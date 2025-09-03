@@ -1,0 +1,3 @@
+# Ignorar archivos de caché que puedan causar problemas
+.next
+node_modules
