@@ -2,7 +2,7 @@ export const translations = {
   es: {
     // Navigation and general
     dashboard: "Panel de control",
-    welcomeMessage: "Bienvenido al Sistema de Gestión de Seguridad",
+    welcomeMessage: "Bienvenido al Programa de Prevención en Lavado de Dinero y FT",
 
     // Main navigation items (sidebar)
     aiSystemRegistry: "Registro de sistemas de IA",
@@ -23,6 +23,16 @@ export const translations = {
     nistCsf: "NIST Cybersecurity Framework",
     nistSp80053: "NIST SP 800-53 Rev. 5",
     nistPrivacy: "NIST Privacy Framework",
+    actividadesVulnerables: "Identificación de Actividades Vulnerables y Umbrales SAT",
+    registroSat: "Registro y Alta ante el SAT",
+    expedienteUnico: "Identificación y Expediente Único (KYC)",
+    beneficiarioControlador: "Beneficiario Controlador",
+    monitoreoOperaciones: "Monitoreo y Acumulación de Operaciones",
+    reportesUif: "Reportes a la UIF vía SAT",
+    capacitacionControl: "Capacitación y Control Interno",
+    auditoriaVerificacion: "Auditoría y Verificación Interna",
+    evidenciasTrazabilidad: "Evidencias y Trazabilidad",
+    gobernanzaControl: "Gobernanza y Control Interno",
 
     // Descriptions for main cards
     aiSystemRegistryDescription: "Registra y gestiona todos los sistemas de inteligencia artificial de la organización",
@@ -37,7 +47,7 @@ export const translations = {
     auditDescription: "Muestra indicadores de cumplimiento de los sistemas de IA",
     securityMeasuresDrawerDescription: "Gestiona las medidas de seguridad del entorno",
     lfpdpppDescription:
-      "Sistema de Gestión de Seguridad de Datos Personales - Cumplimiento normativo obligatorio en México",
+      "Programa de Prevención en Lavado de Dinero y FT - Cumplimiento normativo obligatorio en México",
     iso27001Description:
       "Gestión integral de la seguridad de la información - Certificación de procesos de seguridad y gestión de riesgos",
     iso27701Description:
@@ -52,6 +62,24 @@ export const translations = {
       "Controles de Seguridad y Privacidad - Catálogo amplio de controles técnicos y de privacidad",
     nistPrivacyDescription:
       "Gestión de riesgos de privacidad - Protección de datos personales con principios de confianza, transparencia y ética",
+    actividadesVulnerablesDescription:
+      "Clasificación de operaciones conforme al art. 17 LFPIORPI y validación automática de umbrales de identificación y aviso.",
+    registroSatDescription:
+      "Integración digital de requisitos, e.firma, acuses y designación del Representante de Cumplimiento.",
+    expedienteUnicoDescription:
+      "Integración de expedientes completos de clientes (personas físicas, morales, extranjeras y fideicomisos).",
+    beneficiarioControladorDescription:
+      "Identificación y actualización periódica de las personas físicas con control directo o indirecto.",
+    monitoreoOperacionesDescription:
+      "Vigilancia en tiempo real de operaciones relevantes, inusuales e internas preocupantes, con acumulación semestral.",
+    reportesUifDescription: "Generación y envío de avisos electrónicos dentro de los plazos legales.",
+    capacitacionControlDescription: "Planificación, ejecución y registro de la capacitación anual obligatoria.",
+    auditoriaVerificacionDescription:
+      "Revisiones documentales y atención a observaciones de SAT/UIF con planes de acción.",
+    evidenciasTrazabilidadDescription:
+      "Repositorio digital centralizado con sellos de tiempo, control de versiones y logs de acceso.",
+    gobernanzaControlDescription:
+      "Acreditación de órganos de control como Oficial de Cumplimiento, manuales internos y Comité de Comunicación y Control.",
 
     // Header navigation
     profile: "Perfil",
@@ -94,11 +122,57 @@ export const translations = {
     error: "Error",
     loading: "Cargando...",
     noData: "No hay datos disponibles",
+
+    // Profile and settings
+    profile: "Perfil",
+    settings: "Configuración",
+    logout: "Cerrar sesión",
+    forgotPassword: "¿Olvidaste tu contraseña?",
+    updateProfile: "Actualizar perfil",
+    theme: "Tema",
+    notifications: "Notificaciones",
+    saveSettings: "Guardar configuración",
+    profileUpdated: "Perfil actualizado",
+    settingsSaved: "Configuración guardada",
+
+    // Profile and settings titles
+    profileTitle: "Perfil de usuario",
+    settingsTitle: "Configuración del sistema",
+
+    // Theme options
+    light: "Claro",
+    dark: "Oscuro",
+    system: "Sistema",
+
+    // Additional translations
+    totalUsers: "Total de usuarios",
+    totalDocuments: "Total de documentos",
+    pendingReviews: "Revisiones pendientes",
+    completedActivities: "Actividades completadas",
+    downloadUserAccounts: "Descargar cuentas de usuario",
+    pendingApprovals: "Aprobaciones pendientes",
+    noPendingApprovals: "No hay aprobaciones pendientes",
+
+    // Auth related
+    loginTitle: "Iniciar sesión",
+    registerTitle: "Crear cuenta",
+    loginDescription: "Ingresa tus credenciales para acceder a tu cuenta",
+    registerDescription: "Crea una nueva cuenta para acceder al sistema",
+    email: "Correo electrónico",
+    password: "Contraseña",
+    loginButton: "Iniciar sesión",
+    registerButton: "Registrarse",
+    switchToRegister: "¿No tienes una cuenta? Regístrate",
+    switchToLogin: "¿Ya tienes una cuenta? Inicia sesión",
+    fillAllFields: "Por favor, completa todos los campos",
+    invalidCredentials: "Credenciales inválidas o cuenta no aprobada",
+    accountCreatedDescription:
+      "Tu cuenta ha sido creada exitosamente. Por favor espera la aprobación del administrador.",
   },
   en: {
     // Navigation and general
     dashboard: "Dashboard",
-    welcomeMessage: "Welcome to the Security Management System",
+    welcomeMessage: "Welcome to the Money Laundering and FT Prevention Program",
 
     // Main navigation items (sidebar)
     aiSystemRegistry: "AI Systems Registry",
@@ -119,6 +193,16 @@ export const translations = {
     nistCsf: "NIST Cybersecurity Framework",
     nistSp80053: "NIST SP 800-53 Rev. 5",
     nistPrivacy: "NIST Privacy Framework",
+    actividadesVulnerables: "Vulnerable Activities Identification and SAT Thresholds",
+    registroSat: "SAT Registration and Registration",
+    expedienteUnico: "Identification and Unique File (KYC)",
+    beneficiarioControlador: "Controlling Beneficiary",
+    monitoreoOperaciones: "Operations Monitoring and Accumulation",
+    reportesUif: "UIF Reports via SAT",
+    capacitacionControl: "Training and Internal Control",
+    auditoriaVerificacion: "Audit and Internal Verification",
+    evidenciasTrazabilidad: "Evidence and Traceability",
+    gobernanzaControl: "Governance and Internal Control",
 
     // Descriptions for main cards
     aiSystemRegistryDescription: "Register and manage all artificial intelligence systems in the organization",
@@ -132,8 +216,7 @@ export const translations = {
     aiGovernanceCommitteeDescription: "Manage the AI governance and oversight committee",
     auditDescription: "Show AI systems compliance indicators",
     securityMeasuresDrawerDescription: "Manage environment security measures",
-    lfpdpppDescription:
-      "Personal Data Protection Security Management System - Mandatory regulatory compliance in Mexico",
+    lfpdpppDescription: "Money Laundering and FT Prevention Program - Mandatory regulatory compliance in Mexico",
     iso27001Description:
       "Comprehensive information security management - Security process certification and risk management",
     iso27701Description:
@@ -146,6 +229,23 @@ export const translations = {
     nistSp80053Description: "Security and Privacy Controls - Comprehensive catalog of technical and privacy controls",
     nistPrivacyDescription:
       "Privacy risk management - Personal data protection with principles of trust, transparency and ethics",
+    actividadesVulnerablesDescription:
+      "Classification of operations according to art. 17 LFPIORPI and automatic validation of identification and notice thresholds.",
+    registroSatDescription:
+      "Digital integration of requirements, e-signature, acknowledgments and designation of the Compliance Representative.",
+    expedienteUnicoDescription:
+      "Integration of complete client files (individuals, corporations, foreign entities and trusts).",
+    beneficiarioControladorDescription:
+      "Identification and periodic updating of natural persons with direct or indirect control.",
+    monitoreoOperacionesDescription:
+      "Real-time surveillance of relevant, unusual and concerning internal operations, with semi-annual accumulation.",
+    reportesUifDescription: "Generation and sending of electronic notices within legal deadlines.",
+    capacitacionControlDescription: "Planning, execution and recording of mandatory annual training.",
+    auditoriaVerificacionDescription: "Documentary reviews and attention to SAT/UIF observations with action plans.",
+    evidenciasTrazabilidadDescription:
+      "Centralized digital repository with timestamps, version control and access logs.",
+    gobernanzaControlDescription:
+      "Accreditation of control bodies such as Compliance Officer, internal manuals and Communication and Control Committee.",
 
     // Header navigation
     profile: "Profile",
@@ -188,6 +288,51 @@ export const translations = {
     error: "Error",
     loading: "Loading...",
     noData: "No data available",
+
+    // Profile and settings
+    profile: "Profile",
+    settings: "Settings",
+    logout: "Logout",
+    forgotPassword: "Forgot your password?",
+    updateProfile: "Update profile",
+    theme: "Theme",
+    notifications: "Notifications",
+    saveSettings: "Save settings",
+    profileUpdated: "Profile updated",
+    settingsSaved: "Settings saved",
+
+    // Profile and settings titles
+    profileTitle: "User profile",
+    settingsTitle: "System settings",
+
+    // Theme options
+    light: "Light",
+    dark: "Dark",
+    system: "System",
+
+    // Additional translations
+    totalUsers: "Total users",
+    totalDocuments: "Total documents",
+    pendingReviews: "Pending reviews",
+    completedActivities: "Completed activities",
+    downloadUserAccounts: "Download user accounts",
+    pendingApprovals: "Pending approvals",
+    noPendingApprovals: "No pending approvals",
+
+    // Auth related
+    loginTitle: "Log in",
+    registerTitle: "Create account",
+    loginDescription: "Enter your credentials to access your account",
+    registerDescription: "Create a new account to access the system",
+    email: "Email",
+    password: "Password",
+    loginButton: "Log in",
+    registerButton: "Register",
+    switchToRegister: "Don't have an account? Sign up",
+    switchToLogin: "Already have an account? Log in",
+    fillAllFields: "Please fill in all fields",
+    invalidCredentials: "Invalid credentials or account not approved",
+    accountCreatedDescription: "Your account has been successfully created. Please wait for admin approval.",
   },
 }
 

@@ -4,7 +4,7 @@ import { ClientLayout } from "./ClientLayout"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Sistema de Gestión de Seguridad",
+  title: "Programa de Prevención en Lavado de Dinero y FT",
   description: "Plataforma integral para la gestión y gobernanza de sistemas de inteligencia artificial",
   generator: "v0.dev",
 }

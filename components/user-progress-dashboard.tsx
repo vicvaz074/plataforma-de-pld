@@ -167,7 +167,7 @@ const initialSections: Section[] = [
   },
   {
     id: "sistema-seguridad",
-    title: "Sistema de Gestión de Seguridad",
+    title: "Programa de Prevención en Lavado de Dinero y FT",
     description: "Identifica medidas de seguridad aplicables a los datos y revisa su implementación.",
     path: "/security-system",
     progress: 0,
@@ -386,7 +386,7 @@ const SectionCard = ({
       </CardContent>
       <CardFooter>
         <Link href={section.path} className="w-full">
-          <Button variant="outline" className="w-full">
+          <Button variant="outline" className="w-full bg-transparent">
             <span>Ir a sección</span>
             <ChevronRight className="ml-2 h-4 w-4" />
           </Button>
@@ -668,7 +668,7 @@ export const UserProgressDashboard = () => {
 
       {/* Botones de acción para demo */}
       <div className="mb-6 flex items-center justify-between">
-        <Button variant="outline" onClick={simulateRandomProgress} className="text-xs">
+        <Button variant="outline" onClick={simulateRandomProgress} className="text-xs bg-transparent">
           Generar datos de demo
         </Button>
 

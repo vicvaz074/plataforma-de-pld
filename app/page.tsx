@@ -6,14 +6,15 @@ import { Card } from "@/components/ui/card"
 import Link from "next/link"
 import {
   Shield,
-  Lock,
-  Sparkles,
   FileCheck,
-  Key,
-  CreditCard,
-  Target,
-  BookOpen,
-  Shield as UserShield,
+  Users,
+  Eye,
+  FileText,
+  GraduationCap,
+  Search,
+  Database,
+  Settings,
+  Sparkles,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { translations } from "@/lib/translations"
@@ -21,14 +22,16 @@ import { aliciaTranslations } from "@/lib/alicia-translations"
 import Image from "next/image"
 
 const options = [
-  { name: "lfpdppp", icon: Shield, href: "/lfpdppp" },
-  { name: "iso27001", icon: FileCheck, href: "/iso27001" },
-  { name: "iso27701", icon: Lock, href: "/iso27701" },
-  { name: "iso27002", icon: Key, href: "/iso27002" },
-  { name: "pciDss", icon: CreditCard, href: "/pci-dss" },
-  { name: "nistCsf", icon: Target, href: "/nist-csf" },
-  { name: "nistSp80053", icon: BookOpen, href: "/nist-sp-800-53" },
-  { name: "nistPrivacy", icon: UserShield, href: "/nist-privacy" },
+  { name: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },
+  { name: "registroSat", icon: FileCheck, href: "/registro-sat" },
+  { name: "expedienteUnico", icon: Users, href: "/expediente-unico" },
+  { name: "beneficiarioControlador", icon: Eye, href: "/beneficiario-controlador" },
+  { name: "monitoreoOperaciones", icon: FileText, href: "/monitoreo-operaciones" },
+  { name: "reportesUif", icon: FileText, href: "/reportes-uif" },
+  { name: "capacitacionControl", icon: GraduationCap, href: "/capacitacion-control" },
+  { name: "auditoriaVerificacion", icon: Search, href: "/auditoria-verificacion" },
+  { name: "evidenciasTrazabilidad", icon: Database, href: "/evidencias-trazabilidad" },
+  { name: "gobernanzaControl", icon: Settings, href: "/gobernanza-control" },
   {
     name: "alicia",
     icon: Sparkles,

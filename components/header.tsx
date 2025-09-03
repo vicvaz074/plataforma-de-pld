@@ -44,7 +44,9 @@ export function Header() {
       <div className="flex h-16 items-center px-6 justify-between">
         <div className="flex items-center gap-2">
           <div className="flex items-center">
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Sistema de Gestión de Seguridad</h1>
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Programa de Prevención en Lavado de Dinero y FT
+            </h1>
           </div>
         </div>
         <div className="flex items-center gap-4">
