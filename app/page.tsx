@@ -15,6 +15,7 @@ import {
   Database,
   Settings,
   Sparkles,
+  Book,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { translations } from "@/lib/translations"
@@ -32,6 +33,7 @@ const options = [
   { name: "auditoriaVerificacion", icon: Search, href: "/auditoria-verificacion" },
   { name: "evidenciasTrazabilidad", icon: Database, href: "/evidencias-trazabilidad" },
   { name: "gobernanzaControl", icon: Settings, href: "/gobernanza-control" },
+  { name: "compiladoLeyes", icon: Book, href: "/compilado-leyes" },
   {
     name: "alicia",
     icon: Sparkles,
