@@ -175,26 +175,16 @@ export const translations = {
     actividadesVulnerablesTitle: "Identificación de Actividades Vulnerables y Umbrales SAT",
     actividadesVulnerablesSubtitle:
       "Módulo para determinar si la operación constituye una Actividad Vulnerable y los avisos requeridos",
+    registroSatTitle: "Registro y Alta ante el SAT",
+    registroSatSubtitle:
+      "Módulo para asegurar el registro formal en el padrón de Actividades Vulnerables y designación del REC",
 
     // Tab titles
     preguntasNormativas: "Preguntas Normativas",
     cargaDocumental: "Carga Documental",
     alertasVencimiento: "Alertas de Vencimiento",
     bitacoraTrazabilidad: "Bitácora de Trazabilidad",
-
-    // Progress section
-    progresoModulo: "Progreso del Módulo",
-    preguntasRespondidas: "preguntas respondidas",
-    completado: "Completado",
-
-    // Questions section
-    preguntasGeneralesIniciales: "Preguntas Generales Iniciales",
-    preguntasGeneralesDescription:
-      "Responde las siguientes preguntas para determinar si la operación constituye una Actividad Vulnerable",
-    notasAdicionales: "Notas adicionales (opcional)",
-    agregarObservaciones: "Agregar observaciones o detalles adicionales...",
-    respuestaGuardada: "Respuesta guardada",
-    respuestaRegistrada: "La respuesta ha sido registrada correctamente.",
+    recomendaciones: "Recomendaciones",
 
     // Document section
     evidenciasGenerales: "Evidencias Generales",
@@ -238,6 +228,25 @@ export const translations = {
 
     // Required field indicator
     campoRequerido: "*",
+
+    // Specific translations for registro SAT module sections
+    altaPadron: "A. Alta en el Padrón",
+    altaPadronDescription: "Documentos del alta en Actividades Vulnerables",
+    designacionREC: "B. Designación REC",
+    designacionRECDescription: "Documentos del Representante Encargado",
+    actualizaciones: "C. Actualizaciones",
+    actualizacionesDescription: "Modificaciones y actualizaciones",
+    buzonTributario: "D. Buzón Tributario",
+    buzonTributarioDescription: "Notificaciones y comunicaciones",
+    conservacion: "E. Conservación",
+    conservacionDescription: "Trazabilidad y conservación",
+
+    // Recommendations section
+    recomendacionesPracticas: "Recomendaciones Prácticas",
+    automatizacionAlta: "Automatización del alta",
+    gestionREC: "Gestión del Representante Encargado de Cumplimiento",
+    controlNotificaciones: "Control de notificaciones electrónicas",
+    trazabilidadDocumental: "Trazabilidad documental",
   },
   en: {
     // Navigation and general
@@ -410,26 +419,16 @@ export const translations = {
     actividadesVulnerablesTitle: "Vulnerable Activities Identification and SAT Thresholds",
     actividadesVulnerablesSubtitle:
       "Module to determine if the operation constitutes a Vulnerable Activity and required notices",
+    registroSatTitle: "SAT Registration and Registration",
+    registroSatSubtitle:
+      "Module to ensure formal registration in the Vulnerable Activities registry and REC designation",
 
     // Tab titles
     preguntasNormativas: "Regulatory Questions",
     cargaDocumental: "Document Upload",
     alertasVencimiento: "Expiration Alerts",
     bitacoraTrazabilidad: "Traceability Log",
-
-    // Progress section
-    progresoModulo: "Module Progress",
-    preguntasRespondidas: "questions answered",
-    completado: "Completed",
-
-    // Questions section
-    preguntasGeneralesIniciales: "Initial General Questions",
-    preguntasGeneralesDescription:
-      "Answer the following questions to determine if the operation constitutes a Vulnerable Activity",
-    notasAdicionales: "Additional notes (optional)",
-    agregarObservaciones: "Add observations or additional details...",
-    respuestaGuardada: "Answer saved",
-    respuestaRegistrada: "The answer has been registered correctly.",
+    recomendaciones: "Recommendations",
 
     // Document section
     evidenciasGenerales: "General Evidence",
@@ -473,6 +472,25 @@ export const translations = {
 
     // Required field indicator
     campoRequerido: "*",
+
+    // Specific translations for registro SAT module sections
+    altaPadron: "A. Registry Registration",
+    altaPadronDescription: "Vulnerable Activities registration documents",
+    designacionREC: "B. REC Designation",
+    designacionRECDescription: "Compliance Representative documents",
+    actualizaciones: "C. Updates",
+    actualizacionesDescription: "Modifications and updates",
+    buzonTributario: "D. Tax Mailbox",
+    buzonTributarioDescription: "Notifications and communications",
+    conservacion: "E. Conservation",
+    conservacionDescription: "Traceability and conservation",
+
+    // Recommendations section
+    recomendacionesPracticas: "Practical Recommendations",
+    automatizacionAlta: "Registration automation",
+    gestionREC: "Compliance Representative Management",
+    controlNotificaciones: "Electronic notifications control",
+    trazabilidadDocumental: "Documentary traceability",
   },
 }
 
