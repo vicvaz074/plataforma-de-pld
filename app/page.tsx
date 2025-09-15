@@ -25,7 +25,7 @@ import Image from "next/image"
 const options = [
   { name: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },
   { name: "registroSat", icon: FileCheck, href: "/registro-sat" },
-  { name: "expedienteUnico", icon: Users, href: "/expediente-unico" },
+  { name: "expedienteUnico", icon: Users, href: "/kyc-expediente" },
   { name: "beneficiarioControlador", icon: Eye, href: "/beneficiario-controlador" },
   { name: "monitoreoOperaciones", icon: FileText, href: "/monitoreo-operaciones" },
   { name: "reportesUif", icon: FileText, href: "/reportes-uif" },
