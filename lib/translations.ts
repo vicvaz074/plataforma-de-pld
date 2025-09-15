@@ -178,75 +178,43 @@ export const translations = {
     registroSatTitle: "Registro y Alta ante el SAT",
     registroSatSubtitle:
       "Módulo para asegurar el registro formal en el padrón de Actividades Vulnerables y designación del REC",
+    expedienteUnicoTitle: "Identificación y Expediente Único (KYC)",
+    expedienteUnicoSubtitle:
+      "Módulo para la verificación de identidad, documentación de clientes y cumplimiento de debida diligencia",
 
-    // Tab titles
-    preguntasNormativas: "Preguntas Normativas",
-    cargaDocumental: "Carga Documental",
-    alertasVencimiento: "Alertas de Vencimiento",
-    bitacoraTrazabilidad: "Bitácora de Trazabilidad",
-    recomendaciones: "Recomendaciones",
+    // KYC specific sections
+    identificacionCliente: "Identificación del Cliente",
+    personasMorales: "Personas Morales",
+    beneficiarioControladorSection: "Beneficiario Controlador",
+    personasPoliticamenteExpuestas: "Personas Políticamente Expuestas (PEP)",
+    fideicomisos: "Fideicomisos",
+    actualizacionConservacion: "Actualización y Conservación",
 
-    // Document section
-    evidenciasGenerales: "Evidencias Generales",
-    evidenciasGeneralesDescription: "Documentos requeridos para toda actividad vulnerable",
-    evidenciasEspecificas: "Evidencias Específicas",
-    evidenciasEspecificasDescription: "Documentos específicos por tipo de actividad",
-    conservacionTrazabilidad: "Conservación y Trazabilidad",
-    conservacionTrazabilidadDescription: "Documentos de conservación y control",
-    documentosCargados: "Documentos Cargados",
-    documentosCargadosDescription: "Lista de documentos subidos al sistema",
-    documentoCargado: "Documento cargado",
-    documentoCargadoExito: "ha sido cargado exitosamente.",
+    // KYC document categories
+    evidenciasGeneralesKYC: "A. Evidencias Generales",
+    evidenciasGeneralesKYCDescription: "Documentos aplicables a toda relación de negocios",
+    personasFisicas: "B. Personas Físicas",
+    personasFisicasDescription: "Anexo 3 RCG",
+    personasMoralesDoc: "C. Personas Morales",
+    personasMoralesDocDescription: "Anexos 4 y 4 Bis RCG",
+    personasExtranjeras: "D. Personas Extranjeras",
+    personasExtranjerasDescription: "Anexos 5 y 6 RCG",
+    fideicomisosDoc: "E. Fideicomisos",
+    fideicomisosDocDescription: "Anexo 8 RCG",
+    beneficiarioControladorDoc: "F. Beneficiario Controlador",
+    beneficiarioControladorDocDescription: "Art. 3 y 12 RCG",
+    personasPoliticamenteExpuestasDoc: "G. Personas Políticamente Expuestas",
+    personasPoliticamenteExpuestasDocDescription: "PEP",
+    actualizacionConservacionDoc: "H. Actualización y Conservación",
+    actualizacionConservacionDocDescription: "Mantenimiento de expedientes",
 
-    // Document status
-    vigente: "Vigente",
-    porVencer: "Por vencer",
-    vencido: "Vencido",
-    subido: "Subido",
-    vence: "Vence",
-    renovarDocumento: "Renovar documento",
-
-    // Alerts section
-    alertasAutomaticas: "Alertas Automáticas de Vencimientos",
-    alertasAutomaticasDescription: "Sistema de alertas para documentos próximos a vencer",
-    todosDocumentosVigentes: "Todos los documentos están vigentes",
-    noDocumentosVencer: "No hay documentos próximos a vencer o vencidos",
-    documentoVencido: "Documento vencido",
-
-    // Traceability section
-    bitacoraTrazabilidadTitulo: "Bitácora de Trazabilidad con Sello de Tiempo",
-    bitacoraTrazabilidadDescription: "Registro completo de todas las acciones realizadas en el módulo",
-    sinActividadRegistrada: "Sin actividad registrada",
-    accionesAparecerAqui: "Las acciones realizadas aparecerán aquí",
-    respuestaActualizada: "Respuesta actualizada",
-    usuario: "Usuario",
-
-    // Answer options
-    si: "Sí",
-    no: "No",
-    noAplica: "No Aplica",
-
-    // Required field indicator
-    campoRequerido: "*",
-
-    // Specific translations for registro SAT module sections
-    altaPadron: "A. Alta en el Padrón",
-    altaPadronDescription: "Documentos del alta en Actividades Vulnerables",
-    designacionREC: "B. Designación REC",
-    designacionRECDescription: "Documentos del Representante Encargado",
-    actualizaciones: "C. Actualizaciones",
-    actualizacionesDescription: "Modificaciones y actualizaciones",
-    buzonTributario: "D. Buzón Tributario",
-    buzonTributarioDescription: "Notificaciones y comunicaciones",
-    conservacion: "E. Conservación",
-    conservacionDescription: "Trazabilidad y conservación",
-
-    // Recommendations section
-    recomendacionesPracticas: "Recomendaciones Prácticas",
-    automatizacionAlta: "Automatización del alta",
-    gestionREC: "Gestión del Representante Encargado de Cumplimiento",
-    controlNotificaciones: "Control de notificaciones electrónicas",
-    trazabilidadDocumental: "Trazabilidad documental",
+    // KYC recommendations
+    formulariosdinamicos: "Formularios dinámicos según tipo de cliente",
+    cargaDocumentalObligatoria: "Carga documental obligatoria",
+    beneficiarioControladorPEP: "Beneficiario controlador y PEP",
+    actualizacionPeriodicaAlertas: "Actualización periódica y alertas",
+    seguridadConservacion: "Seguridad y conservación",
+    soporteAuditorias: "Soporte a auditorías y verificaciones",
   },
   en: {
     // Navigation and general
@@ -422,75 +390,42 @@ export const translations = {
     registroSatTitle: "SAT Registration and Registration",
     registroSatSubtitle:
       "Module to ensure formal registration in the Vulnerable Activities registry and REC designation",
+    expedienteUnicoTitle: "Identification and Unique File (KYC)",
+    expedienteUnicoSubtitle: "Module for identity verification, client documentation and due diligence compliance",
 
-    // Tab titles
-    preguntasNormativas: "Regulatory Questions",
-    cargaDocumental: "Document Upload",
-    alertasVencimiento: "Expiration Alerts",
-    bitacoraTrazabilidad: "Traceability Log",
-    recomendaciones: "Recommendations",
+    // KYC specific sections
+    identificacionCliente: "Client Identification",
+    personasMorales: "Legal Entities",
+    beneficiarioControladorSection: "Controlling Beneficiary",
+    personasPoliticamenteExpuestas: "Politically Exposed Persons (PEP)",
+    fideicomisos: "Trusts",
+    actualizacionConservacion: "Update and Conservation",
 
-    // Document section
-    evidenciasGenerales: "General Evidence",
-    evidenciasGeneralesDescription: "Documents required for all vulnerable activities",
-    evidenciasEspecificas: "Specific Evidence",
-    evidenciasEspecificasDescription: "Documents specific to activity type",
-    conservacionTrazabilidad: "Conservation and Traceability",
-    conservacionTrazabilidadDescription: "Conservation and control documents",
-    documentosCargados: "Uploaded Documents",
-    documentosCargadosDescription: "List of documents uploaded to the system",
-    documentoCargado: "Document uploaded",
-    documentoCargadoExito: "has been uploaded successfully.",
+    // KYC document categories
+    evidenciasGeneralesKYC: "A. General Evidence",
+    evidenciasGeneralesKYCDescription: "Documents applicable to all business relationships",
+    personasFisicas: "B. Natural Persons",
+    personasFisicasDescription: "Annex 3 RCG",
+    personasMoralesDoc: "C. Legal Entities",
+    personasMoralesDocDescription: "Annexes 4 and 4 Bis RCG",
+    personasExtranjeras: "D. Foreign Persons",
+    personasExtranjerasDescription: "Annexes 5 and 6 RCG",
+    fideicomisosDoc: "E. Trusts",
+    fideicomisosDocDescription: "Annex 8 RCG",
+    beneficiarioControladorDoc: "F. Controlling Beneficiary",
+    beneficiarioControladorDocDescription: "Art. 3 and 12 RCG",
+    personasPoliticamenteExpuestasDoc: "G. Politically Exposed Persons",
+    personasPoliticamenteExpuestasDocDescription: "PEP",
+    actualizacionConservacionDoc: "H. Update and Conservation",
+    actualizacionConservacionDocDescription: "File maintenance",
 
-    // Document status
-    vigente: "Valid",
-    porVencer: "Expiring soon",
-    vencido: "Expired",
-    subido: "Uploaded",
-    vence: "Expires",
-    renovarDocumento: "Renew document",
-
-    // Alerts section
-    alertasAutomaticas: "Automatic Expiration Alerts",
-    alertasAutomaticasDescription: "Alert system for documents about to expire",
-    todosDocumentosVigentes: "All documents are valid",
-    noDocumentosVencer: "No documents about to expire or expired",
-    documentoVencido: "Expired document",
-
-    // Traceability section
-    bitacoraTrazabilidadTitulo: "Traceability Log with Timestamp",
-    bitacoraTrazabilidadDescription: "Complete record of all actions performed in the module",
-    sinActividadRegistrada: "No activity recorded",
-    accionesAparecerAqui: "Performed actions will appear here",
-    respuestaActualizada: "Answer updated",
-    usuario: "User",
-
-    // Answer options
-    si: "Yes",
-    no: "No",
-    noAplica: "Not Applicable",
-
-    // Required field indicator
-    campoRequerido: "*",
-
-    // Specific translations for registro SAT module sections
-    altaPadron: "A. Registry Registration",
-    altaPadronDescription: "Vulnerable Activities registration documents",
-    designacionREC: "B. REC Designation",
-    designacionRECDescription: "Compliance Representative documents",
-    actualizaciones: "C. Updates",
-    actualizacionesDescription: "Modifications and updates",
-    buzonTributario: "D. Tax Mailbox",
-    buzonTributarioDescription: "Notifications and communications",
-    conservacion: "E. Conservation",
-    conservacionDescription: "Traceability and conservation",
-
-    // Recommendations section
-    recomendacionesPracticas: "Practical Recommendations",
-    automatizacionAlta: "Registration automation",
-    gestionREC: "Compliance Representative Management",
-    controlNotificaciones: "Electronic notifications control",
-    trazabilidadDocumental: "Documentary traceability",
+    // KYC recommendations
+    formulariosdinamicos: "Dynamic forms by client type",
+    cargaDocumentalObligatoria: "Mandatory document upload",
+    beneficiarioControladorPEP: "Controlling beneficiary and PEP",
+    actualizacionPeriodicaAlertas: "Periodic updates and alerts",
+    seguridadConservacion: "Security and conservation",
+    soporteAuditorias: "Audit and verification support",
   },
 }
 
