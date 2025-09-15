@@ -81,8 +81,7 @@ export const translations = {
       "Repositorio digital centralizado con sellos de tiempo, control de versiones y logs de acceso.",
     gobernanzaControlDescription:
       "Acreditación de órganos de control como Oficial de Cumplimiento, manuales internos y Comité de Comunicación y Control.",
-    compiladoLeyesDescription:
-      "Compilado de leyes mexicanas relevantes en materia de prevención de lavado de dinero.",
+    compiladoLeyesDescription: "Compilado de leyes mexicanas relevantes en materia de prevención de lavado de dinero.",
 
     // Header navigation
     profile: "Perfil",
@@ -171,6 +170,74 @@ export const translations = {
     invalidCredentials: "Credenciales inválidas o cuenta no aprobada",
     accountCreatedDescription:
       "Tu cuenta ha sido creada exitosamente. Por favor espera la aprobación del administrador.",
+
+    // Module specific translations
+    actividadesVulnerablesTitle: "Identificación de Actividades Vulnerables y Umbrales SAT",
+    actividadesVulnerablesSubtitle:
+      "Módulo para determinar si la operación constituye una Actividad Vulnerable y los avisos requeridos",
+
+    // Tab titles
+    preguntasNormativas: "Preguntas Normativas",
+    cargaDocumental: "Carga Documental",
+    alertasVencimiento: "Alertas de Vencimiento",
+    bitacoraTrazabilidad: "Bitácora de Trazabilidad",
+
+    // Progress section
+    progresoModulo: "Progreso del Módulo",
+    preguntasRespondidas: "preguntas respondidas",
+    completado: "Completado",
+
+    // Questions section
+    preguntasGeneralesIniciales: "Preguntas Generales Iniciales",
+    preguntasGeneralesDescription:
+      "Responde las siguientes preguntas para determinar si la operación constituye una Actividad Vulnerable",
+    notasAdicionales: "Notas adicionales (opcional)",
+    agregarObservaciones: "Agregar observaciones o detalles adicionales...",
+    respuestaGuardada: "Respuesta guardada",
+    respuestaRegistrada: "La respuesta ha sido registrada correctamente.",
+
+    // Document section
+    evidenciasGenerales: "Evidencias Generales",
+    evidenciasGeneralesDescription: "Documentos requeridos para toda actividad vulnerable",
+    evidenciasEspecificas: "Evidencias Específicas",
+    evidenciasEspecificasDescription: "Documentos específicos por tipo de actividad",
+    conservacionTrazabilidad: "Conservación y Trazabilidad",
+    conservacionTrazabilidadDescription: "Documentos de conservación y control",
+    documentosCargados: "Documentos Cargados",
+    documentosCargadosDescription: "Lista de documentos subidos al sistema",
+    documentoCargado: "Documento cargado",
+    documentoCargadoExito: "ha sido cargado exitosamente.",
+
+    // Document status
+    vigente: "Vigente",
+    porVencer: "Por vencer",
+    vencido: "Vencido",
+    subido: "Subido",
+    vence: "Vence",
+    renovarDocumento: "Renovar documento",
+
+    // Alerts section
+    alertasAutomaticas: "Alertas Automáticas de Vencimientos",
+    alertasAutomaticasDescription: "Sistema de alertas para documentos próximos a vencer",
+    todosDocumentosVigentes: "Todos los documentos están vigentes",
+    noDocumentosVencer: "No hay documentos próximos a vencer o vencidos",
+    documentoVencido: "Documento vencido",
+
+    // Traceability section
+    bitacoraTrazabilidadTitulo: "Bitácora de Trazabilidad con Sello de Tiempo",
+    bitacoraTrazabilidadDescription: "Registro completo de todas las acciones realizadas en el módulo",
+    sinActividadRegistrada: "Sin actividad registrada",
+    accionesAparecerAqui: "Las acciones realizadas aparecerán aquí",
+    respuestaActualizada: "Respuesta actualizada",
+    usuario: "Usuario",
+
+    // Answer options
+    si: "Sí",
+    no: "No",
+    noAplica: "No Aplica",
+
+    // Required field indicator
+    campoRequerido: "*",
   },
   en: {
     // Navigation and general
@@ -250,8 +317,7 @@ export const translations = {
       "Centralized digital repository with timestamps, version control and access logs.",
     gobernanzaControlDescription:
       "Accreditation of control bodies such as Compliance Officer, internal manuals and Communication and Control Committee.",
-    compiladoLeyesDescription:
-      "Compilation of key Mexican laws on anti-money laundering.",
+    compiladoLeyesDescription: "Compilation of key Mexican laws on anti-money laundering.",
 
     // Header navigation
     profile: "Profile",
@@ -339,6 +405,74 @@ export const translations = {
     fillAllFields: "Please fill in all fields",
     invalidCredentials: "Invalid credentials or account not approved",
     accountCreatedDescription: "Your account has been successfully created. Please wait for admin approval.",
+
+    // Module specific translations
+    actividadesVulnerablesTitle: "Vulnerable Activities Identification and SAT Thresholds",
+    actividadesVulnerablesSubtitle:
+      "Module to determine if the operation constitutes a Vulnerable Activity and required notices",
+
+    // Tab titles
+    preguntasNormativas: "Regulatory Questions",
+    cargaDocumental: "Document Upload",
+    alertasVencimiento: "Expiration Alerts",
+    bitacoraTrazabilidad: "Traceability Log",
+
+    // Progress section
+    progresoModulo: "Module Progress",
+    preguntasRespondidas: "questions answered",
+    completado: "Completed",
+
+    // Questions section
+    preguntasGeneralesIniciales: "Initial General Questions",
+    preguntasGeneralesDescription:
+      "Answer the following questions to determine if the operation constitutes a Vulnerable Activity",
+    notasAdicionales: "Additional notes (optional)",
+    agregarObservaciones: "Add observations or additional details...",
+    respuestaGuardada: "Answer saved",
+    respuestaRegistrada: "The answer has been registered correctly.",
+
+    // Document section
+    evidenciasGenerales: "General Evidence",
+    evidenciasGeneralesDescription: "Documents required for all vulnerable activities",
+    evidenciasEspecificas: "Specific Evidence",
+    evidenciasEspecificasDescription: "Documents specific to activity type",
+    conservacionTrazabilidad: "Conservation and Traceability",
+    conservacionTrazabilidadDescription: "Conservation and control documents",
+    documentosCargados: "Uploaded Documents",
+    documentosCargadosDescription: "List of documents uploaded to the system",
+    documentoCargado: "Document uploaded",
+    documentoCargadoExito: "has been uploaded successfully.",
+
+    // Document status
+    vigente: "Valid",
+    porVencer: "Expiring soon",
+    vencido: "Expired",
+    subido: "Uploaded",
+    vence: "Expires",
+    renovarDocumento: "Renew document",
+
+    // Alerts section
+    alertasAutomaticas: "Automatic Expiration Alerts",
+    alertasAutomaticasDescription: "Alert system for documents about to expire",
+    todosDocumentosVigentes: "All documents are valid",
+    noDocumentosVencer: "No documents about to expire or expired",
+    documentoVencido: "Expired document",
+
+    // Traceability section
+    bitacoraTrazabilidadTitulo: "Traceability Log with Timestamp",
+    bitacoraTrazabilidadDescription: "Complete record of all actions performed in the module",
+    sinActividadRegistrada: "No activity recorded",
+    accionesAparecerAqui: "Performed actions will appear here",
+    respuestaActualizada: "Answer updated",
+    usuario: "User",
+
+    // Answer options
+    si: "Yes",
+    no: "No",
+    noAplica: "Not Applicable",
+
+    // Required field indicator
+    campoRequerido: "*",
   },
 }
 
