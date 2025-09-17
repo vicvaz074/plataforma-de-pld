@@ -181,40 +181,35 @@ export const translations = {
     expedienteUnicoTitle: "Identificación y Expediente Único (KYC)",
     expedienteUnicoSubtitle:
       "Módulo para la verificación de identidad, documentación de clientes y cumplimiento de debida diligencia",
+    beneficiarioControladorTitle: "Beneficiario Controlador",
+    beneficiarioControladorSubtitle:
+      "Módulo para identificar a la(s) persona(s) física(s) que obtienen el beneficio o ejercen control efectivo sobre el cliente",
 
-    // KYC specific sections
-    identificacionCliente: "Identificación del Cliente",
-    personasMorales: "Personas Morales",
-    beneficiarioControladorSection: "Beneficiario Controlador",
-    personasPoliticamenteExpuestas: "Personas Políticamente Expuestas (PEP)",
-    fideicomisos: "Fideicomisos",
-    actualizacionConservacion: "Actualización y Conservación",
+    // Beneficiario Controlador sections
+    existenciaDeclaracion: "Existencia y declaración",
+    identificacionBeneficiario: "Identificación del beneficiario controlador",
+    datosBeneficiarioControlador: "Datos del beneficiario controlador (BC)",
+    actualizacionSeguimiento: "Actualización y seguimiento",
 
-    // KYC document categories
-    evidenciasGeneralesKYC: "A. Evidencias Generales",
-    evidenciasGeneralesKYCDescription: "Documentos aplicables a toda relación de negocios",
-    personasFisicas: "B. Personas Físicas",
-    personasFisicasDescription: "Anexo 3 RCG",
-    personasMoralesDoc: "C. Personas Morales",
-    personasMoralesDocDescription: "Anexos 4 y 4 Bis RCG",
-    personasExtranjeras: "D. Personas Extranjeras",
-    personasExtranjerasDescription: "Anexos 5 y 6 RCG",
-    fideicomisosDoc: "E. Fideicomisos",
-    fideicomisosDocDescription: "Anexo 8 RCG",
-    beneficiarioControladorDoc: "F. Beneficiario Controlador",
-    beneficiarioControladorDocDescription: "Art. 3 y 12 RCG",
-    personasPoliticamenteExpuestasDoc: "G. Personas Políticamente Expuestas",
-    personasPoliticamenteExpuestasDocDescription: "PEP",
-    actualizacionConservacionDoc: "H. Actualización y Conservación",
-    actualizacionConservacionDocDescription: "Mantenimiento de expedientes",
+    // Beneficiario Controlador document categories
+    declaracionAcreditacion: "A. Declaración y acreditación",
+    declaracionAcreditacionDescription: "Documentos de declaración del BC",
+    documentacionSocietaria: "B. Documentación societaria",
+    documentacionSocietariaDescription: "Estructura corporativa",
+    identificacionBC: "C. Identificación del BC",
+    identificacionBCDescription: "Datos del beneficiario controlador",
+    validacionesActualizacion: "D. Validaciones y actualización",
+    validacionesActualizacionDescription: "Verificaciones realizadas",
+    conservacionTrazabilidad: "E. Conservación y trazabilidad",
+    conservacionTrazabilidadDescription: "Mantenimiento de registros",
 
-    // KYC recommendations
-    formulariosdinamicos: "Formularios dinámicos según tipo de cliente",
-    cargaDocumentalObligatoria: "Carga documental obligatoria",
-    beneficiarioControladorPEP: "Beneficiario controlador y PEP",
-    actualizacionPeriodicaAlertas: "Actualización periódica y alertas",
-    seguridadConservacion: "Seguridad y conservación",
-    soporteAuditorias: "Soporte a auditorías y verificaciones",
+    // Beneficiario Controlador recommendations
+    formularioDinamico: "Formulario dinámico",
+    checklistsObligatorios: "Checklists obligatorios",
+    cadenasPropiedadBC: "Cadenas de propiedad",
+    alertasAutomaticasBC: "Alertas automáticas",
+    screeningAutomatico: "Screening automático",
+    trazabilidadBC: "Trazabilidad",
   },
   en: {
     // Navigation and general
@@ -392,40 +387,35 @@ export const translations = {
       "Module to ensure formal registration in the Vulnerable Activities registry and REC designation",
     expedienteUnicoTitle: "Identification and Unique File (KYC)",
     expedienteUnicoSubtitle: "Module for identity verification, client documentation and due diligence compliance",
+    beneficiarioControladorTitle: "Controlling Beneficiary",
+    beneficiarioControladorSubtitle:
+      "Module to identify the natural person(s) who obtain the benefit or exercise effective control over the client",
 
-    // KYC specific sections
-    identificacionCliente: "Client Identification",
-    personasMorales: "Legal Entities",
-    beneficiarioControladorSection: "Controlling Beneficiary",
-    personasPoliticamenteExpuestas: "Politically Exposed Persons (PEP)",
-    fideicomisos: "Trusts",
-    actualizacionConservacion: "Update and Conservation",
+    // Beneficiario Controlador sections
+    existenciaDeclaracion: "Existence and declaration",
+    identificacionBeneficiario: "Controlling beneficiary identification",
+    datosBeneficiarioControlador: "Controlling beneficiary (CB) data",
+    actualizacionSeguimiento: "Update and monitoring",
 
-    // KYC document categories
-    evidenciasGeneralesKYC: "A. General Evidence",
-    evidenciasGeneralesKYCDescription: "Documents applicable to all business relationships",
-    personasFisicas: "B. Natural Persons",
-    personasFisicasDescription: "Annex 3 RCG",
-    personasMoralesDoc: "C. Legal Entities",
-    personasMoralesDocDescription: "Annexes 4 and 4 Bis RCG",
-    personasExtranjeras: "D. Foreign Persons",
-    personasExtranjerasDescription: "Annexes 5 and 6 RCG",
-    fideicomisosDoc: "E. Trusts",
-    fideicomisosDocDescription: "Annex 8 RCG",
-    beneficiarioControladorDoc: "F. Controlling Beneficiary",
-    beneficiarioControladorDocDescription: "Art. 3 and 12 RCG",
-    personasPoliticamenteExpuestasDoc: "G. Politically Exposed Persons",
-    personasPoliticamenteExpuestasDocDescription: "PEP",
-    actualizacionConservacionDoc: "H. Update and Conservation",
-    actualizacionConservacionDocDescription: "File maintenance",
+    // Beneficiario Controlador document categories
+    declaracionAcreditacion: "A. Declaration and accreditation",
+    declaracionAcreditacionDescription: "CB declaration documents",
+    documentacionSocietaria: "B. Corporate documentation",
+    documentacionSocietariaDescription: "Corporate structure",
+    identificacionBC: "C. CB Identification",
+    identificacionBCDescription: "Controlling beneficiary data",
+    validacionesActualizacion: "D. Validations and updates",
+    validacionesActualizacionDescription: "Verifications performed",
+    conservacionTrazabilidad: "E. Conservation and traceability",
+    conservacionTrazabilidadDescription: "Record maintenance",
 
-    // KYC recommendations
-    formulariosdinamicos: "Dynamic forms by client type",
-    cargaDocumentalObligatoria: "Mandatory document upload",
-    beneficiarioControladorPEP: "Controlling beneficiary and PEP",
-    actualizacionPeriodicaAlertas: "Periodic updates and alerts",
-    seguridadConservacion: "Security and conservation",
-    soporteAuditorias: "Audit and verification support",
+    // Beneficiario Controlador recommendations
+    formularioDinamico: "Dynamic form",
+    checklistsObligatorios: "Mandatory checklists",
+    cadenasPropiedadBC: "Ownership chains",
+    alertasAutomaticasBC: "Automatic alerts",
+    screeningAutomatico: "Automatic screening",
+    trazabilidadBC: "Traceability",
   },
 }
 
