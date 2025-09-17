@@ -25,7 +25,7 @@ const navigationItems = [
   { key: "dashboard", icon: LayoutDashboard, href: "/dashboard" },
   { key: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },
   { key: "registroSat", icon: FileCheck, href: "/registro-sat" },
-  { key: "expedienteUnico", icon: Users, href: "/expediente-unico" },
+  { key: "expedienteUnico", icon: Users, href: "/kyc-expediente" },
   { key: "beneficiarioControlador", icon: Eye, href: "/beneficiario-controlador" },
   { key: "monitoreoOperaciones", icon: FileText, href: "/monitoreo-operaciones" },
   { key: "reportesUif", icon: FileText, href: "/reportes-uif" },
