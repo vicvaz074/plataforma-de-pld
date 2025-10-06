@@ -81,9 +81,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿El alta en el Portal PLD del SAT se realizó dentro del plazo legal (antes de iniciar operaciones o a más tardar dentro de los 30 días posteriores)?",
     answer: null,
     required: true,
-    siAction: "La plataforma debe solicitar adjuntar el acuse digital de alta expedido por el SAT.",
+    siAction: "Adjunta el acuse digital de alta expedido por el SAT.",
     noAction:
-      "La plataforma debe abrir un campo para explicar la causa del retraso y adjuntar evidencia del trámite posterior.",
+      "Explica la causa del retraso y adjunta evidencia del trámite posterior (acuse, folio o captura del trámite).",
   },
   {
     id: "rg-2",
@@ -92,9 +92,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿El trámite de alta se efectuó utilizando la e.firma (FIEL) vigente del representante legal?",
     answer: null,
     required: true,
-    siAction: "La plataforma debe permitir adjuntar el acuse de validación de FIEL vigente.",
+    siAction: "Adjunta el acuse de validación de la e.firma vigente.",
     noAction:
-      "La plataforma debe requerir evidencia de la renovación o aclaración de la FIEL ante el SAT y registrar el seguimiento.",
+      "Sube la evidencia de renovación o aclaración de la e.firma presentada ante el SAT y documenta el seguimiento.",
   },
   {
     id: "rg-3",
@@ -103,9 +103,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se seleccionó correctamente la fracción de Actividad Vulnerable del art. 17 LFPIORPI que corresponde a la operación?",
     answer: null,
     required: true,
-    siAction: "La plataforma debe solicitar la captura del portal o acuse que confirme la fracción seleccionada.",
+    siAction: "Carga la captura del portal o el acuse que confirme la fracción seleccionada.",
     noAction:
-      "La plataforma debe generar una nota de corrección y pedir evidencia del trámite de modificación ante el SAT.",
+      "Adjunta la nota de corrección y la evidencia del trámite de modificación presentado ante el SAT.",
   },
 
   // 2. Representante Encargada de Cumplimiento (REC)
@@ -116,9 +116,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿La empresa designó formalmente a la Representante Encargada de Cumplimiento en términos del art. 20 LFPIORPI?",
     answer: null,
     required: true,
-    siAction: "La plataforma debe requerir el acuse de designación emitido por el SAT.",
+    siAction: "Sube el acuse de designación emitido por el SAT.",
     noAction:
-      "La plataforma debe habilitar un campo para justificar y adjuntar evidencia del trámite pendiente de designación.",
+      "Describe la situación y adjunta evidencia del trámite pendiente de designación.",
   },
   {
     id: "rg-5",
@@ -126,8 +126,8 @@ const preguntasGenerales: ChecklistItem[] = [
     question: "¿El REC aceptó formalmente el cargo en el Portal SAT y se encuentra vigente?",
     answer: null,
     required: true,
-    siAction: "La plataforma debe permitir adjuntar el acuse de aceptación del REC.",
-    noAction: "La plataforma debe solicitar evidencia de la actualización del REC en trámite.",
+    siAction: "Adjunta el acuse de aceptación del REC vigente.",
+    noAction: "Proporciona evidencia del trámite de actualización del REC que se encuentra en curso.",
   },
   {
     id: "rg-6",
@@ -136,8 +136,8 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿El REC cuenta con constancia de capacitación anual emitida por institución acreditada?",
     answer: null,
     required: true,
-    siAction: "La plataforma debe solicitar adjuntar la constancia o diploma vigente de capacitación.",
-    noAction: "La plataforma debe pedir evidencia del programa de capacitación pendiente para el REC.",
+    siAction: "Carga la constancia o diploma vigente de capacitación del REC.",
+    noAction: "Adjunta el programa de capacitación pendiente o evidencia del curso programado.",
   },
   {
     id: "rg-7",
@@ -146,9 +146,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se cuenta con un respaldo documental del poder o nombramiento que faculte al REC para representar a la empresa ante SAT/UIF?",
     answer: null,
     required: true,
-    siAction: "La plataforma debe requerir adjuntar la copia certificada o poder notarial correspondiente.",
+    siAction: "Sube la copia certificada o poder notarial que faculta al REC.",
     noAction:
-      "La plataforma debe generar un requerimiento interno para obtener el poder o nombramiento del REC.",
+      "Adjunta la evidencia del trámite para obtener el poder o nombramiento actualizado del REC.",
   },
 
   // 3. Actualizaciones y Modificaciones
@@ -159,9 +159,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se han realizado actualizaciones de datos (domicilio, representante, actividad) en el Portal PLD en un plazo no mayor a 30 días naturales de ocurrido el cambio?",
     answer: null,
     required: true,
-    siAction: "La plataforma debe solicitar el acuse de actualización emitido por el portal PLD.",
+    siAction: "Adjunta el acuse de actualización emitido por el portal PLD.",
     noAction:
-      "La plataforma debe habilitar un campo de justificación y requerir evidencia del trámite de actualización pendiente.",
+      "Describe el motivo de la falta de actualización y adjunta evidencia del trámite pendiente.",
   },
   {
     id: "rg-9",
@@ -169,8 +169,8 @@ const preguntasGenerales: ChecklistItem[] = [
     question: "¿Se encuentra actualizado el domicilio fiscal y de operación en el portal?",
     answer: null,
     required: true,
-    siAction: "La plataforma debe permitir adjuntar el acuse de modificación del domicilio.",
-    noAction: "La plataforma debe registrar una nota de pendiente y generar recordatorio de actualización.",
+    siAction: "Carga el acuse de modificación del domicilio registrado ante el portal PLD.",
+    noAction: "Adjunta evidencia del trámite de actualización de domicilio en proceso.",
   },
   {
     id: "rg-10",
@@ -178,9 +178,9 @@ const preguntasGenerales: ChecklistItem[] = [
     question: "¿Se actualizó el registro en caso de suspensión o baja de actividades vulnerables?",
     answer: null,
     required: true,
-    siAction: "La plataforma debe solicitar el acuse de baja emitido por el SAT.",
+    siAction: "Sube el acuse de baja emitido por el SAT.",
     noAction:
-      "La plataforma debe habilitar un campo para justificar la falta de actualización y adjuntar evidencia.",
+      "Explica la razón de la falta de actualización y agrega evidencia del trámite correspondiente.",
   },
 
   // 4. Buzón Tributario y Notificaciones
@@ -190,8 +190,8 @@ const preguntasGenerales: ChecklistItem[] = [
     question: "¿El Buzón Tributario de la empresa está habilitado y vinculado al registro PLD?",
     answer: null,
     required: true,
-    siAction: "La plataforma debe solicitar la captura de configuración del Buzón Tributario vinculado.",
-    noAction: "La plataforma debe registrar la nota de cumplimiento pendiente y programar seguimiento.",
+    siAction: "Adjunta la captura de configuración del Buzón Tributario vinculado.",
+    noAction: "Describe la situación actual y agrega evidencia del seguimiento para habilitar el Buzón Tributario.",
   },
   {
     id: "rg-12",
@@ -200,8 +200,8 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se tiene un procedimiento documentado para revisar semanalmente notificaciones relacionadas con PLD?",
     answer: null,
     required: true,
-    siAction: "La plataforma debe solicitar el registro de revisiones semanales del Buzón Tributario.",
-    noAction: "La plataforma debe generar la tarea de elaborar y adjuntar el procedimiento documentado.",
+    siAction: "Adjunta el registro o procedimiento que respalde la revisión semanal del Buzón Tributario.",
+    noAction: "Documenta el plan para elaborar el procedimiento y agrega evidencia de su implementación.",
   },
   {
     id: "rg-13",
@@ -210,9 +210,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se respondió en plazo (máximo 10 días hábiles) a notificaciones electrónicas del SAT relacionadas con el padrón?",
     answer: null,
     required: true,
-    siAction: "La plataforma debe pedir adjuntar el acuse de respuesta emitido dentro del plazo legal.",
+    siAction: "Sube el acuse de respuesta emitido dentro del plazo legal.",
     noAction:
-      "La plataforma debe requerir evidencia del requerimiento pendiente y generar una alerta de seguimiento.",
+      "Adjunta evidencia del requerimiento pendiente y describe el plan de seguimiento.",
   },
 
   // 5. Evidencias y Conservación
@@ -224,8 +224,8 @@ const preguntasGenerales: ChecklistItem[] = [
     answer: null,
     required: true,
     siAction:
-      "La plataforma debe solicitar adjuntar el listado de documentos resguardados en el repositorio interno.",
-    noAction: "La plataforma debe levantar una nota de incumplimiento y programar acciones correctivas.",
+      "Adjunta el listado de documentos resguardados en el repositorio interno (físico o digital).",
+    noAction: "Describe el incumplimiento y agrega evidencia del plan de acciones correctivas.",
   },
   {
     id: "rg-15",
@@ -235,9 +235,9 @@ const preguntasGenerales: ChecklistItem[] = [
     answer: null,
     required: true,
     siAction:
-      "La plataforma debe requerir adjuntar la validación del sello digital y código de verificación.",
+      "Carga la validación del sello digital y código de verificación de los acuses SAT.",
     noAction:
-      "La plataforma debe registrar un hallazgo y generar seguimiento para validar los acuses digitales.",
+      "Registra el hallazgo e incorpora evidencia del seguimiento para validar los acuses digitales.",
   },
 ]
 
@@ -668,30 +668,44 @@ export default function RegistroSATPage() {
                     <p className="text-xs font-semibold uppercase text-muted-foreground">Evidencias requeridas</p>
                     {pregunta.answer ? (
                       <div className="space-y-4 rounded-lg border border-dashed bg-muted/20 p-4">
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           <Badge variant="outline" className="w-fit capitalize">
                             Respuesta: {formatAnswer(pregunta.answer)}
                           </Badge>
-                          <p className="text-sm font-medium">
-                            Acciones que ejecutará la plataforma para esta respuesta
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {obtenerRequerimientoPorRespuesta(pregunta) ??
-                              "No se registraron acciones específicas para esta respuesta."}
-                          </p>
+                          {obtenerRequerimientoPorRespuesta(pregunta) ? (
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium">Documentación solicitada</p>
+                              <p className="text-sm text-muted-foreground">
+                                {obtenerRequerimientoPorRespuesta(pregunta)}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              No se registraron evidencias específicas para esta respuesta.
+                            </p>
+                          )}
                         </div>
-
                         <div className="grid gap-4 lg:grid-cols-2">
                           <div className="space-y-3">
-                            <Label htmlFor={`evidencia-${pregunta.id}`}>Carga de evidencia</Label>
+                            <Label htmlFor={`evidencia-${pregunta.id}`}>
+                              {pregunta.answer === "si" ? "Sube la evidencia obligatoria" : "Carga de evidencia"}
+                            </Label>
                             <Input
                               id={`evidencia-${pregunta.id}`}
                               type="file"
                               multiple
                               onChange={(event) => manejarCargaEvidencia(pregunta.id, event)}
+                              required={pregunta.answer === "si"}
                             />
-                            <p className="text-xs text-muted-foreground">
-                              Adjunta los archivos que respalden el cumplimiento. Puedes seleccionar varios documentos.
+                            <p
+                              className={cn(
+                                "text-xs",
+                                pregunta.answer === "si" ? "text-destructive" : "text-muted-foreground",
+                              )}
+                            >
+                              {pregunta.answer === "si"
+                                ? "Es obligatorio adjuntar evidencia cuando la respuesta es Sí. Puedes seleccionar varios documentos."
+                                : "Adjunta los archivos que respalden el cumplimiento. Puedes seleccionar varios documentos."}
                             </p>
                             {Boolean((evidenciasPorPregunta[pregunta.id] ?? []).length) && (
                               <div className="flex flex-wrap gap-2">
