@@ -60,45 +60,52 @@ const preguntasGenerales: ChecklistItem[] = [
   // 1. Alta en el Padrón de Actividades Vulnerables
   {
     id: "rg-1",
-    question: "¿La empresa se encuentra dada de alta en el Padrón de Actividades Vulnerables del SAT?",
+    question:
+      "Alta en el Padrón de Actividades Vulnerables.\n¿El alta en el Portal PLD del SAT se realizó dentro del plazo legal (antes de iniciar operaciones o a más tardar dentro de los 30 días posteriores)?\n• Sí → adjuntar acuse digital de alta\n• No → explicar causa y evidenciar trámite posterior",
     answer: null,
     required: true,
   },
   {
     id: "rg-2",
-    question: "¿Se presentó el aviso de alta dentro del plazo establecido (30 días naturales)?",
+    question:
+      "Alta en el Padrón de Actividades Vulnerables.\n¿El trámite de alta se efectuó utilizando la e.firma (FIEL) vigente del representante legal?\n• Sí → adjuntar acuse de validación de FIEL\n• No → adjuntar evidencia de renovación o aclaración ante SAT",
     answer: null,
     required: true,
   },
   {
     id: "rg-3",
-    question: "¿Se cuenta con el acuse de recibo del aviso de alta ante el SAT?",
+    question:
+      "Alta en el Padrón de Actividades Vulnerables.\n¿Se seleccionó correctamente la fracción de Actividad Vulnerable del art. 17 LFPIORPI que corresponde a la operación?\n• Sí → adjuntar captura del portal o acuse\n• No → levantar nota de corrección y evidencia del trámite de modificación",
     answer: null,
     required: true,
   },
 
-  // 2. Representante Encargado de Cumplimiento (REC)
+  // 2. Representante Encargada de Cumplimiento (REC)
   {
     id: "rg-4",
-    question: "¿Se ha designado formalmente al Representante Encargado de Cumplimiento (REC)?",
+    question:
+      "Representante Encargada de Cumplimiento.\n¿La empresa designó formalmente a la Representante Encargada de Cumplimiento en términos del art. 20 LFPIORPI?\n• Sí → adjuntar acuse de designación\n• No → justificar y anexar evidencia de trámite pendiente",
     answer: null,
     required: true,
   },
   {
     id: "rg-5",
-    question: "¿El REC cumple con los requisitos establecidos en la normativa (capacitación, experiencia, etc.)?",
+    question:
+      "Representante Encargada de Cumplimiento.\n¿El REC aceptó formalmente el cargo en el Portal SAT y se encuentra vigente?\n• Sí → adjuntar acuse de aceptación\n• No → adjuntar evidencia de actualización en trámite",
     answer: null,
     required: true,
   },
   {
     id: "rg-6",
-    question: "¿Se presentó el aviso de designación del REC ante el SAT?",
+    question:
+      "Representante Encargada de Cumplimiento.\n¿El REC cuenta con constancia de capacitación anual emitida por institución acreditada?\n• Sí → adjuntar constancia o diploma vigente\n• No → adjuntar evidencia de programa de capacitación pendiente",
     answer: null,
     required: true,
   },
   {
     id: "rg-7",
-    question: "¿Se cuenta con el acuse de recibo del aviso de designación del REC?",
+    question:
+      "Representante Encargada de Cumplimiento.\n¿Se cuenta con un respaldo documental del poder o nombramiento que faculte al REC para representar a la empresa ante SAT/UIF?\n• Sí → adjuntar copia certificada o poder notarial\n• No → generar requerimiento interno",
     answer: null,
     required: true,
   },
@@ -106,19 +113,22 @@ const preguntasGenerales: ChecklistItem[] = [
   // 3. Actualizaciones y Modificaciones
   {
     id: "rg-8",
-    question: "¿Se han presentado oportunamente los avisos de modificación cuando ha habido cambios en la información?",
+    question:
+      "Actualizaciones y Modificaciones.\n¿Se han realizado actualizaciones de datos (domicilio, representante, actividad) en el Portal PLD en un plazo no mayor a 30 días naturales de ocurrido el cambio?\n• Sí → adjuntar acuse de actualización\n• No → justificar y adjuntar evidencia de trámite pendiente",
     answer: null,
     required: true,
   },
   {
     id: "rg-9",
-    question: "¿Se mantiene actualizada la información en el padrón (domicilio, actividades, REC, etc.)?",
+    question:
+      "Actualizaciones y Modificaciones.\n¿Se encuentra actualizado el domicilio fiscal y de operación en el portal?\n• Sí → adjuntar acuse de modificación\n• No → nota de pendiente",
     answer: null,
     required: true,
   },
   {
     id: "rg-10",
-    question: "¿Se cuenta con los acuses de recibo de todos los avisos de modificación presentados?",
+    question:
+      "Actualizaciones y Modificaciones.\n¿Se actualizó el registro en caso de suspensión o baja de actividades vulnerables?\n• Sí → adjuntar acuse de baja\n• No → justificar",
     answer: null,
     required: true,
   },
@@ -126,19 +136,22 @@ const preguntasGenerales: ChecklistItem[] = [
   // 4. Buzón Tributario y Notificaciones
   {
     id: "rg-11",
-    question: "¿Se tiene acceso y se consulta regularmente el buzón tributario?",
+    question:
+      "Buzón Tributario y Notificaciones.\n¿El Buzón Tributario de la empresa está habilitado y vinculado al registro PLD?\n• Sí → adjuntar captura de configuración\n• No → nota de cumplimiento pendiente",
     answer: null,
     required: true,
   },
   {
     id: "rg-12",
-    question: "¿Se han atendido oportunamente las notificaciones recibidas del SAT?",
+    question:
+      "Buzón Tributario y Notificaciones.\n¿Se tiene un procedimiento documentado para revisar semanalmente notificaciones relacionadas con PLD?\n• Sí → adjuntar registro de revisiones\n• No → elaborar procedimiento",
     answer: null,
     required: true,
   },
   {
     id: "rg-13",
-    question: "¿Se mantiene un registro de todas las notificaciones recibidas y su seguimiento?",
+    question:
+      "Buzón Tributario y Notificaciones.\n¿Se respondió en plazo (máximo 10 días hábiles) a notificaciones electrónicas del SAT relacionadas con el padrón?\n• Sí → adjuntar acuse de respuesta\n• No → adjuntar evidencia del requerimiento pendiente",
     answer: null,
     required: true,
   },
@@ -146,13 +159,15 @@ const preguntasGenerales: ChecklistItem[] = [
   // 5. Evidencias y Conservación
   {
     id: "rg-14",
-    question: "¿Se conservan adecuadamente todos los documentos relacionados con el registro ante el SAT?",
+    question:
+      "Evidencias y Conservación.\n¿Se conserva en repositorio interno (físico o digital) la documentación soporte de alta y actualizaciones?\n• Sí → adjuntar listado de documentos resguardados\n• No → levantar nota de incumplimiento",
     answer: null,
     required: true,
   },
   {
     id: "rg-15",
-    question: "¿Se tiene implementado un sistema de respaldo y conservación documental?",
+    question:
+      "Evidencias y Conservación.\n¿Se verificó que los acuses digitales SAT tengan sello digital y código de verificación?\n• Sí → adjuntar validación\n• No → registrar hallazgo",
     answer: null,
     required: true,
   },
@@ -160,63 +175,63 @@ const preguntasGenerales: ChecklistItem[] = [
 
 // Evidencias requeridas por categoría
 const evidenciasAltaPadron = [
-  "Aviso de alta en el Padrón de Actividades Vulnerables",
-  "Acuse de recibo del aviso de alta",
-  "Documentación soporte del alta (RFC, acta constitutiva, etc.)",
-  "Comprobante de domicilio fiscal",
-  "Identificación del representante legal",
+  "Acuse digital de alta en el Portal PLD (SAT) con sello electrónico.",
+  "Captura de pantalla del portal SAT donde conste la actividad vulnerable registrada.",
+  "Constancia de RFC del sujeto obligado.",
+  "Copia vigente de la e.firma (FIEL) utilizada para el trámite.",
+  "Acta constitutiva (en caso de persona moral).",
+  "Comprobante de domicilio fiscal registrado en el portal.",
 ]
 
 const evidenciasREC = [
-  "Aviso de designación del REC",
-  "Acuse de recibo del aviso de designación",
-  "Curriculum vitae del REC",
-  "Constancias de capacitación del REC",
-  "Carta de designación interna del REC",
-  "Identificación oficial del REC",
+  "Acuse de designación de REC emitido por el SAT.",
+  "Acuse de aceptación de REC en el Portal PLD.",
+  "Identificación oficial vigente del REC.",
+  "Poder notarial o documento equivalente que acredite facultades para representar a la empresa ante SAT/UIF.",
+  "Constancia de capacitación anual del REC.",
 ]
 
 const evidenciasActualizaciones = [
-  "Avisos de modificación presentados",
-  "Acuses de recibo de avisos de modificación",
-  "Documentación soporte de las modificaciones",
-  "Registro de cambios y actualizaciones",
-  "Comunicaciones internas sobre cambios",
+  "Acuse de actualización de datos en el Portal PLD (ej. cambio de domicilio, actividad, representante).",
+  "Comprobante de baja o suspensión de actividad vulnerable, si aplica.",
+  "Historial de acuses de modificaciones realizadas en el padrón.",
 ]
 
 const evidenciasBuzonTributario = [
-  "Registro de consultas al buzón tributario",
-  "Notificaciones recibidas del SAT",
-  "Respuestas y seguimiento a notificaciones",
-  "Bitácora de acceso al buzón tributario",
-  "Comunicaciones con el SAT",
+  "Captura de configuración del Buzón Tributario vinculado al registro PLD.",
+  "Acuse de recepción de notificación electrónica SAT relacionada con PLD.",
+  "Acuse de respuesta enviada al SAT dentro del plazo legal (10 días hábiles).",
+  "Bitácora interna de revisiones periódicas del Buzón Tributario.",
 ]
 
 const evidenciasConservacion = [
-  "Sistema de archivo documental",
-  "Respaldos digitales de documentos",
-  "Procedimiento de conservación documentado",
-  "Registro de accesos y consultas",
-  "Plan de respaldo y recuperación",
+  "Repositorio digital interno con respaldo de todos los acuses emitidos por el SAT.",
+  "Registro de fecha y hora del alta inicial.",
+  "Bitácora de cambios de representante o domicilio.",
+  "Control de versiones de cada trámite realizado.",
 ]
 
 // Recomendaciones prácticas
 const recomendacionesPracticas = [
   {
     titulo: "Automatización del alta",
-    descripcion: "Implementar recordatorios automáticos para renovaciones y actualizaciones del padrón.",
+    descripcion:
+      "La plataforma debe incluir un submódulo guiado para el llenado del Portal PLD con checklist de RFC, FIEL, acta constitutiva y poderes, e integrar la carga obligatoria del acuse digital validando sello electrónico.",
   },
   {
     titulo: "Gestión del Representante Encargado de Cumplimiento",
-    descripcion: "Mantener actualizada la capacitación del REC y documentar todas sus actividades.",
+    descripcion:
+      "La plataforma debe habilitar un formulario específico para el REC que solicite acuse de designación, aceptación electrónica, constancia anual de capacitación y poder notarial, con alertas automáticas para renovaciones.",
   },
   {
     titulo: "Control de notificaciones electrónicas",
-    descripcion: "Establecer rutinas diarias de consulta del buzón tributario y seguimiento de notificaciones.",
+    descripcion:
+      "La plataforma debe mostrar un tablero con alertas del Buzón Tributario, registrar acuses de lectura y respuesta dentro de 10 días hábiles y calendarizar recordatorios periódicos de revisión.",
   },
   {
     titulo: "Trazabilidad documental",
-    descripcion: "Implementar un sistema robusto de conservación y trazabilidad de todos los documentos.",
+    descripcion:
+      "La plataforma debe mantener una bitácora digital con fecha de alta, folio SAT, representante registrado y acuses, además de un control de versiones para cada modificación posterior.",
   },
 ]
 
