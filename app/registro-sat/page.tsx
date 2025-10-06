@@ -29,13 +29,9 @@ import { motion } from "framer-motion"
 // Tipos de datos para el módulo
 interface ChecklistItem {
   id: string
-  category: string
   question: string
   answer: "si" | "no" | "no-aplica" | null
   required: boolean
-  yesFlow: string
-  noFlow: string
-  naFlow?: string
   notes?: string
   lastUpdated?: Date
 }
@@ -59,229 +55,125 @@ interface TraceabilityEntry {
   section: string
 }
 
-type StoredChecklistItem = Omit<ChecklistItem, "lastUpdated"> & { lastUpdated?: string | Date }
-type StoredDocumentUpload = Omit<DocumentUpload, "uploadDate" | "expiryDate"> & {
-  uploadDate: string | Date
-  expiryDate?: string | Date | null
-}
-type StoredTraceabilityEntry = Omit<TraceabilityEntry, "timestamp"> & { timestamp: string | Date }
-
-interface StoredData {
-  preguntas?: StoredChecklistItem[]
-  documentos?: StoredDocumentUpload[]
-  trazabilidad?: StoredTraceabilityEntry[]
-}
-
 // Preguntas generales del módulo
 const preguntasGenerales: ChecklistItem[] = [
+  // 1. Alta en el Padrón de Actividades Vulnerables
   {
     id: "rg-1",
-    category: "Alta en el Padrón de Actividades Vulnerables",
     question:
-      "¿El alta en el Portal PLD del SAT se realizó dentro del plazo legal (antes de iniciar operaciones o a más tardar dentro de los 30 días posteriores)?",
+      "Alta en el Padrón de Actividades Vulnerables.\n¿El alta en el Portal PLD del SAT se realizó dentro del plazo legal (antes de iniciar operaciones o a más tardar dentro de los 30 días posteriores)?\n• Sí → adjuntar acuse digital de alta\n• No → explicar causa y evidenciar trámite posterior",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe requerir el acuse digital de alta, validar su sello electrónico y vincularlo automáticamente a la bitácora del módulo.",
-    noFlow:
-      "La plataforma debe solicitar la causa del retraso, habilitar la carga de la evidencia del trámite posterior y registrar la incidencia en la bitácora.",
-    naFlow:
-      "La plataforma debe exigir una justificación formal de la no aplicación y archivarla junto con la respuesta.",
   },
   {
     id: "rg-2",
-    category: "Alta en el Padrón de Actividades Vulnerables",
     question:
-      "¿El trámite de alta se efectuó utilizando la e.firma (FIEL) vigente del representante legal?",
+      "Alta en el Padrón de Actividades Vulnerables.\n¿El trámite de alta se efectuó utilizando la e.firma (FIEL) vigente del representante legal?\n• Sí → adjuntar acuse de validación de FIEL\n• No → adjuntar evidencia de renovación o aclaración ante SAT",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe permitir adjuntar el acuse de validación de la FIEL y marcar el documento como vigente en la bitácora.",
-    noFlow:
-      "La plataforma debe habilitar la carga de la evidencia de renovación o aclaración ante el SAT y generar una alerta de seguimiento.",
-    naFlow:
-      "La plataforma debe solicitar el fundamento de la no aplicación y resguardarlo con la evidencia correspondiente.",
   },
   {
     id: "rg-3",
-    category: "Alta en el Padrón de Actividades Vulnerables",
     question:
-      "¿Se seleccionó correctamente la fracción de Actividad Vulnerable del artículo 17 LFPIORPI que corresponde a la operación?",
+      "Alta en el Padrón de Actividades Vulnerables.\n¿Se seleccionó correctamente la fracción de Actividad Vulnerable del art. 17 LFPIORPI que corresponde a la operación?\n• Sí → adjuntar captura del portal o acuse\n• No → levantar nota de corrección y evidencia del trámite de modificación",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe solicitar la captura del portal o el acuse donde conste la fracción registrada y enlazarlo al expediente digital.",
-    noFlow:
-      "La plataforma debe generar una nota de corrección, habilitar la carga del trámite de modificación y agendar un recordatorio de seguimiento.",
-    naFlow:
-      "La plataforma debe documentar la no aplicación con evidencia soporte dentro del expediente.",
   },
+
+  // 2. Representante Encargada de Cumplimiento (REC)
   {
     id: "rg-4",
-    category: "Representante Encargada de Cumplimiento (REC)",
     question:
-      "¿La empresa designó formalmente a la Representante Encargada de Cumplimiento en términos del artículo 20 LFPIORPI?",
+      "Representante Encargada de Cumplimiento.\n¿La empresa designó formalmente a la Representante Encargada de Cumplimiento en términos del art. 20 LFPIORPI?\n• Sí → adjuntar acuse de designación\n• No → justificar y anexar evidencia de trámite pendiente",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe requerir el acuse de designación emitido por el SAT y registrarlo en la sección de control del REC.",
-    noFlow:
-      "La plataforma debe solicitar una justificación, habilitar la carga de la evidencia del trámite pendiente y marcar la obligación como incompleta.",
-    naFlow:
-      "La plataforma debe registrar la no aplicación con soporte jurídico y dejarla asentada en la bitácora.",
   },
   {
     id: "rg-5",
-    category: "Representante Encargada de Cumplimiento (REC)",
     question:
-      "¿El REC aceptó formalmente el cargo en el Portal SAT y se encuentra vigente?",
+      "Representante Encargada de Cumplimiento.\n¿El REC aceptó formalmente el cargo en el Portal SAT y se encuentra vigente?\n• Sí → adjuntar acuse de aceptación\n• No → adjuntar evidencia de actualización en trámite",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe solicitar el acuse de aceptación y actualizar el estatus del REC como vigente.",
-    noFlow:
-      "La plataforma debe habilitar la carga de la evidencia de actualización en trámite y generar un recordatorio automático.",
-    naFlow:
-      "La plataforma debe requerir la explicación de no aplicación y archivarla con soporte documental.",
   },
   {
     id: "rg-6",
-    category: "Representante Encargada de Cumplimiento (REC)",
     question:
-      "¿El REC cuenta con constancia de capacitación anual emitida por institución acreditada?",
+      "Representante Encargada de Cumplimiento.\n¿El REC cuenta con constancia de capacitación anual emitida por institución acreditada?\n• Sí → adjuntar constancia o diploma vigente\n• No → adjuntar evidencia de programa de capacitación pendiente",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe permitir adjuntar la constancia o diploma vigente y registrar su vigencia para alertas futuras.",
-    noFlow:
-      "La plataforma debe solicitar evidencia del programa de capacitación pendiente y programar alertas de cumplimiento.",
-    naFlow:
-      "La plataforma debe documentar el motivo de no aplicación y mantenerlo en el historial de capacitación.",
   },
   {
     id: "rg-7",
-    category: "Representante Encargada de Cumplimiento (REC)",
     question:
-      "¿Se cuenta con respaldo documental del poder o nombramiento que faculte al REC para representar a la empresa ante el SAT/UIF?",
+      "Representante Encargada de Cumplimiento.\n¿Se cuenta con un respaldo documental del poder o nombramiento que faculte al REC para representar a la empresa ante SAT/UIF?\n• Sí → adjuntar copia certificada o poder notarial\n• No → generar requerimiento interno",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe almacenar la copia certificada o poder notarial y vincularlo al expediente del REC.",
-    noFlow:
-      "La plataforma debe generar un requerimiento interno y permitir documentar las acciones para obtener el poder correspondiente.",
-    naFlow:
-      "La plataforma debe registrar la justificación de la no aplicación y el criterio legal que la respalda.",
   },
+
+  // 3. Actualizaciones y Modificaciones
   {
     id: "rg-8",
-    category: "Actualizaciones y Modificaciones",
     question:
-      "¿Se han realizado actualizaciones de datos (domicilio, representante, actividad) en el Portal PLD en un plazo no mayor a 30 días naturales de ocurrido el cambio?",
+      "Actualizaciones y Modificaciones.\n¿Se han realizado actualizaciones de datos (domicilio, representante, actividad) en el Portal PLD en un plazo no mayor a 30 días naturales de ocurrido el cambio?\n• Sí → adjuntar acuse de actualización\n• No → justificar y adjuntar evidencia de trámite pendiente",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe permitir adjuntar el acuse de actualización y reflejar la fecha del cambio en la bitácora.",
-    noFlow:
-      "La plataforma debe solicitar la justificación del incumplimiento, habilitar la carga de la evidencia del trámite pendiente y generar una alerta de seguimiento.",
-    naFlow:
-      "La plataforma debe resguardar el motivo de no aplicación y asociarlo al registro del cambio.",
   },
   {
     id: "rg-9",
-    category: "Actualizaciones y Modificaciones",
-    question: "¿Se encuentra actualizado el domicilio fiscal y de operación en el portal?",
+    question:
+      "Actualizaciones y Modificaciones.\n¿Se encuentra actualizado el domicilio fiscal y de operación en el portal?\n• Sí → adjuntar acuse de modificación\n• No → nota de pendiente",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe registrar el acuse de modificación y actualizar la información de domicilio en el expediente.",
-    noFlow:
-      "La plataforma debe marcar la actualización como pendiente, solicitar el acuse correspondiente y programar un recordatorio automático.",
-    naFlow:
-      "La plataforma debe documentar el criterio por el cual no aplica la actualización y almacenarlo en la bitácora.",
   },
   {
     id: "rg-10",
-    category: "Actualizaciones y Modificaciones",
-    question: "¿Se actualizó el registro en caso de suspensión o baja de actividades vulnerables?",
+    question:
+      "Actualizaciones y Modificaciones.\n¿Se actualizó el registro en caso de suspensión o baja de actividades vulnerables?\n• Sí → adjuntar acuse de baja\n• No → justificar",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe adjuntar el acuse de baja y actualizar el estado de la actividad vulnerable en el tablero.",
-    noFlow:
-      "La plataforma debe solicitar la justificación, habilitar evidencia del trámite pendiente y generar seguimiento en la bitácora.",
-    naFlow:
-      "La plataforma debe registrar el motivo de no aplicación y el sustento que lo acredita.",
   },
+
+  // 4. Buzón Tributario y Notificaciones
   {
     id: "rg-11",
-    category: "Buzón Tributario y Notificaciones",
-    question: "¿El Buzón Tributario de la empresa está habilitado y vinculado al registro PLD?",
+    question:
+      "Buzón Tributario y Notificaciones.\n¿El Buzón Tributario de la empresa está habilitado y vinculado al registro PLD?\n• Sí → adjuntar captura de configuración\n• No → nota de cumplimiento pendiente",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe permitir adjuntar la captura de la configuración y registrar la verificación en el tablero de alertas.",
-    noFlow:
-      "La plataforma debe marcar el cumplimiento como pendiente, generar una tarea automática y solicitar evidencia de habilitación.",
-    naFlow:
-      "La plataforma debe resguardar la justificación de no aplicación y documentar el riesgo asociado.",
   },
   {
     id: "rg-12",
-    category: "Buzón Tributario y Notificaciones",
     question:
-      "¿Se tiene un procedimiento documentado para revisar semanalmente notificaciones relacionadas con PLD?",
+      "Buzón Tributario y Notificaciones.\n¿Se tiene un procedimiento documentado para revisar semanalmente notificaciones relacionadas con PLD?\n• Sí → adjuntar registro de revisiones\n• No → elaborar procedimiento",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe adjuntar el registro de revisiones y actualizar la agenda de revisiones periódicas.",
-    noFlow:
-      "La plataforma debe generar automáticamente la tarea de elaborar el procedimiento y habilitar el cargador del documento pendiente.",
-    naFlow:
-      "La plataforma debe documentar el criterio de no aplicación y asociarlo a la matriz de controles.",
   },
   {
     id: "rg-13",
-    category: "Buzón Tributario y Notificaciones",
     question:
-      "¿Se respondió en plazo (máximo 10 días hábiles) a notificaciones electrónicas del SAT relacionadas con el padrón?",
+      "Buzón Tributario y Notificaciones.\n¿Se respondió en plazo (máximo 10 días hábiles) a notificaciones electrónicas del SAT relacionadas con el padrón?\n• Sí → adjuntar acuse de respuesta\n• No → adjuntar evidencia del requerimiento pendiente",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe solicitar el acuse de respuesta y marcar la notificación como atendida dentro del plazo legal.",
-    noFlow:
-      "La plataforma debe habilitar la carga de la evidencia del requerimiento pendiente, generar alerta prioritaria y registrar el retraso en la bitácora.",
-    naFlow:
-      "La plataforma debe registrar el motivo de no aplicación y anexar soporte correspondiente.",
   },
+
+  // 5. Evidencias y Conservación
   {
     id: "rg-14",
-    category: "Evidencias y Conservación",
     question:
-      "¿Se conserva en repositorio interno (físico o digital) la documentación soporte de alta y actualizaciones?",
+      "Evidencias y Conservación.\n¿Se conserva en repositorio interno (físico o digital) la documentación soporte de alta y actualizaciones?\n• Sí → adjuntar listado de documentos resguardados\n• No → levantar nota de incumplimiento",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe solicitar el listado de documentos resguardados y confirmar que estén respaldados en el repositorio.",
-    noFlow:
-      "La plataforma debe generar una nota de incumplimiento, solicitar acciones correctivas y registrar responsables y fechas compromiso.",
-    naFlow:
-      "La plataforma debe documentar la excepción y resguardarla con las políticas internas aplicables.",
   },
   {
     id: "rg-15",
-    category: "Evidencias y Conservación",
     question:
-      "¿Se verificó que los acuses digitales SAT tengan sello digital y código de verificación?",
+      "Evidencias y Conservación.\n¿Se verificó que los acuses digitales SAT tengan sello digital y código de verificación?\n• Sí → adjuntar validación\n• No → registrar hallazgo",
     answer: null,
     required: true,
-    yesFlow:
-      "La plataforma debe adjuntar la validación del sello digital y marcar la verificación como completada en la bitácora.",
-    noFlow:
-      "La plataforma debe registrar el hallazgo, solicitar la evidencia de validación pendiente y generar un plan de acción.",
-    naFlow:
-      "La plataforma debe conservar la justificación de no aplicación y asociarla a la matriz de riesgos.",
   },
 ]
+
+// Evidencias requeridas por categoría
 const evidenciasAltaPadron = [
   "Acuse digital de alta en el Portal PLD (SAT) con sello electrónico.",
   "Captura de pantalla del portal SAT donde conste la actividad vulnerable registrada.",
@@ -356,35 +248,10 @@ export default function RegistroSATPage() {
     const savedData = localStorage.getItem("registro-sat-data")
     if (savedData) {
       try {
-        const data = JSON.parse(savedData) as StoredData
-
-        const preguntasGuardadas = preguntasGenerales.map((preguntaBase) => {
-          const stored = data.preguntas?.find((p) => p.id === preguntaBase.id)
-          if (!stored) {
-            return preguntaBase
-          }
-
-          return {
-            ...preguntaBase,
-            ...stored,
-            lastUpdated: stored.lastUpdated ? new Date(stored.lastUpdated) : undefined,
-          }
-        })
-
-        const documentosGuardados = (data.documentos || []).map((doc) => ({
-          ...doc,
-          uploadDate: new Date(doc.uploadDate),
-          expiryDate: doc.expiryDate ? new Date(doc.expiryDate) : undefined,
-        }))
-
-        const trazabilidadGuardada = (data.trazabilidad || []).map((entry) => ({
-          ...entry,
-          timestamp: new Date(entry.timestamp),
-        }))
-
-        setPreguntasState(preguntasGuardadas)
-        setDocumentos(documentosGuardados)
-        setTrazabilidad(trazabilidadGuardada)
+        const data = JSON.parse(savedData)
+        setPreguntasState(data.preguntas || preguntasGenerales)
+        setDocumentos(data.documentos || [])
+        setTrazabilidad(data.trazabilidad || [])
       } catch (error) {
         console.error("Error al cargar datos:", error)
       }
@@ -574,12 +441,9 @@ export default function RegistroSATPage() {
                   transition={{ delay: index * 0.1 }}
                   className="space-y-4 p-4 border rounded-lg"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 space-y-1">
-                      <span className="text-xs font-semibold uppercase tracking-wide text-primary">
-                        {pregunta.category}
-                      </span>
-                      <Label className="text-sm font-medium leading-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <Label className="text-sm font-medium">
                         {index + 1}. {pregunta.question}
                         {pregunta.required && <span className="text-red-500 ml-1">*</span>}
                       </Label>
@@ -592,7 +456,7 @@ export default function RegistroSATPage() {
                     )}
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex gap-2">
                     {["si", "no", "no-aplica"].map((option) => (
                       <Button
                         key={option}
@@ -605,27 +469,6 @@ export default function RegistroSATPage() {
                       </Button>
                     ))}
                   </div>
-
-                  {pregunta.answer === "si" && (
-                    <div className="flex items-start gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-                      <CheckCircle2 className="h-4 w-4 mt-0.5" />
-                      <span>{pregunta.yesFlow}</span>
-                    </div>
-                  )}
-
-                  {pregunta.answer === "no" && (
-                    <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                      <AlertTriangle className="h-4 w-4 mt-0.5" />
-                      <span>{pregunta.noFlow}</span>
-                    </div>
-                  )}
-
-                  {pregunta.answer === "no-aplica" && pregunta.naFlow && (
-                    <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">
-                      <Info className="h-4 w-4 mt-0.5" />
-                      <span>{pregunta.naFlow}</span>
-                    </div>
-                  )}
 
                   {pregunta.answer && (
                     <div className="space-y-2">
