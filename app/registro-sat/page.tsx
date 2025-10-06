@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, type ChangeEvent } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import {
   CheckCircle2,
@@ -24,6 +25,8 @@ import {
   Eye,
   UserCheck,
   Building2,
+  Paperclip,
+  X,
 } from "lucide-react"
 import { motion } from "framer-motion"
 
@@ -307,6 +310,7 @@ export default function RegistroSATPage() {
   const [trazabilidad, setTrazabilidad] = useState<TraceabilityEntry[]>([])
   const [progreso, setProgreso] = useState(0)
   const [activeTab, setActiveTab] = useState("preguntas")
+  const [evidenciasPorPregunta, setEvidenciasPorPregunta] = useState<Record<string, string[]>>({})
 
   // Cargar datos del localStorage
   useEffect(() => {
@@ -354,9 +358,23 @@ export default function RegistroSATPage() {
           }))
         : []
 
+      const evidenciasGuardadas =
+        data.evidenciasPorPregunta && typeof data.evidenciasPorPregunta === "object"
+          ? Object.entries(data.evidenciasPorPregunta as Record<string, unknown>).reduce<Record<string, string[]>>(
+              (acc, [key, value]) => {
+                if (Array.isArray(value)) {
+                  acc[key] = value.map((item) => String(item))
+                }
+                return acc
+              },
+              {},
+            )
+          : {}
+
       setPreguntasState(preguntasGuardadas)
       setDocumentos(documentosGuardados as DocumentUpload[])
       setTrazabilidad(trazabilidadGuardada as TraceabilityEntry[])
+      setEvidenciasPorPregunta(evidenciasGuardadas)
     } catch (error) {
       console.error("Error al cargar datos:", error)
     }
@@ -375,9 +393,10 @@ export default function RegistroSATPage() {
       preguntas: preguntasState,
       documentos,
       trazabilidad,
+      evidenciasPorPregunta,
     }
     localStorage.setItem("registro-sat-data", JSON.stringify(data))
-  }, [preguntasState, documentos, trazabilidad])
+  }, [preguntasState, documentos, trazabilidad, evidenciasPorPregunta])
 
   // Actualizar respuesta de pregunta
   const actualizarRespuesta = (id: string, answer: AnswerValue) => {
@@ -386,6 +405,11 @@ export default function RegistroSATPage() {
     setPreguntasState((prev) =>
       prev.map((pregunta) => (pregunta.id === id ? { ...pregunta, answer, lastUpdated: new Date() } : pregunta)),
     )
+
+    setEvidenciasPorPregunta((prev) => ({
+      ...prev,
+      [id]: prev[id] ?? [],
+    }))
 
     // Agregar entrada de trazabilidad
     const nuevaEntrada: TraceabilityEntry = {
@@ -434,6 +458,57 @@ export default function RegistroSATPage() {
       title: "Documento cargado",
       description: `El documento ${nuevoDocumento.name} ha sido cargado exitosamente.`,
     })
+  }
+
+  const obtenerRequerimientoPorRespuesta = (pregunta: ChecklistItem) => {
+    switch (pregunta.answer) {
+      case "si":
+        return pregunta.siAction
+      case "no":
+        return pregunta.noAction
+      case "no-aplica":
+        return pregunta.noAplicaAction
+      default:
+        return undefined
+    }
+  }
+
+  const manejarCargaEvidencia = (id: string, event: ChangeEvent<HTMLInputElement>) => {
+    const archivos = event.target.files
+    if (!archivos || archivos.length === 0) {
+      return
+    }
+
+    const nombres = Array.from(archivos).map((archivo) => archivo.name)
+
+    setEvidenciasPorPregunta((prev) => ({
+      ...prev,
+      [id]: [...(prev[id] ?? []), ...nombres],
+    }))
+
+    toast({
+      title: "Evidencia registrada",
+      description: `${nombres.length === 1 ? "Se agregó" : "Se agregaron"} ${nombres.length} archivo${
+        nombres.length > 1 ? "s" : ""
+      } a la pregunta seleccionada.`,
+    })
+
+    event.target.value = ""
+  }
+
+  const eliminarEvidencia = (id: string, nombreArchivo: string) => {
+    setEvidenciasPorPregunta((prev) => ({
+      ...prev,
+      [id]: (prev[id] ?? []).filter((nombre) => nombre !== nombreArchivo),
+    }))
+  }
+
+  const actualizarNotasPregunta = (id: string, notas: string) => {
+    setPreguntasState((prev) =>
+      prev.map((pregunta) =>
+        pregunta.id === id ? { ...pregunta, notes: notas, lastUpdated: new Date() } : pregunta,
+      ),
+    )
   }
 
   const formatAnswer = (answer: ChecklistItem["answer"]) => {
@@ -590,91 +665,79 @@ export default function RegistroSATPage() {
                   </div>
 
                   <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase text-muted-foreground">Flujo de acciones</p>
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {pregunta.siAction && (
-                        <div
-                          className={cn(
-                            "flex items-start gap-3 rounded-lg border p-3",
-                            pregunta.answer === "si" ? "border-green-500 bg-green-50" : "border-border bg-background",
-                          )}
-                        >
-                          <CheckCircle2
-                            className={cn(
-                              "mt-0.5 h-4 w-4",
-                              pregunta.answer === "si" ? "text-green-600" : "text-muted-foreground",
-                            )}
-                          />
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium">Sí</p>
-                            <p className="text-sm text-muted-foreground">{pregunta.siAction}</p>
-                          </div>
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">Evidencias requeridas</p>
+                    {pregunta.answer ? (
+                      <div className="space-y-4 rounded-lg border border-dashed bg-muted/20 p-4">
+                        <div className="space-y-2">
+                          <Badge variant="outline" className="w-fit capitalize">
+                            Respuesta: {formatAnswer(pregunta.answer)}
+                          </Badge>
+                          <p className="text-sm font-medium">
+                            Acciones que ejecutará la plataforma para esta respuesta
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {obtenerRequerimientoPorRespuesta(pregunta) ??
+                              "No se registraron acciones específicas para esta respuesta."}
+                          </p>
                         </div>
-                      )}
-                      {pregunta.noAction && (
-                        <div
-                          className={cn(
-                            "flex items-start gap-3 rounded-lg border p-3",
-                            pregunta.answer === "no" ? "border-red-500 bg-red-50" : "border-border bg-background",
-                          )}
-                        >
-                          <AlertTriangle
-                            className={cn(
-                              "mt-0.5 h-4 w-4",
-                              pregunta.answer === "no" ? "text-red-600" : "text-muted-foreground",
-                            )}
-                          />
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium">No</p>
-                            <p className="text-sm text-muted-foreground">{pregunta.noAction}</p>
-                          </div>
-                        </div>
-                      )}
-                      {pregunta.noAplicaAction && (
-                        <div
-                          className={cn(
-                            "flex items-start gap-3 rounded-lg border p-3",
-                            pregunta.answer === "no-aplica"
-                              ? "border-blue-500 bg-blue-50"
-                              : "border-border bg-background",
-                          )}
-                        >
-                          <Info
-                            className={cn(
-                              "mt-0.5 h-4 w-4",
-                              pregunta.answer === "no-aplica" ? "text-blue-600" : "text-muted-foreground",
-                            )}
-                          />
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium">No Aplica</p>
-                            <p className="text-sm text-muted-foreground">{pregunta.noAplicaAction}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
 
-                  {pregunta.answer && (
-                    <div className="space-y-2">
-                      <Label htmlFor={`notes-${pregunta.id}`} className="text-sm">
-                        Notas adicionales (opcional)
-                      </Label>
-                      <Textarea
-                        id={`notes-${pregunta.id}`}
-                        placeholder="Agregar observaciones o detalles adicionales..."
-                        value={pregunta.notes || ""}
-                        onChange={(e) => {
-                          const { value } = e.target
-                          setPreguntasState((prev) =>
-                            prev.map((p) =>
-                              p.id === pregunta.id ? { ...p, notes: value, lastUpdated: new Date() } : p,
-                            ),
-                          )
-                        }}
-                        className="min-h-[80px]"
-                      />
-                    </div>
-                  )}
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          <div className="space-y-3">
+                            <Label htmlFor={`evidencia-${pregunta.id}`}>Carga de evidencia</Label>
+                            <Input
+                              id={`evidencia-${pregunta.id}`}
+                              type="file"
+                              multiple
+                              onChange={(event) => manejarCargaEvidencia(pregunta.id, event)}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Adjunta los archivos que respalden el cumplimiento. Puedes seleccionar varios documentos.
+                            </p>
+                            {Boolean((evidenciasPorPregunta[pregunta.id] ?? []).length) && (
+                              <div className="flex flex-wrap gap-2">
+                                {(evidenciasPorPregunta[pregunta.id] ?? []).map((archivo) => (
+                                  <div
+                                    key={`${pregunta.id}-${archivo}`}
+                                    className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-xs"
+                                  >
+                                    <Paperclip className="h-3.5 w-3.5" />
+                                    <span className="max-w-[160px] truncate" title={archivo}>
+                                      {archivo}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => eliminarEvidencia(pregunta.id, archivo)}
+                                      className="rounded-full p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                      aria-label={`Eliminar ${archivo}`}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="space-y-3">
+                            <Label htmlFor={`notas-${pregunta.id}`}>Observaciones y referencias</Label>
+                            <Textarea
+                              id={`notas-${pregunta.id}`}
+                              placeholder="Describe el contexto de la evidencia, folios, responsables o próximos pasos."
+                              value={pregunta.notes ?? ""}
+                              onChange={(event) => actualizarNotasPregunta(pregunta.id, event.target.value)}
+                              className="min-h-[120px]"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Esta información se guardará automáticamente para dar seguimiento a la acción documental.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm italic text-muted-foreground">
+                        Selecciona una respuesta para habilitar la carga de evidencias y notas asociadas.
+                      </p>
+                    )}
+                  </div>
                 </motion.div>
               ))}
             </CardContent>
