@@ -11,7 +11,6 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { cn } from "@/lib/utils"
 import {
   CheckCircle2,
   Clock,
@@ -406,10 +405,21 @@ export default function RegistroSATPage() {
       prev.map((pregunta) => (pregunta.id === id ? { ...pregunta, answer, lastUpdated: new Date() } : pregunta)),
     )
 
-    setEvidenciasPorPregunta((prev) => ({
-      ...prev,
-      [id]: prev[id] ?? [],
-    }))
+    setEvidenciasPorPregunta((prev) => {
+      if (answer !== "si") {
+        if (!prev[id]) {
+          return prev
+        }
+
+        const { [id]: _omit, ...rest } = prev
+        return rest
+      }
+
+      return {
+        ...prev,
+        [id]: prev[id] ?? [],
+      }
+    })
 
     // Agregar entrada de trazabilidad
     const nuevaEntrada: TraceabilityEntry = {
@@ -472,6 +482,8 @@ export default function RegistroSATPage() {
         return undefined
     }
   }
+
+  const requiereEvidencia = (pregunta: ChecklistItem) => pregunta.answer === "si"
 
   const manejarCargaEvidencia = (id: string, event: ChangeEvent<HTMLInputElement>) => {
     const archivos = event.target.files
@@ -665,76 +677,107 @@ export default function RegistroSATPage() {
                   </div>
 
                   <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase text-muted-foreground">Evidencias requeridas</p>
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">
+                      Gestión de evidencia y seguimiento
+                    </p>
                     {pregunta.answer ? (
                       <div className="space-y-4 rounded-lg border border-dashed bg-muted/20 p-4">
-                        <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="outline" className="w-fit capitalize">
                             Respuesta: {formatAnswer(pregunta.answer)}
                           </Badge>
-                          <p className="text-sm font-medium">
-                            Acciones que ejecutará la plataforma para esta respuesta
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {obtenerRequerimientoPorRespuesta(pregunta) ??
-                              "No se registraron acciones específicas para esta respuesta."}
-                          </p>
+                          <Badge
+                            variant={requiereEvidencia(pregunta) ? "default" : "secondary"}
+                            className="text-xs uppercase tracking-wide"
+                          >
+                            {requiereEvidencia(pregunta) ? "Evidencia requerida" : "Acción automatizada"}
+                          </Badge>
                         </div>
 
                         <div className="grid gap-4 lg:grid-cols-2">
                           <div className="space-y-3">
-                            <Label htmlFor={`evidencia-${pregunta.id}`}>Carga de evidencia</Label>
-                            <Input
-                              id={`evidencia-${pregunta.id}`}
-                              type="file"
-                              multiple
-                              onChange={(event) => manejarCargaEvidencia(pregunta.id, event)}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Adjunta los archivos que respalden el cumplimiento. Puedes seleccionar varios documentos.
-                            </p>
-                            {Boolean((evidenciasPorPregunta[pregunta.id] ?? []).length) && (
-                              <div className="flex flex-wrap gap-2">
-                                {(evidenciasPorPregunta[pregunta.id] ?? []).map((archivo) => (
-                                  <div
-                                    key={`${pregunta.id}-${archivo}`}
-                                    className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-xs"
-                                  >
-                                    <Paperclip className="h-3.5 w-3.5" />
-                                    <span className="max-w-[160px] truncate" title={archivo}>
-                                      {archivo}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => eliminarEvidencia(pregunta.id, archivo)}
-                                      className="rounded-full p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                                      aria-label={`Eliminar ${archivo}`}
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </button>
+                            {requiereEvidencia(pregunta) ? (
+                              <>
+                                <Label htmlFor={`evidencia-${pregunta.id}`}>Sube la evidencia solicitada</Label>
+                                <p className="text-sm text-muted-foreground">
+                                  {obtenerRequerimientoPorRespuesta(pregunta) ??
+                                    "Describe la documentación que respalda esta respuesta."}
+                                </p>
+                                <Input
+                                  id={`evidencia-${pregunta.id}`}
+                                  type="file"
+                                  multiple
+                                  required
+                                  aria-required={true}
+                                  onChange={(event) => manejarCargaEvidencia(pregunta.id, event)}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Adjunta los archivos que respalden el cumplimiento. Puedes seleccionar varios documentos.
+                                </p>
+                                {Boolean((evidenciasPorPregunta[pregunta.id] ?? []).length) && (
+                                  <div className="flex flex-wrap gap-2">
+                                    {(evidenciasPorPregunta[pregunta.id] ?? []).map((archivo) => (
+                                      <div
+                                        key={`${pregunta.id}-${archivo}`}
+                                        className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-xs"
+                                      >
+                                        <Paperclip className="h-3.5 w-3.5" />
+                                        <span className="max-w-[160px] truncate" title={archivo}>
+                                          {archivo}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => eliminarEvidencia(pregunta.id, archivo)}
+                                          className="rounded-full p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                          aria-label={`Eliminar ${archivo}`}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </div>
+                                    ))}
                                   </div>
-                                ))}
+                                )}
+                              </>
+                            ) : (
+                              <div className="space-y-2 rounded-lg border border-dashed bg-background/80 p-3">
+                                <p className="text-sm font-medium">Seguimiento automático programado</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {obtenerRequerimientoPorRespuesta(pregunta) ??
+                                    "No se registraron acciones específicas para esta respuesta."}
+                                </p>
                               </div>
                             )}
                           </div>
                           <div className="space-y-3">
-                            <Label htmlFor={`notas-${pregunta.id}`}>Observaciones y referencias</Label>
+                            <Label htmlFor={`notas-${pregunta.id}`}>
+                              {requiereEvidencia(pregunta)
+                                ? "Observaciones y referencias"
+                                : "Notas de seguimiento"
+                              }
+                            </Label>
                             <Textarea
                               id={`notas-${pregunta.id}`}
-                              placeholder="Describe el contexto de la evidencia, folios, responsables o próximos pasos."
+                              placeholder={
+                                requiereEvidencia(pregunta)
+                                  ? "Describe el contexto de la evidencia, folios, responsables o próximos pasos."
+                                  : "Registra indicaciones para la plataforma o responsables asignados."
+                              }
                               value={pregunta.notes ?? ""}
                               onChange={(event) => actualizarNotasPregunta(pregunta.id, event.target.value)}
                               className="min-h-[120px]"
                             />
                             <p className="text-xs text-muted-foreground">
-                              Esta información se guardará automáticamente para dar seguimiento a la acción documental.
+                              {requiereEvidencia(pregunta)
+                                ? "Esta información se guardará automáticamente para dar seguimiento a la acción documental."
+                                : "La plataforma conservará estas notas para coordinar el flujo de acciones requerido."
+                              }
                             </p>
                           </div>
                         </div>
                       </div>
                     ) : (
                       <p className="text-sm italic text-muted-foreground">
-                        Selecciona una respuesta para habilitar la carga de evidencias y notas asociadas.
+                        Selecciona una respuesta para habilitar la gestión de evidencias y seguimiento.
                       </p>
                     )}
                   </div>
