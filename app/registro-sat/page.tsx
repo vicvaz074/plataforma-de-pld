@@ -31,17 +31,28 @@ import {
 import { motion } from "framer-motion"
 
 // Tipos de datos para el módulo
+type AnswerValue = "si" | "no" | "no-aplica"
+
+interface ChecklistRequirement {
+  requiresEvidence?: boolean
+  evidenceHints?: string[]
+  evidenceHelperText?: string
+  notesLabel?: string
+  notesPlaceholder?: string
+  helperText?: string
+}
+
+type ChecklistRequirements = Partial<Record<AnswerValue, ChecklistRequirement>>
+
 interface ChecklistItem {
   id: string
   section: string
   question: string
-  answer: "si" | "no" | "no-aplica" | null
+  answer: AnswerValue | null
   required: boolean
   notes?: string
   lastUpdated?: Date
-  siAction?: string
-  noAction?: string
-  noAplicaAction?: string
+  requirements?: ChecklistRequirements
 }
 
 interface DocumentUpload {
@@ -63,13 +74,35 @@ interface TraceabilityEntry {
   section: string
 }
 
-type AnswerValue = Exclude<ChecklistItem["answer"], null>
-
 const answerOptions: { value: AnswerValue; label: string }[] = [
   { value: "si", label: "Sí" },
   { value: "no", label: "No" },
   { value: "no-aplica", label: "No Aplica" },
 ]
+
+const createRequirements = (siHints: string[]): ChecklistRequirements => ({
+  si: {
+    requiresEvidence: true,
+    evidenceHints: siHints,
+    evidenceHelperText:
+      "Adjunta los archivos que respalden el cumplimiento. Puedes seleccionar varios documentos.",
+    notesLabel: "Comentarios sobre la evidencia",
+    notesPlaceholder: "Agrega folios, responsables o aclaraciones relacionadas con los archivos cargados.",
+    helperText:
+      "Esta información se guardará automáticamente para mantener trazabilidad sobre la documentación presentada.",
+  },
+  no: {
+    notesLabel: "Justificación y acciones pendientes",
+    notesPlaceholder: "Describe el motivo de la respuesta negativa y los pasos para regularizar la situación.",
+    helperText:
+      "Documenta la causa del incumplimiento y las acciones previstas para atender el requisito.",
+  },
+  "no-aplica": {
+    notesLabel: "Notas sobre no aplicabilidad",
+    notesPlaceholder: "Explica por qué este requisito no aplica en la operación.",
+    helperText: "Deja constancia de la justificación de no aplicabilidad para futuras revisiones.",
+  },
+})
 
 // Preguntas generales del módulo
 const preguntasGenerales: ChecklistItem[] = [
@@ -81,9 +114,7 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿El alta en el Portal PLD del SAT se realizó dentro del plazo legal (antes de iniciar operaciones o a más tardar dentro de los 30 días posteriores)?",
     answer: null,
     required: true,
-    siAction: "Adjunta el acuse digital de alta expedido por el SAT.",
-    noAction:
-      "Explica la causa del retraso y adjunta evidencia del trámite posterior (acuse, folio o captura del trámite).",
+    requirements: createRequirements(["Acuse digital de alta expedido por el SAT."]),
   },
   {
     id: "rg-2",
@@ -92,9 +123,7 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿El trámite de alta se efectuó utilizando la e.firma (FIEL) vigente del representante legal?",
     answer: null,
     required: true,
-    siAction: "Adjunta el acuse de validación de la e.firma vigente.",
-    noAction:
-      "Sube la evidencia de renovación o aclaración de la e.firma presentada ante el SAT y documenta el seguimiento.",
+    requirements: createRequirements(["Acuse de validación de e.firma (FIEL) vigente del representante legal."]),
   },
   {
     id: "rg-3",
@@ -103,9 +132,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se seleccionó correctamente la fracción de Actividad Vulnerable del art. 17 LFPIORPI que corresponde a la operación?",
     answer: null,
     required: true,
-    siAction: "Carga la captura del portal o el acuse que confirme la fracción seleccionada.",
-    noAction:
-      "Adjunta la nota de corrección y la evidencia del trámite de modificación presentado ante el SAT.",
+    requirements: createRequirements([
+      "Captura del portal o acuse que confirme la fracción de Actividad Vulnerable seleccionada.",
+    ]),
   },
 
   // 2. Representante Encargada de Cumplimiento (REC)
@@ -116,9 +145,7 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿La empresa designó formalmente a la Representante Encargada de Cumplimiento en términos del art. 20 LFPIORPI?",
     answer: null,
     required: true,
-    siAction: "Sube el acuse de designación emitido por el SAT.",
-    noAction:
-      "Describe la situación y adjunta evidencia del trámite pendiente de designación.",
+    requirements: createRequirements(["Acuse de designación de la REC emitido por el SAT."]),
   },
   {
     id: "rg-5",
@@ -126,8 +153,7 @@ const preguntasGenerales: ChecklistItem[] = [
     question: "¿El REC aceptó formalmente el cargo en el Portal SAT y se encuentra vigente?",
     answer: null,
     required: true,
-    siAction: "Adjunta el acuse de aceptación del REC vigente.",
-    noAction: "Proporciona evidencia del trámite de actualización del REC que se encuentra en curso.",
+    requirements: createRequirements(["Acuse de aceptación del REC en el Portal PLD del SAT."]),
   },
   {
     id: "rg-6",
@@ -136,8 +162,7 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿El REC cuenta con constancia de capacitación anual emitida por institución acreditada?",
     answer: null,
     required: true,
-    siAction: "Carga la constancia o diploma vigente de capacitación del REC.",
-    noAction: "Adjunta el programa de capacitación pendiente o evidencia del curso programado.",
+    requirements: createRequirements(["Constancia o diploma vigente de capacitación anual del REC."]),
   },
   {
     id: "rg-7",
@@ -146,9 +171,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se cuenta con un respaldo documental del poder o nombramiento que faculte al REC para representar a la empresa ante SAT/UIF?",
     answer: null,
     required: true,
-    siAction: "Sube la copia certificada o poder notarial que faculta al REC.",
-    noAction:
-      "Adjunta la evidencia del trámite para obtener el poder o nombramiento actualizado del REC.",
+    requirements: createRequirements([
+      "Copia certificada o poder notarial que faculte al REC para representar a la empresa ante SAT/UIF.",
+    ]),
   },
 
   // 3. Actualizaciones y Modificaciones
@@ -159,9 +184,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se han realizado actualizaciones de datos (domicilio, representante, actividad) en el Portal PLD en un plazo no mayor a 30 días naturales de ocurrido el cambio?",
     answer: null,
     required: true,
-    siAction: "Adjunta el acuse de actualización emitido por el portal PLD.",
-    noAction:
-      "Describe el motivo de la falta de actualización y adjunta evidencia del trámite pendiente.",
+    requirements: createRequirements([
+      "Acuse de actualización de datos emitido por el Portal PLD del SAT.",
+    ]),
   },
   {
     id: "rg-9",
@@ -169,8 +194,9 @@ const preguntasGenerales: ChecklistItem[] = [
     question: "¿Se encuentra actualizado el domicilio fiscal y de operación en el portal?",
     answer: null,
     required: true,
-    siAction: "Carga el acuse de modificación del domicilio registrado ante el portal PLD.",
-    noAction: "Adjunta evidencia del trámite de actualización de domicilio en proceso.",
+    requirements: createRequirements([
+      "Acuse de modificación o confirmación del domicilio registrado en el portal.",
+    ]),
   },
   {
     id: "rg-10",
@@ -178,9 +204,7 @@ const preguntasGenerales: ChecklistItem[] = [
     question: "¿Se actualizó el registro en caso de suspensión o baja de actividades vulnerables?",
     answer: null,
     required: true,
-    siAction: "Sube el acuse de baja emitido por el SAT.",
-    noAction:
-      "Explica la razón de la falta de actualización y agrega evidencia del trámite correspondiente.",
+    requirements: createRequirements(["Acuse de baja o suspensión de actividades vulnerables emitido por el SAT."]),
   },
 
   // 4. Buzón Tributario y Notificaciones
@@ -190,8 +214,9 @@ const preguntasGenerales: ChecklistItem[] = [
     question: "¿El Buzón Tributario de la empresa está habilitado y vinculado al registro PLD?",
     answer: null,
     required: true,
-    siAction: "Adjunta la captura de configuración del Buzón Tributario vinculado.",
-    noAction: "Describe la situación actual y agrega evidencia del seguimiento para habilitar el Buzón Tributario.",
+    requirements: createRequirements([
+      "Captura o acuse de configuración del Buzón Tributario vinculado al registro PLD.",
+    ]),
   },
   {
     id: "rg-12",
@@ -200,8 +225,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se tiene un procedimiento documentado para revisar semanalmente notificaciones relacionadas con PLD?",
     answer: null,
     required: true,
-    siAction: "Adjunta el registro o procedimiento que respalde la revisión semanal del Buzón Tributario.",
-    noAction: "Documenta el plan para elaborar el procedimiento y agrega evidencia de su implementación.",
+    requirements: createRequirements([
+      "Procedimiento documentado o bitácora de revisiones semanales del Buzón Tributario.",
+    ]),
   },
   {
     id: "rg-13",
@@ -210,9 +236,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se respondió en plazo (máximo 10 días hábiles) a notificaciones electrónicas del SAT relacionadas con el padrón?",
     answer: null,
     required: true,
-    siAction: "Sube el acuse de respuesta emitido dentro del plazo legal.",
-    noAction:
-      "Adjunta evidencia del requerimiento pendiente y describe el plan de seguimiento.",
+    requirements: createRequirements([
+      "Acuse de respuesta emitido dentro del plazo legal correspondiente.",
+    ]),
   },
 
   // 5. Evidencias y Conservación
@@ -223,9 +249,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se conserva en repositorio interno (físico o digital) la documentación soporte de alta y actualizaciones?",
     answer: null,
     required: true,
-    siAction:
-      "Adjunta el listado de documentos resguardados en el repositorio interno (físico o digital).",
-    noAction: "Describe el incumplimiento y agrega evidencia del plan de acciones correctivas.",
+    requirements: createRequirements([
+      "Listado o inventario de documentos resguardados en el repositorio interno.",
+    ]),
   },
   {
     id: "rg-15",
@@ -234,10 +260,9 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se verificó que los acuses digitales SAT tengan sello digital y código de verificación?",
     answer: null,
     required: true,
-    siAction:
-      "Carga la validación del sello digital y código de verificación de los acuses SAT.",
-    noAction:
-      "Registra el hallazgo e incorpora evidencia del seguimiento para validar los acuses digitales.",
+    requirements: createRequirements([
+      "Validación o constancia del sello digital y código de verificación de los acuses.",
+    ]),
   },
 ]
 
@@ -401,15 +426,27 @@ export default function RegistroSATPage() {
   // Actualizar respuesta de pregunta
   const actualizarRespuesta = (id: string, answer: AnswerValue) => {
     const preguntaActual = preguntasState.find((p) => p.id === id)
+    const requerimientoSeleccionado = preguntaActual?.requirements?.[answer]
 
     setPreguntasState((prev) =>
       prev.map((pregunta) => (pregunta.id === id ? { ...pregunta, answer, lastUpdated: new Date() } : pregunta)),
     )
 
-    setEvidenciasPorPregunta((prev) => ({
-      ...prev,
-      [id]: prev[id] ?? [],
-    }))
+    setEvidenciasPorPregunta((prev) => {
+      if (requerimientoSeleccionado?.requiresEvidence) {
+        return {
+          ...prev,
+          [id]: prev[id] ?? [],
+        }
+      }
+
+      if (prev[id]) {
+        const { [id]: _omit, ...rest } = prev
+        return rest
+      }
+
+      return prev
+    })
 
     // Agregar entrada de trazabilidad
     const nuevaEntrada: TraceabilityEntry = {
@@ -458,19 +495,6 @@ export default function RegistroSATPage() {
       title: "Documento cargado",
       description: `El documento ${nuevoDocumento.name} ha sido cargado exitosamente.`,
     })
-  }
-
-  const obtenerRequerimientoPorRespuesta = (pregunta: ChecklistItem) => {
-    switch (pregunta.answer) {
-      case "si":
-        return pregunta.siAction
-      case "no":
-        return pregunta.noAction
-      case "no-aplica":
-        return pregunta.noAplicaAction
-      default:
-        return undefined
-    }
   }
 
   const manejarCargaEvidencia = (id: string, event: ChangeEvent<HTMLInputElement>) => {
@@ -624,14 +648,19 @@ export default function RegistroSATPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {preguntasState.map((pregunta, index) => (
-                <motion.div
-                  key={pregunta.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="space-y-5 rounded-lg border bg-background p-4"
-                >
+              {preguntasState.map((pregunta, index) => {
+                const requirement = pregunta.answer ? pregunta.requirements?.[pregunta.answer] : undefined
+                const showEvidenceUpload = Boolean(requirement?.requiresEvidence)
+                const evidenceList = requirement?.evidenceHints ?? []
+
+                return (
+                  <motion.div
+                    key={pregunta.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="space-y-5 rounded-lg border bg-background p-4"
+                  >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-2">
                       <Badge variant="secondary" className="text-xs font-normal uppercase tracking-wide">
@@ -665,95 +694,102 @@ export default function RegistroSATPage() {
                   </div>
 
                   <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase text-muted-foreground">Evidencias requeridas</p>
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">
+                      Seguimiento de respuesta
+                    </p>
                     {pregunta.answer ? (
                       <div className="space-y-4 rounded-lg border border-dashed bg-muted/20 p-4">
                         <div className="space-y-3">
                           <Badge variant="outline" className="w-fit capitalize">
                             Respuesta: {formatAnswer(pregunta.answer)}
                           </Badge>
-                          {obtenerRequerimientoPorRespuesta(pregunta) ? (
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium">Documentación solicitada</p>
-                              <p className="text-sm text-muted-foreground">
-                                {obtenerRequerimientoPorRespuesta(pregunta)}
-                              </p>
+                          {evidenceList.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium">Evidencias esperadas</p>
+                              <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
+                                {evidenceList.map((item) => (
+                                  <li key={item}>{item}</li>
+                                ))}
+                              </ul>
                             </div>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">
-                              No se registraron evidencias específicas para esta respuesta.
-                            </p>
                           )}
                         </div>
-                        <div className="grid gap-4 lg:grid-cols-2">
-                          <div className="space-y-3">
-                            <Label htmlFor={`evidencia-${pregunta.id}`}>
-                              {pregunta.answer === "si" ? "Sube la evidencia obligatoria" : "Carga de evidencia"}
-                            </Label>
-                            <Input
-                              id={`evidencia-${pregunta.id}`}
-                              type="file"
-                              multiple
-                              onChange={(event) => manejarCargaEvidencia(pregunta.id, event)}
-                              required={pregunta.answer === "si"}
-                            />
-                            <p
-                              className={cn(
-                                "text-xs",
-                                pregunta.answer === "si" ? "text-destructive" : "text-muted-foreground",
+
+                        <div
+                          className={cn(
+                            "grid gap-4",
+                            showEvidenceUpload ? "lg:grid-cols-2" : "lg:grid-cols-1",
+                          )}
+                        >
+                          {showEvidenceUpload && (
+                            <div className="space-y-3">
+                              <Label htmlFor={`evidencia-${pregunta.id}`}>Carga de evidencia</Label>
+                              <Input
+                                id={`evidencia-${pregunta.id}`}
+                                type="file"
+                                multiple
+                                onChange={(event) => manejarCargaEvidencia(pregunta.id, event)}
+                              />
+                              {requirement?.evidenceHelperText && (
+                                <p className="text-xs text-muted-foreground">
+                                  {requirement.evidenceHelperText}
+                                </p>
                               )}
-                            >
-                              {pregunta.answer === "si"
-                                ? "Es obligatorio adjuntar evidencia cuando la respuesta es Sí. Puedes seleccionar varios documentos."
-                                : "Adjunta los archivos que respalden el cumplimiento. Puedes seleccionar varios documentos."}
-                            </p>
-                            {Boolean((evidenciasPorPregunta[pregunta.id] ?? []).length) && (
-                              <div className="flex flex-wrap gap-2">
-                                {(evidenciasPorPregunta[pregunta.id] ?? []).map((archivo) => (
-                                  <div
-                                    key={`${pregunta.id}-${archivo}`}
-                                    className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-xs"
-                                  >
-                                    <Paperclip className="h-3.5 w-3.5" />
-                                    <span className="max-w-[160px] truncate" title={archivo}>
-                                      {archivo}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => eliminarEvidencia(pregunta.id, archivo)}
-                                      className="rounded-full p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                                      aria-label={`Eliminar ${archivo}`}
+                              {Boolean((evidenciasPorPregunta[pregunta.id] ?? []).length) && (
+                                <div className="flex flex-wrap gap-2">
+                                  {(evidenciasPorPregunta[pregunta.id] ?? []).map((archivo) => (
+                                    <div
+                                      key={`${pregunta.id}-${archivo}`}
+                                      className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-xs"
                                     >
-                                      <X className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                                      <Paperclip className="h-3.5 w-3.5" />
+                                      <span className="max-w-[160px] truncate" title={archivo}>
+                                        {archivo}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => eliminarEvidencia(pregunta.id, archivo)}
+                                        className="rounded-full p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                        aria-label={`Eliminar ${archivo}`}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div className="space-y-3">
-                            <Label htmlFor={`notas-${pregunta.id}`}>Observaciones y referencias</Label>
+                            <Label htmlFor={`notas-${pregunta.id}`}>
+                              {requirement?.notesLabel ?? "Observaciones y referencias"}
+                            </Label>
                             <Textarea
                               id={`notas-${pregunta.id}`}
-                              placeholder="Describe el contexto de la evidencia, folios, responsables o próximos pasos."
+                              placeholder={
+                                requirement?.notesPlaceholder ??
+                                "Describe información relevante para esta respuesta."
+                              }
                               value={pregunta.notes ?? ""}
                               onChange={(event) => actualizarNotasPregunta(pregunta.id, event.target.value)}
                               className="min-h-[120px]"
                             />
                             <p className="text-xs text-muted-foreground">
-                              Esta información se guardará automáticamente para dar seguimiento a la acción documental.
+                              {requirement?.helperText ??
+                                "Esta información se guardará automáticamente para dar seguimiento."}
                             </p>
                           </div>
                         </div>
                       </div>
                     ) : (
                       <p className="text-sm italic text-muted-foreground">
-                        Selecciona una respuesta para habilitar la carga de evidencias y notas asociadas.
+                        Selecciona una respuesta para habilitar los campos de seguimiento.
                       </p>
                     )}
                   </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                )
+              })}
             </CardContent>
           </Card>
         </TabsContent>
