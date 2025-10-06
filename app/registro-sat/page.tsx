@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
 import {
   CheckCircle2,
   Clock,
@@ -29,11 +30,15 @@ import { motion } from "framer-motion"
 // Tipos de datos para el módulo
 interface ChecklistItem {
   id: string
+  section: string
   question: string
   answer: "si" | "no" | "no-aplica" | null
   required: boolean
   notes?: string
   lastUpdated?: Date
+  siAction?: string
+  noAction?: string
+  noAplicaAction?: string
 }
 
 interface DocumentUpload {
@@ -55,121 +60,181 @@ interface TraceabilityEntry {
   section: string
 }
 
+type AnswerValue = Exclude<ChecklistItem["answer"], null>
+
+const answerOptions: { value: AnswerValue; label: string }[] = [
+  { value: "si", label: "Sí" },
+  { value: "no", label: "No" },
+  { value: "no-aplica", label: "No Aplica" },
+]
+
 // Preguntas generales del módulo
 const preguntasGenerales: ChecklistItem[] = [
   // 1. Alta en el Padrón de Actividades Vulnerables
   {
     id: "rg-1",
+    section: "Alta en el Padrón de Actividades Vulnerables",
     question:
-      "Alta en el Padrón de Actividades Vulnerables.\n¿El alta en el Portal PLD del SAT se realizó dentro del plazo legal (antes de iniciar operaciones o a más tardar dentro de los 30 días posteriores)?\n• Sí → adjuntar acuse digital de alta\n• No → explicar causa y evidenciar trámite posterior",
+      "¿El alta en el Portal PLD del SAT se realizó dentro del plazo legal (antes de iniciar operaciones o a más tardar dentro de los 30 días posteriores)?",
     answer: null,
     required: true,
+    siAction: "La plataforma debe solicitar adjuntar el acuse digital de alta expedido por el SAT.",
+    noAction:
+      "La plataforma debe abrir un campo para explicar la causa del retraso y adjuntar evidencia del trámite posterior.",
   },
   {
     id: "rg-2",
+    section: "Alta en el Padrón de Actividades Vulnerables",
     question:
-      "Alta en el Padrón de Actividades Vulnerables.\n¿El trámite de alta se efectuó utilizando la e.firma (FIEL) vigente del representante legal?\n• Sí → adjuntar acuse de validación de FIEL\n• No → adjuntar evidencia de renovación o aclaración ante SAT",
+      "¿El trámite de alta se efectuó utilizando la e.firma (FIEL) vigente del representante legal?",
     answer: null,
     required: true,
+    siAction: "La plataforma debe permitir adjuntar el acuse de validación de FIEL vigente.",
+    noAction:
+      "La plataforma debe requerir evidencia de la renovación o aclaración de la FIEL ante el SAT y registrar el seguimiento.",
   },
   {
     id: "rg-3",
+    section: "Alta en el Padrón de Actividades Vulnerables",
     question:
-      "Alta en el Padrón de Actividades Vulnerables.\n¿Se seleccionó correctamente la fracción de Actividad Vulnerable del art. 17 LFPIORPI que corresponde a la operación?\n• Sí → adjuntar captura del portal o acuse\n• No → levantar nota de corrección y evidencia del trámite de modificación",
+      "¿Se seleccionó correctamente la fracción de Actividad Vulnerable del art. 17 LFPIORPI que corresponde a la operación?",
     answer: null,
     required: true,
+    siAction: "La plataforma debe solicitar la captura del portal o acuse que confirme la fracción seleccionada.",
+    noAction:
+      "La plataforma debe generar una nota de corrección y pedir evidencia del trámite de modificación ante el SAT.",
   },
 
   // 2. Representante Encargada de Cumplimiento (REC)
   {
     id: "rg-4",
+    section: "Representante Encargada de Cumplimiento (REC)",
     question:
-      "Representante Encargada de Cumplimiento.\n¿La empresa designó formalmente a la Representante Encargada de Cumplimiento en términos del art. 20 LFPIORPI?\n• Sí → adjuntar acuse de designación\n• No → justificar y anexar evidencia de trámite pendiente",
+      "¿La empresa designó formalmente a la Representante Encargada de Cumplimiento en términos del art. 20 LFPIORPI?",
     answer: null,
     required: true,
+    siAction: "La plataforma debe requerir el acuse de designación emitido por el SAT.",
+    noAction:
+      "La plataforma debe habilitar un campo para justificar y adjuntar evidencia del trámite pendiente de designación.",
   },
   {
     id: "rg-5",
-    question:
-      "Representante Encargada de Cumplimiento.\n¿El REC aceptó formalmente el cargo en el Portal SAT y se encuentra vigente?\n• Sí → adjuntar acuse de aceptación\n• No → adjuntar evidencia de actualización en trámite",
+    section: "Representante Encargada de Cumplimiento (REC)",
+    question: "¿El REC aceptó formalmente el cargo en el Portal SAT y se encuentra vigente?",
     answer: null,
     required: true,
+    siAction: "La plataforma debe permitir adjuntar el acuse de aceptación del REC.",
+    noAction: "La plataforma debe solicitar evidencia de la actualización del REC en trámite.",
   },
   {
     id: "rg-6",
+    section: "Representante Encargada de Cumplimiento (REC)",
     question:
-      "Representante Encargada de Cumplimiento.\n¿El REC cuenta con constancia de capacitación anual emitida por institución acreditada?\n• Sí → adjuntar constancia o diploma vigente\n• No → adjuntar evidencia de programa de capacitación pendiente",
+      "¿El REC cuenta con constancia de capacitación anual emitida por institución acreditada?",
     answer: null,
     required: true,
+    siAction: "La plataforma debe solicitar adjuntar la constancia o diploma vigente de capacitación.",
+    noAction: "La plataforma debe pedir evidencia del programa de capacitación pendiente para el REC.",
   },
   {
     id: "rg-7",
+    section: "Representante Encargada de Cumplimiento (REC)",
     question:
-      "Representante Encargada de Cumplimiento.\n¿Se cuenta con un respaldo documental del poder o nombramiento que faculte al REC para representar a la empresa ante SAT/UIF?\n• Sí → adjuntar copia certificada o poder notarial\n• No → generar requerimiento interno",
+      "¿Se cuenta con un respaldo documental del poder o nombramiento que faculte al REC para representar a la empresa ante SAT/UIF?",
     answer: null,
     required: true,
+    siAction: "La plataforma debe requerir adjuntar la copia certificada o poder notarial correspondiente.",
+    noAction:
+      "La plataforma debe generar un requerimiento interno para obtener el poder o nombramiento del REC.",
   },
 
   // 3. Actualizaciones y Modificaciones
   {
     id: "rg-8",
+    section: "Actualizaciones y Modificaciones",
     question:
-      "Actualizaciones y Modificaciones.\n¿Se han realizado actualizaciones de datos (domicilio, representante, actividad) en el Portal PLD en un plazo no mayor a 30 días naturales de ocurrido el cambio?\n• Sí → adjuntar acuse de actualización\n• No → justificar y adjuntar evidencia de trámite pendiente",
+      "¿Se han realizado actualizaciones de datos (domicilio, representante, actividad) en el Portal PLD en un plazo no mayor a 30 días naturales de ocurrido el cambio?",
     answer: null,
     required: true,
+    siAction: "La plataforma debe solicitar el acuse de actualización emitido por el portal PLD.",
+    noAction:
+      "La plataforma debe habilitar un campo de justificación y requerir evidencia del trámite de actualización pendiente.",
   },
   {
     id: "rg-9",
-    question:
-      "Actualizaciones y Modificaciones.\n¿Se encuentra actualizado el domicilio fiscal y de operación en el portal?\n• Sí → adjuntar acuse de modificación\n• No → nota de pendiente",
+    section: "Actualizaciones y Modificaciones",
+    question: "¿Se encuentra actualizado el domicilio fiscal y de operación en el portal?",
     answer: null,
     required: true,
+    siAction: "La plataforma debe permitir adjuntar el acuse de modificación del domicilio.",
+    noAction: "La plataforma debe registrar una nota de pendiente y generar recordatorio de actualización.",
   },
   {
     id: "rg-10",
-    question:
-      "Actualizaciones y Modificaciones.\n¿Se actualizó el registro en caso de suspensión o baja de actividades vulnerables?\n• Sí → adjuntar acuse de baja\n• No → justificar",
+    section: "Actualizaciones y Modificaciones",
+    question: "¿Se actualizó el registro en caso de suspensión o baja de actividades vulnerables?",
     answer: null,
     required: true,
+    siAction: "La plataforma debe solicitar el acuse de baja emitido por el SAT.",
+    noAction:
+      "La plataforma debe habilitar un campo para justificar la falta de actualización y adjuntar evidencia.",
   },
 
   // 4. Buzón Tributario y Notificaciones
   {
     id: "rg-11",
-    question:
-      "Buzón Tributario y Notificaciones.\n¿El Buzón Tributario de la empresa está habilitado y vinculado al registro PLD?\n• Sí → adjuntar captura de configuración\n• No → nota de cumplimiento pendiente",
+    section: "Buzón Tributario y Notificaciones",
+    question: "¿El Buzón Tributario de la empresa está habilitado y vinculado al registro PLD?",
     answer: null,
     required: true,
+    siAction: "La plataforma debe solicitar la captura de configuración del Buzón Tributario vinculado.",
+    noAction: "La plataforma debe registrar la nota de cumplimiento pendiente y programar seguimiento.",
   },
   {
     id: "rg-12",
+    section: "Buzón Tributario y Notificaciones",
     question:
-      "Buzón Tributario y Notificaciones.\n¿Se tiene un procedimiento documentado para revisar semanalmente notificaciones relacionadas con PLD?\n• Sí → adjuntar registro de revisiones\n• No → elaborar procedimiento",
+      "¿Se tiene un procedimiento documentado para revisar semanalmente notificaciones relacionadas con PLD?",
     answer: null,
     required: true,
+    siAction: "La plataforma debe solicitar el registro de revisiones semanales del Buzón Tributario.",
+    noAction: "La plataforma debe generar la tarea de elaborar y adjuntar el procedimiento documentado.",
   },
   {
     id: "rg-13",
+    section: "Buzón Tributario y Notificaciones",
     question:
-      "Buzón Tributario y Notificaciones.\n¿Se respondió en plazo (máximo 10 días hábiles) a notificaciones electrónicas del SAT relacionadas con el padrón?\n• Sí → adjuntar acuse de respuesta\n• No → adjuntar evidencia del requerimiento pendiente",
+      "¿Se respondió en plazo (máximo 10 días hábiles) a notificaciones electrónicas del SAT relacionadas con el padrón?",
     answer: null,
     required: true,
+    siAction: "La plataforma debe pedir adjuntar el acuse de respuesta emitido dentro del plazo legal.",
+    noAction:
+      "La plataforma debe requerir evidencia del requerimiento pendiente y generar una alerta de seguimiento.",
   },
 
   // 5. Evidencias y Conservación
   {
     id: "rg-14",
+    section: "Evidencias y Conservación",
     question:
-      "Evidencias y Conservación.\n¿Se conserva en repositorio interno (físico o digital) la documentación soporte de alta y actualizaciones?\n• Sí → adjuntar listado de documentos resguardados\n• No → levantar nota de incumplimiento",
+      "¿Se conserva en repositorio interno (físico o digital) la documentación soporte de alta y actualizaciones?",
     answer: null,
     required: true,
+    siAction:
+      "La plataforma debe solicitar adjuntar el listado de documentos resguardados en el repositorio interno.",
+    noAction: "La plataforma debe levantar una nota de incumplimiento y programar acciones correctivas.",
   },
   {
     id: "rg-15",
+    section: "Evidencias y Conservación",
     question:
-      "Evidencias y Conservación.\n¿Se verificó que los acuses digitales SAT tengan sello digital y código de verificación?\n• Sí → adjuntar validación\n• No → registrar hallazgo",
+      "¿Se verificó que los acuses digitales SAT tengan sello digital y código de verificación?",
     answer: null,
     required: true,
+    siAction:
+      "La plataforma debe requerir adjuntar la validación del sello digital y código de verificación.",
+    noAction:
+      "La plataforma debe registrar un hallazgo y generar seguimiento para validar los acuses digitales.",
   },
 ]
 
@@ -246,15 +311,54 @@ export default function RegistroSATPage() {
   // Cargar datos del localStorage
   useEffect(() => {
     const savedData = localStorage.getItem("registro-sat-data")
-    if (savedData) {
-      try {
-        const data = JSON.parse(savedData)
-        setPreguntasState(data.preguntas || preguntasGenerales)
-        setDocumentos(data.documentos || [])
-        setTrazabilidad(data.trazabilidad || [])
-      } catch (error) {
-        console.error("Error al cargar datos:", error)
-      }
+    if (!savedData) return
+
+    try {
+      const data = JSON.parse(savedData)
+
+      const storedPreguntas = Array.isArray(data.preguntas) ? data.preguntas : []
+      const preguntasGuardadas = preguntasGenerales.map((preguntaBase) => {
+        const stored = storedPreguntas.find((item: Partial<ChecklistItem>) => item.id === preguntaBase.id)
+        if (!stored) {
+          return preguntaBase
+        }
+
+        return {
+          ...preguntaBase,
+          answer: (stored.answer as ChecklistItem["answer"]) ?? preguntaBase.answer,
+          notes: stored.notes ?? preguntaBase.notes,
+          lastUpdated: stored.lastUpdated ? new Date(stored.lastUpdated) : undefined,
+        }
+      })
+
+      const documentosGuardados = Array.isArray(data.documentos)
+        ? data.documentos.map((doc: Partial<DocumentUpload>) => ({
+            ...doc,
+            id: doc.id ?? Date.now().toString(),
+            name: doc.name ?? "",
+            type: doc.type ?? "",
+            uploadDate: doc.uploadDate ? new Date(doc.uploadDate) : new Date(),
+            expiryDate: doc.expiryDate ? new Date(doc.expiryDate) : undefined,
+            status: (doc.status as DocumentUpload["status"]) ?? "vigente",
+          }))
+        : []
+
+      const trazabilidadGuardada = Array.isArray(data.trazabilidad)
+        ? data.trazabilidad.map((entry: Partial<TraceabilityEntry>) => ({
+            id: entry.id ?? Date.now().toString(),
+            action: entry.action ?? "Acción registrada",
+            user: entry.user ?? "Usuario",
+            timestamp: entry.timestamp ? new Date(entry.timestamp) : new Date(),
+            details: entry.details ?? "",
+            section: entry.section ?? "Preguntas Generales",
+          }))
+        : []
+
+      setPreguntasState(preguntasGuardadas)
+      setDocumentos(documentosGuardados as DocumentUpload[])
+      setTrazabilidad(trazabilidadGuardada as TraceabilityEntry[])
+    } catch (error) {
+      console.error("Error al cargar datos:", error)
     }
   }, [])
 
@@ -266,20 +370,21 @@ export default function RegistroSATPage() {
     setProgreso(nuevoProgreso)
   }, [preguntasState])
 
-  // Guardar datos en localStorage
-  const guardarDatos = () => {
+  useEffect(() => {
     const data = {
       preguntas: preguntasState,
       documentos,
       trazabilidad,
     }
     localStorage.setItem("registro-sat-data", JSON.stringify(data))
-  }
+  }, [preguntasState, documentos, trazabilidad])
 
   // Actualizar respuesta de pregunta
-  const actualizarRespuesta = (id: string, answer: "si" | "no" | "no-aplica", notes?: string) => {
+  const actualizarRespuesta = (id: string, answer: AnswerValue) => {
+    const preguntaActual = preguntasState.find((p) => p.id === id)
+
     setPreguntasState((prev) =>
-      prev.map((pregunta) => (pregunta.id === id ? { ...pregunta, answer, notes, lastUpdated: new Date() } : pregunta)),
+      prev.map((pregunta) => (pregunta.id === id ? { ...pregunta, answer, lastUpdated: new Date() } : pregunta)),
     )
 
     // Agregar entrada de trazabilidad
@@ -288,12 +393,12 @@ export default function RegistroSATPage() {
       action: "Respuesta actualizada",
       user: "Usuario actual",
       timestamp: new Date(),
-      details: `Pregunta: ${preguntasState.find((p) => p.id === id)?.question.substring(0, 50)}... - Respuesta: ${answer}`,
-      section: "Preguntas Generales",
+      details: preguntaActual
+        ? `${preguntaActual.section}: ${preguntaActual.question} - Respuesta: ${formatAnswer(answer)}`
+        : `Pregunta ${id} - Respuesta: ${formatAnswer(answer)}`,
+      section: preguntaActual?.section ?? "Preguntas Generales",
     }
     setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-
-    guardarDatos()
 
     toast({
       title: "Respuesta guardada",
@@ -325,12 +430,23 @@ export default function RegistroSATPage() {
     }
     setTrazabilidad((prev) => [nuevaEntrada, ...prev])
 
-    guardarDatos()
-
     toast({
       title: "Documento cargado",
       description: `El documento ${nuevoDocumento.name} ha sido cargado exitosamente.`,
     })
+  }
+
+  const formatAnswer = (answer: ChecklistItem["answer"]) => {
+    switch (answer) {
+      case "si":
+        return "Sí"
+      case "no":
+        return "No"
+      case "no-aplica":
+        return "No Aplica"
+      default:
+        return "Sin respuesta"
+    }
   }
 
   // Obtener color según respuesta
@@ -439,35 +555,103 @@ export default function RegistroSATPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="space-y-4 p-4 border rounded-lg"
+                  className="space-y-5 rounded-lg border bg-background p-4"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <Label className="text-sm font-medium">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 space-y-2">
+                      <Badge variant="secondary" className="text-xs font-normal uppercase tracking-wide">
+                        {pregunta.section}
+                      </Badge>
+                      <Label className="text-sm font-semibold leading-relaxed">
                         {index + 1}. {pregunta.question}
-                        {pregunta.required && <span className="text-red-500 ml-1">*</span>}
+                        {pregunta.required && <span className="ml-1 text-red-500">*</span>}
                       </Label>
                     </div>
                     {pregunta.lastUpdated && (
-                      <Badge variant="outline" className="text-xs">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {pregunta.lastUpdated.toLocaleDateString()}
+                      <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                        <Clock className="h-3.5 w-3.5" />
+                        {pregunta.lastUpdated.toLocaleString()}
                       </Badge>
                     )}
                   </div>
 
-                  <div className="flex gap-2">
-                    {["si", "no", "no-aplica"].map((option) => (
+                  <div className="flex flex-wrap gap-2">
+                    {answerOptions.map(({ value, label }) => (
                       <Button
-                        key={option}
-                        variant={pregunta.answer === option ? "default" : "outline"}
+                        key={value}
+                        variant={pregunta.answer === value ? "default" : "outline"}
                         size="sm"
-                        onClick={() => actualizarRespuesta(pregunta.id, option as any)}
-                        className={pregunta.answer === option ? getAnswerColor(option as any) : ""}
+                        onClick={() => actualizarRespuesta(pregunta.id, value)}
+                        className={pregunta.answer === value ? getAnswerColor(value) : ""}
                       >
-                        {option === "si" ? "Sí" : option === "no" ? "No" : "No Aplica"}
+                        {label}
                       </Button>
                     ))}
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">Flujo de acciones</p>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {pregunta.siAction && (
+                        <div
+                          className={cn(
+                            "flex items-start gap-3 rounded-lg border p-3",
+                            pregunta.answer === "si" ? "border-green-500 bg-green-50" : "border-border bg-background",
+                          )}
+                        >
+                          <CheckCircle2
+                            className={cn(
+                              "mt-0.5 h-4 w-4",
+                              pregunta.answer === "si" ? "text-green-600" : "text-muted-foreground",
+                            )}
+                          />
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">Sí</p>
+                            <p className="text-sm text-muted-foreground">{pregunta.siAction}</p>
+                          </div>
+                        </div>
+                      )}
+                      {pregunta.noAction && (
+                        <div
+                          className={cn(
+                            "flex items-start gap-3 rounded-lg border p-3",
+                            pregunta.answer === "no" ? "border-red-500 bg-red-50" : "border-border bg-background",
+                          )}
+                        >
+                          <AlertTriangle
+                            className={cn(
+                              "mt-0.5 h-4 w-4",
+                              pregunta.answer === "no" ? "text-red-600" : "text-muted-foreground",
+                            )}
+                          />
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">No</p>
+                            <p className="text-sm text-muted-foreground">{pregunta.noAction}</p>
+                          </div>
+                        </div>
+                      )}
+                      {pregunta.noAplicaAction && (
+                        <div
+                          className={cn(
+                            "flex items-start gap-3 rounded-lg border p-3",
+                            pregunta.answer === "no-aplica"
+                              ? "border-blue-500 bg-blue-50"
+                              : "border-border bg-background",
+                          )}
+                        >
+                          <Info
+                            className={cn(
+                              "mt-0.5 h-4 w-4",
+                              pregunta.answer === "no-aplica" ? "text-blue-600" : "text-muted-foreground",
+                            )}
+                          />
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">No Aplica</p>
+                            <p className="text-sm text-muted-foreground">{pregunta.noAplicaAction}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {pregunta.answer && (
@@ -480,8 +664,11 @@ export default function RegistroSATPage() {
                         placeholder="Agregar observaciones o detalles adicionales..."
                         value={pregunta.notes || ""}
                         onChange={(e) => {
+                          const { value } = e.target
                           setPreguntasState((prev) =>
-                            prev.map((p) => (p.id === pregunta.id ? { ...p, notes: e.target.value } : p)),
+                            prev.map((p) =>
+                              p.id === pregunta.id ? { ...p, notes: value, lastUpdated: new Date() } : p,
+                            ),
                           )
                         }}
                         className="min-h-[80px]"
