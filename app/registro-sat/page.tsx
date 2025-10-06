@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 import {
   CheckCircle2,
   Clock,
@@ -405,21 +406,10 @@ export default function RegistroSATPage() {
       prev.map((pregunta) => (pregunta.id === id ? { ...pregunta, answer, lastUpdated: new Date() } : pregunta)),
     )
 
-    setEvidenciasPorPregunta((prev) => {
-      if (answer !== "si") {
-        if (!prev[id]) {
-          return prev
-        }
-
-        const { [id]: _omit, ...rest } = prev
-        return rest
-      }
-
-      return {
-        ...prev,
-        [id]: prev[id] ?? [],
-      }
-    })
+    setEvidenciasPorPregunta((prev) => ({
+      ...prev,
+      [id]: prev[id] ?? [],
+    }))
 
     // Agregar entrada de trazabilidad
     const nuevaEntrada: TraceabilityEntry = {
@@ -482,8 +472,6 @@ export default function RegistroSATPage() {
         return undefined
     }
   }
-
-  const requiereEvidencia = (pregunta: ChecklistItem) => pregunta.answer === "si"
 
   const manejarCargaEvidencia = (id: string, event: ChangeEvent<HTMLInputElement>) => {
     const archivos = event.target.files
@@ -677,9 +665,7 @@ export default function RegistroSATPage() {
                   </div>
 
                   <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase text-muted-foreground">
-                      Gestión de evidencia y seguimiento
-                    </p>
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">Evidencias requeridas</p>
                     {pregunta.answer ? (
                       <div className="space-y-4 rounded-lg border border-dashed bg-muted/20 p-4">
                         <div className="space-y-3">
@@ -741,48 +727,28 @@ export default function RegistroSATPage() {
                                       <X className="h-3 w-3" />
                                     </button>
                                   </div>
-                                )}
-                              </>
-                            ) : (
-                              <div className="space-y-2 rounded-lg border border-dashed bg-background/80 p-3">
-                                <p className="text-sm font-medium">Seguimiento automático programado</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {obtenerRequerimientoPorRespuesta(pregunta) ??
-                                    "No se registraron acciones específicas para esta respuesta."}
-                                </p>
+                                ))}
                               </div>
                             )}
                           </div>
                           <div className="space-y-3">
-                            <Label htmlFor={`notas-${pregunta.id}`}>
-                              {requiereEvidencia(pregunta)
-                                ? "Observaciones y referencias"
-                                : "Notas de seguimiento"
-                              }
-                            </Label>
+                            <Label htmlFor={`notas-${pregunta.id}`}>Observaciones y referencias</Label>
                             <Textarea
                               id={`notas-${pregunta.id}`}
-                              placeholder={
-                                requiereEvidencia(pregunta)
-                                  ? "Describe el contexto de la evidencia, folios, responsables o próximos pasos."
-                                  : "Registra indicaciones para la plataforma o responsables asignados."
-                              }
+                              placeholder="Describe el contexto de la evidencia, folios, responsables o próximos pasos."
                               value={pregunta.notes ?? ""}
                               onChange={(event) => actualizarNotasPregunta(pregunta.id, event.target.value)}
                               className="min-h-[120px]"
                             />
                             <p className="text-xs text-muted-foreground">
-                              {requiereEvidencia(pregunta)
-                                ? "Esta información se guardará automáticamente para dar seguimiento a la acción documental."
-                                : "La plataforma conservará estas notas para coordinar el flujo de acciones requerido."
-                              }
+                              Esta información se guardará automáticamente para dar seguimiento a la acción documental.
                             </p>
                           </div>
                         </div>
                       </div>
                     ) : (
                       <p className="text-sm italic text-muted-foreground">
-                        Selecciona una respuesta para habilitar la gestión de evidencias y seguimiento.
+                        Selecciona una respuesta para habilitar la carga de evidencias y notas asociadas.
                       </p>
                     )}
                   </div>
