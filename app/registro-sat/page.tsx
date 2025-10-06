@@ -80,10 +80,10 @@ const answerOptions: { value: AnswerValue; label: string }[] = [
   { value: "no-aplica", label: "No Aplica" },
 ]
 
-const createRequirements = (siHints: string[]): ChecklistRequirements => ({
+const defaultRequirements: ChecklistRequirements = {
   si: {
     requiresEvidence: true,
-    evidenceHints: siHints,
+    evidenceHints: [],
     evidenceHelperText:
       "Adjunta los archivos que respalden el cumplimiento. Puedes seleccionar varios documentos.",
     notesLabel: "Comentarios sobre la evidencia",
@@ -92,17 +92,40 @@ const createRequirements = (siHints: string[]): ChecklistRequirements => ({
       "Esta información se guardará automáticamente para mantener trazabilidad sobre la documentación presentada.",
   },
   no: {
+    requiresEvidence: false,
     notesLabel: "Justificación y acciones pendientes",
     notesPlaceholder: "Describe el motivo de la respuesta negativa y los pasos para regularizar la situación.",
     helperText:
       "Documenta la causa del incumplimiento y las acciones previstas para atender el requisito.",
   },
   "no-aplica": {
+    requiresEvidence: false,
     notesLabel: "Notas sobre no aplicabilidad",
     notesPlaceholder: "Explica por qué este requisito no aplica en la operación.",
     helperText: "Deja constancia de la justificación de no aplicabilidad para futuras revisiones.",
   },
-})
+}
+
+const createRequirements = (
+  overrides: Partial<Record<AnswerValue, Partial<ChecklistRequirement>>>,
+): ChecklistRequirements =>
+  (Object.keys(defaultRequirements) as AnswerValue[]).reduce((acc, answer) => {
+    const baseRequirement = defaultRequirements[answer] ?? {}
+    const override = overrides[answer] ?? {}
+
+    acc[answer] = {
+      ...baseRequirement,
+      ...override,
+      requiresEvidence: override.requiresEvidence ?? baseRequirement.requiresEvidence,
+      evidenceHints: override.evidenceHints ?? baseRequirement.evidenceHints,
+      evidenceHelperText: override.evidenceHelperText ?? baseRequirement.evidenceHelperText,
+      notesLabel: override.notesLabel ?? baseRequirement.notesLabel,
+      notesPlaceholder: override.notesPlaceholder ?? baseRequirement.notesPlaceholder,
+      helperText: override.helperText ?? baseRequirement.helperText,
+    }
+
+    return acc
+  }, {} as ChecklistRequirements)
 
 // Preguntas generales del módulo
 const preguntasGenerales: ChecklistItem[] = [
@@ -114,7 +137,20 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿El alta en el Portal PLD del SAT se realizó dentro del plazo legal (antes de iniciar operaciones o a más tardar dentro de los 30 días posteriores)?",
     answer: null,
     required: true,
-    requirements: createRequirements(["Acuse digital de alta expedido por el SAT."]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: ["Acuse digital de alta expedido por el SAT."],
+      },
+      no: {
+        requiresEvidence: true,
+        evidenceHints: ["Comprobante del trámite posterior presentado ante el SAT."],
+        notesLabel: "Causa del retraso y acciones correctivas",
+        notesPlaceholder:
+          "Detalla el motivo del incumplimiento y los folios o gestiones realizadas para regularizar el alta.",
+        helperText:
+          "Incluye evidencia del trámite posterior y describe los plazos comprometidos para concluirlo.",
+      },
+    }),
   },
   {
     id: "rg-2",
@@ -123,7 +159,20 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿El trámite de alta se efectuó utilizando la e.firma (FIEL) vigente del representante legal?",
     answer: null,
     required: true,
-    requirements: createRequirements(["Acuse de validación de e.firma (FIEL) vigente del representante legal."]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: ["Acuse de validación de e.firma (FIEL) vigente del representante legal."],
+      },
+      no: {
+        requiresEvidence: true,
+        evidenceHints: ["Comprobante de renovación de e.firma o aclaración ingresada ante el SAT."],
+        notesLabel: "Motivo de falta de FIEL vigente",
+        notesPlaceholder:
+          "Describe la situación de la e.firma, folios de renovación o aclaraciones presentadas ante el SAT.",
+        helperText:
+          "Adjunta la evidencia del trámite de renovación o la aclaración ingresada ante la autoridad fiscal.",
+      },
+    }),
   },
   {
     id: "rg-3",
@@ -132,9 +181,22 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se seleccionó correctamente la fracción de Actividad Vulnerable del art. 17 LFPIORPI que corresponde a la operación?",
     answer: null,
     required: true,
-    requirements: createRequirements([
-      "Captura del portal o acuse que confirme la fracción de Actividad Vulnerable seleccionada.",
-    ]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: [
+          "Captura del portal o acuse que confirme la fracción de Actividad Vulnerable seleccionada.",
+        ],
+      },
+      no: {
+        requiresEvidence: true,
+        evidenceHints: ["Nota de corrección presentada y evidencia del trámite de modificación."],
+        notesLabel: "Corrección requerida",
+        notesPlaceholder:
+          "Explica la fracción correcta e incluye detalles del trámite de modificación ante el SAT.",
+        helperText:
+          "Anexa la nota de corrección levantada y el soporte del trámite de modificación enviado.",
+      },
+    }),
   },
 
   // 2. Representante Encargada de Cumplimiento (REC)
@@ -145,7 +207,20 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿La empresa designó formalmente a la Representante Encargada de Cumplimiento en términos del art. 20 LFPIORPI?",
     answer: null,
     required: true,
-    requirements: createRequirements(["Acuse de designación de la REC emitido por el SAT."]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: ["Acuse de designación de la REC emitido por el SAT."],
+      },
+      no: {
+        requiresEvidence: true,
+        evidenceHints: ["Comprobante del trámite pendiente de designación ante el SAT."],
+        notesLabel: "Situación de la designación del REC",
+        notesPlaceholder:
+          "Describe la razón de la falta de designación y los pasos o folios del trámite en curso.",
+        helperText:
+          "Adjunta evidencia del trámite pendiente o documentación interna que respalde la gestión.",
+      },
+    }),
   },
   {
     id: "rg-5",
@@ -153,7 +228,20 @@ const preguntasGenerales: ChecklistItem[] = [
     question: "¿El REC aceptó formalmente el cargo en el Portal SAT y se encuentra vigente?",
     answer: null,
     required: true,
-    requirements: createRequirements(["Acuse de aceptación del REC en el Portal PLD del SAT."]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: ["Acuse de aceptación del REC en el Portal PLD del SAT."],
+      },
+      no: {
+        requiresEvidence: true,
+        evidenceHints: ["Constancia del trámite de actualización del REC en proceso."],
+        notesLabel: "Actualización del REC pendiente",
+        notesPlaceholder:
+          "Detalla el motivo por el cual no se ha aceptado el cargo y adjunta folios del trámite de actualización.",
+        helperText:
+          "Incluye evidencia de la gestión de actualización o de la respuesta esperada del SAT.",
+      },
+    }),
   },
   {
     id: "rg-6",
@@ -162,7 +250,20 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿El REC cuenta con constancia de capacitación anual emitida por institución acreditada?",
     answer: null,
     required: true,
-    requirements: createRequirements(["Constancia o diploma vigente de capacitación anual del REC."]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: ["Constancia o diploma vigente de capacitación anual del REC."],
+      },
+      no: {
+        requiresEvidence: true,
+        evidenceHints: ["Programa, convocatoria o constancia provisional de capacitación en trámite."],
+        notesLabel: "Plan de capacitación pendiente",
+        notesPlaceholder:
+          "Describe el estatus de la capacitación anual, fechas programadas y responsables de su cumplimiento.",
+        helperText:
+          "Adjunta evidencia del programa o de la gestión para obtener la constancia de capacitación.",
+      },
+    }),
   },
   {
     id: "rg-7",
@@ -171,9 +272,22 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se cuenta con un respaldo documental del poder o nombramiento que faculte al REC para representar a la empresa ante SAT/UIF?",
     answer: null,
     required: true,
-    requirements: createRequirements([
-      "Copia certificada o poder notarial que faculte al REC para representar a la empresa ante SAT/UIF.",
-    ]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: [
+          "Copia certificada o poder notarial que faculte al REC para representar a la empresa ante SAT/UIF.",
+        ],
+      },
+      no: {
+        requiresEvidence: true,
+        evidenceHints: ["Requerimiento interno emitido para formalizar el poder o nombramiento."],
+        notesLabel: "Regularización del poder del REC",
+        notesPlaceholder:
+          "Registra la situación actual y los pasos para obtener el poder o nombramiento correspondiente.",
+        helperText:
+          "Carga el requerimiento interno o la evidencia del trámite para formalizar las facultades del REC.",
+      },
+    }),
   },
 
   // 3. Actualizaciones y Modificaciones
@@ -184,9 +298,20 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se han realizado actualizaciones de datos (domicilio, representante, actividad) en el Portal PLD en un plazo no mayor a 30 días naturales de ocurrido el cambio?",
     answer: null,
     required: true,
-    requirements: createRequirements([
-      "Acuse de actualización de datos emitido por el Portal PLD del SAT.",
-    ]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: ["Acuse de actualización de datos emitido por el Portal PLD del SAT."],
+      },
+      no: {
+        requiresEvidence: true,
+        evidenceHints: ["Comprobante del trámite pendiente de actualización presentado ante el SAT."],
+        notesLabel: "Actualización de datos pendiente",
+        notesPlaceholder:
+          "Detalla la modificación requerida, la fecha del cambio y los folios del trámite en curso.",
+        helperText:
+          "Adjunta evidencia del trámite pendiente o de la gestión interna para completar la actualización.",
+      },
+    }),
   },
   {
     id: "rg-9",
@@ -194,9 +319,18 @@ const preguntasGenerales: ChecklistItem[] = [
     question: "¿Se encuentra actualizado el domicilio fiscal y de operación en el portal?",
     answer: null,
     required: true,
-    requirements: createRequirements([
-      "Acuse de modificación o confirmación del domicilio registrado en el portal.",
-    ]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: ["Acuse de modificación o confirmación del domicilio registrado en el portal."],
+      },
+      no: {
+        notesLabel: "Pendiente de actualización de domicilio",
+        notesPlaceholder:
+          "Registra la situación del domicilio y los pasos programados para actualizarlo en el portal.",
+        helperText:
+          "Documenta la fecha prevista para la actualización y a los responsables de la gestión.",
+      },
+    }),
   },
   {
     id: "rg-10",
@@ -204,7 +338,18 @@ const preguntasGenerales: ChecklistItem[] = [
     question: "¿Se actualizó el registro en caso de suspensión o baja de actividades vulnerables?",
     answer: null,
     required: true,
-    requirements: createRequirements(["Acuse de baja o suspensión de actividades vulnerables emitido por el SAT."]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: ["Acuse de baja o suspensión de actividades vulnerables emitido por el SAT."],
+      },
+      no: {
+        notesLabel: "Justificación de ausencia de baja",
+        notesPlaceholder:
+          "Explica por qué no se ha actualizado la baja o suspensión y los pasos siguientes para regularizarla.",
+        helperText:
+          "Documenta las gestiones pendientes y los responsables de realizar la actualización correspondiente.",
+      },
+    }),
   },
 
   // 4. Buzón Tributario y Notificaciones
@@ -214,9 +359,18 @@ const preguntasGenerales: ChecklistItem[] = [
     question: "¿El Buzón Tributario de la empresa está habilitado y vinculado al registro PLD?",
     answer: null,
     required: true,
-    requirements: createRequirements([
-      "Captura o acuse de configuración del Buzón Tributario vinculado al registro PLD.",
-    ]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: ["Captura o acuse de configuración del Buzón Tributario vinculado al registro PLD."],
+      },
+      no: {
+        notesLabel: "Pendiente de habilitar Buzón Tributario",
+        notesPlaceholder:
+          "Describe las acciones necesarias para habilitar y vincular el Buzón Tributario con el registro PLD.",
+        helperText:
+          "Registra responsables y fechas objetivo para concluir la habilitación del buzón.",
+      },
+    }),
   },
   {
     id: "rg-12",
@@ -225,9 +379,18 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se tiene un procedimiento documentado para revisar semanalmente notificaciones relacionadas con PLD?",
     answer: null,
     required: true,
-    requirements: createRequirements([
-      "Procedimiento documentado o bitácora de revisiones semanales del Buzón Tributario.",
-    ]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: ["Procedimiento documentado o bitácora de revisiones semanales del Buzón Tributario."],
+      },
+      no: {
+        notesLabel: "Elaboración de procedimiento pendiente",
+        notesPlaceholder:
+          "Describe el estatus del procedimiento y los responsables de documentarlo para su aprobación.",
+        helperText:
+          "Registra los pasos para documentar el procedimiento y la fecha objetivo de implementación.",
+      },
+    }),
   },
   {
     id: "rg-13",
@@ -236,9 +399,20 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se respondió en plazo (máximo 10 días hábiles) a notificaciones electrónicas del SAT relacionadas con el padrón?",
     answer: null,
     required: true,
-    requirements: createRequirements([
-      "Acuse de respuesta emitido dentro del plazo legal correspondiente.",
-    ]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: ["Acuse de respuesta emitido dentro del plazo legal correspondiente."],
+      },
+      no: {
+        requiresEvidence: true,
+        evidenceHints: ["Requerimiento pendiente y evidencia de la respuesta en elaboración."],
+        notesLabel: "Gestión de respuesta pendiente",
+        notesPlaceholder:
+          "Detalla la notificación sin atender, los motivos del retraso y el plan para responder en tiempo.",
+        helperText:
+          "Adjunta el requerimiento recibido y cualquier evidencia del seguimiento interno para responderlo.",
+      },
+    }),
   },
 
   // 5. Evidencias y Conservación
@@ -249,9 +423,18 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se conserva en repositorio interno (físico o digital) la documentación soporte de alta y actualizaciones?",
     answer: null,
     required: true,
-    requirements: createRequirements([
-      "Listado o inventario de documentos resguardados en el repositorio interno.",
-    ]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: ["Listado o inventario de documentos resguardados en el repositorio interno."],
+      },
+      no: {
+        notesLabel: "Nota de incumplimiento registrada",
+        notesPlaceholder:
+          "Describe los documentos faltantes, responsables y fecha objetivo para completar el repositorio.",
+        helperText:
+          "Documenta la nota de incumplimiento y el plan de acción para resguardar la documentación.",
+      },
+    }),
   },
   {
     id: "rg-15",
@@ -260,9 +443,18 @@ const preguntasGenerales: ChecklistItem[] = [
       "¿Se verificó que los acuses digitales SAT tengan sello digital y código de verificación?",
     answer: null,
     required: true,
-    requirements: createRequirements([
-      "Validación o constancia del sello digital y código de verificación de los acuses.",
-    ]),
+    requirements: createRequirements({
+      si: {
+        evidenceHints: ["Validación o constancia del sello digital y código de verificación de los acuses."],
+      },
+      no: {
+        notesLabel: "Registro del hallazgo",
+        notesPlaceholder:
+          "Describe el hallazgo detectado, acuses involucrados y acciones para obtener la validación correspondiente.",
+        helperText:
+          "Anota el seguimiento para validar los acuses y asegurar su autenticidad ante futuras revisiones.",
+      },
+    }),
   },
 ]
 
