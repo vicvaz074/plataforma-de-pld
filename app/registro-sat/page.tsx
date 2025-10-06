@@ -1,6 +1,6 @@
 "use client"
 
-import { ChangeEvent, useEffect, useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import {
   CheckCircle2,
@@ -25,8 +24,6 @@ import {
   Eye,
   UserCheck,
   Building2,
-  UploadCloud,
-  Trash2,
 } from "lucide-react"
 import { motion } from "framer-motion"
 
@@ -65,43 +62,11 @@ interface TraceabilityEntry {
 
 type AnswerValue = Exclude<ChecklistItem["answer"], null>
 
-interface EvidenceFile {
-  id: string
-  questionId: string
-  answer: AnswerValue
-  name: string
-  uploadedAt: Date
-}
-
 const answerOptions: { value: AnswerValue; label: string }[] = [
   { value: "si", label: "Sí" },
   { value: "no", label: "No" },
   { value: "no-aplica", label: "No Aplica" },
 ]
-
-const answerMetadata: Record<AnswerValue, { label: string; icon: typeof CheckCircle2; highlight: string; defaultBorder: string; iconColor: string }> = {
-  si: {
-    label: "Sí",
-    icon: CheckCircle2,
-    highlight: "border-green-500 bg-green-50",
-    defaultBorder: "border-border bg-background",
-    iconColor: "text-green-600",
-  },
-  no: {
-    label: "No",
-    icon: AlertTriangle,
-    highlight: "border-red-500 bg-red-50",
-    defaultBorder: "border-border bg-background",
-    iconColor: "text-red-600",
-  },
-  "no-aplica": {
-    label: "No Aplica",
-    icon: Info,
-    highlight: "border-blue-500 bg-blue-50",
-    defaultBorder: "border-border bg-background",
-    iconColor: "text-blue-600",
-  },
-}
 
 // Preguntas generales del módulo
 const preguntasGenerales: ChecklistItem[] = [
@@ -342,7 +307,6 @@ export default function RegistroSATPage() {
   const [trazabilidad, setTrazabilidad] = useState<TraceabilityEntry[]>([])
   const [progreso, setProgreso] = useState(0)
   const [activeTab, setActiveTab] = useState("preguntas")
-  const [evidencias, setEvidencias] = useState<Record<string, EvidenceFile[]>>({})
 
   // Cargar datos del localStorage
   useEffect(() => {
@@ -390,27 +354,9 @@ export default function RegistroSATPage() {
           }))
         : []
 
-      const evidenciasGuardadas: Record<string, EvidenceFile[]> = data.evidencias
-        ? Object.fromEntries(
-            Object.entries(data.evidencias as Record<string, Partial<EvidenceFile>[]>)
-              .filter(([, archivos]) => Array.isArray(archivos))
-              .map(([questionId, archivos]) => [
-                questionId,
-                (archivos as Partial<EvidenceFile>[]).map((archivo) => ({
-                  id: archivo.id ?? `${questionId}-${Date.now()}`,
-                  questionId,
-                  answer: (archivo.answer as AnswerValue) ?? "si",
-                  name: archivo.name ?? "Evidencia",
-                  uploadedAt: archivo.uploadedAt ? new Date(archivo.uploadedAt) : new Date(),
-                })),
-              ]),
-          )
-        : {}
-
       setPreguntasState(preguntasGuardadas)
       setDocumentos(documentosGuardados as DocumentUpload[])
       setTrazabilidad(trazabilidadGuardada as TraceabilityEntry[])
-      setEvidencias(evidenciasGuardadas)
     } catch (error) {
       console.error("Error al cargar datos:", error)
     }
@@ -429,18 +375,9 @@ export default function RegistroSATPage() {
       preguntas: preguntasState,
       documentos,
       trazabilidad,
-      evidencias: Object.fromEntries(
-        Object.entries(evidencias).map(([questionId, archivos]) => [
-          questionId,
-          archivos.map((archivo) => ({
-            ...archivo,
-            uploadedAt: archivo.uploadedAt.toISOString(),
-          })),
-        ]),
-      ),
     }
     localStorage.setItem("registro-sat-data", JSON.stringify(data))
-  }, [preguntasState, documentos, trazabilidad, evidencias])
+  }, [preguntasState, documentos, trazabilidad])
 
   // Actualizar respuesta de pregunta
   const actualizarRespuesta = (id: string, answer: AnswerValue) => {
@@ -451,91 +388,21 @@ export default function RegistroSATPage() {
     )
 
     // Agregar entrada de trazabilidad
-    registrarAccionTrazabilidad({
+    const nuevaEntrada: TraceabilityEntry = {
+      id: Date.now().toString(),
       action: "Respuesta actualizada",
       user: "Usuario actual",
+      timestamp: new Date(),
       details: preguntaActual
         ? `${preguntaActual.section}: ${preguntaActual.question} - Respuesta: ${formatAnswer(answer)}`
         : `Pregunta ${id} - Respuesta: ${formatAnswer(answer)}`,
       section: preguntaActual?.section ?? "Preguntas Generales",
-    })
+    }
+    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
 
     toast({
       title: "Respuesta guardada",
       description: "La respuesta ha sido registrada correctamente.",
-    })
-  }
-
-  const registrarAccionTrazabilidad = (entrada: Omit<TraceabilityEntry, "id" | "timestamp"> & { timestamp?: Date }) => {
-    const nuevaEntrada: TraceabilityEntry = {
-      id: Date.now().toString(),
-      timestamp: entrada.timestamp ?? new Date(),
-      ...entrada,
-    }
-
-    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-  }
-
-  const handleEvidenceUpload = (
-    questionId: string,
-    answer: AnswerValue,
-    event: ChangeEvent<HTMLInputElement>,
-  ) => {
-    const files = event.target.files
-    if (!files || files.length === 0) return
-
-    const nuevosArchivos: EvidenceFile[] = Array.from(files).map((file) => ({
-      id: `${questionId}-${answer}-${Date.now()}-${file.name}`,
-      questionId,
-      answer,
-      name: file.name,
-      uploadedAt: new Date(),
-    }))
-
-    setEvidencias((prev) => {
-      const existentes = prev[questionId] ?? []
-      return {
-        ...prev,
-        [questionId]: [...existentes, ...nuevosArchivos],
-      }
-    })
-
-    const pregunta = preguntasState.find((p) => p.id === questionId)
-    registrarAccionTrazabilidad({
-      action: "Evidencia cargada",
-      user: "Usuario actual",
-      details: `${pregunta?.question ?? "Pregunta"} - ${files.length} archivo(s) adjuntado(s)` ,
-      section: pregunta?.section ?? "Preguntas Generales",
-    })
-
-    toast({
-      title: "Evidencia cargada",
-      description: files.length === 1 ? `Se adjuntó ${files[0].name}.` : `Se adjuntaron ${files.length} archivos.`,
-    })
-
-    event.target.value = ""
-  }
-
-  const handleEvidenceRemoval = (questionId: string, evidenceId: string) => {
-    setEvidencias((prev) => {
-      const existentes = prev[questionId] ?? []
-      return {
-        ...prev,
-        [questionId]: existentes.filter((archivo) => archivo.id !== evidenceId),
-      }
-    })
-
-    const pregunta = preguntasState.find((p) => p.id === questionId)
-    registrarAccionTrazabilidad({
-      action: "Evidencia eliminada",
-      user: "Usuario actual",
-      details: `${pregunta?.question ?? "Pregunta"} - Evidencia eliminada`,
-      section: pregunta?.section ?? "Preguntas Generales",
-    })
-
-    toast({
-      title: "Evidencia eliminada",
-      description: "Se eliminó la evidencia seleccionada.",
     })
   }
 
@@ -553,12 +420,15 @@ export default function RegistroSATPage() {
     setDocumentos((prev) => [...prev, nuevoDocumento])
 
     // Agregar entrada de trazabilidad
-    registrarAccionTrazabilidad({
+    const nuevaEntrada: TraceabilityEntry = {
+      id: Date.now().toString(),
       action: "Documento cargado",
       user: "Usuario actual",
+      timestamp: new Date(),
       details: `Documento: ${nuevoDocumento.name} - Tipo: ${tipo}`,
       section: "Carga Documental",
-    })
+    }
+    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
 
     toast({
       title: "Documento cargado",
@@ -592,30 +462,6 @@ export default function RegistroSATPage() {
         return "text-gray-400 bg-gray-50"
     }
   }
-
-  const normalizarDescripcionRequisito = (texto: string) =>
-    texto.replace(/^[Ll]a plataforma debe\s*/u, "").trim()
-
-  const obtenerRequisitosEvidencia = (pregunta: ChecklistItem) => {
-    const requisitos: { answer: AnswerValue; description: string }[] = []
-
-    if (pregunta.siAction) {
-      requisitos.push({ answer: "si", description: pregunta.siAction })
-    }
-
-    if (pregunta.noAction) {
-      requisitos.push({ answer: "no", description: pregunta.noAction })
-    }
-
-    if (pregunta.noAplicaAction) {
-      requisitos.push({ answer: "no-aplica", description: pregunta.noAplicaAction })
-    }
-
-    return requisitos
-  }
-
-  const formatearFechaCorta = (fecha: Date) =>
-    fecha.toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })
 
   // Obtener estado de documento
   const getDocumentStatus = (doc: DocumentUpload) => {
@@ -744,94 +590,65 @@ export default function RegistroSATPage() {
                   </div>
 
                   <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase text-muted-foreground">Evidencias requeridas</p>
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">Flujo de acciones</p>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {obtenerRequisitosEvidencia(pregunta).map((requisito) => {
-                        const meta = answerMetadata[requisito.answer]
-                        const Icono = meta.icon
-                        const archivos = (evidencias[pregunta.id] ?? []).filter(
-                          (archivo) => archivo.answer === requisito.answer,
-                        )
-
-                        return (
-                          <div
-                            key={`${pregunta.id}-${requisito.answer}`}
+                      {pregunta.siAction && (
+                        <div
+                          className={cn(
+                            "flex items-start gap-3 rounded-lg border p-3",
+                            pregunta.answer === "si" ? "border-green-500 bg-green-50" : "border-border bg-background",
+                          )}
+                        >
+                          <CheckCircle2
                             className={cn(
-                              "flex flex-col gap-3 rounded-lg border p-3",
-                              pregunta.answer === requisito.answer ? meta.highlight : meta.defaultBorder,
+                              "mt-0.5 h-4 w-4",
+                              pregunta.answer === "si" ? "text-green-600" : "text-muted-foreground",
                             )}
-                          >
-                            <div className="flex items-start gap-3">
-                              <Icono
-                                className={cn(
-                                  "mt-0.5 h-4 w-4",
-                                  pregunta.answer === requisito.answer ? meta.iconColor : "text-muted-foreground",
-                                )}
-                              />
-                              <div className="space-y-1">
-                                <p className="text-sm font-medium">Respuesta {meta.label}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {normalizarDescripcionRequisito(requisito.description)}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="space-y-3">
-                              <div className="space-y-1">
-                                <Label
-                                  htmlFor={`${pregunta.id}-${requisito.answer}-upload`}
-                                  className="text-xs font-medium uppercase text-muted-foreground"
-                                >
-                                  Subir evidencia
-                                </Label>
-                                <Input
-                                  id={`${pregunta.id}-${requisito.answer}-upload`}
-                                  type="file"
-                                  multiple
-                                  onChange={(event) => handleEvidenceUpload(pregunta.id, requisito.answer, event)}
-                                />
-                              </div>
-
-                              {archivos.length > 0 && (
-                                <div className="space-y-2">
-                                  <p className="text-xs font-medium text-muted-foreground">Archivos adjuntos</p>
-                                  <ul className="space-y-2 text-sm">
-                                    {archivos.map((archivo) => (
-                                      <li
-                                        key={archivo.id}
-                                        className="flex items-center justify-between gap-2 rounded-md border border-dashed border-muted-foreground/40 bg-muted/40 px-2 py-1.5"
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          <UploadCloud className="h-4 w-4 text-muted-foreground" />
-                                          <div className="space-y-0.5">
-                                            <p className="font-medium leading-none">{archivo.name}</p>
-                                            <p className="text-xs text-muted-foreground">
-                                              Cargado el {formatearFechaCorta(archivo.uploadedAt)}
-                                            </p>
-                                          </div>
-                                        </div>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          onClick={() => handleEvidenceRemoval(pregunta.id, archivo.id)}
-                                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                          <span className="sr-only">Eliminar evidencia</span>
-                                        </Button>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                            </div>
+                          />
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">Sí</p>
+                            <p className="text-sm text-muted-foreground">{pregunta.siAction}</p>
                           </div>
-                        )
-                      })}
-
-                      {obtenerRequisitosEvidencia(pregunta).length === 0 && (
-                        <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                          No se definieron evidencias para esta pregunta.
+                        </div>
+                      )}
+                      {pregunta.noAction && (
+                        <div
+                          className={cn(
+                            "flex items-start gap-3 rounded-lg border p-3",
+                            pregunta.answer === "no" ? "border-red-500 bg-red-50" : "border-border bg-background",
+                          )}
+                        >
+                          <AlertTriangle
+                            className={cn(
+                              "mt-0.5 h-4 w-4",
+                              pregunta.answer === "no" ? "text-red-600" : "text-muted-foreground",
+                            )}
+                          />
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">No</p>
+                            <p className="text-sm text-muted-foreground">{pregunta.noAction}</p>
+                          </div>
+                        </div>
+                      )}
+                      {pregunta.noAplicaAction && (
+                        <div
+                          className={cn(
+                            "flex items-start gap-3 rounded-lg border p-3",
+                            pregunta.answer === "no-aplica"
+                              ? "border-blue-500 bg-blue-50"
+                              : "border-border bg-background",
+                          )}
+                        >
+                          <Info
+                            className={cn(
+                              "mt-0.5 h-4 w-4",
+                              pregunta.answer === "no-aplica" ? "text-blue-600" : "text-muted-foreground",
+                            )}
+                          />
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">No Aplica</p>
+                            <p className="text-sm text-muted-foreground">{pregunta.noAplicaAction}</p>
+                          </div>
                         </div>
                       )}
                     </div>
