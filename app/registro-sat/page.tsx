@@ -11,15 +11,6 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import {
   CheckCircle2,
@@ -29,20 +20,13 @@ import {
   FileText,
   History,
   AlertCircle,
+  Info,
   Download,
   Eye,
   UserCheck,
   Building2,
   Paperclip,
   X,
-  ListChecks,
-  Bell,
-  CalendarClock,
-  Inbox,
-  ClipboardList,
-  CalendarDays,
-  RefreshCcw,
-  FileCheck,
 } from "lucide-react"
 import { motion } from "framer-motion"
 
@@ -88,71 +72,6 @@ interface TraceabilityEntry {
   timestamp: Date
   details: string
   section: string
-}
-
-interface PasoAltaPortal {
-  id: string
-  titulo: string
-  descripcion: string
-  checklist: {
-    id: string
-    label: string
-    helperText?: string
-    required?: boolean
-  }[]
-}
-
-interface AcuseSATState {
-  fileName: string | null
-  uploadDate: Date | null
-  selloDigital: string
-  validado: boolean
-}
-
-interface RECFormState {
-  nombre: string
-  correo: string
-  telefono: string
-  fechaDesignacion: string
-  fechaUltimaCapacitacion: string
-  acuseDesignacion: string | null
-  acuseAceptacion: string | null
-  constanciaCapacitacion: string | null
-  poderNotarial: string | null
-  observaciones: string
-  ultimaActualizacion?: string
-}
-
-type EstadoNotificacion = "pendiente" | "contestada" | "vencida"
-
-interface NotificacionElectronica {
-  id: string
-  asunto: string
-  fechaRecepcion: string
-  fechaLimite: string
-  acuseLectura?: string
-  acuseRespuesta?: string
-  estado: EstadoNotificacion
-}
-
-interface RecordatorioBuzon {
-  id: string
-  fechaRevision: string
-  descripcion: string
-}
-
-interface RegistroAltaState {
-  fechaAlta: string
-  folioSAT: string
-  representante: string
-  acuses: string[]
-}
-
-interface ControlVersion {
-  id: string
-  fecha: string
-  tipoCambio: string
-  detalle: string
 }
 
 const answerOptions: { value: AnswerValue; label: string }[] = [
@@ -577,141 +496,29 @@ const evidenciasConservacion = [
   "Control de versiones de cada trámite realizado.",
 ]
 
-const pasosAltaPortal: PasoAltaPortal[] = [
+// Recomendaciones prácticas
+const recomendacionesPracticas = [
   {
-    id: "preparacion",
-    titulo: "Preparación documental obligatoria",
+    titulo: "Automatización del alta",
     descripcion:
-      "Valida que la documentación base esté vigente y completa antes de iniciar el trámite en el Portal PLD.",
-    checklist: [
-      {
-        id: "rfc",
-        label: "RFC vigente del sujeto obligado",
-        helperText: "Descarga la constancia actualizada directamente del portal SAT.",
-        required: true,
-      },
-      {
-        id: "fiel",
-        label: "Certificados de e.firma (FIEL) activos",
-        helperText: "Verifica vigencia y contraseña para firmar el envío.",
-        required: true,
-      },
-      {
-        id: "acta",
-        label: "Acta constitutiva y modificaciones",
-        helperText: "Adjunta la versión protocolizada más reciente.",
-        required: true,
-      },
-      {
-        id: "poderes",
-        label: "Poderes notariales del representante legal",
-        helperText: "Confirma que el poder contenga facultades para actos de administración y representación ante SAT/UIF.",
-        required: true,
-      },
-    ],
+      "La plataforma debe incluir un submódulo guiado para el llenado del Portal PLD con checklist de RFC, FIEL, acta constitutiva y poderes, e integrar la carga obligatoria del acuse digital validando sello electrónico.",
   },
   {
-    id: "configuracion",
-    titulo: "Configuración del Portal PLD",
+    titulo: "Gestión del Representante Encargado de Cumplimiento",
     descripcion:
-      "Revisa accesos, roles y checklist interno antes del llenado del formulario digital.",
-    checklist: [
-      {
-        id: "usuarios",
-        label: "Usuarios y roles dados de alta en el Portal PLD",
-        helperText: "Confirma que el REC y auxiliares tengan credenciales activas.",
-      },
-      {
-        id: "buzon",
-        label: "Buzón Tributario vinculado y verificado",
-        helperText: "Registra correo y teléfono autorizados para notificaciones.",
-      },
-      {
-        id: "representante",
-        label: "Datos del representante legal coinciden con acta y RFC",
-      },
-    ],
+      "La plataforma debe habilitar un formulario específico para el REC que solicite acuse de designación, aceptación electrónica, constancia anual de capacitación y poder notarial, con alertas automáticas para renovaciones.",
   },
   {
-    id: "captura",
-    titulo: "Captura de información",
+    titulo: "Control de notificaciones electrónicas",
     descripcion:
-      "Completa cada sección del portal asegurando consistencia con la documentación soporte.",
-    checklist: [
-      {
-        id: "actividad",
-        label: "Selección correcta de la actividad vulnerable",
-        helperText: "Corrobora fracción aplicable conforme a la Ley Federal para la Prevención e Identificación de Operaciones con Recursos de Procedencia Ilícita.",
-      },
-      {
-        id: "domicilio",
-        label: "Domicilio fiscal y sucursales registrados",
-      },
-      {
-        id: "procedimientos",
-        label: "Carga de manuales y procedimientos internos cuando el portal lo solicite",
-      },
-    ],
+      "La plataforma debe mostrar un tablero con alertas del Buzón Tributario, registrar acuses de lectura y respuesta dentro de 10 días hábiles y calendarizar recordatorios periódicos de revisión.",
   },
   {
-    id: "envio",
-    titulo: "Envío y resguardo",
+    titulo: "Trazabilidad documental",
     descripcion:
-      "Realiza el envío con la e.firma y resguarda el acuse digital con sello electrónico.",
-    checklist: [
-      {
-        id: "firma",
-        label: "Firma electrónica exitosa y acuse descargado",
-        required: true,
-      },
-      {
-        id: "validacion",
-        label: "Validación del sello digital y código de barras del acuse",
-        helperText: "Utiliza el verificador de documentos SAT para confirmar autenticidad.",
-        required: true,
-      },
-      {
-        id: "resguardo",
-        label: "Respaldo del acuse en repositorio interno",
-      },
-    ],
+      "La plataforma debe mantener una bitácora digital con fecha de alta, folio SAT, representante registrado y acuses, además de un control de versiones para cada modificación posterior.",
   },
 ]
-
-const addBusinessDays = (startDate: Date, businessDays: number) => {
-  const date = new Date(startDate)
-  let addedDays = 0
-
-  while (addedDays < businessDays) {
-    date.setDate(date.getDate() + 1)
-    const day = date.getDay()
-    if (day !== 0 && day !== 6) {
-      addedDays += 1
-    }
-  }
-
-  return date
-}
-
-const formatISODate = (value: string) => {
-  if (!value) return ""
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ""
-  return date.toLocaleDateString()
-}
-
-const createEmptyRecForm = (): RECFormState => ({
-  nombre: "",
-  correo: "",
-  telefono: "",
-  fechaDesignacion: "",
-  fechaUltimaCapacitacion: "",
-  acuseDesignacion: null,
-  acuseAceptacion: null,
-  constanciaCapacitacion: null,
-  poderNotarial: null,
-  observaciones: "",
-})
 
 export default function RegistroSATPage() {
   const { toast } = useToast()
@@ -721,39 +528,6 @@ export default function RegistroSATPage() {
   const [progreso, setProgreso] = useState(0)
   const [activeTab, setActiveTab] = useState("preguntas")
   const [evidenciasPorPregunta, setEvidenciasPorPregunta] = useState<Record<string, string[]>>({})
-  const [pasosChecklist, setPasosChecklist] = useState<Record<string, boolean>>({})
-  const [acuseSAT, setAcuseSAT] = useState<AcuseSATState>({
-    fileName: null,
-    uploadDate: null,
-    selloDigital: "",
-    validado: false,
-  })
-  const [acuseSATError, setAcuseSATError] = useState<string | null>(null)
-  const [recForm, setRecForm] = useState<RECFormState>(createEmptyRecForm())
-  const [notificacionesElectronicas, setNotificacionesElectronicas] = useState<NotificacionElectronica[]>([])
-  const [recordatoriosBuzon, setRecordatoriosBuzon] = useState<RecordatorioBuzon[]>([])
-  const [registroAlta, setRegistroAlta] = useState<RegistroAltaState>({
-    fechaAlta: "",
-    folioSAT: "",
-    representante: "",
-    acuses: [],
-  })
-  const [controlVersiones, setControlVersiones] = useState<ControlVersion[]>([])
-  const [nuevoAcuseRegistro, setNuevoAcuseRegistro] = useState("")
-  const [nuevoCambio, setNuevoCambio] = useState<{ tipoCambio: string; detalle: string }>({
-    tipoCambio: "",
-    detalle: "",
-  })
-  const [notificacionDraft, setNotificacionDraft] = useState({
-    asunto: "",
-    fechaRecepcion: "",
-    acuseLectura: "",
-    acuseRespuesta: "",
-  })
-  const [recordatorioDraft, setRecordatorioDraft] = useState({
-    fechaRevision: "",
-    descripcion: "Revisión periódica del Buzón Tributario",
-  })
 
   // Cargar datos del localStorage
   useEffect(() => {
@@ -814,110 +588,10 @@ export default function RegistroSATPage() {
             )
           : {}
 
-      const checklistGuardado =
-        data.pasosChecklist && typeof data.pasosChecklist === "object"
-          ? Object.entries(data.pasosChecklist as Record<string, unknown>).reduce<Record<string, boolean>>(
-              (acc, [key, value]) => {
-                acc[key] = Boolean(value)
-                return acc
-              },
-              {},
-            )
-          : {}
-
-      const acuseGuardado: AcuseSATState = {
-        fileName: typeof data.acuseSAT?.fileName === "string" ? data.acuseSAT.fileName : null,
-        uploadDate:
-          data.acuseSAT?.uploadDate && typeof data.acuseSAT.uploadDate === "string"
-            ? new Date(data.acuseSAT.uploadDate)
-            : null,
-        selloDigital: typeof data.acuseSAT?.selloDigital === "string" ? data.acuseSAT.selloDigital : "",
-        validado: Boolean(data.acuseSAT?.validado),
-      }
-
-      const recGuardado: RECFormState = {
-        ...createEmptyRecForm(),
-        ...(typeof data.recForm === "object" && data.recForm
-          ? {
-              nombre: typeof data.recForm.nombre === "string" ? data.recForm.nombre : "",
-              correo: typeof data.recForm.correo === "string" ? data.recForm.correo : "",
-              telefono: typeof data.recForm.telefono === "string" ? data.recForm.telefono : "",
-              fechaDesignacion:
-                typeof data.recForm.fechaDesignacion === "string" ? data.recForm.fechaDesignacion : "",
-              fechaUltimaCapacitacion:
-                typeof data.recForm.fechaUltimaCapacitacion === "string"
-                  ? data.recForm.fechaUltimaCapacitacion
-                  : "",
-              acuseDesignacion:
-                typeof data.recForm.acuseDesignacion === "string" ? data.recForm.acuseDesignacion : null,
-              acuseAceptacion:
-                typeof data.recForm.acuseAceptacion === "string" ? data.recForm.acuseAceptacion : null,
-              constanciaCapacitacion:
-                typeof data.recForm.constanciaCapacitacion === "string"
-                  ? data.recForm.constanciaCapacitacion
-                  : null,
-              poderNotarial:
-                typeof data.recForm.poderNotarial === "string" ? data.recForm.poderNotarial : null,
-              observaciones:
-                typeof data.recForm.observaciones === "string" ? data.recForm.observaciones : "",
-              ultimaActualizacion:
-                typeof data.recForm.ultimaActualizacion === "string"
-                  ? data.recForm.ultimaActualizacion
-                  : undefined,
-            }
-          : {}),
-      }
-
-      const notificacionesGuardadas = Array.isArray(data.notificacionesElectronicas)
-        ? data.notificacionesElectronicas.map((item: Partial<NotificacionElectronica>) => ({
-            id: item.id ?? Date.now().toString(),
-            asunto: item.asunto ?? "",
-            fechaRecepcion: item.fechaRecepcion ?? "",
-            fechaLimite: item.fechaLimite ?? "",
-            acuseLectura: item.acuseLectura,
-            acuseRespuesta: item.acuseRespuesta,
-            estado: (item.estado as EstadoNotificacion) ?? "pendiente",
-          }))
-        : []
-
-      const recordatoriosGuardados = Array.isArray(data.recordatoriosBuzon)
-        ? data.recordatoriosBuzon.map((item: Partial<RecordatorioBuzon>) => ({
-            id: item.id ?? Date.now().toString(),
-            fechaRevision: item.fechaRevision ?? "",
-            descripcion: item.descripcion ?? "",
-          }))
-        : []
-
-      const registroAltaGuardado: RegistroAltaState = {
-        fechaAlta: typeof data.registroAlta?.fechaAlta === "string" ? data.registroAlta.fechaAlta : "",
-        folioSAT: typeof data.registroAlta?.folioSAT === "string" ? data.registroAlta.folioSAT : "",
-        representante:
-          typeof data.registroAlta?.representante === "string" ? data.registroAlta.representante : "",
-        acuses: Array.isArray(data.registroAlta?.acuses)
-          ? (data.registroAlta?.acuses as unknown[]).map((acuse) => String(acuse))
-          : [],
-      }
-
-      const versionesGuardadas = Array.isArray(data.controlVersiones)
-        ? data.controlVersiones.map((item: Partial<ControlVersion>) => ({
-            id: item.id ?? Date.now().toString(),
-            fecha: item.fecha ?? new Date().toISOString(),
-            tipoCambio: item.tipoCambio ?? "",
-            detalle: item.detalle ?? "",
-          }))
-        : []
-
       setPreguntasState(preguntasGuardadas)
       setDocumentos(documentosGuardados as DocumentUpload[])
       setTrazabilidad(trazabilidadGuardada as TraceabilityEntry[])
       setEvidenciasPorPregunta(evidenciasGuardadas)
-      setPasosChecklist(checklistGuardado)
-      setAcuseSAT(acuseGuardado)
-      setRecForm(recGuardado)
-      setNotificacionesElectronicas(notificacionesGuardadas as NotificacionElectronica[])
-      setRecordatoriosBuzon(recordatoriosGuardados as RecordatorioBuzon[])
-      setRegistroAlta(registroAltaGuardado)
-      setControlVersiones(versionesGuardadas as ControlVersion[])
     } catch (error) {
       console.error("Error al cargar datos:", error)
     }
@@ -937,533 +611,9 @@ export default function RegistroSATPage() {
       documentos,
       trazabilidad,
       evidenciasPorPregunta,
-      pasosChecklist,
-      acuseSAT: {
-        ...acuseSAT,
-        uploadDate: acuseSAT.uploadDate ? acuseSAT.uploadDate.toISOString() : null,
-      },
-      recForm,
-      notificacionesElectronicas,
-      recordatoriosBuzon,
-      registroAlta,
-      controlVersiones,
     }
     localStorage.setItem("registro-sat-data", JSON.stringify(data))
-  }, [
-    preguntasState,
-    documentos,
-    trazabilidad,
-    evidenciasPorPregunta,
-    pasosChecklist,
-    acuseSAT,
-    recForm,
-    notificacionesElectronicas,
-    recordatoriosBuzon,
-    registroAlta,
-    controlVersiones,
-  ])
-
-  const totalChecklistItems = pasosAltaPortal.reduce(
-    (acc, paso) => acc + paso.checklist.length,
-    0,
-  )
-  const checklistCompletados = Object.values(pasosChecklist).filter(Boolean).length
-  const checklistProgreso = totalChecklistItems
-    ? Math.round((checklistCompletados / totalChecklistItems) * 100)
-    : 0
-
-  const toggleChecklistItem = (stepId: string, itemId: string) => {
-    const key = `${stepId}-${itemId}`
-    const paso = pasosAltaPortal.find((item) => item.id === stepId)
-    const checklistItem = paso?.checklist.find((item) => item.id === itemId)
-    let seMarco = false
-
-    setPasosChecklist((prev) => {
-      const nextValue = !(prev[key] ?? false)
-      seMarco = nextValue
-      if (nextValue) {
-        return {
-          ...prev,
-          [key]: true,
-        }
-      }
-
-      const { [key]: _omit, ...rest } = prev
-      return rest
-    })
-
-    if (seMarco && paso && checklistItem) {
-      const nuevaEntrada: TraceabilityEntry = {
-        id: Date.now().toString(),
-        action: "Checklist actualizado",
-        user: "Usuario actual",
-        timestamp: new Date(),
-        details: `${paso.titulo}: ${checklistItem.label}`,
-        section: "Automatización del Alta",
-      }
-      setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-    }
-  }
-
-  const handleAcuseFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    setAcuseSAT((prev) => ({
-      ...prev,
-      fileName: file?.name ?? null,
-      uploadDate: file ? new Date() : prev.uploadDate,
-      validado: false,
-    }))
-    setAcuseSATError(null)
-  }
-
-  const handleAcuseSelloChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    const value = event.target.value.toUpperCase()
-    setAcuseSAT((prev) => ({
-      ...prev,
-      selloDigital: value,
-      validado: false,
-    }))
-    if (acuseSATError) {
-      setAcuseSATError(null)
-    }
-  }
-
-  const obtenerEstadoNotificacion = (
-    notificacion: Pick<NotificacionElectronica, "fechaLimite" | "acuseRespuesta">,
-  ): EstadoNotificacion => {
-    if (notificacion.acuseRespuesta) {
-      return "contestada"
-    }
-
-    if (notificacion.fechaLimite && new Date(notificacion.fechaLimite).getTime() < Date.now()) {
-      return "vencida"
-    }
-
-    return "pendiente"
-  }
-
-  const handleValidarAcuse = () => {
-    if (!acuseSAT.fileName) {
-      setAcuseSATError("Adjunta el acuse digital emitido por el SAT.")
-      return
-    }
-
-    const selloNormalizado = acuseSAT.selloDigital.replace(/\s+/g, "")
-    if (selloNormalizado.length < 20 || !/^[A-Z0-9]+$/.test(selloNormalizado)) {
-      setAcuseSATError("El sello digital debe contener al menos 20 caracteres alfanuméricos válidos.")
-      setAcuseSAT((prev) => ({ ...prev, validado: false }))
-      return
-    }
-
-    setAcuseSAT((prev) => ({
-      ...prev,
-      selloDigital: selloNormalizado,
-      validado: true,
-      uploadDate: prev.uploadDate ?? new Date(),
-    }))
-    setAcuseSATError(null)
-
-    const fileName = acuseSAT.fileName
-    if (fileName) {
-      setDocumentos((prev) => {
-        if (prev.some((doc) => doc.name === fileName)) {
-          return prev
-        }
-        const nuevoDocumento: DocumentUpload = {
-          id: Date.now().toString(),
-          name: fileName,
-          type: "Acuse digital SAT",
-          uploadDate: new Date(),
-          status: "vigente",
-        }
-        return [nuevoDocumento, ...prev]
-      })
-
-      setRegistroAlta((prev) => {
-        if (prev.acuses.includes(fileName)) {
-          return prev
-        }
-        return {
-          ...prev,
-          acuses: [...prev.acuses, fileName],
-        }
-      })
-
-      const nuevaEntrada: TraceabilityEntry = {
-        id: Date.now().toString(),
-        action: "Acuse validado",
-        user: "Usuario actual",
-        timestamp: new Date(),
-        details: `Se validó el acuse ${fileName} con sello ${selloNormalizado.slice(0, 12)}...`,
-        section: "Alta en el Portal PLD",
-      }
-      setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-
-      toast({
-        title: "Acuse validado",
-        description: "El sello digital fue verificado y el documento quedó registrado.",
-      })
-    }
-  }
-
-  type RecFileField = "acuseDesignacion" | "acuseAceptacion" | "constanciaCapacitacion" | "poderNotarial"
-
-  const handleRecInputChange = (field: keyof RECFormState, value: string) => {
-    setRecForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }))
-  }
-
-  const handleRecFileChange = (field: RecFileField, event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    setRecForm((prev) => ({
-      ...prev,
-      [field]: file?.name ?? null,
-    }))
-  }
-
-  const guardarRecForm = () => {
-    const camposObligatorios: Array<keyof RECFormState> = [
-      "nombre",
-      "correo",
-      "telefono",
-      "fechaDesignacion",
-      "fechaUltimaCapacitacion",
-    ]
-
-    const archivosObligatorios: RecFileField[] = [
-      "acuseDesignacion",
-      "acuseAceptacion",
-      "constanciaCapacitacion",
-      "poderNotarial",
-    ]
-
-    const faltantes = camposObligatorios.filter((campo) => !recForm[campo])
-    const archivosFaltantes = archivosObligatorios.filter((campo) => !recForm[campo])
-
-    if (faltantes.length > 0 || archivosFaltantes.length > 0) {
-      toast({
-        title: "Información incompleta",
-        description: "Completa la información del REC y adjunta las evidencias obligatorias.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const actualizacion = new Date().toISOString()
-    setRecForm((prev) => ({
-      ...prev,
-      ultimaActualizacion: actualizacion,
-    }))
-
-    if (recForm.fechaDesignacion) {
-      const proximaRenovacion = new Date(recForm.fechaDesignacion)
-      proximaRenovacion.setFullYear(proximaRenovacion.getFullYear() + 1)
-      const fechaRevision = proximaRenovacion.toISOString().slice(0, 10)
-      setRecordatoriosBuzon((prev) => {
-        if (
-          prev.some(
-            (recordatorio) =>
-              recordatorio.descripcion.includes("Renovación del REC") && recordatorio.fechaRevision === fechaRevision,
-          )
-        ) {
-          return prev
-        }
-
-        const nuevoRecordatorio: RecordatorioBuzon = {
-          id: `${Date.now()}-rec`,
-          fechaRevision,
-          descripcion: "Renovación del REC y actualización de designación",
-        }
-        return [nuevoRecordatorio, ...prev]
-      })
-    }
-
-    const nuevaEntrada: TraceabilityEntry = {
-      id: Date.now().toString(),
-      action: "REC actualizado",
-      user: "Usuario actual",
-      timestamp: new Date(),
-      details: `Se registró/actualizó la designación del REC ${recForm.nombre}.`,
-      section: "Gestión del REC",
-    }
-    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-
-    toast({
-      title: "REC guardado",
-      description: "La información del representante encargado quedó registrada con sus evidencias.",
-    })
-  }
-
-  const registrarNotificacion = () => {
-    if (!notificacionDraft.asunto || !notificacionDraft.fechaRecepcion) {
-      toast({
-        title: "Datos incompletos",
-        description: "Captura el asunto y la fecha de recepción de la notificación electrónica.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const fechaRecepcion = new Date(notificacionDraft.fechaRecepcion)
-    const fechaLimite = addBusinessDays(fechaRecepcion, 10)
-
-    const nuevaNotificacion: NotificacionElectronica = {
-      id: Date.now().toString(),
-      asunto: notificacionDraft.asunto,
-      fechaRecepcion: notificacionDraft.fechaRecepcion,
-      fechaLimite: fechaLimite.toISOString(),
-      acuseLectura: notificacionDraft.acuseLectura || undefined,
-      acuseRespuesta: notificacionDraft.acuseRespuesta || undefined,
-      estado: obtenerEstadoNotificacion({
-        fechaLimite: fechaLimite.toISOString(),
-        acuseRespuesta: notificacionDraft.acuseRespuesta || undefined,
-      }),
-    }
-
-    setNotificacionesElectronicas((prev) => [nuevaNotificacion, ...prev])
-    setNotificacionDraft({ asunto: "", fechaRecepcion: "", acuseLectura: "", acuseRespuesta: "" })
-
-    const nuevaEntrada: TraceabilityEntry = {
-      id: Date.now().toString(),
-      action: "Notificación registrada",
-      user: "Usuario actual",
-      timestamp: new Date(),
-      details: `Se registró el aviso "${nuevaNotificacion.asunto}" con plazo al ${formatISODate(
-        nuevaNotificacion.fechaLimite,
-      )}.`,
-      section: "Buzón Tributario",
-    }
-    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-
-    toast({
-      title: "Notificación registrada",
-      description: "Se generó el seguimiento con plazo de 10 días hábiles.",
-    })
-  }
-
-  const actualizarNotificacionCampo = (
-    id: string,
-    field: "acuseLectura" | "acuseRespuesta",
-    value: string,
-  ) => {
-    setNotificacionesElectronicas((prev) =>
-      prev.map((notificacion) => {
-        if (notificacion.id !== id) return notificacion
-        const updated = {
-          ...notificacion,
-          [field]: value ? value : undefined,
-        }
-        return {
-          ...updated,
-          estado: obtenerEstadoNotificacion(updated),
-        }
-      }),
-    )
-
-    if (value) {
-      const detalle =
-        field === "acuseLectura"
-          ? `Se registró acuse de lectura ${value}.`
-          : `Se registró acuse de respuesta ${value}.`
-      const nuevaEntrada: TraceabilityEntry = {
-        id: Date.now().toString(),
-        action: "Seguimiento de notificación",
-        user: "Usuario actual",
-        timestamp: new Date(),
-        details: detalle,
-        section: "Buzón Tributario",
-      }
-      setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-    }
-  }
-
-  const diasRestantes = (fechaLimite: string) => {
-    if (!fechaLimite) return null
-    const limite = new Date(fechaLimite)
-    const hoy = new Date()
-    const diff = Math.ceil((limite.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24))
-    return diff
-  }
-
-  const agregarRecordatorio = () => {
-    if (!recordatorioDraft.fechaRevision) {
-      toast({
-        title: "Fecha obligatoria",
-        description: "Define la fecha para el recordatorio del Buzón Tributario.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const nuevoRecordatorio: RecordatorioBuzon = {
-      id: Date.now().toString(),
-      fechaRevision: recordatorioDraft.fechaRevision,
-      descripcion: recordatorioDraft.descripcion,
-    }
-
-    setRecordatoriosBuzon((prev) => [nuevoRecordatorio, ...prev])
-    setRecordatorioDraft((prev) => ({ ...prev, fechaRevision: "" }))
-
-    const nuevaEntrada: TraceabilityEntry = {
-      id: Date.now().toString(),
-      action: "Recordatorio programado",
-      user: "Usuario actual",
-      timestamp: new Date(),
-      details: `Recordatorio del buzón para el ${formatISODate(nuevoRecordatorio.fechaRevision)}: ${
-        nuevoRecordatorio.descripcion
-      }`,
-      section: "Buzón Tributario",
-    }
-    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-
-    toast({
-      title: "Recordatorio agregado",
-      description: "Se calendarizó la revisión periódica del buzón.",
-    })
-  }
-
-  const eliminarRecordatorio = (id: string) => {
-    setRecordatoriosBuzon((prev) => prev.filter((recordatorio) => recordatorio.id !== id))
-  }
-
-  const actualizarRegistroAltaCampo = (field: keyof RegistroAltaState, value: string) => {
-    setRegistroAlta((prev) => ({
-      ...prev,
-      [field]: value,
-    }))
-  }
-
-  const guardarRegistroAlta = () => {
-    if (!registroAlta.fechaAlta || !registroAlta.folioSAT || !registroAlta.representante) {
-      toast({
-        title: "Datos del alta incompletos",
-        description: "Captura la fecha de alta, folio SAT y representante registrado.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const nuevaEntrada: TraceabilityEntry = {
-      id: Date.now().toString(),
-      action: "Alta documentada",
-      user: "Usuario actual",
-      timestamp: new Date(),
-      details: `Alta con folio ${registroAlta.folioSAT} y representante ${registroAlta.representante}.`,
-      section: "Trazabilidad documental",
-    }
-    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-
-    toast({
-      title: "Registro del alta guardado",
-      description: "La bitácora conserva los datos clave del folio y representante.",
-    })
-  }
-
-  const agregarAcuseRegistro = () => {
-    const acuse = nuevoAcuseRegistro.trim()
-    if (!acuse) {
-      toast({
-        title: "Acuse requerido",
-        description: "Indica el folio o referencia del acuse a registrar.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setRegistroAlta((prev) => {
-      if (prev.acuses.includes(acuse)) {
-        return prev
-      }
-      return {
-        ...prev,
-        acuses: [...prev.acuses, acuse],
-      }
-    })
-    setNuevoAcuseRegistro("")
-
-    const nuevaEntrada: TraceabilityEntry = {
-      id: Date.now().toString(),
-      action: "Acuse incorporado",
-      user: "Usuario actual",
-      timestamp: new Date(),
-      details: `Se agregó el acuse ${acuse} al expediente del alta.`,
-      section: "Trazabilidad documental",
-    }
-    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-  }
-
-  const eliminarAcuseRegistro = (acuse: string) => {
-    setRegistroAlta((prev) => ({
-      ...prev,
-      acuses: prev.acuses.filter((item) => item !== acuse),
-    }))
-  }
-
-  const registrarCambioVersion = () => {
-    if (!nuevoCambio.tipoCambio || !nuevoCambio.detalle.trim()) {
-      toast({
-        title: "Información incompleta",
-        description: "Selecciona el tipo de modificación y describe el cambio realizado.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const nuevaVersion: ControlVersion = {
-      id: Date.now().toString(),
-      fecha: new Date().toISOString(),
-      tipoCambio: nuevoCambio.tipoCambio,
-      detalle: nuevoCambio.detalle.trim(),
-    }
-
-    setControlVersiones((prev) => [nuevaVersion, ...prev])
-    setNuevoCambio({ tipoCambio: "", detalle: "" })
-
-    const nuevaEntrada: TraceabilityEntry = {
-      id: Date.now().toString(),
-      action: "Cambio documentado",
-      user: "Usuario actual",
-      timestamp: new Date(),
-      details: `${nuevoCambio.tipoCambio}: ${nuevoCambio.detalle.trim()}`,
-      section: "Control de versiones",
-    }
-    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-
-    toast({
-      title: "Versión registrada",
-      description: "Se documentó la modificación en el padrón de actividades vulnerables.",
-    })
-  }
-
-  const recFechaDesignacion = recForm.fechaDesignacion ? new Date(recForm.fechaDesignacion) : null
-  const recRenovacionDate =
-    recFechaDesignacion && !Number.isNaN(recFechaDesignacion.getTime())
-      ? (() => {
-          const date = new Date(recFechaDesignacion)
-          date.setFullYear(date.getFullYear() + 1)
-          return date
-        })()
-      : null
-  const diasParaRenovacion = recRenovacionDate
-    ? Math.ceil((recRenovacionDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    : null
-  const capacitacionDate = recForm.fechaUltimaCapacitacion
-    ? new Date(recForm.fechaUltimaCapacitacion)
-    : null
-  const diasDesdeCapacitacion = capacitacionDate
-    ? Math.ceil((Date.now() - capacitacionDate.getTime()) / (1000 * 60 * 60 * 24))
-    : null
-  const capacitacionPorVencer = diasDesdeCapacitacion !== null && diasDesdeCapacitacion >= 335
-  const capacitacionVencida = diasDesdeCapacitacion !== null && diasDesdeCapacitacion > 365
-
-  const notificacionesPendientes = notificacionesElectronicas.filter(
-    (notificacion) => notificacion.estado !== "contestada",
-  )
-  const notificacionesVencidas = notificacionesElectronicas.filter(
-    (notificacion) => notificacion.estado === "vencida",
-  )
+  }, [preguntasState, documentos, trazabilidad, evidenciasPorPregunta])
 
   // Actualizar respuesta de pregunta
   const actualizarRespuesta = (id: string, answer: AnswerValue) => {
@@ -1654,7 +804,7 @@ export default function RegistroSATPage() {
 
       {/* Tabs principales */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="preguntas" className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4" />
             Preguntas Normativas
@@ -1671,96 +821,14 @@ export default function RegistroSATPage() {
             <History className="h-4 w-4" />
             Bitácora de Trazabilidad
           </TabsTrigger>
+          <TabsTrigger value="recomendaciones" className="flex items-center gap-2">
+            <Info className="h-4 w-4" />
+            Recomendaciones
+          </TabsTrigger>
         </TabsList>
 
         {/* Tab: Preguntas Normativas */}
         <TabsContent value="preguntas" className="space-y-6">
-          <Card>
-            <CardHeader className="space-y-1">
-              <CardTitle className="flex items-center gap-2">
-                <ListChecks className="h-5 w-5 text-primary" />
-                Guía paso a paso del Portal PLD
-              </CardTitle>
-              <CardDescription>
-                Completa la lista de verificación documental para automatizar el alta ante el SAT.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-medium">Progreso del checklist</p>
-                  <p className="text-xs text-muted-foreground">
-                    Elementos completados: {checklistCompletados} de {totalChecklistItems}
-                  </p>
-                </div>
-                <div className="w-full max-w-xs">
-                  <Progress value={checklistProgreso} className="h-2" />
-                  <p className="mt-1 text-xs text-muted-foreground text-right">{checklistProgreso}% completado</p>
-                </div>
-              </div>
-              <div className="space-y-4">
-                {pasosAltaPortal.map((paso, index) => {
-                  const completado = paso.checklist.every(
-                    (item) => pasosChecklist[`${paso.id}-${item.id}`],
-                  )
-
-                  return (
-                    <div key={paso.id} className="space-y-4 rounded-lg border p-4">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div className="space-y-2">
-                          <Badge variant="secondary" className="w-fit uppercase text-xs">
-                            Paso {index + 1}
-                          </Badge>
-                          <div>
-                            <h4 className="text-base font-semibold">{paso.titulo}</h4>
-                            <p className="text-sm text-muted-foreground">{paso.descripcion}</p>
-                          </div>
-                        </div>
-                        <Badge
-                          variant={completado ? "default" : "outline"}
-                          className="flex items-center gap-1"
-                        >
-                          {completado ? (
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                          ) : (
-                            <Clock className="h-3.5 w-3.5" />
-                          )}
-                          {completado ? "Completado" : "Pendiente"}
-                        </Badge>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {paso.checklist.map((item) => {
-                          const key = `${paso.id}-${item.id}`
-                          const checked = pasosChecklist[key] ?? false
-
-                          return (
-                            <label
-                              key={item.id}
-                              className="flex items-start gap-3 rounded-lg border p-3 transition hover:border-primary"
-                            >
-                              <Checkbox
-                                checked={checked}
-                                onCheckedChange={() => toggleChecklistItem(paso.id, item.id)}
-                              />
-                              <div className="space-y-1">
-                                <p className="text-sm font-medium leading-snug">
-                                  {item.label}
-                                  {item.required && <span className="ml-1 text-destructive">*</span>}
-                                </p>
-                                {item.helperText && (
-                                  <p className="text-xs text-muted-foreground">{item.helperText}</p>
-                                )}
-                              </div>
-                            </label>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </CardContent>
-          </Card>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1920,195 +988,6 @@ export default function RegistroSATPage() {
 
         {/* Tab: Carga Documental */}
         <TabsContent value="documentos" className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <FileCheck className="h-5 w-5 text-primary" />
-                  Acuse digital obligatorio
-                </CardTitle>
-                <CardDescription>
-                  Carga y valida el acuse emitido por el SAT con su sello digital.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="acuse-sat-file">Archivo del acuse (PDF o XML)</Label>
-                  <Input
-                    id="acuse-sat-file"
-                    type="file"
-                    accept=".pdf,.xml"
-                    onChange={handleAcuseFileChange}
-                  />
-                  {acuseSAT.fileName && (
-                    <p className="text-xs text-muted-foreground">
-                      Archivo seleccionado: {acuseSAT.fileName}
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="acuse-sat-sello">Sello digital</Label>
-                  <Textarea
-                    id="acuse-sat-sello"
-                    value={acuseSAT.selloDigital}
-                    onChange={handleAcuseSelloChange}
-                    placeholder="Pega el sello digital tal como aparece en el acuse del SAT"
-                    className="min-h-[100px]"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Se comprobará que el sello tenga el formato alfanumérico requerido y se registrará en la bitácora.
-                  </p>
-                </div>
-                {acuseSATError && (
-                  <Alert variant="destructive">
-                    <AlertTitle>Validación pendiente</AlertTitle>
-                    <AlertDescription>{acuseSATError}</AlertDescription>
-                  </Alert>
-                )}
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button type="button" onClick={handleValidarAcuse}>
-                    Validar sello digital
-                  </Button>
-                  {acuseSAT.validado && (
-                    <Badge variant="secondary" className="flex items-center gap-1">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                      Acuse validado
-                    </Badge>
-                  )}
-                  {acuseSAT.uploadDate && (
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
-                      Registrado el {acuseSAT.uploadDate.toLocaleDateString()}
-                    </Badge>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <ClipboardList className="h-5 w-5 text-primary" />
-                  Gestión del Representante Encargado de Cumplimiento
-                </CardTitle>
-                <CardDescription>
-                  Registra los datos y evidencias del REC con seguimiento automático de renovaciones.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="rec-nombre">Nombre completo</Label>
-                    <Input
-                      id="rec-nombre"
-                      value={recForm.nombre}
-                      onChange={(event) => handleRecInputChange("nombre", event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="rec-correo">Correo electrónico</Label>
-                    <Input
-                      id="rec-correo"
-                      type="email"
-                      value={recForm.correo}
-                      onChange={(event) => handleRecInputChange("correo", event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="rec-telefono">Teléfono</Label>
-                    <Input
-                      id="rec-telefono"
-                      value={recForm.telefono}
-                      onChange={(event) => handleRecInputChange("telefono", event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="rec-designacion">Fecha de designación</Label>
-                    <Input
-                      id="rec-designacion"
-                      type="date"
-                      value={recForm.fechaDesignacion}
-                      onChange={(event) => handleRecInputChange("fechaDesignacion", event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="rec-capacitacion">Fecha de última capacitación anual</Label>
-                    <Input
-                      id="rec-capacitacion"
-                      type="date"
-                      value={recForm.fechaUltimaCapacitacion}
-                      onChange={(event) =>
-                        handleRecInputChange("fechaUltimaCapacitacion", event.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="rec-acuse-designacion">Acuse de designación</Label>
-                    <Input
-                      id="rec-acuse-designacion"
-                      type="file"
-                      onChange={(event) => handleRecFileChange("acuseDesignacion", event)}
-                    />
-                    {recForm.acuseDesignacion && (
-                      <p className="text-xs text-muted-foreground">{recForm.acuseDesignacion}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="rec-acuse-aceptacion">Acuse de aceptación electrónica</Label>
-                    <Input
-                      id="rec-acuse-aceptacion"
-                      type="file"
-                      onChange={(event) => handleRecFileChange("acuseAceptacion", event)}
-                    />
-                    {recForm.acuseAceptacion && (
-                      <p className="text-xs text-muted-foreground">{recForm.acuseAceptacion}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="rec-constancia">Constancia anual de capacitación</Label>
-                    <Input
-                      id="rec-constancia"
-                      type="file"
-                      onChange={(event) => handleRecFileChange("constanciaCapacitacion", event)}
-                    />
-                    {recForm.constanciaCapacitacion && (
-                      <p className="text-xs text-muted-foreground">{recForm.constanciaCapacitacion}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="rec-poder">Poder notarial vigente</Label>
-                    <Input
-                      id="rec-poder"
-                      type="file"
-                      onChange={(event) => handleRecFileChange("poderNotarial", event)}
-                    />
-                    {recForm.poderNotarial && (
-                      <p className="text-xs text-muted-foreground">{recForm.poderNotarial}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="rec-observaciones">Observaciones y alcance del REC</Label>
-                  <Textarea
-                    id="rec-observaciones"
-                    value={recForm.observaciones}
-                    onChange={(event) => handleRecInputChange("observaciones", event.target.value)}
-                    placeholder="Incluye notas sobre facultades, cobertura geográfica o suplencias."
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button type="button" onClick={guardarRecForm}>
-                    Guardar información del REC
-                  </Button>
-                  {recForm.ultimaActualizacion && (
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
-                      Actualizado el {formatISODate(recForm.ultimaActualizacion)}
-                    </Badge>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* A. Alta en el Padrón */}
             <Card>
@@ -2259,11 +1138,11 @@ export default function RegistroSATPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5" />
-                Alertas automáticas de vencimientos
+                Alertas Automáticas de Vencimientos
               </CardTitle>
-              <CardDescription>Vigencia de documentos críticos del alta ante el SAT</CardDescription>
+              <CardDescription>Sistema de alertas para documentos próximos a vencer</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent>
               {documentos.filter((doc) => getDocumentStatus(doc) !== "vigente").length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-500" />
@@ -2275,8 +1154,8 @@ export default function RegistroSATPage() {
                   {documentos
                     .filter((doc) => getDocumentStatus(doc) !== "vigente")
                     .map((doc) => (
-                      <div key={doc.id} className="flex items-center justify-between gap-4 rounded-lg border p-4">
-                        <div className="flex items-center gap-3">
+                      <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg bg-amber-50">
+                        <div className="flex items-center space-x-3">
                           <AlertTriangle className="h-5 w-5 text-amber-500" />
                           <div>
                             <div className="font-medium">{doc.name}</div>
@@ -2294,434 +1173,19 @@ export default function RegistroSATPage() {
                     ))}
                 </div>
               )}
-              {acuseSAT.validado ? (
-                <Alert className="border-green-200 bg-green-50">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  <AlertTitle>Acuse digital verificado</AlertTitle>
-                  <AlertDescription>
-                    El acuse del SAT se encuentra cargado y validado con sello digital.
-                  </AlertDescription>
-                </Alert>
-              ) : (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Acuse pendiente de validación</AlertTitle>
-                  <AlertDescription>
-                    Registra el acuse digital del alta y valida su sello electrónico para cerrar el proceso.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
-
-          {recRenovacionDate && diasParaRenovacion !== null && diasParaRenovacion <= 60 && (
-            <Alert variant={diasParaRenovacion < 0 ? "destructive" : "default"}>
-              <Bell className="h-4 w-4" />
-              <AlertTitle>
-                Renovación del REC {diasParaRenovacion < 0 ? "vencida" : "próxima"}
-              </AlertTitle>
-              <AlertDescription>
-                {diasParaRenovacion < 0
-                  ? `La designación del REC venció el ${recRenovacionDate.toLocaleDateString()}. Actualiza la información cuanto antes.`
-                  : `La designación del REC vence el ${recRenovacionDate.toLocaleDateString()}. Restan ${diasParaRenovacion} días para renovar.`}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {capacitacionDate && (capacitacionPorVencer || capacitacionVencida) && (
-            <Alert variant={capacitacionVencida ? "destructive" : "default"}>
-              <Bell className="h-4 w-4" />
-              <AlertTitle>
-                Constancia anual del REC {capacitacionVencida ? "vencida" : "por vencer"}
-              </AlertTitle>
-              <AlertDescription>
-                {capacitacionVencida
-                  ? `Han transcurrido ${diasDesdeCapacitacion ?? 0} días desde la última capacitación registrada. Adjunta la constancia vigente.`
-                  : `La última capacitación se registró hace ${diasDesdeCapacitacion ?? 0} días. Programa la constancia antes de cumplir el año.`}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Inbox className="h-5 w-5 text-primary" />
-                Tablero del Buzón Tributario
-              </CardTitle>
-              <CardDescription>
-                Controla acuses de lectura y respuesta con plazo legal de 10 días hábiles.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-6 lg:grid-cols-2">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="notif-asunto">Asunto de la notificación</Label>
-                    <Input
-                      id="notif-asunto"
-                      value={notificacionDraft.asunto}
-                      onChange={(event) =>
-                        setNotificacionDraft((prev) => ({ ...prev, asunto: event.target.value }))
-                      }
-                      placeholder="Ej. Requerimiento de información PLD"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="notif-recepcion">Fecha de recepción</Label>
-                    <Input
-                      id="notif-recepcion"
-                      type="date"
-                      value={notificacionDraft.fechaRecepcion}
-                      onChange={(event) =>
-                        setNotificacionDraft((prev) => ({
-                          ...prev,
-                          fechaRecepcion: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="notif-lectura">Acuse de lectura</Label>
-                    <Input
-                      id="notif-lectura"
-                      value={notificacionDraft.acuseLectura}
-                      onChange={(event) =>
-                        setNotificacionDraft((prev) => ({
-                          ...prev,
-                          acuseLectura: event.target.value,
-                        }))
-                      }
-                      placeholder="Folio o referencia del acuse"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="notif-respuesta">Acuse de respuesta</Label>
-                    <Input
-                      id="notif-respuesta"
-                      value={notificacionDraft.acuseRespuesta}
-                      onChange={(event) =>
-                        setNotificacionDraft((prev) => ({
-                          ...prev,
-                          acuseRespuesta: event.target.value,
-                        }))
-                      }
-                      placeholder="Folio de la respuesta enviada"
-                    />
-                  </div>
-                  <Button type="button" onClick={registrarNotificacion} className="w-full sm:w-auto">
-                    Registrar notificación
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    Se calcula automáticamente la fecha límite de atención considerando 10 días hábiles a partir de la recepción.
-                  </p>
-                  {notificacionesVencidas.length > 0 && (
-                    <Alert variant="destructive">
-                      <AlertTitle>Notificaciones vencidas</AlertTitle>
-                      <AlertDescription>
-                        {notificacionesVencidas.length === 1
-                          ? "Existe una notificación vencida sin respuesta registrada."
-                          : `Existen ${notificacionesVencidas.length} notificaciones vencidas.`}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  {notificacionesPendientes.length > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Hay {notificacionesPendientes.length} notificaciones en seguimiento activo.
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-4">
-                  {notificacionesElectronicas.length === 0 ? (
-                    <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                      No hay notificaciones registradas.
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {notificacionesElectronicas.map((notificacion) => {
-                        const dias = diasRestantes(notificacion.fechaLimite)
-                        const estadoVariant =
-                          notificacion.estado === "contestada"
-                            ? "secondary"
-                            : notificacion.estado === "vencida"
-                              ? "destructive"
-                              : "outline"
-
-                        return (
-                          <div key={notificacion.id} className="space-y-3 rounded-lg border p-4">
-                            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                              <div>
-                                <p className="font-semibold">{notificacion.asunto}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  Recibida el {formatISODate(notificacion.fechaRecepcion)} • Límite: {" "}
-                                  {formatISODate(notificacion.fechaLimite)}
-                                </p>
-                              </div>
-                              <Badge variant={estadoVariant}>{notificacion.estado}</Badge>
-                            </div>
-                            <div className="grid gap-3 md:grid-cols-2">
-                              <div className="space-y-1">
-                                <Label className="text-xs uppercase text-muted-foreground">Acuse de lectura</Label>
-                                <Input
-                                  value={notificacion.acuseLectura ?? ""}
-                                  onChange={(event) =>
-                                    actualizarNotificacionCampo(
-                                      notificacion.id,
-                                      "acuseLectura",
-                                      event.target.value,
-                                    )
-                                  }
-                                  placeholder="Ingresa folio de lectura"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-xs uppercase text-muted-foreground">Acuse de respuesta</Label>
-                                <Input
-                                  value={notificacion.acuseRespuesta ?? ""}
-                                  onChange={(event) =>
-                                    actualizarNotificacionCampo(
-                                      notificacion.id,
-                                      "acuseRespuesta",
-                                      event.target.value,
-                                    )
-                                  }
-                                  placeholder="Ingresa folio de respuesta"
-                                />
-                              </div>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {dias === null
-                                ? "Sin fecha límite calculada"
-                                : dias < 0
-                                  ? `Vencida hace ${Math.abs(dias)} días`
-                                  : `Restan ${dias} días naturales para responder`}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarClock className="h-5 w-5 text-primary" />
-                Recordatorios de revisión del buzón
-              </CardTitle>
-              <CardDescription>Calendariza la supervisión periódica del Buzón Tributario.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="recordatorio-fecha">Próxima revisión</Label>
-                    <Input
-                      id="recordatorio-fecha"
-                      type="date"
-                      value={recordatorioDraft.fechaRevision}
-                      onChange={(event) =>
-                        setRecordatorioDraft((prev) => ({
-                          ...prev,
-                          fechaRevision: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="recordatorio-descripcion">Descripción</Label>
-                    <Textarea
-                      id="recordatorio-descripcion"
-                      value={recordatorioDraft.descripcion}
-                      onChange={(event) =>
-                        setRecordatorioDraft((prev) => ({
-                          ...prev,
-                          descripcion: event.target.value,
-                        }))
-                      }
-                      rows={3}
-                    />
-                  </div>
-                  <Button type="button" onClick={agregarRecordatorio} className="w-full sm:w-auto">
-                    Agregar recordatorio
-                  </Button>
-                </div>
-                <div className="space-y-3">
-                  {recordatoriosBuzon.length === 0 ? (
-                    <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                      No se han programado recordatorios.
-                    </div>
-                  ) : (
-                    recordatoriosBuzon.map((recordatorio) => (
-                      <div key={recordatorio.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                        <div className="flex items-center gap-3">
-                          <CalendarDays className="h-5 w-5 text-primary" />
-                          <div>
-                            <p className="text-sm font-medium">{formatISODate(recordatorio.fechaRevision)}</p>
-                            <p className="text-xs text-muted-foreground">{recordatorio.descripcion}</p>
-                          </div>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => eliminarRecordatorio(recordatorio.id)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         {/* Tab: Bitácora de Trazabilidad */}
         <TabsContent value="trazabilidad" className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary" />
-                  Registro documental del alta
-                </CardTitle>
-                <CardDescription>Conserva folio SAT, representante y acuses asociados.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="registro-fecha">Fecha de alta</Label>
-                    <Input
-                      id="registro-fecha"
-                      type="date"
-                      value={registroAlta.fechaAlta}
-                      onChange={(event) => actualizarRegistroAltaCampo("fechaAlta", event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="registro-folio">Folio SAT</Label>
-                    <Input
-                      id="registro-folio"
-                      value={registroAlta.folioSAT}
-                      onChange={(event) => actualizarRegistroAltaCampo("folioSAT", event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="registro-representante">Representante registrado</Label>
-                    <Input
-                      id="registro-representante"
-                      value={registroAlta.representante}
-                      onChange={(event) =>
-                        actualizarRegistroAltaCampo("representante", event.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <Input
-                    value={nuevoAcuseRegistro}
-                    onChange={(event) => setNuevoAcuseRegistro(event.target.value)}
-                    placeholder="Folio o referencia de acuse emitido por el SAT"
-                  />
-                  <Button type="button" variant="outline" onClick={agregarAcuseRegistro}>
-                    Agregar acuse
-                  </Button>
-                </div>
-                {registroAlta.acuses.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Acuses registrados</p>
-                    <div className="flex flex-wrap gap-2">
-                      {registroAlta.acuses.map((acuse) => (
-                        <Badge key={acuse} variant="secondary" className="flex items-center gap-1">
-                          <Paperclip className="h-3.5 w-3.5" />
-                          <span>{acuse}</span>
-                          <button
-                            type="button"
-                            onClick={() => eliminarAcuseRegistro(acuse)}
-                            className="rounded-full p-1 text-muted-foreground transition hover:bg-muted"
-                            aria-label={`Eliminar ${acuse}`}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <Button type="button" onClick={guardarRegistroAlta} className="w-full sm:w-auto">
-                  Guardar datos del alta
-                </Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <RefreshCcw className="h-5 w-5 text-primary" />
-                  Control de versiones del padrón
-                </CardTitle>
-                <CardDescription>Documenta cambios de domicilio, actividad o representante.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Tipo de modificación</Label>
-                  <Select
-                    value={nuevoCambio.tipoCambio}
-                    onValueChange={(value) => setNuevoCambio((prev) => ({ ...prev, tipoCambio: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona una opción" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Cambio de domicilio">Cambio de domicilio</SelectItem>
-                      <SelectItem value="Cambio de actividad vulnerable">Cambio de actividad vulnerable</SelectItem>
-                      <SelectItem value="Cambio de representante">Cambio de representante</SelectItem>
-                      <SelectItem value="Actualización de datos generales">Actualización de datos generales</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Detalle del cambio</Label>
-                  <Textarea
-                    value={nuevoCambio.detalle}
-                    onChange={(event) => setNuevoCambio((prev) => ({ ...prev, detalle: event.target.value }))}
-                    placeholder="Describe qué se modificó y la fecha de entrada en vigor."
-                    rows={4}
-                  />
-                </div>
-                <Button type="button" onClick={registrarCambioVersion} className="w-full sm:w-auto">
-                  Registrar modificación
-                </Button>
-                <div className="space-y-3">
-                  {controlVersiones.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Las actualizaciones realizadas aparecerán aquí con su sello de tiempo.
-                    </p>
-                  ) : (
-                    controlVersiones.map((version) => (
-                      <div key={version.id} className="space-y-1 rounded-lg border p-3">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{version.tipoCambio}</span>
-                          <Badge variant="outline">{formatISODate(version.fecha)}</Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{version.detalle}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <History className="h-5 w-5" />
-                Bitácora de trazabilidad con sello de tiempo
+                Bitácora de Trazabilidad con Sello de Tiempo
               </CardTitle>
-              <CardDescription>Registro completo de todas las acciones realizadas en el módulo.</CardDescription>
+              <CardDescription>Registro completo de todas las acciones realizadas en el módulo</CardDescription>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-[400px]">
@@ -2759,6 +1223,24 @@ export default function RegistroSATPage() {
           </Card>
         </TabsContent>
 
+        {/* Tab: Recomendaciones Prácticas */}
+        <TabsContent value="recomendaciones" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {recomendacionesPracticas.map((recomendacion, index) => (
+              <Card key={index}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Info className="h-5 w-5 text-primary" />
+                    {recomendacion.titulo}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">{recomendacion.descripcion}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
       </Tabs>
     </div>
   )
