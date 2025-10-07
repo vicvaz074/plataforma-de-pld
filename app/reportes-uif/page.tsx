@@ -559,7 +559,7 @@ export default function ReportesUIFPage() {
       <div className="flex items-center gap-3">
         <Shield className="h-10 w-10 text-primary" />
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Módulo VI – Reportes a la UIF vía SAT</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Reportes a la UIF vía SAT</h1>
           <p className="text-muted-foreground">
             Gestión integral de avisos relevantes, inusuales e internos preocupantes ante la UIF a través del Portal SAT.
           </p>
@@ -645,7 +645,7 @@ export default function ReportesUIFPage() {
                 <div className="rounded-lg border p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-base font-semibold">Integración con Módulo IX</h3>
+                      <h3 className="text-base font-semibold">Integración con Módulo de Evidencias y Trazabilidad</h3>
                       <p className="text-sm text-muted-foreground">
                         Conservación de acuses y dictámenes por al menos 5 años en Evidencias y Trazabilidad.
                       </p>

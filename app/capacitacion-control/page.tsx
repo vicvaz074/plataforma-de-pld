@@ -1060,7 +1060,7 @@ export default function CapacitacionControlPage() {
         <div className="flex items-center gap-3">
           <GraduationCap className="h-10 w-10 text-primary" />
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Módulo VII – Capacitación y Control Interno</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Capacitación y Control Interno</h1>
             <p className="text-muted-foreground">
               Garantiza que todo el personal involucrado en Actividades Vulnerables reciba capacitación periódica en PLD-FT,
               documentando evidencias, constancias y evaluaciones conforme al art. 39 de las RCG.
@@ -1927,4 +1927,3 @@ export default function CapacitacionControlPage() {
     </div>
   )
 }
-

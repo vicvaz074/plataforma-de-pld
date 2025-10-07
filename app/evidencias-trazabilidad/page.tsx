@@ -652,7 +652,7 @@ export default function EvidenciasTrazabilidadPage() {
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl font-bold">
-              <Layers className="h-6 w-6" /> Módulo IX – Evidencias y Trazabilidad
+              <Layers className="h-6 w-6" /> Evidencias y Trazabilidad
             </CardTitle>
             <CardDescription>
               Repositorio centralizado con sellos de tiempo, control de versiones y trazabilidad completa

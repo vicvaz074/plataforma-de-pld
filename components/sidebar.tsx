@@ -48,7 +48,7 @@ export function Sidebar() {
       <div className="mb-8 h-[100px]">
         <Link href="/" className="flex items-center gap-2">
           <Image
-            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-KCMkMWJluvEnrZ7kiJcIZwOaH63W1s.png"
+            src="/images/design-mode/image.png"
             alt="Davara Governance"
             width={280}
             height={100}

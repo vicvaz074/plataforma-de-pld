@@ -696,7 +696,7 @@ export default function AuditoriaVerificacionPage() {
   return (
     <div className="container mx-auto space-y-8 pb-16 pt-8">
       <div className="space-y-3">
-        <h1 className="text-3xl font-bold tracking-tight">Módulo VIII – Auditoría y Verificación Interna</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Auditoría y Verificación Interna</h1>
         <p className="max-w-3xl text-muted-foreground">
           Supervisa el cumplimiento documental y operativo del programa PLD-FT, registra lineamientos internos, auditorías, observaciones de autoridades y planes de acción con trazabilidad completa.
         </p>
