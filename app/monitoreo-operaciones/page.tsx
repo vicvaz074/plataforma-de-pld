@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type ChangeEvent } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -44,6 +44,7 @@ import {
   UserCheck,
 } from "lucide-react"
 import { motion } from "framer-motion"
+import { readFileAsDataUrl } from "@/lib/storage/read-file"
 
 // Tipos de datos para el módulo
 interface ChecklistItem {
@@ -61,8 +62,9 @@ interface DocumentUpload {
   type: string
   uploadDate: Date
   expiryDate?: Date
-  status: "vigente" | "por-vencer" | "vencido"
-  url?: string
+  dataUrl: string
+  mimeType: string
+  size: number
 }
 
 interface TraceabilityEntry {
@@ -303,28 +305,48 @@ export default function MonitoreoOperacionesPage() {
     })
   }
 
-  // Simular carga de documento
-  const cargarDocumento = (tipo: string, nombrePersonalizado?: string) => {
-    const nuevoDocumento: DocumentUpload = {
-      id: Date.now().toString(),
-      name: nombrePersonalizado ?? `Documento_${tipo}_${Date.now()}.pdf`,
-      type: tipo,
-      uploadDate: new Date(),
-      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 año
-      status: "vigente",
+  const handleDocumentUpload = async (event: ChangeEvent<HTMLInputElement>, tipo: string) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file)
+      const nuevoDocumento: DocumentUpload = {
+        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+        name: file.name,
+        type: tipo,
+        uploadDate: new Date(),
+        expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        dataUrl,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+      }
+
+      const updatedDocumentos = [nuevoDocumento, ...documentos]
+
+      setDocumentos(updatedDocumentos)
+      guardarDatos({ documentos: updatedDocumentos })
+
+      registrarAccion(
+        "Documento cargado",
+        "Carga Documental",
+        `Documento: ${nuevoDocumento.name} - Tipo: ${tipo}`,
+      )
+
+      toast({
+        title: "Documento cargado",
+        description: `El documento ${nuevoDocumento.name} se almacenó en el expediente digital.`,
+      })
+    } catch (error) {
+      console.error("Error al almacenar el archivo", error)
+      toast({
+        title: "No se pudo cargar el archivo",
+        description: "Intenta nuevamente con un archivo válido.",
+        variant: "destructive",
+      })
+    } finally {
+      event.target.value = ""
     }
-
-    const updatedDocumentos = [...documentos, nuevoDocumento]
-
-    setDocumentos(updatedDocumentos)
-    guardarDatos({ documentos: updatedDocumentos })
-
-    registrarAccion("Documento cargado", "Carga Documental", `Documento: ${nuevoDocumento.name} - Tipo: ${tipo}`)
-
-    toast({
-      title: "Documento cargado",
-      description: `El documento ${nuevoDocumento.name} ha sido cargado exitosamente.`,
-    })
   }
 
   // Obtener color según respuesta
@@ -1027,13 +1049,16 @@ export default function MonitoreoOperacionesPage() {
                       <Checkbox checked={evidenciaDisponible(evidencia.id)} disabled />
                       <span className="text-sm">{evidencia.label}</span>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => cargarDocumento(evidencia.id, `${evidencia.id}.pdf`)}
-                    >
-                      <Upload className="mr-1 h-3 w-3" />
-                      Cargar
+                    <Button size="sm" variant="outline" asChild>
+                      <label className="flex cursor-pointer items-center gap-1">
+                        <Upload className="mr-1 h-3 w-3" />
+                        Cargar
+                        <input
+                          type="file"
+                          className="sr-only"
+                          onChange={(event) => handleDocumentUpload(event, evidencia.id)}
+                        />
+                      </label>
                     </Button>
                   </div>
                 ))}
@@ -1059,8 +1084,15 @@ export default function MonitoreoOperacionesPage() {
                         <Checkbox checked={evidenciaDisponible(item.id)} disabled />
                         <span>{item.label}</span>
                       </div>
-                      <Button size="sm" variant="ghost" onClick={() => cargarDocumento(item.id)}>
-                        <Upload className="h-3 w-3" />
+                      <Button size="sm" variant="ghost" asChild>
+                        <label className="flex cursor-pointer items-center gap-1">
+                          <Upload className="h-3 w-3" />
+                          <input
+                            type="file"
+                            className="sr-only"
+                            onChange={(event) => handleDocumentUpload(event, item.id)}
+                          />
+                        </label>
                       </Button>
                     </div>
                   ))}
@@ -1073,8 +1105,15 @@ export default function MonitoreoOperacionesPage() {
                         <Checkbox checked={evidenciaDisponible(item.id)} disabled />
                         <span>{item.label}</span>
                       </div>
-                      <Button size="sm" variant="ghost" onClick={() => cargarDocumento(item.id)}>
-                        <Upload className="h-3 w-3" />
+                      <Button size="sm" variant="ghost" asChild>
+                        <label className="flex cursor-pointer items-center gap-1">
+                          <Upload className="h-3 w-3" />
+                          <input
+                            type="file"
+                            className="sr-only"
+                            onChange={(event) => handleDocumentUpload(event, item.id)}
+                          />
+                        </label>
                       </Button>
                     </div>
                   ))}
@@ -1087,8 +1126,15 @@ export default function MonitoreoOperacionesPage() {
                         <Checkbox checked={evidenciaDisponible(item.id)} disabled />
                         <span>{item.label}</span>
                       </div>
-                      <Button size="sm" variant="ghost" onClick={() => cargarDocumento(item.id)}>
-                        <Upload className="h-3 w-3" />
+                      <Button size="sm" variant="ghost" asChild>
+                        <label className="flex cursor-pointer items-center gap-1">
+                          <Upload className="h-3 w-3" />
+                          <input
+                            type="file"
+                            className="sr-only"
+                            onChange={(event) => handleDocumentUpload(event, item.id)}
+                          />
+                        </label>
                       </Button>
                     </div>
                   ))}
@@ -1102,8 +1148,15 @@ export default function MonitoreoOperacionesPage() {
                         <span>{item.label}</span>
                       </div>
                       <div className="flex gap-2">
-                        <Button size="sm" variant="ghost" onClick={() => cargarDocumento(item.id)}>
-                          <Upload className="h-3 w-3" />
+                        <Button size="sm" variant="ghost" asChild>
+                          <label className="flex cursor-pointer items-center gap-1">
+                            <Upload className="h-3 w-3" />
+                            <input
+                              type="file"
+                              className="sr-only"
+                              onChange={(event) => handleDocumentUpload(event, item.id)}
+                            />
+                          </label>
                         </Button>
                         <Button size="sm" variant="outline" onClick={ejecutarScreening}>
                           <Search className="mr-1 h-3 w-3" />
@@ -1160,11 +1213,20 @@ export default function MonitoreoOperacionesPage() {
                               ? "Por vencer"
                               : "Vencido"}
                         </Badge>
-                        <Button size="sm" variant="ghost">
-                          <Eye className="h-4 w-4" />
+                        <Button size="sm" variant="ghost" asChild>
+                          <a
+                            href={doc.dataUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </a>
                         </Button>
-                        <Button size="sm" variant="ghost">
-                          <Download className="h-4 w-4" />
+                        <Button size="sm" variant="ghost" asChild>
+                          <a href={doc.dataUrl} download={doc.name} className="flex items-center gap-1">
+                            <Download className="h-4 w-4" />
+                          </a>
                         </Button>
                       </div>
                     </div>
