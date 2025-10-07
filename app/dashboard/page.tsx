@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { useLanguage } from "@/lib/LanguageContext"
 import { translations } from "@/lib/translations"
 import { sortAlphabetically } from "@/lib/utils"
@@ -11,48 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BarChart, LineChart, PieChart } from "@/components/ui/charts"
 import { UserProgressDashboard } from "@/components/user-progress-dashboard"
 import { AdminUserPrivileges } from "@/components/admin-user-privileges"
-import { getDocuments, DOCUMENT_STORAGE_KEY } from "@/lib/documents"
-import { ALERT_STORAGE_KEY, getAlerts } from "@/lib/alerts"
-import type { AlertRecord } from "@/lib/alerts"
-
-type TrendPoint = { name: string; value: number }
-
-type AlertDistribution = { name: string; value: number }
-
-function buildMonthlyTrend(timestamps: (string | undefined)[], locale: string): TrendPoint[] {
-  const now = new Date()
-  return Array.from({ length: 6 }).map((_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1)
-    const monthLabel = date.toLocaleString(locale, { month: "short" })
-    const count = timestamps.filter((timestamp) => {
-      if (!timestamp) return false
-      const time = new Date(timestamp)
-      return time.getFullYear() === date.getFullYear() && time.getMonth() === date.getMonth()
-    }).length
-    return { name: monthLabel, value: count }
-  })
-}
-
-function buildAlertDistributionData(alerts: AlertRecord[], labels: {
-  danger: string
-  warning: string
-  info: string
-}): AlertDistribution[] {
-  const summary = alerts.reduce(
-    (acc, alert) => {
-      if (alert.status === "resolved") return acc
-      acc[alert.severity] = (acc[alert.severity] ?? 0) + 1
-      return acc
-    },
-    { danger: 0, warning: 0, info: 0 } as Record<"danger" | "warning" | "info", number>,
-  )
-
-  return [
-    { name: labels.danger, value: summary.danger },
-    { name: labels.warning, value: summary.warning },
-    { name: labels.info, value: summary.info },
-  ]
-}
 
 export default function DashboardPage() {
   const { language } = useLanguage()
@@ -66,89 +24,69 @@ export default function DashboardPage() {
     pendingReviews: 0,
     completedActivities: 0,
   })
-  const [userTrend, setUserTrend] = useState<TrendPoint[]>([])
-  const [documentTrend, setDocumentTrend] = useState<TrendPoint[]>([])
-  const [alertDistribution, setAlertDistribution] = useState<AlertDistribution[]>([])
 
-  const locale = language === "es" ? "es-MX" : "en-US"
-
-  const syncDashboard = useCallback(() => {
+  useEffect(() => {
     setUserRole(localStorage.getItem("userRole"))
     const users = JSON.parse(localStorage.getItem("users") || "[]")
     setPendingUsers(users.filter((u: any) => !u.approved))
 
-    const documents = getDocuments()
-    const alerts = getAlerts()
-
+    // Calcular datos precisos para el dashboard del administrador
     setDashboardData({
       totalUsers: users.filter((u: any) => u.approved).length,
-      totalDocuments: documents.length,
+      totalDocuments: JSON.parse(localStorage.getItem("documents") || "[]").length,
       pendingReviews: users.filter((u: any) => !u.approved).length,
       completedActivities: JSON.parse(localStorage.getItem("completedActivities") || "[]").length,
     })
-
-    setUserTrend(buildMonthlyTrend(users.map((user: any) => user.createdAt), locale))
-    setDocumentTrend(buildMonthlyTrend(documents.map((doc) => doc.uploadedAt), locale))
-    setAlertDistribution(
-      buildAlertDistributionData(alerts, {
-        danger: t.criticalAlerts,
-        warning: t.warningAlerts,
-        info: t.infoAlerts,
-      }),
-    )
-  }, [locale, t.criticalAlerts, t.infoAlerts, t.warningAlerts])
-
-  useEffect(() => {
-    syncDashboard()
-
-    const handleStorageUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent<{ key?: string }>
-      if (!customEvent.detail || [DOCUMENT_STORAGE_KEY, ALERT_STORAGE_KEY].includes(customEvent.detail.key ?? "")) {
-        syncDashboard()
-      }
-    }
-
-    const handleNativeStorage = (event: StorageEvent) => {
-      if ([DOCUMENT_STORAGE_KEY, ALERT_STORAGE_KEY, "users", "completedActivities"].includes(event.key ?? "")) {
-        syncDashboard()
-      }
-    }
-
-    window.addEventListener("pld-storage-updated", handleStorageUpdate)
-    window.addEventListener("storage", handleNativeStorage)
-
-    return () => {
-      window.removeEventListener("pld-storage-updated", handleStorageUpdate)
-      window.removeEventListener("storage", handleNativeStorage)
-    }
-  }, [syncDashboard])
+  }, [])
 
   const handleApprove = (email: string) => {
     const users = JSON.parse(localStorage.getItem("users") || "[]")
     const updatedUsers = users.map((u: any) => (u.email === email ? { ...u, approved: true } : u))
     localStorage.setItem("users", JSON.stringify(updatedUsers))
-    syncDashboard()
+    setPendingUsers(updatedUsers.filter((u: any) => !u.approved))
+    setDashboardData((prev) => ({
+      ...prev,
+      totalUsers: prev.totalUsers + 1,
+      pendingReviews: prev.pendingReviews - 1,
+    }))
   }
 
   const handleReject = (email: string) => {
     const users = JSON.parse(localStorage.getItem("users") || "[]")
     const updatedUsers = users.filter((u: any) => u.email !== email)
     localStorage.setItem("users", JSON.stringify(updatedUsers))
-    syncDashboard()
+    setPendingUsers(updatedUsers.filter((u: any) => !u.approved))
+    setDashboardData((prev) => ({
+      ...prev,
+      pendingReviews: prev.pendingReviews - 1,
+    }))
   }
 
-  const metricsOptions = useMemo(
-    () =>
-      sortAlphabetically(
-        [
-          { value: "users", label: t.usersMetric },
-          { value: "documents", label: t.documentsMetric },
-          { value: "alerts", label: t.alertsMetric },
-        ],
-        (opt) => opt.label,
-      ),
-    [t.alertsMetric, t.documentsMetric, t.usersMetric],
-  )
+  // Datos de muestra más realistas para el dashboard del usuario
+  const userData = [
+    { name: "Jan", users: 10 },
+    { name: "Feb", users: 15 },
+    { name: "Mar", users: 20 },
+    { name: "Apr", users: 25 },
+    { name: "May", users: 30 },
+    { name: "Jun", users: 35 },
+  ]
+
+  const revenueData = [
+    { name: "Jan", revenue: 1000 },
+    { name: "Feb", revenue: 1500 },
+    { name: "Mar", revenue: 2000 },
+    { name: "Apr", revenue: 2500 },
+    { name: "May", revenue: 3000 },
+    { name: "Jun", revenue: 3500 },
+  ]
+
+  const activityData = [
+    { name: "ROPA", value: 40 },
+    { name: "Documents", value: 30 },
+    { name: "Reviews", value: 20 },
+    { name: "Others", value: 10 },
+  ]
 
   const AdminDashboard = () => (
     <motion.div
@@ -244,12 +182,19 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">{t.dashboard}</h1>
 
-      <Select onValueChange={setSelectedMetric} value={selectedMetric}>
-        <SelectTrigger className="w-[220px]">
+      <Select onValueChange={setSelectedMetric} defaultValue={selectedMetric}>
+        <SelectTrigger className="w-[180px]">
           <SelectValue placeholder={t.selectMetric} />
         </SelectTrigger>
         <SelectContent>
-          {metricsOptions.map((opt) => (
+          {sortAlphabetically(
+            [
+              { value: "users", label: t.users },
+              { value: "revenue", label: t.revenue },
+              { value: "activities", label: t.activities },
+            ],
+            (opt) => opt.label
+          ).map((opt) => (
             <SelectItem key={opt.value} value={opt.value}>
               {opt.label}
             </SelectItem>
@@ -258,55 +203,43 @@ export default function DashboardPage() {
       </Select>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {selectedMetric === "users" && (
-          <Card className="md:col-span-2 lg:col-span-3">
-            <CardHeader>
-              <CardTitle>{t.usersMetric}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <BarChart data={userTrend} xKey="name" yKey="value" />
-            </CardContent>
-          </Card>
-        )}
-        {selectedMetric === "documents" && (
-          <Card className="md:col-span-2 lg:col-span-3">
-            <CardHeader>
-              <CardTitle>{t.documentsMetric}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <LineChart data={documentTrend} xKey="name" yKey="value" />
-            </CardContent>
-          </Card>
-        )}
-        {selectedMetric === "alerts" && (
-          <Card className="md:col-span-2 lg:col-span-3">
-            <CardHeader>
-              <CardTitle>{t.alertsMetric}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PieChart data={alertDistribution} />
-            </CardContent>
-          </Card>
-        )}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t.dailyUsers}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BarChart data={userData} xKey="name" yKey="users" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t.monthlyRevenue}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LineChart data={revenueData} xKey="name" yKey="revenue" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t.activityDistribution}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PieChart data={activityData} />
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
 
+  // Si el usuario es administrador, mostrar el dashboard de administrador
+  // Si es un usuario regular, mostrar el panel de progreso de usuario
   if (userRole === "admin") {
     return (
       <div className="container mx-auto py-10">
         <AdminDashboard />
       </div>
     )
+  } else {
+    return <UserProgressDashboard />
   }
-
-  if (userRole === "analyst") {
-    return (
-      <div className="container mx-auto py-10">
-        <AnalyticsDashboard />
-      </div>
-    )
-  }
-
-  return <UserProgressDashboard />
 }

@@ -17,8 +17,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useLanguage } from "@/lib/LanguageContext"
 import { translations } from "@/lib/translations"
-import { addDocument, getDocuments } from "@/lib/documents"
-import { syncDocumentAlerts } from "@/lib/alerts"
+import { addDocument } from "@/lib/documents"
 import { useAppContext } from "@/lib/AppContext"
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -66,7 +65,7 @@ export function DocumentUploadForm({
       setIsUploading(true)
       const userEmail = localStorage.getItem("userEmail") || "unknown"
 
-      const addedDocument = await addDocument({
+      const newDocument = {
         name: values.name,
         legalEntity: values.legalEntity,
         description: values.description,
@@ -75,17 +74,9 @@ export function DocumentUploadForm({
         date: format(values.date, "yyyy-MM-dd"),
         file: values.file[0],
         userEmail,
-      })
+      }
 
-      const updatedDocuments = getDocuments()
-      syncDocumentAlerts({
-        module: "document-management",
-        documents: updatedDocuments.map((doc) => ({
-          id: doc.id,
-          name: doc.name,
-          dueDate: doc.renewalDate ? new Date(doc.renewalDate) : null,
-        })),
-      })
+      const addedDocument = await addDocument(newDocument)
 
       if (addedDocument) {
         addActivityUnderReview({
