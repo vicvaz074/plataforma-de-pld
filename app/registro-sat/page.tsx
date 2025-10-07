@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { readFileAsDataUrl } from "@/lib/storage/read-file"
 import {
   CheckCircle2,
   Clock,
@@ -61,8 +62,9 @@ interface DocumentUpload {
   type: string
   uploadDate: Date
   expiryDate?: Date
-  status: "vigente" | "por-vencer" | "vencido"
-  url?: string
+  dataUrl: string
+  mimeType: string
+  size: number
 }
 
 interface TraceabilityEntry {
@@ -554,13 +556,14 @@ export default function RegistroSATPage() {
 
       const documentosGuardados = Array.isArray(data.documentos)
         ? data.documentos.map((doc: Partial<DocumentUpload>) => ({
-            ...doc,
             id: doc.id ?? Date.now().toString(),
             name: doc.name ?? "",
             type: doc.type ?? "",
-            uploadDate: doc.uploadDate ? new Date(doc.uploadDate) : new Date(),
-            expiryDate: doc.expiryDate ? new Date(doc.expiryDate) : undefined,
-            status: (doc.status as DocumentUpload["status"]) ?? "vigente",
+            uploadDate: doc.uploadDate ? new Date(doc.uploadDate as unknown as string) : new Date(),
+            expiryDate: doc.expiryDate ? new Date(doc.expiryDate as unknown as string) : undefined,
+            dataUrl: typeof doc.dataUrl === "string" ? doc.dataUrl : "",
+            mimeType: doc.mimeType ?? "application/octet-stream",
+            size: typeof doc.size === "number" ? doc.size : 0,
           }))
         : []
 
@@ -659,57 +662,100 @@ export default function RegistroSATPage() {
     })
   }
 
-  // Simular carga de documento
-  const cargarDocumento = (tipo: string) => {
-    const nuevoDocumento: DocumentUpload = {
-      id: Date.now().toString(),
-      name: `Documento_${tipo}_${Date.now()}.pdf`,
+  const crearDocumentoDesdeArchivo = async (file: File, tipo: string): Promise<DocumentUpload> => {
+    const dataUrl = await readFileAsDataUrl(file)
+    return {
+      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+      name: file.name,
       type: tipo,
       uploadDate: new Date(),
-      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 año
-      status: "vigente",
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      dataUrl,
+      mimeType: file.type || "application/octet-stream",
+      size: file.size,
     }
-
-    setDocumentos((prev) => [...prev, nuevoDocumento])
-
-    // Agregar entrada de trazabilidad
-    const nuevaEntrada: TraceabilityEntry = {
-      id: Date.now().toString(),
-      action: "Documento cargado",
-      user: "Usuario actual",
-      timestamp: new Date(),
-      details: `Documento: ${nuevoDocumento.name} - Tipo: ${tipo}`,
-      section: "Carga Documental",
-    }
-    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-
-    toast({
-      title: "Documento cargado",
-      description: `El documento ${nuevoDocumento.name} ha sido cargado exitosamente.`,
-    })
   }
 
-  const manejarCargaEvidencia = (id: string, event: ChangeEvent<HTMLInputElement>) => {
+  const manejarCargaDocumento = async (event: ChangeEvent<HTMLInputElement>, tipo: string) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      const documento = await crearDocumentoDesdeArchivo(file, tipo)
+
+      setDocumentos((prev) => [documento, ...prev])
+      setTrazabilidad((prev) => [
+        {
+          id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+          action: "Documento cargado",
+          user: "Usuario actual",
+          timestamp: new Date(),
+          details: `Documento: ${documento.name} - Tipo: ${tipo}`,
+          section: "Carga Documental",
+        },
+        ...prev,
+      ])
+
+      toast({
+        title: "Documento cargado",
+        description: `El documento ${documento.name} se almacenó en el repositorio digital.`,
+      })
+    } catch (error) {
+      console.error("Error al guardar el archivo", error)
+      toast({
+        title: "No se pudo cargar el archivo",
+        description: "Verifica el formato y vuelve a intentarlo.",
+        variant: "destructive",
+      })
+    } finally {
+      event.target.value = ""
+    }
+  }
+
+  const manejarCargaEvidencia = async (id: string, event: ChangeEvent<HTMLInputElement>) => {
     const archivos = event.target.files
     if (!archivos || archivos.length === 0) {
       return
     }
 
-    const nombres = Array.from(archivos).map((archivo) => archivo.name)
+    try {
+      const nuevosDocumentos = await Promise.all(
+        Array.from(archivos).map((archivo) => crearDocumentoDesdeArchivo(archivo, `pregunta-${id}`)),
+      )
 
-    setEvidenciasPorPregunta((prev) => ({
-      ...prev,
-      [id]: [...(prev[id] ?? []), ...nombres],
-    }))
+      setDocumentos((prev) => [...nuevosDocumentos, ...prev])
+      setEvidenciasPorPregunta((prev) => ({
+        ...prev,
+        [id]: [...(prev[id] ?? []), ...nuevosDocumentos.map((doc) => doc.name)],
+      }))
+      setTrazabilidad((prev) => [
+        ...nuevosDocumentos.map((doc) => ({
+          id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${doc.id}`,
+          action: "Evidencia adjuntada",
+          user: "Usuario actual",
+          timestamp: new Date(),
+          details: `Evidencia ${doc.name} vinculada a la pregunta ${id}`,
+          section: "Seguimiento de preguntas",
+        })),
+        ...prev,
+      ])
 
-    toast({
-      title: "Evidencia registrada",
-      description: `${nombres.length === 1 ? "Se agregó" : "Se agregaron"} ${nombres.length} archivo${
-        nombres.length > 1 ? "s" : ""
-      } a la pregunta seleccionada.`,
-    })
-
-    event.target.value = ""
+      toast({
+        title: "Evidencia registrada",
+        description: `${nuevosDocumentos.length === 1 ? "Se adjuntó" : "Se adjuntaron"} ${
+          nuevosDocumentos.length
+        } archivo${nuevosDocumentos.length > 1 ? "s" : ""} a la pregunta seleccionada.`,
+      })
+    } catch (error) {
+      console.error("Error al adjuntar evidencias", error)
+      toast({
+        title: "No se pudieron procesar las evidencias",
+        description: "Intenta nuevamente con archivos válidos.",
+        variant: "destructive",
+      })
+    } finally {
+      event.target.value = ""
+    }
   }
 
   const eliminarEvidencia = (id: string, nombreArchivo: string) => {
@@ -717,6 +763,27 @@ export default function RegistroSATPage() {
       ...prev,
       [id]: (prev[id] ?? []).filter((nombre) => nombre !== nombreArchivo),
     }))
+
+    setDocumentos((prev) =>
+      prev.filter((doc) => !(doc.type === `pregunta-${id}` && doc.name === nombreArchivo)),
+    )
+
+    setTrazabilidad((prev) => [
+      {
+        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+        action: "Evidencia eliminada",
+        user: "Usuario actual",
+        timestamp: new Date(),
+        details: `Se retiró ${nombreArchivo} de la pregunta ${id}`,
+        section: "Seguimiento de preguntas",
+      },
+      ...prev,
+    ])
+
+    toast({
+      title: "Evidencia eliminada",
+      description: `${nombreArchivo} se retiró del expediente de la pregunta.`,
+    })
   }
 
   const actualizarNotasPregunta = (id: string, notas: string) => {
@@ -999,8 +1066,15 @@ export default function RegistroSATPage() {
                 {evidenciasAltaPadron.map((evidencia, index) => (
                   <div key={index} className="flex items-center justify-between p-2 border rounded">
                     <span className="text-sm">{evidencia}</span>
-                    <Button size="sm" variant="outline" onClick={() => cargarDocumento(evidencia)}>
-                      <Upload className="h-3 w-3" />
+                    <Button size="sm" variant="outline" asChild>
+                      <label className="flex cursor-pointer items-center gap-1">
+                        <Upload className="h-3 w-3" />
+                        <input
+                          type="file"
+                          className="sr-only"
+                          onChange={(event) => manejarCargaDocumento(event, evidencia)}
+                        />
+                      </label>
                     </Button>
                   </div>
                 ))}
@@ -1017,8 +1091,15 @@ export default function RegistroSATPage() {
                 {evidenciasREC.map((evidencia, index) => (
                   <div key={index} className="flex items-center justify-between p-2 border rounded">
                     <span className="text-sm">{evidencia}</span>
-                    <Button size="sm" variant="outline" onClick={() => cargarDocumento(evidencia)}>
-                      <Upload className="h-3 w-3" />
+                    <Button size="sm" variant="outline" asChild>
+                      <label className="flex cursor-pointer items-center gap-1">
+                        <Upload className="h-3 w-3" />
+                        <input
+                          type="file"
+                          className="sr-only"
+                          onChange={(event) => manejarCargaDocumento(event, evidencia)}
+                        />
+                      </label>
                     </Button>
                   </div>
                 ))}
@@ -1035,8 +1116,15 @@ export default function RegistroSATPage() {
                 {evidenciasActualizaciones.map((evidencia, index) => (
                   <div key={index} className="flex items-center justify-between p-2 border rounded">
                     <span className="text-sm">{evidencia}</span>
-                    <Button size="sm" variant="outline" onClick={() => cargarDocumento(evidencia)}>
-                      <Upload className="h-3 w-3" />
+                    <Button size="sm" variant="outline" asChild>
+                      <label className="flex cursor-pointer items-center gap-1">
+                        <Upload className="h-3 w-3" />
+                        <input
+                          type="file"
+                          className="sr-only"
+                          onChange={(event) => manejarCargaDocumento(event, evidencia)}
+                        />
+                      </label>
                     </Button>
                   </div>
                 ))}
@@ -1053,8 +1141,15 @@ export default function RegistroSATPage() {
                 {evidenciasBuzonTributario.map((evidencia, index) => (
                   <div key={index} className="flex items-center justify-between p-2 border rounded">
                     <span className="text-sm">{evidencia}</span>
-                    <Button size="sm" variant="outline" onClick={() => cargarDocumento(evidencia)}>
-                      <Upload className="h-3 w-3" />
+                    <Button size="sm" variant="outline" asChild>
+                      <label className="flex cursor-pointer items-center gap-1">
+                        <Upload className="h-3 w-3" />
+                        <input
+                          type="file"
+                          className="sr-only"
+                          onChange={(event) => manejarCargaDocumento(event, evidencia)}
+                        />
+                      </label>
                     </Button>
                   </div>
                 ))}
@@ -1071,8 +1166,15 @@ export default function RegistroSATPage() {
                 {evidenciasConservacion.map((evidencia, index) => (
                   <div key={index} className="flex items-center justify-between p-2 border rounded">
                     <span className="text-sm">{evidencia}</span>
-                    <Button size="sm" variant="outline" onClick={() => cargarDocumento(evidencia)}>
-                      <Upload className="h-3 w-3" />
+                    <Button size="sm" variant="outline" asChild>
+                      <label className="flex cursor-pointer items-center gap-1">
+                        <Upload className="h-3 w-3" />
+                        <input
+                          type="file"
+                          className="sr-only"
+                          onChange={(event) => manejarCargaDocumento(event, evidencia)}
+                        />
+                      </label>
                     </Button>
                   </div>
                 ))}
@@ -1098,6 +1200,7 @@ export default function RegistroSATPage() {
                           <div className="text-sm text-muted-foreground">
                             Subido: {doc.uploadDate.toLocaleDateString()}
                             {doc.expiryDate && ` • Vence: ${doc.expiryDate.toLocaleDateString()}`}
+                            {doc.size > 0 && ` • ${Math.max(1, Math.round(doc.size / 1024))} KB`}
                           </div>
                         </div>
                       </div>
@@ -1117,11 +1220,20 @@ export default function RegistroSATPage() {
                               ? "Por vencer"
                               : "Vencido"}
                         </Badge>
-                        <Button size="sm" variant="ghost">
-                          <Eye className="h-4 w-4" />
+                        <Button size="sm" variant="ghost" asChild>
+                          <a
+                            href={doc.dataUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </a>
                         </Button>
-                        <Button size="sm" variant="ghost">
-                          <Download className="h-4 w-4" />
+                        <Button size="sm" variant="ghost" asChild>
+                          <a href={doc.dataUrl} download={doc.name} className="flex items-center gap-1">
+                            <Download className="h-4 w-4" />
+                          </a>
                         </Button>
                       </div>
                     </div>

@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
+import { readFileAsDataUrl } from "@/lib/storage/read-file"
 import {
   AlertTriangle,
   BellRing,
@@ -250,14 +251,6 @@ const formatDisplayDate = (date: string) => {
     return date
   }
 }
-
-const readFileAsDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = () => reject(new Error("No fue posible leer el archivo"))
-    reader.readAsDataURL(file)
-  })
 
 export default function CapacitacionControlPage() {
   const [state, setState] = useState<PersistedState>(defaultState)
