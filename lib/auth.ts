@@ -11,7 +11,11 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 
 export function saveUser(user: { name: string; email: string; password: string }) {
   const users = JSON.parse(localStorage.getItem("users") || "[]")
-  users.push({ ...user, approved: false })
+  users.push({
+    ...user,
+    approved: false,
+    createdAt: new Date().toISOString(),
+  })
   localStorage.setItem("users", JSON.stringify(users))
 }
 
