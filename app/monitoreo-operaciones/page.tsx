@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -43,6 +43,8 @@ import {
   FileSpreadsheet,
   UserCheck,
 } from "lucide-react"
+import { persistFile, openStoredFile, downloadStoredFile, getStoredFile } from "@/lib/files"
+import { AlertRecord, resolveAlert, syncDocumentAlerts } from "@/lib/alerts"
 import { motion } from "framer-motion"
 
 // Tipos de datos para el módulo
@@ -62,7 +64,10 @@ interface DocumentUpload {
   uploadDate: Date
   expiryDate?: Date
   status: "vigente" | "por-vencer" | "vencido"
-  url?: string
+  fileId: string
+  fileName: string
+  fileSize: number
+  fileType: string
 }
 
 interface TraceabilityEntry {
@@ -201,6 +206,31 @@ export default function MonitoreoOperacionesPage() {
   const [ultimaSincronizacionKyc, setUltimaSincronizacionKyc] = useState<Date | null>(null)
   const [ultimoEnvioUif, setUltimoEnvioUif] = useState<Date | null>(null)
   const [formOperacion, setFormOperacion] = useState(initialFormState)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [pendingUpload, setPendingUpload] = useState<{ type: string; name?: string } | null>(null)
+  const [documentAlerts, setDocumentAlerts] = useState<AlertRecord[]>([])
+
+  const actualizarAlertas = useCallback(
+    (docs: DocumentUpload[]) => {
+      const alerts = syncDocumentAlerts({
+        module: "monitoreo-operaciones",
+        documents: docs.map((doc) => ({
+          id: doc.id,
+          name: doc.name,
+          dueDate: doc.expiryDate ?? null,
+        })),
+      })
+      setDocumentAlerts(
+        alerts.filter(
+          (alert) =>
+            alert.module === "monitoreo-operaciones" &&
+            alert.category === "document-expiry" &&
+            alert.status === "open",
+        ),
+      )
+    },
+    [],
+  )
 
   // Cargar datos del localStorage
   useEffect(() => {
@@ -255,6 +285,10 @@ export default function MonitoreoOperacionesPage() {
     setProgreso(nuevoProgreso)
   }, [preguntasState])
 
+  useEffect(() => {
+    actualizarAlertas(documentos)
+  }, [documentos, actualizarAlertas])
+
   // Guardar datos en localStorage
   const guardarDatos = (override?: Partial<MonitoreoStorageData>) => {
     const data: MonitoreoStorageData = {
@@ -303,27 +337,115 @@ export default function MonitoreoOperacionesPage() {
     })
   }
 
-  // Simular carga de documento
-  const cargarDocumento = (tipo: string, nombrePersonalizado?: string) => {
-    const nuevoDocumento: DocumentUpload = {
-      id: Date.now().toString(),
-      name: nombrePersonalizado ?? `Documento_${tipo}_${Date.now()}.pdf`,
-      type: tipo,
-      uploadDate: new Date(),
-      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 año
-      status: "vigente",
+  const solicitarCargaDocumento = (tipo: string, nombrePersonalizado?: string) => {
+    setPendingUpload({ type: tipo, name: nombrePersonalizado })
+    fileInputRef.current?.click()
+  }
+
+  const manejarArchivoSeleccionado = async (event: ChangeEvent<HTMLInputElement>) => {
+    const archivo = event.target.files?.[0]
+    if (!archivo || !pendingUpload) {
+      setPendingUpload(null)
+      event.target.value = ""
+      return
     }
 
-    const updatedDocumentos = [...documentos, nuevoDocumento]
+    try {
+      const vencimiento = new Date()
+      vencimiento.setFullYear(vencimiento.getFullYear() + 1)
 
-    setDocumentos(updatedDocumentos)
-    guardarDatos({ documentos: updatedDocumentos })
+      const registroArchivo = await persistFile(archivo, {
+        module: "monitoreo-operaciones",
+        tags: [pendingUpload.type],
+        expiresAt: vencimiento,
+      })
 
-    registrarAccion("Documento cargado", "Carga Documental", `Documento: ${nuevoDocumento.name} - Tipo: ${tipo}`)
+      const nuevoDocumento: DocumentUpload = {
+        id: registroArchivo.id,
+        name: pendingUpload.name ?? archivo.name,
+        type: pendingUpload.type,
+        uploadDate: new Date(registroArchivo.uploadedAt),
+        expiryDate: vencimiento,
+        status: "vigente",
+        fileId: registroArchivo.id,
+        fileName: registroArchivo.name,
+        fileSize: registroArchivo.size,
+        fileType: registroArchivo.type,
+      }
 
+      const updatedDocumentos = [...documentos, nuevoDocumento]
+      setDocumentos(updatedDocumentos)
+      guardarDatos({ documentos: updatedDocumentos })
+
+      registrarAccion(
+        "Documento cargado",
+        "Carga Documental",
+        `Documento: ${nuevoDocumento.name} (${archivo.name}) - Tipo: ${pendingUpload.type}`,
+      )
+
+      toast({
+        title: "Documento cargado",
+        description: `El documento ${nuevoDocumento.name} ha sido almacenado correctamente.`,
+      })
+    } catch (error) {
+      console.error("Error al guardar documento", error)
+      toast({
+        title: "Error al guardar",
+        description: "No se pudo almacenar el documento seleccionado. Intenta nuevamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setPendingUpload(null)
+      event.target.value = ""
+    }
+  }
+
+  const manejarVisualizacionDocumento = async (documento: DocumentUpload) => {
+    const registro = getStoredFile(documento.fileId)
+    if (!registro) {
+      toast({
+        title: "Archivo no disponible",
+        description: "No encontramos el archivo en el almacenamiento local.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await openStoredFile(registro)
+      registrarAccion("Documento visualizado", "Carga Documental", `Documento: ${documento.name}`)
+    } catch (error) {
+      console.error("Error al abrir documento", error)
+      toast({
+        title: "No se pudo abrir",
+        description: "Ocurrió un error al intentar abrir el archivo.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const manejarDescargaDocumento = (documento: DocumentUpload) => {
+    const registro = getStoredFile(documento.fileId)
+    if (!registro) {
+      toast({
+        title: "Archivo no disponible",
+        description: "No encontramos el archivo en el almacenamiento local.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    downloadStoredFile(registro)
+    registrarAccion("Documento descargado", "Carga Documental", `Documento: ${documento.name}`)
+  }
+
+  const manejarResolucionAlerta = (alerta: AlertRecord) => {
+    resolveAlert(alerta.id)
+    actualizarAlertas(documentos)
+    registrarAccion("Alerta gestionada", "Alertas documentales", `Alerta atendida: ${alerta.title}`)
     toast({
-      title: "Documento cargado",
-      description: `El documento ${nuevoDocumento.name} ha sido cargado exitosamente.`,
+      title: "Alerta actualizada",
+      description: "Se marcó la alerta como atendida.",
     })
   }
 
@@ -637,6 +759,14 @@ export default function MonitoreoOperacionesPage() {
           </CardContent>
         </Card>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+        onChange={manejarArchivoSeleccionado}
+      />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-5">
@@ -1030,7 +1160,7 @@ export default function MonitoreoOperacionesPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => cargarDocumento(evidencia.id, `${evidencia.id}.pdf`)}
+                      onClick={() => solicitarCargaDocumento(evidencia.id, `${evidencia.id}.pdf`)}
                     >
                       <Upload className="mr-1 h-3 w-3" />
                       Cargar
@@ -1059,7 +1189,7 @@ export default function MonitoreoOperacionesPage() {
                         <Checkbox checked={evidenciaDisponible(item.id)} disabled />
                         <span>{item.label}</span>
                       </div>
-                      <Button size="sm" variant="ghost" onClick={() => cargarDocumento(item.id)}>
+                      <Button size="sm" variant="ghost" onClick={() => solicitarCargaDocumento(item.id)}>
                         <Upload className="h-3 w-3" />
                       </Button>
                     </div>
@@ -1073,7 +1203,7 @@ export default function MonitoreoOperacionesPage() {
                         <Checkbox checked={evidenciaDisponible(item.id)} disabled />
                         <span>{item.label}</span>
                       </div>
-                      <Button size="sm" variant="ghost" onClick={() => cargarDocumento(item.id)}>
+                      <Button size="sm" variant="ghost" onClick={() => solicitarCargaDocumento(item.id)}>
                         <Upload className="h-3 w-3" />
                       </Button>
                     </div>
@@ -1087,7 +1217,7 @@ export default function MonitoreoOperacionesPage() {
                         <Checkbox checked={evidenciaDisponible(item.id)} disabled />
                         <span>{item.label}</span>
                       </div>
-                      <Button size="sm" variant="ghost" onClick={() => cargarDocumento(item.id)}>
+                      <Button size="sm" variant="ghost" onClick={() => solicitarCargaDocumento(item.id)}>
                         <Upload className="h-3 w-3" />
                       </Button>
                     </div>
@@ -1102,7 +1232,7 @@ export default function MonitoreoOperacionesPage() {
                         <span>{item.label}</span>
                       </div>
                       <div className="flex gap-2">
-                        <Button size="sm" variant="ghost" onClick={() => cargarDocumento(item.id)}>
+                        <Button size="sm" variant="ghost" onClick={() => solicitarCargaDocumento(item.id)}>
                           <Upload className="h-3 w-3" />
                         </Button>
                         <Button size="sm" variant="outline" onClick={ejecutarScreening}>
@@ -1160,10 +1290,10 @@ export default function MonitoreoOperacionesPage() {
                               ? "Por vencer"
                               : "Vencido"}
                         </Badge>
-                        <Button size="sm" variant="ghost">
+                        <Button size="sm" variant="ghost" onClick={() => manejarVisualizacionDocumento(doc)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="ghost">
+                        <Button size="sm" variant="ghost" onClick={() => manejarDescargaDocumento(doc)}>
                           <Download className="h-4 w-4" />
                         </Button>
                       </div>
@@ -1176,46 +1306,45 @@ export default function MonitoreoOperacionesPage() {
         </TabsContent>
 
         <TabsContent value="alertas" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5" />
-                Alertas documentales
-              </CardTitle>
-              <CardDescription>Vigencia y renovaciones pendientes de los soportes cargados.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {documentos.filter((doc) => getDocumentStatus(doc) !== "vigente").length === 0 ? (
-                <div className="py-6 text-center text-sm text-muted-foreground">
-                  <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-green-500" />
-                  Todos los documentos están vigentes.
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {documentos
-                    .filter((doc) => getDocumentStatus(doc) !== "vigente")
-                    .map((doc) => (
-                      <div key={doc.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
-                        <div className="flex items-center gap-3">
-                          <AlertTriangle className="h-5 w-5 text-amber-500" />
-                          <div>
-                            <div className="font-medium">{doc.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {getDocumentStatus(doc) === "vencido"
-                                ? "Documento vencido"
-                                : `Vence el ${doc.expiryDate?.toLocaleDateString()}`}
-                            </div>
-                          </div>
-                        </div>
-                        <Button size="sm" variant="outline">
-                          Gestionar renovación
-                        </Button>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5" />
+            Alertas documentales
+          </CardTitle>
+          <CardDescription>Vigencia y renovaciones pendientes de los soportes cargados.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {documentAlerts.length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">
+              <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-green-500" />
+              Todos los documentos están vigentes.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {documentAlerts.map((alerta) => (
+                <div key={alerta.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+                  <div className="flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-500" />
+                    <div>
+                      <div className="font-medium">{alerta.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {alerta.dueDate
+                          ? `Vence el ${new Date(alerta.dueDate).toLocaleDateString()}`
+                          : alerta.description}
                       </div>
-                    ))}
+                      <div className="text-xs text-muted-foreground">{alerta.description}</div>
+                    </div>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => manejarResolucionAlerta(alerta)}>
+                    Marcar como atendida
+                  </Button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
           <Card>
             <CardHeader>

@@ -5,13 +5,14 @@ import { createContext, useContext, useState, useEffect } from "react"
 import type { ThirdPartySource } from "./third-party"
 import type { ExternalRecipient } from "./external-recipients"
 import type { ProcessingActivity } from "./data"
-import type { Document } from "./documents"
+import type { DocumentRecord } from "./documents"
+import { DOCUMENT_STORAGE_KEY, getDocuments } from "./documents"
 
 interface AppState {
   thirdPartySources: ThirdPartySource[]
   externalRecipients: ExternalRecipient[]
   processingActivities: ProcessingActivity[]
-  documents: Document[]
+  documents: DocumentRecord[]
   templates: any[]
   activitiesUnderReview: ProcessingActivity[]
 }
@@ -24,7 +25,7 @@ interface AppContextType {
   deleteExternalRecipient: (id: string) => void
   updateProcessingActivity: (updatedActivity: ProcessingActivity) => void
   deleteProcessingActivity: (id: number) => void
-  updateDocument: (updatedDocument: Document) => void
+  updateDocument: (updatedDocument: DocumentRecord) => void
   deleteDocument: (id: string) => void
   addTemplate: (template: any) => void
   updateTemplate: (updatedTemplate: any) => void
@@ -57,6 +58,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem("appState", JSON.stringify(state))
   }, [state])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const syncDocuments = () => {
+      const documents = getDocuments()
+      setState((prevState) => ({
+        ...prevState,
+        documents,
+      }))
+    }
+
+    syncDocuments()
+
+    const handleStorageUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<{ key?: string }>
+      if (!customEvent.detail || customEvent.detail.key === DOCUMENT_STORAGE_KEY) {
+        syncDocuments()
+      }
+    }
+
+    const handleNativeStorage = (event: StorageEvent) => {
+      if (event.key === DOCUMENT_STORAGE_KEY) {
+        syncDocuments()
+      }
+    }
+
+    window.addEventListener("pld-storage-updated", handleStorageUpdate)
+    window.addEventListener("storage", handleNativeStorage)
+
+    return () => {
+      window.removeEventListener("pld-storage-updated", handleStorageUpdate)
+      window.removeEventListener("storage", handleNativeStorage)
+    }
+  }, [])
 
   const updateThirdPartySource = (updatedSource: ThirdPartySource) => {
     setState((prevState) => ({
@@ -106,7 +142,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }))
   }
 
-  const updateDocument = (updatedDocument: Document) => {
+  const updateDocument = (updatedDocument: DocumentRecord) => {
     setState((prevState) => ({
       ...prevState,
       documents: prevState.documents.map((doc) => (doc.id === updatedDocument.id ? updatedDocument : doc)),
