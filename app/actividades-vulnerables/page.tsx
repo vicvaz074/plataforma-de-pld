@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { ChangeEvent, useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -53,7 +53,9 @@ interface DocumentUpload {
   uploadDate: Date
   expiryDate?: Date
   status: "vigente" | "por-vencer" | "vencido"
-  url?: string
+  size?: number
+  mimeType?: string
+  content?: string
 }
 
 interface TraceabilityEntry {
@@ -510,6 +512,8 @@ export default function ActividadesVulnerablesPage() {
   const [trazabilidad, setTrazabilidad] = useState<TraceabilityEntry[]>([])
   const [progreso, setProgreso] = useState(0)
   const [activeTab, setActiveTab] = useState("preguntas")
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [pendingDocumentType, setPendingDocumentType] = useState<string | null>(null)
 
   // Cargar datos del localStorage
   useEffect(() => {
@@ -733,34 +737,105 @@ export default function ActividadesVulnerablesPage() {
     })
   }
 
-  // Simular carga de documento
-  const cargarDocumento = (tipo: string) => {
-    const nuevoDocumento: DocumentUpload = {
-      id: Date.now().toString(),
-      name: `Documento_${tipo}_${Date.now()}.pdf`,
-      type: tipo,
-      uploadDate: new Date(),
-      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 año
-      status: "vigente",
-    }
-
-    setDocumentos((prev) => [...prev, nuevoDocumento])
-
-    // Agregar entrada de trazabilidad
-    const nuevaEntrada: TraceabilityEntry = {
-      id: Date.now().toString(),
-      action: "Documento cargado",
-      user: "Usuario actual",
-      timestamp: new Date(),
-      details: `Documento: ${nuevoDocumento.name} - Tipo: ${tipo}`,
-      section: "Carga Documental",
-    }
-    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-
-    toast({
-      title: "Documento cargado",
-      description: `El documento ${nuevoDocumento.name} ha sido cargado exitosamente.`,
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = () => reject(new Error("No se pudo leer el archivo"))
+      reader.readAsDataURL(file)
     })
+
+  const cargarDocumento = (tipo: string) => {
+    setPendingDocumentType(tipo)
+    fileInputRef.current?.click()
+  }
+
+  const procesarArchivo = async (event: ChangeEvent<HTMLInputElement>) => {
+    const archivo = event.target.files?.[0]
+    if (!archivo) {
+      return
+    }
+
+    const tipoDocumento = pendingDocumentType ?? "Documento"
+
+    try {
+      const contenido = await fileToDataUrl(archivo)
+      const nuevoDocumento: DocumentUpload = {
+        id: Date.now().toString(),
+        name: archivo.name,
+        type: tipoDocumento,
+        uploadDate: new Date(),
+        status: "vigente",
+        size: archivo.size,
+        mimeType: archivo.type,
+        content: contenido,
+      }
+
+      setDocumentos((prev) => [...prev, nuevoDocumento])
+
+      const nuevaEntrada: TraceabilityEntry = {
+        id: Date.now().toString(),
+        action: "Documento cargado",
+        user: "Usuario actual",
+        timestamp: new Date(),
+        details: `Documento: ${nuevoDocumento.name} - Tipo: ${tipoDocumento}`,
+        section: "Carga Documental",
+      }
+      setTrazabilidad((prev) => [nuevaEntrada, ...prev])
+
+      toast({
+        title: "Documento cargado",
+        description: `El documento ${nuevoDocumento.name} ha sido cargado exitosamente.`,
+      })
+    } catch (error) {
+      console.error(error)
+      toast({
+        title: "Error al cargar",
+        description: "Ocurrió un problema al procesar el archivo seleccionado.",
+        variant: "destructive",
+      })
+    } finally {
+      setPendingDocumentType(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
+  }
+
+  const verDocumento = (doc: DocumentUpload) => {
+    if (!doc.content) {
+      toast({
+        title: "Documento no disponible",
+        description: "El archivo seleccionado no cuenta con contenido para visualizarse.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const nuevaVentana = window.open(doc.content, "_blank")
+    if (!nuevaVentana) {
+      toast({
+        title: "No se pudo abrir el documento",
+        description: "Permite las ventanas emergentes para visualizar el archivo.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const descargarDocumento = (doc: DocumentUpload) => {
+    if (!doc.content) {
+      toast({
+        title: "Documento no disponible",
+        description: "El archivo seleccionado no cuenta con contenido para descargarse.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const enlace = document.createElement("a")
+    enlace.href = doc.content
+    enlace.download = doc.name
+    enlace.click()
   }
 
   // Obtener color según respuesta
@@ -856,6 +931,23 @@ export default function ActividadesVulnerablesPage() {
     return "vigente"
   }
 
+  const formatFileSize = (size?: number) => {
+    if (!size && size !== 0) return ""
+    if (size === 0) return "0 B"
+
+    const unidades = ["B", "KB", "MB", "GB", "TB"]
+    let valor = size
+    let indice = 0
+
+    while (valor >= 1024 && indice < unidades.length - 1) {
+      valor /= 1024
+      indice += 1
+    }
+
+    const decimales = valor < 10 && indice > 0 ? 1 : 0
+    return `${valor.toFixed(decimales)} ${unidades[indice]}`
+  }
+
   const preguntasEspecificasSeleccionadas =
     selectedFraccion && preguntasEspecificasState[selectedFraccion]
       ? preguntasEspecificasState[selectedFraccion]!
@@ -880,6 +972,12 @@ export default function ActividadesVulnerablesPage() {
 
   return (
     <div className="container mx-auto py-6 space-y-6">
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={procesarArchivo}
+      />
       {/* Header */}
       <div className="space-y-4">
         <div className="flex items-center space-x-2">
@@ -1234,6 +1332,10 @@ export default function ActividadesVulnerablesPage() {
                             Subido: {doc.uploadDate.toLocaleDateString()}
                             {doc.expiryDate && ` • Vence: ${doc.expiryDate.toLocaleDateString()}`}
                           </div>
+                          <div className="text-xs text-muted-foreground">
+                            {doc.type}
+                            {doc.size ? ` • ${formatFileSize(doc.size)}` : ""}
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -1252,10 +1354,10 @@ export default function ActividadesVulnerablesPage() {
                               ? "Por vencer"
                               : "Vencido"}
                         </Badge>
-                        <Button size="sm" variant="ghost">
+                        <Button size="sm" variant="ghost" onClick={() => verDocumento(doc)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button size="sm" variant="ghost">
+                        <Button size="sm" variant="ghost" onClick={() => descargarDocumento(doc)}>
                           <Download className="h-4 w-4" />
                         </Button>
                       </div>
