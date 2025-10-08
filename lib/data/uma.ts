@@ -8,75 +8,97 @@ export type UmaPeriod = {
   months: { month: number; year: number }[]
 }
 
-export const UMA_PERIODS: UmaPeriod[] = [
+type UmaCycleSource = {
+  cycle: string
+  validFrom: string
+  validTo: string
+  daily: number
+}
+
+const UMA_CYCLES_SOURCE: UmaCycleSource[] = [
   {
     cycle: "2020",
     validFrom: "2020-02-01",
     validTo: "2021-01-31",
     daily: 86.88,
-    monthly: 2641.15,
-    annual: 31693.8,
-    months: Array.from({ length: 12 }).map((_, index) => {
-      const start = new Date(2020, 1, 1)
-      start.setMonth(start.getMonth() + index)
-      return { month: start.getMonth() + 1, year: start.getFullYear() }
-    }),
   },
   {
     cycle: "2021",
     validFrom: "2021-02-01",
     validTo: "2022-01-31",
     daily: 89.62,
-    monthly: 2724.45,
-    annual: 32693.4,
-    months: Array.from({ length: 12 }).map((_, index) => {
-      const start = new Date(2021, 1, 1)
-      start.setMonth(start.getMonth() + index)
-      return { month: start.getMonth() + 1, year: start.getFullYear() }
-    }),
   },
   {
     cycle: "2022",
     validFrom: "2022-02-01",
     validTo: "2023-01-31",
     daily: 96.22,
-    monthly: 2925.09,
-    annual: 35101.08,
-    months: Array.from({ length: 12 }).map((_, index) => {
-      const start = new Date(2022, 1, 1)
-      start.setMonth(start.getMonth() + index)
-      return { month: start.getMonth() + 1, year: start.getFullYear() }
-    }),
   },
   {
     cycle: "2023",
     validFrom: "2023-02-01",
     validTo: "2024-01-31",
     daily: 103.74,
-    monthly: 3162.52,
-    annual: 37950.45,
-    months: Array.from({ length: 12 }).map((_, index) => {
-      const start = new Date(2023, 1, 1)
-      start.setMonth(start.getMonth() + index)
-      return { month: start.getMonth() + 1, year: start.getFullYear() }
-    }),
   },
   {
     cycle: "2024",
     validFrom: "2024-02-01",
     validTo: "2025-01-31",
     daily: 108.57,
-    monthly: 3300.53,
-    annual: 39606.36,
-    months: Array.from({ length: 12 }).map((_, index) => {
-      const start = new Date(2024, 1, 1)
-      start.setMonth(start.getMonth() + index)
-      return { month: start.getMonth() + 1, year: start.getFullYear() }
-    }),
+  },
+  {
+    cycle: "2025",
+    validFrom: "2025-02-01",
+    validTo: "2026-01-31",
+    daily: 115.8,
   },
 ]
 
-export const UMA_MONTHS = UMA_PERIODS.flatMap((period) =>
+function calculateMonthly(daily: number) {
+  return Number((daily * 30.4).toFixed(2))
+}
+
+function calculateAnnual(daily: number) {
+  return Number((daily * 365).toFixed(2))
+}
+
+function buildMonths(validFrom: string, length = 12) {
+  const startDate = new Date(validFrom)
+  const months = [] as { month: number; year: number }[]
+  for (let index = 0; index < length; index += 1) {
+    const date = new Date(startDate)
+    date.setMonth(startDate.getMonth() + index)
+    months.push({ month: date.getMonth() + 1, year: date.getFullYear() })
+  }
+  return months
+}
+
+export const UMA_PERIODS: UmaPeriod[] = UMA_CYCLES_SOURCE.map((cycle) => {
+  const monthly = calculateMonthly(cycle.daily)
+  const annual = calculateAnnual(cycle.daily)
+  return {
+    cycle: cycle.cycle,
+    validFrom: cycle.validFrom,
+    validTo: cycle.validTo,
+    daily: cycle.daily,
+    monthly,
+    annual,
+    months: buildMonths(cycle.validFrom),
+  }
+})
+
+type UmaMonth = {
+  month: number
+  year: number
+  cycle: string
+  daily: number
+  monthly: number
+  annual: number
+  validFrom: string
+  validTo: string
+}
+
+const UMA_MONTHS_FULL: UmaMonth[] = UMA_PERIODS.flatMap((period) =>
   period.months.map((month) => ({
     ...month,
     cycle: period.cycle,
@@ -87,6 +109,16 @@ export const UMA_MONTHS = UMA_PERIODS.flatMap((period) =>
     validTo: period.validTo,
   })),
 )
+
+const WINDOW_START = new Date(2020, 8, 1) // septiembre 2020
+const WINDOW_MONTHS = 60
+const WINDOW_END = new Date(WINDOW_START)
+WINDOW_END.setMonth(WINDOW_START.getMonth() + WINDOW_MONTHS)
+
+export const UMA_MONTHS: UmaMonth[] = UMA_MONTHS_FULL.filter((entry) => {
+  const entryDate = new Date(entry.year, entry.month - 1, 1)
+  return entryDate >= WINDOW_START && entryDate < WINDOW_END
+})
 
 export function findUmaByMonthYear(month: number, year: number) {
   return UMA_MONTHS.find((entry) => entry.month === month && entry.year === year)
@@ -100,4 +132,14 @@ export function listMonthsForYear(year: number) {
   return UMA_MONTHS.filter((entry) => entry.year === year)
     .map((entry) => entry.month)
     .sort((a, b) => a - b)
+}
+
+export function listUmaByYear(year: number) {
+  return UMA_MONTHS.filter((entry) => entry.year === year)
+    .sort((a, b) => a.month - b.month)
+    .map((entry) => ({
+      month: entry.month,
+      monthly: entry.monthly,
+      cycle: entry.cycle,
+    }))
 }

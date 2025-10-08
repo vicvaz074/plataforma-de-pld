@@ -111,9 +111,24 @@ const FACTORES_RIESGO = [
 ]
 
 const RISK_LEVELS = [
-  { value: "bajo", label: "Bajo", color: "bg-emerald-100 text-emerald-700" },
-  { value: "medio", label: "Medio", color: "bg-amber-100 text-amber-700" },
-  { value: "alto", label: "Alto", color: "bg-rose-100 text-rose-700" },
+  {
+    value: "bajo",
+    label: "Bajo",
+    color: "bg-emerald-100 text-emerald-700",
+    chip: "bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 text-white",
+  },
+  {
+    value: "medio",
+    label: "Medio",
+    color: "bg-amber-100 text-amber-700",
+    chip: "bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-white",
+  },
+  {
+    value: "alto",
+    label: "Alto",
+    color: "bg-rose-100 text-rose-700",
+    chip: "bg-gradient-to-r from-rose-500 via-rose-600 to-rose-700 text-white",
+  },
 ]
 
 type RiskValue = (typeof RISK_LEVELS)[number]["value"]
@@ -135,6 +150,11 @@ const CLIENTE_COLORES: Record<RiskValue, string> = {
   bajo: "bg-emerald-500",
   medio: "bg-amber-500",
   alto: "bg-rose-500",
+}
+
+function getRiskChipClass(nivel: RiskValue) {
+  return RISK_LEVELS.find((item) => item.value === nivel)?.chip ??
+    "bg-gradient-to-r from-slate-400 via-slate-500 to-slate-600 text-white"
 }
 
 export default function KycExpedientePage() {
@@ -171,13 +191,32 @@ export default function KycExpedientePage() {
     return "bajo"
   }, [respuestas])
 
-  const matrizCalor = useMemo(() => {
-    const data = [
-      { seccion: "Identificación", nivel: nivelIdentificacion },
-      { seccion: "Conocimiento", nivel: nivelConocimiento },
-    ]
-    return data
+  const riesgoIntegral = useMemo<RiskValue>(() => {
+    if (nivelIdentificacion === "alto" || nivelConocimiento === "alto") return "alto"
+    if (nivelIdentificacion === "medio" || nivelConocimiento === "medio") return "medio"
+    return "bajo"
   }, [nivelIdentificacion, nivelConocimiento])
+
+  const matrizCalor = useMemo(
+    () => [
+      {
+        seccion: "Identificación",
+        nivel: nivelIdentificacion,
+        descripcion: "Documentos y verificaciones del expediente",
+      },
+      {
+        seccion: "Conocimiento",
+        nivel: nivelConocimiento,
+        descripcion: "Perfil transaccional, geografía y monitoreo",
+      },
+      {
+        seccion: "Riesgo integral",
+        nivel: riesgoIntegral,
+        descripcion: "Resultado del enfoque basado en riesgo (EBR)",
+      },
+    ],
+    [nivelIdentificacion, nivelConocimiento, riesgoIntegral],
+  )
 
   const generarAlerta = (factorId: string) => {
     const factor = FACTORES_RIESGO.find((item) => item.id === factorId)
@@ -205,12 +244,6 @@ export default function KycExpedientePage() {
       description: `${factor.titulo} clasificado como riesgo ${respuesta.valor}.`,
     })
   }
-
-  const riesgoIntegral = useMemo<RiskValue>(() => {
-    if (nivelIdentificacion === "alto" || nivelConocimiento === "alto") return "alto"
-    if (nivelIdentificacion === "medio" || nivelConocimiento === "medio") return "medio"
-    return "bajo"
-  }, [nivelIdentificacion, nivelConocimiento])
 
   return (
     <div className="space-y-6">
@@ -257,15 +290,17 @@ export default function KycExpedientePage() {
             </div>
             <div className="rounded-xl border bg-white p-4 text-sm">
               <p className="text-xs font-semibold uppercase text-slate-500">Riesgo integral</p>
-              <div className="mt-2 flex items-center gap-3">
+              <div className="mt-2 flex flex-wrap items-center gap-3">
                 <span className={`inline-flex h-3 w-3 rounded-full ${CLIENTE_COLORES[riesgoIntegral]}`}></span>
-                <span className="text-base font-semibold capitalize">{riesgoIntegral}</span>
-                <Badge variant="outline" className="border-slate-300 text-slate-600">
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${getRiskChipClass(riesgoIntegral)}`}>
+                  Integral: {riesgoIntegral}
+                </span>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${getRiskChipClass(nivelIdentificacion)}`}>
                   Identificación: {nivelIdentificacion}
-                </Badge>
-                <Badge variant="outline" className="border-slate-300 text-slate-600">
+                </span>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${getRiskChipClass(nivelConocimiento)}`}>
                   Conocimiento: {nivelConocimiento}
-                </Badge>
+                </span>
               </div>
             </div>
           </CardContent>
@@ -427,27 +462,26 @@ export default function KycExpedientePage() {
               <Globe2 className="h-5 w-5 text-slate-600" /> Mapa de calor de riesgo
             </CardTitle>
             <CardDescription>
-              Visualiza la madurez del expediente por bloque y atención prioritaria.
+              Visualiza la madurez del expediente por bloque y la conclusión del enfoque basado en riesgo (EBR).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3">
+            <div className="grid gap-4 md:grid-cols-3">
               {matrizCalor.map((item) => (
-                <div key={item.seccion} className="flex items-center justify-between rounded border border-slate-200 bg-white p-3">
-                  <div className="flex items-center gap-3">
-                    <span className={`inline-flex h-3 w-3 rounded-full ${CLIENTE_COLORES[item.nivel]}`}></span>
-                    <p className="font-semibold text-slate-700">{item.seccion}</p>
-                  </div>
-                  <Badge className={`capitalize ${RISK_LEVELS.find((nivel) => nivel.value === item.nivel)?.color}`}>
-                    {item.nivel}
-                  </Badge>
+                <div
+                  key={item.seccion}
+                  className={`rounded-2xl border border-white/40 p-4 text-white shadow-sm transition hover:shadow-md ${getRiskChipClass(item.nivel)}`}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-white/80">{item.seccion}</p>
+                  <p className="mt-2 text-2xl font-semibold capitalize">{item.nivel}</p>
+                  <p className="mt-3 text-xs text-white/80">{item.descripcion}</p>
                 </div>
               ))}
             </div>
             <div className="rounded border bg-white p-4 text-sm text-slate-700">
               <p className="font-semibold">Metodología EBR</p>
               <p className="mt-2 text-muted-foreground">
-                Combina controles de identificación y conocimiento para definir planes de acción diferenciados. El nivel integral determina periodicidad de actualización documental y monitoreo transaccional.
+                Combina controles de identificación y conocimiento para definir planes de acción diferenciados. El riesgo integral define la periodicidad de actualización documental, la frecuencia del monitoreo y la intensidad del seguimiento a alertas.
               </p>
             </div>
           </CardContent>
