@@ -1,1553 +1,1323 @@
 "use client"
 
-import { ChangeEvent, useEffect, useRef, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
-import { useToast } from "@/components/ui/use-toast"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  Upload,
-  FileText,
-  Shield,
-  History,
-  AlertCircle,
-  Info,
-  Download,
-  Eye,
-  Trash2,
-} from "lucide-react"
+import { useMemo, useState } from "react"
 import { motion } from "framer-motion"
+import { AlertCircle, CheckCircle2, Info, Plus, Shield, Upload, X } from "lucide-react"
 
-// Tipos de datos para el módulo
-type ChecklistAnswer = string | null
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
+import { useToast } from "@/components/ui/use-toast"
+import {
+  calculateThreshold,
+  describeThreshold,
+  formatCurrency,
+  formatUma,
+  generateUmaMonths,
+  UMA_PERIODS,
+  type UmaMonth,
+} from "@/lib/uma"
+import {
+  clientChecklists,
+  type ClientChecklist,
+  type ClientChecklistItem,
+  type ClientTypeId,
+} from "@/lib/clientes"
+import {
+  vulnerableActivities,
+  type SubActivity,
+  type ThresholdDetail,
+  type VulnerableActivity,
+} from "@/lib/actividades-vulnerables"
 
-interface ChecklistItem {
+interface OperationEntry {
   id: string
-  question: string
-  required: boolean
-  answer: ChecklistAnswer
-  type?: "boolean" | "selection"
-  options?: { value: string; label: string }[]
-  notes?: string
-  lastUpdated?: Date
+  clienteNombre: string
+  clienteRfc: string
+  tipoCliente: ClientTypeId
+  esMismoGrupo: boolean
+  grupoEmpresarial?: string
+  actividadDescripcion: string
+  tipoOperacion: string
+  fecha: string
+  periodo: UmaMonth
+  moneda: "MXN" | "USD" | "EUR"
+  tipoCambio: number
+  montoMoneda: number
+  montoMx: number
+  montoUma?: number
+  excedeIdentificacion: boolean
+  excedeAviso: boolean
+  evidencia: string
+  comentarios: string
 }
 
-interface DocumentUpload {
-  id: string
-  name: string
-  type: string
-  uploadDate: Date
-  expiryDate?: Date
-  status: "vigente" | "por-vencer" | "vencido"
-  size?: number
-  mimeType?: string
-  content?: string
+interface ClientSummary {
+  rfc: string
+  nombre: string
+  tipoCliente: ClientTypeId
+  grupoEmpresarial?: string
+  esMismoGrupo: boolean
+  operaciones: OperationEntry[]
+  totalUma: number
+  maxUma: number
+  acumuladoSeisMesesUma: number
+  excedeIdentificacion: boolean
+  excedeAviso: boolean
 }
 
-interface TraceabilityEntry {
-  id: string
-  action: string
-  user: string
-  timestamp: Date
-  details: string
-  section: string
+const monthOptions = generateUmaMonths(2020, 9, 60)
+const yearOptions = Array.from(new Set(monthOptions.map((month) => month.year)))
+
+const getDefaultMonth = () => {
+  const current = monthOptions.find((month) => {
+    const now = new Date()
+    return month.year === now.getFullYear() && month.month === now.getMonth() + 1
+  })
+  if (current) return current
+  return monthOptions[0]
 }
 
-const actividadesCatalog = [
-  {
-    value: "fraccion-i",
-    label: "Fracción I – Juegos con apuesta, concursos o sorteos",
-    identificacion: "Identificación obligatoria cuando el monto sea ≥ 325 UMA ($36,770.50).",
-    aviso: "Aviso obligatorio si premios, apuestas o concursos exceden 645 UMA ($72,975.30).",
-  },
-  {
-    value: "fraccion-ii",
-    label: "Fracción II – Tarjetas de servicios, crédito o prepagadas",
-    identificacion:
-      "Identificación por adquisiciones o recargas de tarjetas de crédito/servicios ≥ 805 UMA ($91,077.70) o tarjetas prepagadas/vales ≥ 645 UMA ($72,975.30).",
-    aviso:
-      "Aviso obligatorio por montos ≥ 1,285 UMA ($145,384.90) en tarjetas de crédito/servicios o ≥ 645 UMA en tarjetas prepagadas/vales.",
-  },
-  {
-    value: "fraccion-iii",
-    label: "Fracción III – Emisión o comercialización de cheques de viajero (no financieros)",
-    identificacion: "Identificación conforme a umbrales aplicables publicados por el SAT.",
-    aviso: "Aviso conforme a umbrales aplicables publicados por el SAT.",
-  },
-  {
-    value: "fraccion-iv",
-    label: "Fracción IV – Operaciones de mutuo, garantía, préstamos o créditos",
-    identificacion: "Identificación obligatoria en todos los préstamos o créditos.",
-    aviso: "Aviso obligatorio por montos ≥ 1,605 UMA ($181,589.70).",
-  },
-  {
-    value: "fraccion-v",
-    label: "Fracción V – Construcción, desarrollo e intermediación en bienes inmuebles",
-    identificacion: "Identificación obligatoria en todas las operaciones de inmuebles.",
-    aviso: "Aviso obligatorio por montos ≥ 8,025 UMA ($907,948.50).",
-  },
-  {
-    value: "fraccion-vi",
-    label: "Fracción VI – Comercialización de metales y piedras preciosas, joyas o relojes",
-    identificacion: "Identificación obligatoria por montos ≥ 805 UMA ($91,077.70).",
-    aviso: "Aviso obligatorio por montos ≥ 1,605 UMA ($181,589.70).",
-  },
-  {
-    value: "fraccion-vii",
-    label: "Fracción VII – Subasta o comercialización de obras de arte",
-    identificacion: "Identificación obligatoria por montos ≥ 2,410 UMA ($272,667.40).",
-    aviso: "Aviso obligatorio por montos ≥ 4,815 UMA ($544,769.10).",
-  },
-  {
-    value: "fraccion-viii",
-    label: "Fracción VIII – Comercialización o distribución de vehículos",
-    identificacion: "Identificación obligatoria por montos ≥ 3,210 UMA ($363,179.40).",
-    aviso: "Aviso obligatorio por montos ≥ 6,420 UMA ($726,358.80).",
-  },
-  {
-    value: "fraccion-ix",
-    label: "Fracción IX – Servicios de blindaje de vehículos o inmuebles",
-    identificacion: "Identificación obligatoria por contratos ≥ 2,410 UMA ($272,667.40).",
-    aviso: "Aviso obligatorio por contratos ≥ 4,815 UMA ($544,769.10).",
-  },
-  {
-    value: "fraccion-x",
-    label: "Fracción X – Servicios de traslado o custodia de dinero o valores",
-    identificacion: "Identificación obligatoria en todos los traslados o custodia de valores.",
-    aviso:
-      "Aviso obligatorio cuando no sea posible determinar el monto o cuando sea ≥ 3,210 UMA ($363,179.40).",
-  },
-  {
-    value: "fraccion-xi",
-    label:
-      "Fracción XI – Servicios profesionales independientes en operaciones financieras específicas",
-    identificacion:
-      "Identificación obligatoria al realizar operaciones en nombre del cliente (inmuebles, administración de activos, cuentas, sociedades/fideicomisos).",
-    aviso:
-      "Aviso cuando la operación financiera realizada en nombre del cliente así lo requiera conforme a la normatividad aplicable.",
-  },
-  {
-    value: "fraccion-xii",
-    label: "Fracción XII – Servicios de fe pública (notarios, corredores públicos)",
-    identificacion: "Identificación conforme a los supuestos aplicables del art. 17.",
-    aviso: "Aviso conforme a los supuestos aplicables del art. 17.",
-  },
-  {
-    value: "fraccion-xiii",
-    label: "Fracción XIII – Recepción de donativos por asociaciones y sociedades sin fines de lucro",
-    identificacion: "Identificación obligatoria por donativos ≥ 1,605 UMA ($181,589.70).",
-    aviso: "Aviso obligatorio por donativos ≥ 3,210 UMA ($363,179.40).",
-  },
-  {
-    value: "fraccion-xiv",
-    label: "Fracción XIV – Servicios de comercio exterior en mercancías específicas",
-    identificacion: "Identificación conforme a umbrales aplicables publicados por el SAT.",
-    aviso: "Aviso conforme a umbrales aplicables publicados por el SAT.",
-  },
-  {
-    value: "fraccion-xv",
-    label: "Fracción XV – Constitución de derechos de uso o goce de bienes inmuebles",
-    identificacion: "Identificación obligatoria por valores ≥ 1,605 UMA ($181,589.70).",
-    aviso: "Aviso obligatorio por valores ≥ 3,210 UMA ($363,179.40).",
-  },
-  {
-    value: "fraccion-xvi",
-    label: "Fracción XVI – Intercambio de activos virtuales (no reconocidos por Banxico)",
-    identificacion: "Identificación obligatoria en todas las operaciones con activos virtuales.",
-    aviso: "Aviso obligatorio por montos ≥ 210 UMA ($23,759.40).",
-  },
-]
-
-type ActividadKey = (typeof actividadesCatalog)[number]["value"]
-
-const basePreguntasGenerales: Omit<ChecklistItem, "answer" | "notes" | "lastUpdated">[] = [
-  {
-    id: "pg-1",
-    question: "¿Cuál es la naturaleza de la operación? (Selecciona la fracción del art. 17)",
-    required: true,
-    type: "selection",
-    options: actividadesCatalog.map((actividad) => ({
-      value: actividad.value,
-      label: actividad.label,
-    })),
-  },
-  {
-    id: "pg-2",
-    question:
-      "¿El monto de la operación es igual o superior al umbral de identificación publicado por el SAT para esa actividad?",
-    required: true,
-  },
-  {
-    id: "pg-3",
-    question: "¿El monto de la operación es igual o superior al umbral de aviso aplicable?",
-    required: true,
-  },
-  {
-    id: "pg-4",
-    question: "¿Cuál es el medio de pago de la operación?",
-    required: true,
-    type: "selection",
-    options: [
-      { value: "efectivo", label: "Efectivo" },
-      { value: "transferencia", label: "Transferencia" },
-      { value: "cheque", label: "Cheque" },
-      { value: "tarjeta", label: "Tarjeta" },
-      { value: "combinacion", label: "Combinación de medios" },
-    ],
-  },
-  {
-    id: "pg-5",
-    question: "¿Existen operaciones acumuladas con el mismo cliente en el semestre que superen los umbrales?",
-    required: true,
-  },
-  {
-    id: "pg-6",
-    question:
-      "¿Existen exenciones conforme al art. 27 Bis RCG (ej. operaciones entre empresas del mismo grupo empresarial, primera venta con banca de desarrollo, etc.)?",
-    required: true,
-  },
-]
-
-const createPreguntasGenerales = (): ChecklistItem[] =>
-  basePreguntasGenerales.map((pregunta) => ({ ...pregunta, answer: null }))
-
-const preguntasEspecificasCatalog: Partial<
-  Record<
-    ActividadKey,
-    Omit<ChecklistItem, "answer" | "notes" | "lastUpdated">[]
-  >
-> = {
-  "fraccion-i": [
-    {
-      id: "f1-q1",
-      question: "¿El cliente participa en un evento con monto ≥ 325 UMA ($36,770.50)?",
-      required: true,
-    },
-    {
-      id: "f1-q2",
-      question: "¿El monto de premios, apuestas o concursos excede 645 UMA ($72,975.30)?",
-      required: true,
-    },
-    {
-      id: "f1-q3",
-      question: "¿Se cuenta con identificación del participante y forma de pago documentada?",
-      required: true,
-    },
-  ],
-  "fraccion-ii": [
-    {
-      id: "f2-q1",
-      question: "¿El cliente adquirió o recargó tarjeta de crédito o servicios por ≥ 805 UMA ($91,077.70)?",
-      required: true,
-    },
-    {
-      id: "f2-q2",
-      question: "¿El monto excede el umbral de aviso de 1,285 UMA ($145,384.90)?",
-      required: true,
-    },
-    {
-      id: "f2-q3",
-      question: "¿Se vendieron tarjetas prepagadas, vales o monederos por ≥ 645 UMA ($72,975.30)?",
-      required: true,
-    },
-  ],
-  "fraccion-iv": [
-    {
-      id: "f4-q1",
-      question: "¿Se otorgó préstamo o crédito (con o sin garantía)?",
-      required: true,
-    },
-    {
-      id: "f4-q2",
-      question: "¿El monto excede 1,605 UMA ($181,589.70)?",
-      required: true,
-    },
-  ],
-  "fraccion-v": [
-    {
-      id: "f5-q1",
-      question: "¿La operación corresponde a compraventa, desarrollo o intermediación de bienes inmuebles?",
-      required: true,
-    },
-    {
-      id: "f5-q2",
-      question: "¿El monto excede 8,025 UMA ($907,948.50) para presentar aviso?",
-      required: true,
-    },
-  ],
-  "fraccion-vi": [
-    {
-      id: "f6-q1",
-      question: "¿La operación fue por ≥ 805 UMA ($91,077.70)?",
-      required: true,
-    },
-    {
-      id: "f6-q2",
-      question: "¿El monto supera 1,605 UMA ($181,589.70)?",
-      required: true,
-    },
-  ],
-  "fraccion-vii": [
-    {
-      id: "f7-q1",
-      question: "¿El valor de la subasta o compraventa es ≥ 2,410 UMA ($272,667.40)?",
-      required: true,
-    },
-    {
-      id: "f7-q2",
-      question: "¿El monto supera 4,815 UMA ($544,769.10)?",
-      required: true,
-    },
-  ],
-  "fraccion-viii": [
-    {
-      id: "f8-q1",
-      question: "¿Se vendió o distribuyó un vehículo con valor ≥ 3,210 UMA ($363,179.40)?",
-      required: true,
-    },
-    {
-      id: "f8-q2",
-      question: "¿El monto supera 6,420 UMA ($726,358.80)?",
-      required: true,
-    },
-  ],
-  "fraccion-ix": [
-    {
-      id: "f9-q1",
-      question: "¿El contrato de blindaje tiene un valor ≥ 2,410 UMA ($272,667.40)?",
-      required: true,
-    },
-    {
-      id: "f9-q2",
-      question: "¿El monto supera 4,815 UMA ($544,769.10)?",
-      required: true,
-    },
-  ],
-  "fraccion-x": [
-    {
-      id: "f10-q1",
-      question: "¿La operación corresponde a servicios de traslado o custodia de valores?",
-      required: true,
-    },
-    {
-      id: "f10-q2",
-      question: "¿No es posible determinar el monto de la operación?",
-      required: true,
-    },
-    {
-      id: "f10-q3",
-      question: "Si el monto es conocido, ¿es ≥ 3,210 UMA ($363,179.40)?",
-      required: true,
-    },
-  ],
-  "fraccion-xi": [
-    {
-      id: "f11-q1",
-      question:
-        "¿El profesionista realizó operaciones en nombre del cliente (inmuebles, administración de recursos, manejo de cuentas o constitución/administración de sociedades o fideicomisos)?",
-      required: true,
-    },
-    {
-      id: "f11-q2",
-      question: "¿La operación realizada en nombre del cliente requiere aviso conforme a la normatividad financiera aplicable?",
-      required: true,
-    },
-  ],
-  "fraccion-xiii": [
-    {
-      id: "f13-q1",
-      question: "¿El donativo recibido es ≥ 1,605 UMA ($181,589.70)?",
-      required: true,
-    },
-    {
-      id: "f13-q2",
-      question: "¿El monto del donativo supera 3,210 UMA ($363,179.40)?",
-      required: true,
-    },
-  ],
-  "fraccion-xv": [
-    {
-      id: "f15-q1",
-      question: "¿Se otorgó un derecho de uso o goce (arrendamiento/usufructo) por valor ≥ 1,605 UMA ($181,589.70)?",
-      required: true,
-    },
-    {
-      id: "f15-q2",
-      question: "¿El monto supera 3,210 UMA ($363,179.40)?",
-      required: true,
-    },
-  ],
-  "fraccion-xvi": [
-    {
-      id: "f16-q1",
-      question: "¿Se realizó una operación con activos virtuales?",
-      required: true,
-    },
-    {
-      id: "f16-q2",
-      question: "¿El monto de la transacción es ≥ 210 UMA ($23,759.40)?",
-      required: true,
-    },
-  ],
+const cryptoId = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  return Math.random().toString(36).slice(2)
 }
 
-const createPreguntasEspecificas = (fraccion: ActividadKey): ChecklistItem[] =>
-  (preguntasEspecificasCatalog[fraccion] || []).map((pregunta) => ({
-    ...pregunta,
-    answer: null,
-  }))
+const getActivityByFraction = (fraction: string): VulnerableActivity | undefined =>
+  vulnerableActivities.find((activity) => activity.fraccion === fraction)
 
-// Evidencias requeridas
-const evidenciasGenerales = [
-  "Identificación oficial vigente del cliente (INE, pasaporte, FM2/FM3, tarjeta de residente)",
-  "Comprobante de domicilio no mayor a 3 meses (recibo de servicios, estado de cuenta, predial)",
-  "RFC y CURP (constancia de situación fiscal o documento oficial)",
-  "Declaración firmada sobre beneficiario controlador",
-  "Comprobante del medio de pago (transferencia, cheque, tarjeta o efectivo)",
-  "Contrato o documento que ampare la operación",
-]
+const getSubActivity = (activity: VulnerableActivity | undefined, key: string): SubActivity | undefined =>
+  activity?.actividades.find((sub) => sub.key === key)
 
-const evidenciasPorFraccion: Partial<Record<ActividadKey, string[]>> = {
-  "fraccion-i": [
-    "Registro de participación o boleto",
-    "Identificación del participante",
-    "Comprobante de pago de la apuesta o entrega del premio",
-  ],
-  "fraccion-ii": [
-    "Contrato o solicitud de emisión de la tarjeta",
-    "Identificación del adquirente o usuario",
-    "Comprobante de carga o compra de tarjetas, vales o monederos",
-  ],
-  "fraccion-iv": [
-    "Contrato de mutuo o crédito",
-    "Identificación del acreditado",
-    "Garantías que soporten la operación (si existen)",
-    "Comprobante de desembolso de recursos",
-  ],
-  "fraccion-v": [
-    "Contrato de compraventa o intermediación",
-    "Escritura pública o avalúo",
-    "Identificación de comprador y vendedor",
-    "Comprobante de pago de la operación",
-  ],
-  "fraccion-vi": [
-    "Factura de venta",
-    "Identificación del comprador",
-    "Comprobante de pago cuando exceda el umbral",
-  ],
-  "fraccion-vii": [
-    "Contrato de compraventa o factura",
-    "Documento de subasta, en su caso",
-    "Identificación del comprador",
-    "Comprobante de pago",
-  ],
-  "fraccion-viii": [
-    "Factura o contrato de compraventa del vehículo",
-    "Identificación del comprador",
-    "Comprobante de pago",
-    "Tarjeta de circulación o documento equivalente (si aplica)",
-  ],
-  "fraccion-ix": [
-    "Contrato de prestación de servicios de blindaje",
-    "Identificación del contratante",
-    "Comprobante de pago",
-  ],
-  "fraccion-x": [
-    "Contrato de custodia o traslado",
-    "Guía de traslado o póliza de custodia",
-    "Identificación del contratante",
-  ],
-  "fraccion-xi": [
-    "Contrato de prestación de servicios profesionales",
-    "Identificación del cliente",
-    "Documento que acredite la operación realizada en nombre del cliente (escritura, contrato bancario, acta societaria)",
-  ],
-  "fraccion-xiii": [
-    "Acta de aceptación del donativo",
-    "Identificación del donante",
-    "Comprobante de transferencia o entrega del donativo",
-  ],
-  "fraccion-xv": [
-    "Contrato de arrendamiento o usufructo",
-    "Identificación del arrendatario o usuario",
-    "Comprobante de pago",
-  ],
-  "fraccion-xvi": [
-    "Contrato o términos de servicio con el usuario",
-    "Identificación del usuario",
-    "Comprobante de la transacción (wallet, exchange, recibo digital)",
-  ],
+const getThreshold = (subActivity: SubActivity | undefined, type: ThresholdDetail["tipo"]) =>
+  subActivity?.thresholds.find((threshold) => threshold.tipo === type)
+
+const formatChecklistItem = (item: ClientChecklistItem) =>
+  `${item.obligatorio ? "Obligatorio" : "Opcional"} · ${item.label}`
+
+const buildPeriodCode = (month: UmaMonth | null) => {
+  if (!month) return ""
+  return `${month.year}${String(month.month).padStart(2, "0")}`
 }
 
-const evidenciasConservacion = [
-  "Adjuntar cada evidencia al expediente digital del cliente",
-  "Permitir marcado de verificación y carga de archivo por evidencia",
-  "Generar folio único por operación con fecha de carga y usuario responsable",
-  "Registrar el estado del expediente (completo o incompleto)",
-  "Mantener bitácora de accesos y descargas",
-  "Contar con plan de respaldo y recuperación de información",
-]
+const getSixMonthWindow = (operations: OperationEntry[], reference: UmaMonth) => {
+  const end = new Date(Date.UTC(reference.year, reference.month - 1, 1))
+  const start = new Date(end)
+  start.setUTCMonth(start.getUTCMonth() - 5)
+  return operations.filter((operation) => {
+    const operationDate = new Date(operation.fecha)
+    return operationDate >= start && operationDate <= end
+  })
+}
+
+const computeClientSummaries = (
+  operations: OperationEntry[],
+  subActivity: SubActivity | undefined,
+  selectedMonth: UmaMonth | null,
+): ClientSummary[] => {
+  if (!operations.length || !selectedMonth || !subActivity) return []
+  const identification = getThreshold(subActivity, "identificacion")
+  const aviso = getThreshold(subActivity, "aviso")
+
+  const map = new Map<string, ClientSummary>()
+
+  operations.forEach((operation) => {
+    const key = operation.clienteRfc
+    const existing = map.get(key)
+    const montoUma = operation.montoUma ?? 0
+    if (!existing) {
+      const windowOperations = getSixMonthWindow(
+        operations.filter((item) => item.clienteRfc === operation.clienteRfc && item.montoUma),
+        selectedMonth,
+      )
+      const acumuladoWindow = windowOperations.reduce((total, item) => total + (item.montoUma ?? 0), 0)
+      map.set(key, {
+        rfc: operation.clienteRfc,
+        nombre: operation.clienteNombre,
+        tipoCliente: operation.tipoCliente,
+        grupoEmpresarial: operation.grupoEmpresarial,
+        esMismoGrupo: operation.esMismoGrupo,
+        operaciones: [operation],
+        totalUma: montoUma,
+        maxUma: montoUma,
+        acumuladoSeisMesesUma: acumuladoWindow,
+        excedeIdentificacion:
+          identification?.uma === "todas" ? true : Boolean(identification && acumuladoWindow >= (identification.uma as number)),
+        excedeAviso: Boolean(aviso && acumuladoWindow >= (aviso.uma as number)),
+      })
+    } else {
+      const actualizada: ClientSummary = {
+        ...existing,
+        operaciones: [...existing.operaciones, operation],
+        totalUma: existing.totalUma + montoUma,
+        maxUma: Math.max(existing.maxUma, montoUma),
+      }
+      const windowOperations = getSixMonthWindow(
+        [...actualizada.operaciones],
+        selectedMonth,
+      )
+      const acumuladoWindow = windowOperations.reduce((total, item) => total + (item.montoUma ?? 0), 0)
+      actualizada.acumuladoSeisMesesUma = acumuladoWindow
+      actualizada.excedeIdentificacion =
+        identification?.uma === "todas"
+          ? true
+          : Boolean(identification && acumuladoWindow >= (identification.uma as number))
+      actualizada.excedeAviso = Boolean(aviso && acumuladoWindow >= (aviso.uma as number))
+      map.set(key, actualizada)
+    }
+  })
+
+  return Array.from(map.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+}
+
+const getSemaforoColor = (summary: ClientSummary, identification: ThresholdDetail | undefined) => {
+  if (summary.excedeAviso) return "bg-destructive/10 text-destructive"
+  if (summary.excedeIdentificacion || identification?.uma === "todas") return "bg-amber-500/10 text-amber-700"
+  return "bg-emerald-500/10 text-emerald-700"
+}
+
+const clientTypeLabel = (type: ClientTypeId) => {
+  const checklist = clientChecklists.find((item) => item.tipo === type)
+  return checklist?.nombre ?? "Cliente"
+}
+
+const fractionLabel = (fraction: VulnerableActivity | undefined, subActivity: SubActivity | undefined) => {
+  if (!fraction || !subActivity) return "Selecciona una actividad vulnerable"
+  return `${fraction.fraccion} · ${fraction.titulo} → ${subActivity.label}`
+}
+
+const infoMessages = {
+  grupoEmpresarial:
+    "Grupo empresarial: conjunto de empresas vinculadas por control directo o indirecto que comparten políticas y procesos. Si el cliente pertenece al mismo grupo, acumula operaciones sólo para efectos del informe 27 BIS cuando el sujeto obligado ya reportó un aviso por otra filial.",
+  avisoCero:
+    "El informe 27 BIS se presenta cuando no se realizan operaciones reportables en el periodo, aun siendo sujeto obligado. Genera el XML en blanco para cumplir con la obligación.",
+}
+
+const initialOperationForm = {
+  clienteNombre: "",
+  clienteRfc: "",
+  tipoCliente: "persona-fisica-nacional" as ClientTypeId,
+  esMismoGrupo: false,
+  grupoEmpresarial: "",
+  tipoOperacion: "",
+  fecha: "",
+  moneda: "MXN" as OperationEntry["moneda"],
+  tipoCambio: 1,
+  montoMoneda: 0,
+  evidencia: "",
+  comentarios: "",
+}
+
+type OperationFormState = typeof initialOperationForm
 
 export default function ActividadesVulnerablesPage() {
   const { toast } = useToast()
-  const [preguntasState, setPreguntasState] = useState<ChecklistItem[]>(() => createPreguntasGenerales())
-  const [preguntasEspecificasState, setPreguntasEspecificasState] =
-    useState<Partial<Record<ActividadKey, ChecklistItem[]>>>({})
-  const [selectedFraccion, setSelectedFraccion] = useState<ActividadKey | null>(null)
-  const [documentos, setDocumentos] = useState<DocumentUpload[]>([])
-  const [trazabilidad, setTrazabilidad] = useState<TraceabilityEntry[]>([])
-  const [progreso, setProgreso] = useState(0)
-  const [activeTab, setActiveTab] = useState("preguntas")
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const [pendingDocumentType, setPendingDocumentType] = useState<string | null>(null)
-  const [documentoAEliminar, setDocumentoAEliminar] = useState<DocumentUpload | null>(null)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-
-  // Cargar datos del localStorage
-  useEffect(() => {
-    const savedData = localStorage.getItem("actividades-vulnerables-data")
-    if (savedData) {
-      try {
-        const data = JSON.parse(savedData)
-        const savedPreguntas: ChecklistItem[] = data.preguntas || []
-        const mergedPreguntas = createPreguntasGenerales().map((basePregunta) => {
-          const storedPregunta = savedPreguntas.find((pregunta: ChecklistItem) => pregunta.id === basePregunta.id)
-          if (!storedPregunta) {
-            return basePregunta
-          }
-          return {
-            ...basePregunta,
-            answer: storedPregunta.answer ?? null,
-            notes: storedPregunta.notes,
-            lastUpdated: storedPregunta.lastUpdated ? new Date(storedPregunta.lastUpdated) : undefined,
-          }
-        })
-        setPreguntasState(mergedPreguntas)
-
-        const savedSpecific: Partial<Record<ActividadKey, ChecklistItem[]>> =
-          data.preguntasEspecificasState || {}
-        const mergedSpecific: Partial<Record<ActividadKey, ChecklistItem[]>> = {}
-
-        Object.keys(preguntasEspecificasCatalog).forEach((key) => {
-          const typedKey = key as ActividadKey
-          const base = createPreguntasEspecificas(typedKey)
-          const storedList = savedSpecific[typedKey] || []
-          mergedSpecific[typedKey] = base.map((basePregunta) => {
-            const storedPregunta = storedList.find((pregunta) => pregunta.id === basePregunta.id)
-            if (!storedPregunta) {
-              return basePregunta
-            }
-            return {
-              ...basePregunta,
-              answer: storedPregunta.answer ?? null,
-              notes: storedPregunta.notes,
-              lastUpdated: storedPregunta.lastUpdated ? new Date(storedPregunta.lastUpdated) : undefined,
-            }
-          })
-        })
-
-        Object.keys(savedSpecific).forEach((key) => {
-          const typedKey = key as ActividadKey
-          if (!mergedSpecific[typedKey] && Array.isArray(savedSpecific[typedKey])) {
-            mergedSpecific[typedKey] = (savedSpecific[typedKey] || []).map((pregunta) => ({
-              ...pregunta,
-              answer: pregunta.answer ?? null,
-              lastUpdated: pregunta.lastUpdated ? new Date(pregunta.lastUpdated) : undefined,
-            }))
-          }
-        })
-
-        setPreguntasEspecificasState(mergedSpecific)
-
-        const savedFraccion = data.selectedFraccion
-        if (typeof savedFraccion === "string" && actividadesCatalog.some((actividad) => actividad.value === savedFraccion)) {
-          setSelectedFraccion(savedFraccion as ActividadKey)
-        } else {
-          const fraccionFromPreguntas = mergedPreguntas.find((pregunta) => pregunta.id === "pg-1")?.answer
-          if (fraccionFromPreguntas && actividadesCatalog.some((actividad) => actividad.value === fraccionFromPreguntas)) {
-            setSelectedFraccion(fraccionFromPreguntas as ActividadKey)
-          }
-        }
-
-        const savedDocumentos: DocumentUpload[] = data.documentos || []
-        setDocumentos(
-          savedDocumentos.map((doc) => ({
-            ...doc,
-            uploadDate: doc.uploadDate ? new Date(doc.uploadDate) : new Date(),
-            expiryDate: doc.expiryDate ? new Date(doc.expiryDate) : undefined,
-          })),
-        )
-
-        const savedTrazabilidad: TraceabilityEntry[] = data.trazabilidad || []
-        setTrazabilidad(
-          savedTrazabilidad.map((entry) => ({
-            ...entry,
-            timestamp: entry.timestamp ? new Date(entry.timestamp) : new Date(),
-          })),
-        )
-      } catch (error) {
-        console.error("Error al cargar datos:", error)
-      }
+  const [selectedFraction, setSelectedFraction] = useState<string>(vulnerableActivities[0]?.fraccion ?? "")
+  const [selectedSubActivityKey, setSelectedSubActivityKey] = useState<string>(
+    vulnerableActivities[0]?.actividades[0]?.key ?? "",
+  )
+  const [selectedYear, setSelectedYear] = useState<number>(getDefaultMonth().year)
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string>(getDefaultMonth().key)
+  const [operations, setOperations] = useState<OperationEntry[]>([])
+  const [operationForm, setOperationForm] = useState<OperationFormState>(initialOperationForm)
+  const [selectedClientChecklist, setSelectedClientChecklist] = useState<ClientTypeId>("persona-fisica-nacional")
+  const [checklistStatus, setChecklistStatus] = useState<Record<ClientTypeId, Record<string, boolean>>>(() => {
+    const base: Record<ClientTypeId, Record<string, boolean>> = {
+      "persona-fisica-nacional": {},
+      "persona-fisica-extranjera": {},
+      "persona-moral-mexicana": {},
+      "persona-moral-extranjera": {},
+      fideicomiso: {},
+      "sociedad-financiera": {},
+      "organizacion-sin-fines": {},
+      "clientes-alto-riesgo": {},
     }
-  }, [])
+    return base
+  })
+  const [observacionesGenerales, setObservacionesGenerales] = useState<string>("")
+  const [alertasGeneradas, setAlertasGeneradas] = useState<string[]>([])
 
-  // Calcular progreso
-  useEffect(() => {
-    const preguntasEspecificasSeleccionadas =
-      selectedFraccion && preguntasEspecificasState[selectedFraccion]
-        ? preguntasEspecificasState[selectedFraccion]!
-        : []
-    const totalPreguntas = preguntasState.length + preguntasEspecificasSeleccionadas.length
-    if (totalPreguntas === 0) {
-      setProgreso(0)
-      return
-    }
-    const preguntasRespondidas =
-      preguntasState.filter((p) => p.answer !== null).length +
-      preguntasEspecificasSeleccionadas.filter((p) => p.answer !== null).length
-    const nuevoProgreso = Math.round((preguntasRespondidas / totalPreguntas) * 100)
-    setProgreso(nuevoProgreso)
-  }, [preguntasState, preguntasEspecificasState, selectedFraccion])
+  const fraction = useMemo(() => getActivityByFraction(selectedFraction), [selectedFraction])
+  const subActivity = useMemo(
+    () => getSubActivity(fraction, selectedSubActivityKey) ?? fraction?.actividades[0],
+    [fraction, selectedSubActivityKey],
+  )
+  const identificationThreshold = useMemo(() => getThreshold(subActivity, "identificacion"), [subActivity])
+  const avisoThreshold = useMemo(() => getThreshold(subActivity, "aviso"), [subActivity])
 
-  // Asegurar catálogo específico cargado para la fracción seleccionada
-  useEffect(() => {
-    if (!selectedFraccion) return
-    setPreguntasEspecificasState((prev) => {
-      if (prev[selectedFraccion]) {
-        return prev
-      }
-      return {
-        ...prev,
-        [selectedFraccion]: createPreguntasEspecificas(selectedFraccion),
-      }
-    })
-  }, [selectedFraccion])
+  const monthsForYear = useMemo(
+    () => monthOptions.filter((month) => month.year === selectedYear),
+    [selectedYear],
+  )
 
-  // Guardar datos en localStorage
-  useEffect(() => {
-    const data = {
-      preguntas: preguntasState,
-      documentos,
-      trazabilidad,
-      selectedFraccion,
-      preguntasEspecificasState,
-    }
-    localStorage.setItem("actividades-vulnerables-data", JSON.stringify(data))
-  }, [preguntasState, documentos, trazabilidad, selectedFraccion, preguntasEspecificasState])
+  const selectedMonth = useMemo(
+    () => monthOptions.find((month) => month.key === selectedMonthKey) ?? null,
+    [selectedMonthKey],
+  )
 
-  // Actualizar respuesta de pregunta general
-  const actualizarRespuestaGeneral = (id: string, answer: ChecklistAnswer) => {
-    const pregunta = preguntasState.find((item) => item.id === id)
+  const identificationCalculation = useMemo(
+    () => calculateThreshold(selectedMonth, identificationThreshold?.uma ?? ("todas" as const)),
+    [selectedMonth, identificationThreshold],
+  )
 
-    setPreguntasState((prev) =>
-      prev.map((preguntaItem) =>
-        preguntaItem.id === id ? { ...preguntaItem, answer, lastUpdated: new Date() } : preguntaItem,
-      ),
-    )
+  const avisoCalculation = useMemo(
+    () => calculateThreshold(selectedMonth, avisoThreshold?.uma ?? ("todas" as const)),
+    [selectedMonth, avisoThreshold],
+  )
 
-    if (id === "pg-1") {
-      const esActividadValida =
-        typeof answer === "string" && actividadesCatalog.some((actividad) => actividad.value === answer)
-      setSelectedFraccion(esActividadValida ? (answer as ActividadKey) : null)
-    }
+  const clientSummaries = useMemo(
+    () => computeClientSummaries(operations, subActivity, selectedMonth),
+    [operations, subActivity, selectedMonth],
+  )
 
-    if (pregunta) {
-      const nuevaEntrada: TraceabilityEntry = {
-        id: Date.now().toString(),
-        action: "Respuesta actualizada",
-        user: "Usuario actual",
-        timestamp: new Date(),
-        details: `Pregunta: ${pregunta.question.substring(0, 80)}... - Respuesta: ${answer ?? "Sin respuesta"}`,
-        section: "Preguntas Generales",
-      }
-      setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-    }
+  const sinUmbral = clientSummaries.filter((summary) => !summary.excedeIdentificacion && !summary.excedeAviso)
+  const identificacion = clientSummaries.filter(
+    (summary) => (summary.excedeIdentificacion || identificationThreshold?.uma === "todas") && !summary.excedeAviso,
+  )
+  const aviso = clientSummaries.filter((summary) => summary.excedeAviso)
 
-    toast({
-      title: "Respuesta guardada",
-      description: "La respuesta ha sido registrada correctamente.",
-    })
+  const periodCode = buildPeriodCode(selectedMonth)
+
+  const selectedChecklist: ClientChecklist | undefined = useMemo(
+    () => clientChecklists.find((item) => item.tipo === selectedClientChecklist),
+    [selectedClientChecklist],
+  )
+
+  const updateChecklist = (type: ClientTypeId, itemId: string, value: boolean) => {
+    setChecklistStatus((prev) => ({
+      ...prev,
+      [type]: {
+        ...(prev[type] ?? {}),
+        [itemId]: value,
+      },
+    }))
   }
 
-  const actualizarRespuestaEspecifica = (fraccion: ActividadKey, id: string, answer: ChecklistAnswer) => {
-    const preguntasActuales = preguntasEspecificasState[fraccion] || createPreguntasEspecificas(fraccion)
-    const pregunta = preguntasActuales.find((item) => item.id === id)
+  const handleFormChange = <Key extends keyof OperationFormState>(key: Key, value: OperationFormState[Key]) => {
+    setOperationForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }))
+  }
 
-    setPreguntasEspecificasState((prev) => {
-      const current = prev[fraccion] || createPreguntasEspecificas(fraccion)
-      const updated = current.map((item) =>
-        item.id === id ? { ...item, answer, lastUpdated: new Date() } : item,
+  const handleAddOperation = () => {
+    if (!subActivity || !selectedMonth) {
+      toast({ title: "Selecciona actividad y mes", description: "Indica la actividad vulnerable y el periodo de la UMA." })
+      return
+    }
+
+    if (!selectedMonth.published || !selectedMonth.period) {
+      toast({
+        title: "UMA pendiente",
+        description:
+          "El SAT aún no publica la UMA del periodo seleccionado. Selecciona otro mes o espera la actualización oficial.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!operationForm.clienteNombre || !operationForm.clienteRfc || !operationForm.fecha) {
+      toast({
+        title: "Campos obligatorios",
+        description: "Captura nombre, RFC y fecha de la operación para continuar.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (operationForm.moneda !== "MXN" && (!operationForm.tipoCambio || operationForm.tipoCambio <= 0)) {
+      toast({ title: "Tipo de cambio requerido", description: "Ingresa el tipo de cambio aplicado a la operación." })
+      return
+    }
+
+    const montoMoneda = Number(operationForm.montoMoneda)
+    if (!montoMoneda || montoMoneda <= 0) {
+      toast({ title: "Monto inválido", description: "Captura un monto positivo." })
+      return
+    }
+
+    const tipoCambio = operationForm.moneda === "MXN" ? 1 : Number(operationForm.tipoCambio)
+    const montoMx = montoMoneda * tipoCambio
+    const montoUma = selectedMonth.period.daily ? montoMx / selectedMonth.period.daily : undefined
+
+    const identificacionUma =
+      identificationThreshold?.uma === "todas" ? undefined : (identificationThreshold?.uma as number | undefined)
+    const avisoUma = avisoThreshold?.uma === "todas" ? undefined : (avisoThreshold?.uma as number | undefined)
+
+    const excedeIdentificacion =
+      identificationThreshold?.uma === "todas"
+        ? true
+        : Boolean(montoUma && identificacionUma && montoUma >= identificacionUma)
+    const excedeAviso = Boolean(montoUma && avisoUma && montoUma >= avisoUma)
+
+    const entry: OperationEntry = {
+      id: cryptoId(),
+      clienteNombre: operationForm.clienteNombre.trim(),
+      clienteRfc: operationForm.clienteRfc.trim().toUpperCase(),
+      tipoCliente: operationForm.tipoCliente,
+      esMismoGrupo: operationForm.esMismoGrupo,
+      grupoEmpresarial: operationForm.grupoEmpresarial || undefined,
+      actividadDescripcion: fractionLabel(fraction, subActivity),
+      tipoOperacion: operationForm.tipoOperacion || "Operación registrada",
+      fecha: operationForm.fecha,
+      periodo: selectedMonth,
+      moneda: operationForm.moneda,
+      tipoCambio,
+      montoMoneda,
+      montoMx,
+      montoUma,
+      excedeIdentificacion,
+      excedeAviso,
+      evidencia: operationForm.evidencia,
+      comentarios: operationForm.comentarios,
+    }
+
+    setOperations((prev) => [...prev, entry])
+    setOperationForm(initialOperationForm)
+
+    const nuevasAlertas: string[] = []
+    if (excedeAviso) {
+      nuevasAlertas.push(
+        `El cliente ${entry.clienteNombre} supera el umbral de aviso por ${formatUma(avisoThreshold?.uma as number)}.`,
       )
-      return {
-        ...prev,
-        [fraccion]: updated,
-      }
-    })
-
-    if (pregunta) {
-      const actividadLabel =
-        actividadesCatalog.find((actividad) => actividad.value === fraccion)?.label || "Preguntas Específicas"
-      const nuevaEntrada: TraceabilityEntry = {
-        id: Date.now().toString(),
-        action: "Respuesta actualizada",
-        user: "Usuario actual",
-        timestamp: new Date(),
-        details: `Pregunta: ${pregunta.question.substring(0, 80)}... - Respuesta: ${answer ?? "Sin respuesta"}`,
-        section: actividadLabel,
-      }
-      setTrazabilidad((prev) => [nuevaEntrada, ...prev])
+    } else if (excedeIdentificacion || identificationThreshold?.uma === "todas") {
+      nuevasAlertas.push(
+        `El cliente ${entry.clienteNombre} requiere expediente completo (umbral de identificación alcanzado).`,
+      )
     }
 
-    toast({
-      title: "Respuesta guardada",
-      description: "La respuesta ha sido registrada correctamente.",
-    })
+    if (nuevasAlertas.length) {
+      setAlertasGeneradas((prev) => Array.from(new Set([...prev, ...nuevasAlertas])))
+      toast({
+        title: "Alerta generada",
+        description: nuevasAlertas.join(" "),
+      })
+    } else {
+      toast({ title: "Operación registrada", description: "La operación se guardó para el análisis de umbrales." })
+    }
   }
 
-  const actualizarNotasGeneral = (id: string, notes: string) => {
-    setPreguntasState((prev) =>
-      prev.map((pregunta) =>
-        pregunta.id === id ? { ...pregunta, notes, lastUpdated: new Date() } : pregunta,
-      ),
+  const handleRemoveOperation = (id: string) => {
+    setOperations((prev) => prev.filter((operation) => operation.id !== id))
+  }
+
+  const checklistCompletions = useMemo(() => {
+    const checklist = selectedChecklist
+    if (!checklist) return 0
+    const status = checklistStatus[checklist.tipo] ?? {}
+    const total = checklist.documentos.length + checklist.datos.length
+    const cumplidos = [...checklist.documentos, ...checklist.datos].filter((item) => status[item.id]).length
+    return Math.round((cumplidos / total) * 100)
+  }, [selectedChecklist, checklistStatus])
+
+  const buildXml = (summary: ClientSummary) => {
+    if (!subActivity || !selectedMonth) return ""
+    const operaciones = summary.operaciones
+      .map((operation) => `      <Operacion>
+        <Fecha>${operation.fecha}</Fecha>
+        <Tipo>${operation.tipoOperacion}</Tipo>
+        <Moneda>${operation.moneda}</Moneda>
+        <MontoMoneda>${operation.montoMoneda.toFixed(2)}</MontoMoneda>
+        <MontoMXN>${operation.montoMx.toFixed(2)}</MontoMXN>
+        <MontoUMA>${(operation.montoUma ?? 0).toFixed(2)}</MontoUMA>
+        <TipoCambio>${operation.tipoCambio.toFixed(4)}</TipoCambio>
+        <Evidencia>${operation.evidencia || "NA"}</Evidencia>
+        <Comentarios>${operation.comentarios || ""}</Comentarios>
+      </Operacion>`)
+      .join("\n")
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<AvisoPLD>
+  <Encabezado>
+    <Periodo>${buildPeriodCode(selectedMonth)}</Periodo>
+    <ActividadVulnerable>${subActivity.satCode}</ActividadVulnerable>
+    <Fraccion>${fraction?.fraccion}</Fraccion>
+    <SubActividad>${subActivity.label}</SubActividad>
+  </Encabezado>
+  <Cliente>
+    <Nombre>${summary.nombre}</Nombre>
+    <RFC>${summary.rfc}</RFC>
+    <TipoCliente>${clientTypeLabel(summary.tipoCliente)}</TipoCliente>
+    <GrupoEmpresarial>${summary.grupoEmpresarial || "No"}</GrupoEmpresarial>
+  </Cliente>
+  <Operaciones>
+${operaciones}
+  </Operaciones>
+  <Totales>
+    <TotalUMA>${summary.totalUma.toFixed(2)}</TotalUMA>
+    <AcumuladoSeisMeses>${summary.acumuladoSeisMesesUma.toFixed(2)}</AcumuladoSeisMeses>
+    <ExcedeIdentificacion>${summary.excedeIdentificacion}</ExcedeIdentificacion>
+    <ExcedeAviso>${summary.excedeAviso}</ExcedeAviso>
+  </Totales>
+</AvisoPLD>`
+  }
+
+  const descargarXml = (summary: ClientSummary) => {
+    const xml = buildXml(summary)
+    if (!xml) {
+      toast({
+        title: "Completa los datos",
+        description: "Selecciona actividad y periodo válido para generar el XML.",
+        variant: "destructive",
+      })
+      return
+    }
+    const blob = new Blob([xml], { type: "application/xml" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `aviso-${summary.rfc}-${buildPeriodCode(selectedMonth)}.xml`
+    link.click()
+    URL.revokeObjectURL(url)
+    toast({ title: "XML generado", description: "Archivo listo para carga en el portal del SAT." })
+  }
+
+  const generarInformeEnBlanco = () => {
+    if (!fraction || !subActivity || !selectedMonth) {
+      toast({ title: "Selecciona datos", description: "Define actividad y periodo para el informe." })
+      return
+    }
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Informe27BIS>
+  <Periodo>${buildPeriodCode(selectedMonth)}</Periodo>
+  <Actividad>${subActivity.satCode}</Actividad>
+  <Descripcion>${subActivity.label}</Descripcion>
+  <Operaciones>0</Operaciones>
+  <Observaciones>${observacionesGenerales || "Sin operaciones reportables en el periodo."}</Observaciones>
+</Informe27BIS>`
+    const blob = new Blob([xml], { type: "application/xml" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `informe-27bis-${buildPeriodCode(selectedMonth)}.xml`
+    link.click()
+    URL.revokeObjectURL(url)
+    toast({ title: "Informe 27 BIS", description: "Se generó el archivo en ceros para el periodo seleccionado." })
+  }
+
+  const renderChecklist = (title: string, items: ClientChecklistItem[], type: ClientTypeId) => (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold text-muted-foreground">{title}</h4>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <label
+            key={item.id}
+            className="flex items-start gap-3 rounded-lg border p-3 text-sm transition hover:border-primary/40"
+          >
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4"
+              checked={Boolean(checklistStatus[type]?.[item.id])}
+              onChange={(event) => updateChecklist(type, item.id, event.target.checked)}
+            />
+            <span>
+              <span className="font-medium">{formatChecklistItem(item)}</span>
+              {item.referencia && (
+                <span className="block text-xs text-muted-foreground">Referencia: {item.referencia}</span>
+              )}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+
+  const renderAlertas = () => {
+    if (!alertasGeneradas.length) return <p className="text-sm text-muted-foreground">No hay alertas activas.</p>
+    return (
+      <ul className="space-y-2 text-sm">
+        {alertasGeneradas.map((alerta) => (
+          <li key={alerta} className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <span>{alerta}</span>
+          </li>
+        ))}
+      </ul>
     )
   }
-
-  const actualizarNotasEspecificas = (fraccion: ActividadKey, id: string, notes: string) => {
-    setPreguntasEspecificasState((prev) => {
-      const current = prev[fraccion] || createPreguntasEspecificas(fraccion)
-      const updated = current.map((pregunta) =>
-        pregunta.id === id ? { ...pregunta, notes, lastUpdated: new Date() } : pregunta,
-      )
-      return {
-        ...prev,
-        [fraccion]: updated,
-      }
-    })
-  }
-
-  const fileToDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as string)
-      reader.onerror = () => reject(new Error("No se pudo leer el archivo"))
-      reader.readAsDataURL(file)
-    })
-
-  const cargarDocumento = (tipo: string) => {
-    setPendingDocumentType(tipo)
-    fileInputRef.current?.click()
-  }
-
-  const solicitarEliminacionDocumento = (doc: DocumentUpload) => {
-    setDocumentoAEliminar(doc)
-    setIsDeleteDialogOpen(true)
-  }
-
-  const cerrarDialogoEliminacion = () => {
-    setIsDeleteDialogOpen(false)
-    setDocumentoAEliminar(null)
-  }
-
-  const confirmarEliminacionDocumento = () => {
-    if (!documentoAEliminar) {
-      return
-    }
-
-    const documento = documentoAEliminar
-    setDocumentos((prev) => prev.filter((item) => item.id !== documento.id))
-
-    const nuevaEntrada: TraceabilityEntry = {
-      id: Date.now().toString(),
-      action: "Documento eliminado",
-      user: "Usuario actual",
-      timestamp: new Date(),
-      details: `Documento eliminado: ${documento.name}`,
-      section: "Carga Documental",
-    }
-    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-
-    toast({
-      title: "Documento eliminado",
-      description: `El documento ${documento.name} fue eliminado correctamente.`,
-    })
-
-    cerrarDialogoEliminacion()
-  }
-
-  const procesarArchivo = async (event: ChangeEvent<HTMLInputElement>) => {
-    const archivo = event.target.files?.[0]
-    if (!archivo) {
-      return
-    }
-
-    const tipoDocumento = pendingDocumentType ?? "Documento"
-
-    try {
-      const contenido = await fileToDataUrl(archivo)
-      const nuevoDocumento: DocumentUpload = {
-        id: Date.now().toString(),
-        name: archivo.name,
-        type: tipoDocumento,
-        uploadDate: new Date(),
-        status: "vigente",
-        size: archivo.size,
-        mimeType: archivo.type,
-        content: contenido,
-      }
-
-      setDocumentos((prev) => [...prev, nuevoDocumento])
-
-      const nuevaEntrada: TraceabilityEntry = {
-        id: Date.now().toString(),
-        action: "Documento cargado",
-        user: "Usuario actual",
-        timestamp: new Date(),
-        details: `Documento: ${nuevoDocumento.name} - Tipo: ${tipoDocumento}`,
-        section: "Carga Documental",
-      }
-      setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-
-      toast({
-        title: "Documento cargado",
-        description: `El documento ${nuevoDocumento.name} ha sido cargado exitosamente.`,
-      })
-    } catch (error) {
-      console.error(error)
-      toast({
-        title: "Error al cargar",
-        description: "Ocurrió un problema al procesar el archivo seleccionado.",
-        variant: "destructive",
-      })
-    } finally {
-      setPendingDocumentType(null)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ""
-      }
-    }
-  }
-
-  const verDocumento = (doc: DocumentUpload) => {
-    if (!doc.content) {
-      toast({
-        title: "Documento no disponible",
-        description: "El archivo seleccionado no cuenta con contenido para visualizarse.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const nuevaVentana = window.open(doc.content, "_blank")
-    if (!nuevaVentana) {
-      toast({
-        title: "No se pudo abrir el documento",
-        description: "Permite las ventanas emergentes para visualizar el archivo.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const descargarDocumento = (doc: DocumentUpload) => {
-    if (!doc.content) {
-      toast({
-        title: "Documento no disponible",
-        description: "El archivo seleccionado no cuenta con contenido para descargarse.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const enlace = document.createElement("a")
-    enlace.href = doc.content
-    enlace.download = doc.name
-    enlace.click()
-  }
-
-  // Obtener color según respuesta
-  const getAnswerColor = (answer: ChecklistAnswer) => {
-    switch (answer) {
-      case "si":
-        return "text-green-600 bg-green-50"
-      case "no":
-        return "text-red-600 bg-red-50"
-      case "no-aplica":
-        return "text-gray-600 bg-gray-50"
-      default:
-        return "text-gray-400 bg-gray-50"
-    }
-  }
-
-  const buildThresholdStatus = (
-    type: "identificacion" | "aviso",
-    answer: ChecklistAnswer,
-  ) => {
-    if (type === "identificacion") {
-      if (answer === "si") {
-        return {
-          key: "identificacion",
-          title: "Requiere identificación del cliente",
-          description:
-            "El monto rebasa el umbral de identificación establecido para la actividad seleccionada.",
-          color: "border-amber-200 bg-amber-50",
-          icon: AlertTriangle,
-          iconClassName: "text-amber-600",
-        }
-      }
-      if (answer === "no") {
-        return {
-          key: "identificacion",
-          title: "Sin obligación adicional de identificación",
-          description: "El monto no rebasa el umbral de identificación.",
-          color: "border-green-200 bg-green-50",
-          icon: CheckCircle2,
-          iconClassName: "text-green-600",
-        }
-      }
-      return {
-        key: "identificacion",
-        title: "Identificación pendiente de determinar",
-        description: "Completa la evaluación para definir si debe identificarse al cliente.",
-        color: "border-slate-200 bg-slate-50",
-        icon: Info,
-        iconClassName: "text-slate-600",
-      }
-    }
-
-    if (answer === "si") {
-      return {
-        key: "aviso",
-        title: "Aviso obligatorio a la UIF vía SAT",
-        description: "El monto rebasa el umbral de aviso para la fracción seleccionada.",
-        color: "border-red-200 bg-red-50",
-        icon: AlertCircle,
-        iconClassName: "text-red-600",
-      }
-    }
-    if (answer === "no") {
-      return {
-        key: "aviso",
-        title: "Sin obligación de aviso",
-        description: "El monto no rebasa el umbral de aviso correspondiente.",
-        color: "border-green-200 bg-green-50",
-        icon: CheckCircle2,
-        iconClassName: "text-green-600",
-      }
-    }
-    return {
-      key: "aviso",
-      title: "Aviso pendiente de determinar",
-      description: "Responde las preguntas de umbral para conocer si procede el aviso.",
-      color: "border-slate-200 bg-slate-50",
-      icon: Info,
-      iconClassName: "text-slate-600",
-    }
-  }
-
-  // Obtener estado de documento
-  const getDocumentStatus = (doc: DocumentUpload) => {
-    if (!doc.expiryDate) return "vigente"
-
-    const now = new Date()
-    const expiry = new Date(doc.expiryDate)
-    const daysUntilExpiry = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-
-    if (daysUntilExpiry < 0) return "vencido"
-    if (daysUntilExpiry <= 30) return "por-vencer"
-    return "vigente"
-  }
-
-  const formatFileSize = (size?: number) => {
-    if (!size && size !== 0) return ""
-    if (size === 0) return "0 B"
-
-    const unidades = ["B", "KB", "MB", "GB", "TB"]
-    let valor = size
-    let indice = 0
-
-    while (valor >= 1024 && indice < unidades.length - 1) {
-      valor /= 1024
-      indice += 1
-    }
-
-    const decimales = valor < 10 && indice > 0 ? 1 : 0
-    return `${valor.toFixed(decimales)} ${unidades[indice]}`
-  }
-
-  const preguntasEspecificasSeleccionadas =
-    selectedFraccion && preguntasEspecificasState[selectedFraccion]
-      ? preguntasEspecificasState[selectedFraccion]!
-      : []
-  const preguntasGeneralesRespondidas = preguntasState.filter((p) => p.answer !== null).length
-  const preguntasEspecificasRespondidas = preguntasEspecificasSeleccionadas.filter((p) => p.answer !== null).length
-  const totalPreguntas = preguntasState.length + preguntasEspecificasSeleccionadas.length
-
-  const selectedActividadConfig = selectedFraccion
-    ? actividadesCatalog.find((actividad) => actividad.value === selectedFraccion)
-    : undefined
-  const selectedEvidenciasEspecificas = selectedFraccion
-    ? evidenciasPorFraccion[selectedFraccion] || []
-    : []
-
-  const respuestaIdentificacion = preguntasState.find((pregunta) => pregunta.id === "pg-2")?.answer ?? null
-  const respuestaAviso = preguntasState.find((pregunta) => pregunta.id === "pg-3")?.answer ?? null
-  const thresholdStatuses = [
-    buildThresholdStatus("identificacion", respuestaIdentificacion),
-    buildThresholdStatus("aviso", respuestaAviso),
-  ]
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <input
-        ref={fileInputRef}
-        type="file"
-        className="hidden"
-        onChange={procesarArchivo}
-      />
-      {/* Header */}
-      <div className="space-y-4">
-        <div className="flex items-center space-x-2">
-          <Shield className="h-8 w-8 text-primary" />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Identificación de Actividades Vulnerables y Umbrales SAT
-            </h1>
-            <p className="text-muted-foreground">
-              Módulo para determinar si la operación constituye una Actividad Vulnerable y los avisos requeridos
-            </p>
-          </div>
-        </div>
-
-        {/* Progreso general */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-medium">Progreso del Módulo</h3>
-                <p className="text-sm text-muted-foreground">
-                  {preguntasGeneralesRespondidas + preguntasEspecificasRespondidas} de {totalPreguntas} preguntas
-                  respondidas
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold">{progreso}%</div>
-                <div className="text-sm text-muted-foreground">Completado</div>
-              </div>
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background">
+          <CardHeader>
+            <CardTitle>Identificación de actividades vulnerables</CardTitle>
+            <CardDescription>
+              Selecciona la fracción de la LFPIORPI, determina el umbral vigente y genera obligaciones automáticas.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <div className="rounded-lg border border-primary/30 bg-white/50 p-3 text-sm">
+              <p className="font-semibold text-primary">Periodo UMA seleccionado</p>
+              <p>{selectedMonth?.label ?? "Sin definir"}</p>
+              <p className="text-xs text-muted-foreground">
+                Las UMA aplican del 1º de febrero al 31 de enero del siguiente año conforme a la publicación oficial del INEGI.
+              </p>
             </div>
-            <Progress value={progreso} className="h-2" />
+            <div className="rounded-lg border border-primary/30 bg-white/50 p-3 text-sm">
+              <p className="font-semibold text-primary">Código preliminar de aviso</p>
+              <p>{periodCode || "Completa la selección del mes"}</p>
+              <p className="text-xs text-muted-foreground">
+                La nomenclatura utiliza el formato AAAAMM, ej. {periodCode || "202509"}.
+              </p>
+            </div>
           </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Umbral de identificación</CardTitle>
+            <CardDescription>{identificationThreshold?.descripcion}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-lg font-semibold text-primary">{describeThreshold(identificationCalculation)}</p>
+            {identificationThreshold?.uma !== "todas" && selectedMonth?.period && (
+              <p className="text-sm text-muted-foreground">
+                Valor UMA diario: {formatCurrency(selectedMonth.period.daily)} · Mensual: {formatCurrency(selectedMonth.period.monthly)} · Anual: {formatCurrency(selectedMonth.period.annual)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Umbral de aviso</CardTitle>
+            <CardDescription>{avisoThreshold?.descripcion}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-lg font-semibold text-destructive">{describeThreshold(avisoCalculation)}</p>
+            {avisoThreshold?.uma && avisoThreshold.uma !== "todas" && selectedMonth?.period && (
+              <p className="text-sm text-muted-foreground">
+                Supera este valor para activar la obligación de aviso.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Alertas inmediatas</CardTitle>
+            <CardDescription>Seguimiento de umbrales por operación y acumulado.</CardDescription>
+          </CardHeader>
+          <CardContent>{renderAlertas()}</CardContent>
         </Card>
       </div>
 
-      {/* Tabs principales */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Card>
+        <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle>Configuración de la actividad vulnerable</CardTitle>
+            <CardDescription>
+              Define la fracción aplicable, subactividad específica y periodo para habilitar la captura de operaciones.
+            </CardDescription>
+          </div>
+          <Button variant="outline" onClick={() => setOperations([])} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Añadir actividad vulnerable
+          </Button>
+        </CardHeader>
+        <CardContent className="grid gap-6 md:grid-cols-3">
+          <div className="space-y-3">
+            <Label>Fracción de la LFPIORPI</Label>
+            <Select
+              value={selectedFraction}
+              onValueChange={(value) => {
+                setSelectedFraction(value)
+                const first = getActivityByFraction(value)?.actividades[0]
+                if (first) {
+                  setSelectedSubActivityKey(first.key)
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona fracción" />
+              </SelectTrigger>
+              <SelectContent>
+                {vulnerableActivities.map((activity) => (
+                  <SelectItem key={activity.fraccion} value={activity.fraccion}>
+                    {activity.fraccion} · {activity.titulo}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{fraction?.referenciaLegal}</p>
+          </div>
+
+          <div className="space-y-3">
+            <Label>Actividad específica</Label>
+            <Select
+              value={selectedSubActivityKey}
+              onValueChange={(value) => setSelectedSubActivityKey(value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona la actividad" />
+              </SelectTrigger>
+              <SelectContent>
+                {fraction?.actividades.map((activity) => (
+                  <SelectItem key={activity.key} value={activity.key}>
+                    {activity.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Shield className="h-3 w-3" /> Código SAT: {subActivity?.satCode}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <Label>Periodo (Mes y año)</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Select value={String(selectedYear)} onValueChange={(value) => setSelectedYear(Number(value))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Año" />
+                </SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map((year) => (
+                    <SelectItem key={year} value={String(year)}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={selectedMonthKey} onValueChange={(value) => setSelectedMonthKey(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Mes" />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthsForYear.map((month) => (
+                    <SelectItem key={month.key} value={month.key}>
+                      {month.label}
+                      {!month.published && " · UMA pendiente"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {!selectedMonth?.published && (
+              <p className="text-xs text-destructive">
+                La UMA de este periodo no ha sido publicada por el SAT. Las operaciones no generarán cálculo automático.
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Tabs defaultValue="operaciones" className="space-y-6">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="preguntas" className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4" />
-            Preguntas Normativas
-          </TabsTrigger>
-          <TabsTrigger value="documentos" className="flex items-center gap-2">
-            <Upload className="h-4 w-4" />
-            Carga Documental
-          </TabsTrigger>
-          <TabsTrigger value="alertas" className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
-            Alertas de Vencimiento
-          </TabsTrigger>
-          <TabsTrigger value="trazabilidad" className="flex items-center gap-2">
-            <History className="h-4 w-4" />
-            Bitácora de Trazabilidad
-          </TabsTrigger>
+          <TabsTrigger value="operaciones">Operaciones</TabsTrigger>
+          <TabsTrigger value="clientes">Clientes y checklist</TabsTrigger>
+          <TabsTrigger value="obligaciones">Obligaciones y avisos</TabsTrigger>
+          <TabsTrigger value="uma">Histórico UMA</TabsTrigger>
         </TabsList>
 
-        {/* Tab: Preguntas Normativas */}
-        <TabsContent value="preguntas" className="space-y-6">
+        <TabsContent value="operaciones" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Info className="h-5 w-5" />
-                Preguntas Generales Iniciales
-              </CardTitle>
+              <CardTitle>Captura de operaciones</CardTitle>
               <CardDescription>
-                Responde las siguientes preguntas para determinar si la operación constituye una Actividad Vulnerable
+                Registra cada acto u operación y adjunta la evidencia para validar si supera los umbrales en UMA.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {preguntasState.map((pregunta, index) => (
-                <motion.div
-                  key={pregunta.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="space-y-4 p-4 border rounded-lg"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <Label className="text-sm font-medium">
-                        {index + 1}. {pregunta.question}
-                        {pregunta.required && <span className="text-red-500 ml-1">*</span>}
-                      </Label>
-                    </div>
-                    {pregunta.lastUpdated && (
-                      <Badge variant="outline" className="text-xs">
-                        <Clock className="h-3 w-3 mr-1" />
-                        {pregunta.lastUpdated.toLocaleDateString()}
-                      </Badge>
-                    )}
-                  </div>
-
-                  {pregunta.type === "selection" ? (
-                    <Select
-                      value={pregunta.answer ?? undefined}
-                      onValueChange={(value) => actualizarRespuestaGeneral(pregunta.id, value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona una opción" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {pregunta.options?.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {["si", "no", "no-aplica"].map((option) => (
-                        <Button
-                          key={option}
-                          variant={pregunta.answer === option ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => actualizarRespuestaGeneral(pregunta.id, option)}
-                          className={pregunta.answer === option ? getAnswerColor(option) : ""}
-                        >
-                          {option === "si" ? "Sí" : option === "no" ? "No" : "No aplica"}
-                        </Button>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Nombre o razón social del cliente</Label>
+                  <Input
+                    value={operationForm.clienteNombre}
+                    onChange={(event) => handleFormChange("clienteNombre", event.target.value)}
+                    placeholder="Ingresa el nombre completo"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>RFC del cliente</Label>
+                  <Input
+                    value={operationForm.clienteRfc}
+                    onChange={(event) => handleFormChange("clienteRfc", event.target.value.toUpperCase())}
+                    placeholder="RFC"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tipo de cliente</Label>
+                  <Select
+                    value={operationForm.tipoCliente}
+                    onValueChange={(value) => {
+                      handleFormChange("tipoCliente", value as ClientTypeId)
+                      setSelectedClientChecklist(value as ClientTypeId)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clientChecklists.map((client) => (
+                        <SelectItem key={client.tipo} value={client.tipo}>
+                          {client.nombre}
+                        </SelectItem>
                       ))}
-                    </div>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    ¿Pertenece al mismo grupo empresarial?
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      type="button"
+                      className="h-6 w-6"
+                      onClick={() =>
+                        toast({
+                          title: "Grupo empresarial",
+                          description: infoMessages.grupoEmpresarial,
+                        })
+                      }
+                    >
+                      <Info className="h-4 w-4" />
+                    </Button>
+                  </Label>
+                  <Select
+                    value={operationForm.esMismoGrupo ? "si" : "no"}
+                    onValueChange={(value) => handleFormChange("esMismoGrupo", value === "si")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="si">Sí</SelectItem>
+                      <SelectItem value="no">No</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {operationForm.esMismoGrupo && (
+                  <div className="space-y-2">
+                    <Label>Nombre del grupo empresarial</Label>
+                    <Input
+                      value={operationForm.grupoEmpresarial}
+                      onChange={(event) => handleFormChange("grupoEmpresarial", event.target.value)}
+                      placeholder="Ej. Grupo Sanborns"
+                    />
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>Tipo de operación</Label>
+                  <Input
+                    value={operationForm.tipoOperacion}
+                    onChange={(event) => handleFormChange("tipoOperacion", event.target.value)}
+                    placeholder="Venta de boletos, entrega de premio, etc."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Fecha de la operación</Label>
+                  <Input
+                    type="date"
+                    value={operationForm.fecha}
+                    onChange={(event) => handleFormChange("fecha", event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Moneda</Label>
+                  <Select
+                    value={operationForm.moneda}
+                    onValueChange={(value) => handleFormChange("moneda", value as OperationEntry["moneda"])}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MXN">MXN</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="EUR">EUR</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {operationForm.moneda !== "MXN" && (
+                  <div className="space-y-2">
+                    <Label>Tipo de cambio aplicado</Label>
+                    <Input
+                      type="number"
+                      step="0.0001"
+                      value={operationForm.tipoCambio}
+                      onChange={(event) => handleFormChange("tipoCambio", Number(event.target.value))}
+                    />
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>Monto de la operación ({operationForm.moneda})</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={operationForm.montoMoneda}
+                    onChange={(event) => handleFormChange("montoMoneda", Number(event.target.value))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Evidencia o folio</Label>
+                  <Input
+                    value={operationForm.evidencia}
+                    onChange={(event) => handleFormChange("evidencia", event.target.value)}
+                    placeholder="Número de contrato, CFDI, folio interno"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2 xl:col-span-3">
+                  <Label>Comentarios y observaciones</Label>
+                  <Textarea
+                    value={operationForm.comentarios}
+                    onChange={(event) => handleFormChange("comentarios", event.target.value)}
+                    placeholder="Detalla origen de recursos, destino y cualquier indicio relevante para UIF."
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">
+                  {selectedMonth?.period && (
+                    <span>
+                      Conversión estimada: {formatCurrency(operationForm.montoMoneda * (operationForm.tipoCambio || 1))} MXN ·{" "}
+                      {selectedMonth.period.daily
+                        ? ((operationForm.montoMoneda * (operationForm.tipoCambio || 1)) / selectedMonth.period.daily).toFixed(2)
+                        : "0.00"}{" "}UMA
+                    </span>
                   )}
-
-                  {pregunta.answer && (
-                    <div className="space-y-2">
-                      <Label htmlFor={`notes-${pregunta.id}`} className="text-sm">
-                        Notas adicionales (opcional)
-                      </Label>
-                      <Textarea
-                        id={`notes-${pregunta.id}`}
-                        placeholder="Agregar observaciones o detalles adicionales..."
-                        value={pregunta.notes || ""}
-                        onChange={(e) => actualizarNotasGeneral(pregunta.id, e.target.value)}
-                        className="min-h-[80px]"
-                      />
-                    </div>
-                  )}
-                </motion.div>
-              ))}
+                </div>
+                <Button onClick={handleAddOperation} className="gap-2">
+                  <Upload className="h-4 w-4" /> Registrar operación
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
-          {selectedActividadConfig && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Reglas y Umbrales de la Actividad Seleccionada
-                </CardTitle>
-                <CardDescription>
-                  Catálogo normativo dinámico vinculado a los umbrales oficiales publicados por el SAT.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-sm font-semibold">{selectedActividadConfig.label}</p>
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                    <li>{selectedActividadConfig.identificacion}</li>
-                    <li>{selectedActividadConfig.aviso}</li>
-                  </ul>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {thresholdStatuses.map((status) => {
-                    const StatusIcon = status.icon
-                    return (
-                      <div
-                        key={status.key}
-                        className={`flex items-start gap-3 rounded-lg border p-4 ${status.color}`}
-                      >
-                        <StatusIcon className={`h-5 w-5 ${status.iconClassName}`} />
-                        <div>
-                          <p className="font-medium">{status.title}</p>
-                          <p className="text-sm text-muted-foreground">{status.description}</p>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {selectedFraccion && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5" />
-                  Preguntas Específicas por Actividad Vulnerable
-                </CardTitle>
-                <CardDescription>
-                  Validaciones automáticas de umbrales para {selectedActividadConfig?.label || "la actividad seleccionada"}.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {preguntasEspecificasSeleccionadas.length > 0 ? (
-                  preguntasEspecificasSeleccionadas.map((pregunta, index) => (
-                    <motion.div
-                      key={pregunta.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="space-y-4 p-4 border rounded-lg"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <Label className="text-sm font-medium">
-                            {index + 1}. {pregunta.question}
-                            {pregunta.required && <span className="text-red-500 ml-1">*</span>}
-                          </Label>
-                        </div>
-                        {pregunta.lastUpdated && (
-                          <Badge variant="outline" className="text-xs">
-                            <Clock className="h-3 w-3 mr-1" />
-                            {pregunta.lastUpdated.toLocaleDateString()}
-                          </Badge>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        {["si", "no", "no-aplica"].map((option) => (
-                          <Button
-                            key={option}
-                            variant={pregunta.answer === option ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => actualizarRespuestaEspecifica(selectedFraccion!, pregunta.id, option)}
-                            className={pregunta.answer === option ? getAnswerColor(option) : ""}
-                          >
-                            {option === "si" ? "Sí" : option === "no" ? "No" : "No aplica"}
-                          </Button>
-                        ))}
-                      </div>
-
-                      {pregunta.answer && (
-                        <div className="space-y-2">
-                          <Label htmlFor={`notes-${pregunta.id}`} className="text-sm">
-                            Notas adicionales (opcional)
-                          </Label>
-                          <Textarea
-                            id={`notes-${pregunta.id}`}
-                            placeholder="Registrar evidencia o contexto adicional..."
-                            value={pregunta.notes || ""}
-                            onChange={(e) =>
-                              actualizarNotasEspecificas(selectedFraccion!, pregunta.id, e.target.value)
-                            }
-                            className="min-h-[80px]"
-                          />
-                        </div>
-                      )}
-                    </motion.div>
-                  ))
-                ) : (
-                  <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                    No hay preguntas específicas adicionales para esta fracción. Continúa con la evaluación general.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Tab: Carga Documental */}
-        <TabsContent value="documentos" className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            {/* Evidencias Generales */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Evidencias Generales</CardTitle>
-                <CardDescription>Documentos mínimos para cualquier actividad vulnerable del art. 17.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {evidenciasGenerales.map((evidencia, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 border rounded">
-                    <span className="text-sm">{evidencia}</span>
-                    <Button size="sm" variant="outline" onClick={() => cargarDocumento(evidencia)}>
-                      <Upload className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Evidencias Específicas */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Evidencias Específicas</CardTitle>
-                <CardDescription>
-                  Documentación adicional alineada a la fracción seleccionada del catálogo normativo.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {selectedFraccion ? (
-                  selectedEvidenciasEspecificas.length > 0 ? (
-                    selectedEvidenciasEspecificas.map((evidencia, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 border rounded">
-                        <span className="text-sm">{evidencia}</span>
-                        <Button size="sm" variant="outline" onClick={() => cargarDocumento(evidencia)}>
-                          <Upload className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      La fracción seleccionada no tiene evidencias adicionales específicas registradas.
-                    </p>
-                  )
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Selecciona una actividad vulnerable para mostrar las evidencias requeridas.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Conservación y Trazabilidad */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Conservación y Trazabilidad</CardTitle>
-                <CardDescription>
-                  Controles para expedientes digitales con folio, responsable y estado de integración.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {evidenciasConservacion.map((evidencia, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 border rounded">
-                    <span className="text-sm">{evidencia}</span>
-                    <Button size="sm" variant="outline" onClick={() => cargarDocumento(evidencia)}>
-                      <Upload className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Lista de documentos cargados */}
-          {documentos.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Documentos Cargados</CardTitle>
-                <CardDescription>Lista de documentos subidos al sistema</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {documentos.map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <FileText className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                          <div className="font-medium">{doc.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            Subido: {doc.uploadDate.toLocaleDateString()}
-                            {doc.expiryDate && ` • Vence: ${doc.expiryDate.toLocaleDateString()}`}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {doc.type}
-                            {doc.size ? ` • ${formatFileSize(doc.size)}` : ""}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge
-                          variant={
-                            getDocumentStatus(doc) === "vigente"
-                              ? "default"
-                              : getDocumentStatus(doc) === "por-vencer"
-                                ? "secondary"
-                                : "destructive"
-                          }
-                        >
-                          {getDocumentStatus(doc) === "vigente"
-                            ? "Vigente"
-                            : getDocumentStatus(doc) === "por-vencer"
-                              ? "Por vencer"
-                              : "Vencido"}
-                        </Badge>
-                        <Button size="sm" variant="ghost" onClick={() => verDocumento(doc)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => descargarDocumento(doc)}>
-                          <Download className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => solicitarEliminacionDocumento(doc)}
-                          className="text-destructive hover:text-destructive focus-visible:ring-destructive"
-                          aria-label={`Eliminar ${doc.name}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Tab: Alertas de Vencimiento */}
-        <TabsContent value="alertas" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5" />
-                Alertas Automáticas de Vencimientos
-              </CardTitle>
-              <CardDescription>Sistema de alertas para documentos próximos a vencer</CardDescription>
+              <CardTitle>Operaciones registradas</CardTitle>
+              <CardDescription>Visualiza el semáforo por operación y descarga evidencias cuando sea necesario.</CardDescription>
             </CardHeader>
             <CardContent>
-              {documentos.filter((doc) => getDocumentStatus(doc) !== "vigente").length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-500" />
-                  <h3 className="font-medium mb-2">Todos los documentos están vigentes</h3>
-                  <p>No hay documentos próximos a vencer o vencidos</p>
-                </div>
+              {operations.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No hay operaciones cargadas. Utiliza el formulario anterior para registrar actos u operaciones del periodo.
+                </p>
               ) : (
-                <div className="space-y-4">
-                  {documentos
-                    .filter((doc) => getDocumentStatus(doc) !== "vigente")
-                    .map((doc) => (
-                      <div key={doc.id} className="flex items-center justify-between p-4 border rounded-lg bg-amber-50">
-                        <div className="flex items-center space-x-3">
-                          <AlertTriangle className="h-5 w-5 text-amber-500" />
+                <ScrollArea className="max-h-[420px]">
+                  <div className="space-y-3">
+                    {operations.map((operation) => (
+                      <motion.div
+                        key={operation.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="flex flex-col gap-2 rounded-lg border p-4 text-sm shadow-sm"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
-                            <div className="font-medium">{doc.name}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {getDocumentStatus(doc) === "vencido"
-                                ? "Documento vencido"
-                                : `Vence el ${doc.expiryDate?.toLocaleDateString()}`}
-                            </div>
+                            <p className="font-semibold">{operation.clienteNombre}</p>
+                            <p className="text-xs text-muted-foreground">RFC: {operation.clienteRfc}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                operation.excedeAviso
+                                  ? "bg-destructive/10 text-destructive"
+                                  : operation.excedeIdentificacion
+                                    ? "bg-amber-500/10 text-amber-700"
+                                    : "bg-emerald-500/10 text-emerald-700"
+                              }`}
+                            >
+                              {operation.excedeAviso
+                                ? "Aviso obligatorio"
+                                : operation.excedeIdentificacion
+                                  ? "Umbral de identificación"
+                                  : "Sin obligación"}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemoveOperation(operation.id)}
+                              className="h-8 w-8"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
-                        <Button size="sm" variant="outline">
-                          Renovar documento
-                        </Button>
-                      </div>
+                        <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                          <div>
+                            <p className="font-medium">Tipo de operación</p>
+                            <p>{operation.tipoOperacion}</p>
+                          </div>
+                          <div>
+                            <p className="font-medium">Fecha</p>
+                            <p>{operation.fecha}</p>
+                          </div>
+                          <div>
+                            <p className="font-medium">Monto</p>
+                            <p>
+                              {formatCurrency(operation.montoMx)} MXN · {(operation.montoUma ?? 0).toFixed(2)} UMA
+                            </p>
+                          </div>
+                          <div>
+                            <p className="font-medium">Evidencia</p>
+                            <p>{operation.evidencia || "Sin folio"}</p>
+                          </div>
+                        </div>
+                        {operation.comentarios && (
+                          <p className="text-xs text-muted-foreground">Comentarios: {operation.comentarios}</p>
+                        )}
+                      </motion.div>
                     ))}
-                </div>
+                  </div>
+                </ScrollArea>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Tab: Bitácora de Trazabilidad */}
-        <TabsContent value="trazabilidad" className="space-y-6">
+        <TabsContent value="clientes" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <History className="h-5 w-5" />
-                Bitácora de Trazabilidad con Sello de Tiempo
-              </CardTitle>
-              <CardDescription>Registro completo de todas las acciones realizadas en el módulo</CardDescription>
+              <CardTitle>Checklist de identificación y conocimiento del cliente</CardTitle>
+              <CardDescription>
+                Marca los datos y documentos integrados en el expediente conforme al tipo de cliente seleccionado.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex flex-wrap gap-2">
+                {clientChecklists.map((client) => (
+                  <Button
+                    key={client.tipo}
+                    variant={selectedClientChecklist === client.tipo ? "default" : "outline"}
+                    onClick={() => setSelectedClientChecklist(client.tipo)}
+                  >
+                    {client.nombre}
+                  </Button>
+                ))}
+              </div>
+              {selectedChecklist ? (
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold">Documentos requeridos</h3>
+                    {renderChecklist("Documentación soporte", selectedChecklist.documentos, selectedChecklist.tipo)}
+                  </div>
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold">Datos obligatorios</h3>
+                    {renderChecklist("Datos críticos", selectedChecklist.datos, selectedChecklist.tipo)}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Selecciona un tipo de cliente para visualizar la guía.</p>
+              )}
+              <div className="rounded-lg border bg-muted/30 p-4 text-sm">
+                <p className="font-semibold text-primary">Nivel de cumplimiento del checklist</p>
+                <p>{checklistCompletions || 0}% de los requisitos marcados.</p>
+                <p className="text-xs text-muted-foreground">
+                  Mantén evidencia digitalizada y conservada al menos por 5 años posteriores a la última operación.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Clasificación por umbrales y semáforo</CardTitle>
+              <CardDescription>
+                Divide automáticamente a los clientes en función de sus operaciones y acumulados.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-3">
+                <div className="space-y-2 rounded-xl border p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                    <CheckCircle2 className="h-4 w-4" /> Sin obligación
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Clientes que no superan el umbral de identificación en operaciones individuales ni acumuladas.
+                  </p>
+                  <ul className="space-y-2 text-xs">
+                    {sinUmbral.map((summary) => (
+                      <li key={summary.rfc} className="rounded-lg bg-emerald-50 p-2">
+                        <p className="font-medium">{summary.nombre}</p>
+                        <p>RFC: {summary.rfc}</p>
+                        <p>Total UMA: {summary.totalUma.toFixed(2)}</p>
+                      </li>
+                    ))}
+                    {sinUmbral.length === 0 && <li>No hay clientes en esta categoría.</li>}
+                  </ul>
+                </div>
+                <div className="space-y-2 rounded-xl border p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-amber-700">
+                    <Shield className="h-4 w-4" /> Identificación reforzada
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Clientes que superan el umbral de identificación y requieren expediente completo y monitoreo de acumulación
+                    a 6 meses.
+                  </p>
+                  <ul className="space-y-2 text-xs">
+                    {identificacion.map((summary) => (
+                      <li key={summary.rfc} className="rounded-lg bg-amber-50 p-2">
+                        <p className="font-medium">{summary.nombre}</p>
+                        <p>RFC: {summary.rfc}</p>
+                        <p>Acumulado 6 meses: {summary.acumuladoSeisMesesUma.toFixed(2)} UMA</p>
+                      </li>
+                    ))}
+                    {identificacion.length === 0 && <li>No hay clientes en seguimiento especial.</li>}
+                  </ul>
+                </div>
+                <div className="space-y-2 rounded-xl border p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-destructive">
+                    <AlertCircle className="h-4 w-4" /> Aviso obligatorio
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Clientes que superaron el umbral de aviso por importe individual o acumulado. Presenta aviso y reinicia el
+                    conteo.
+                  </p>
+                  <ul className="space-y-2 text-xs">
+                    {aviso.map((summary) => (
+                      <li key={summary.rfc} className="rounded-lg bg-destructive/10 p-2">
+                        <p className="font-medium">{summary.nombre}</p>
+                        <p>RFC: {summary.rfc}</p>
+                        <p>UMA acumuladas: {summary.acumuladoSeisMesesUma.toFixed(2)}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button size="sm" onClick={() => descargarXml(summary)}>
+                            Descargar XML
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              toast({
+                                title: "Seguimiento reiniciado",
+                                description:
+                                  "Registra la presentación del aviso en tus controles internos para reiniciar la acumulación.",
+                              })
+                            }
+                          >
+                            Registrar aviso presentado
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                    {aviso.length === 0 && <li>No hay clientes con obligación de aviso.</li>}
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="obligaciones" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Obligaciones aplicables</CardTitle>
+              <CardDescription>
+                Determina las obligaciones regulatorias según el umbral alcanzado y documenta la evidencia correspondiente.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-6 lg:grid-cols-3">
+              <div className="rounded-xl border bg-emerald-50/40 p-4 text-sm">
+                <h3 className="text-base font-semibold text-emerald-700">Sin obligación</h3>
+                <ul className="mt-2 space-y-2">
+                  <li>Continuar monitoreo mensual.</li>
+                  <li>Registrar operación en controles internos.</li>
+                  <li>Conservar evidencia mínima (comprobante de pago, contrato).</li>
+                </ul>
+              </div>
+              <div className="rounded-xl border bg-amber-50 p-4 text-sm">
+                <h3 className="text-base font-semibold text-amber-700">Identificación</h3>
+                <ul className="mt-2 space-y-2">
+                  {subActivity?.obligacionesCumplidas.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                  <li>Acumular operaciones durante 6 meses solo si superan el umbral de identificación.</li>
+                </ul>
+              </div>
+              <div className="rounded-xl border bg-destructive/10 p-4 text-sm">
+                <h3 className="text-base font-semibold text-destructive">Aviso</h3>
+                <ul className="mt-2 space-y-2">
+                  {subActivity?.obligacionesAviso.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                  <li>Al presentar el aviso se reinicia la acumulación del cliente.</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Avisos e informes</CardTitle>
+              <CardDescription>
+                Genera el aviso preliminar con los datos del sujeto obligado o el informe 27 BIS en ceros cuando aplique.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-lg border p-4 text-sm">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold">Aviso preliminar</p>
+                      <p className="text-xs text-muted-foreground">RFC, periodo y clave de actividad vulnerable.</p>
+                    </div>
+                    <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                      {periodCode || "AAAAmm"}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    <p>Clave SAT: {subActivity?.satCode ?? "Selecciona actividad"}</p>
+                    <p>Periodo: {periodCode || "Sin definir"}</p>
+                    <p>Clientes con aviso: {aviso.length}</p>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {aviso.map((summary) => (
+                      <Button key={summary.rfc} size="sm" onClick={() => descargarXml(summary)}>
+                        XML {summary.rfc}
+                      </Button>
+                    ))}
+                    {aviso.length === 0 && <p className="text-xs text-muted-foreground">No hay avisos generados.</p>}
+                  </div>
+                </div>
+                <div className="rounded-lg border p-4 text-sm">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold">Informe 27 BIS en ceros</p>
+                      <p className="text-xs text-muted-foreground">Utiliza cuando seas sujeto obligado sin operaciones reportables.</p>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => toast({ title: "Informe 27 BIS", description: infoMessages.avisoCero })}
+                    >
+                      <Info className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Textarea
+                    className="mt-3"
+                    value={observacionesGenerales}
+                    onChange={(event) => setObservacionesGenerales(event.target.value)}
+                    placeholder="Observaciones a incluir en el informe en ceros"
+                  />
+                  <Button className="mt-3" variant="outline" onClick={generarInformeEnBlanco}>
+                    Generar XML en blanco
+                  </Button>
+                </div>
+              </div>
+
+              <Card className="border-dashed">
+                <CardHeader>
+                  <CardTitle>Criterios de la UIF aplicables</CardTitle>
+                  <CardDescription>
+                    Considera estos lineamientos al evaluar operaciones inusuales y definir alertas.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ul className="grid gap-2 text-sm sm:grid-cols-2">
+                    {subActivity?.criteriosUif.map((criterio) => (
+                      <li key={criterio} className="rounded-lg bg-muted/40 p-3">
+                        {criterio}
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="uma" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>UMA publicadas por año</CardTitle>
+              <CardDescription>Valores oficiales publicados por INEGI/SAT desde 2020.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-3">
+              {UMA_PERIODS.map((period) => (
+                <div key={period.periodLabel} className="rounded-lg border bg-muted/30 p-4 text-sm">
+                  <p className="text-xs text-muted-foreground">Vigencia {period.start} al {period.end}</p>
+                  <p className="text-lg font-semibold">{period.periodLabel}</p>
+                  <ul className="mt-2 space-y-1 text-sm">
+                    <li>Diaria: {formatCurrency(period.daily)}</li>
+                    <li>Mensual: {formatCurrency(period.monthly)}</li>
+                    <li>Anual: {formatCurrency(period.annual)}</li>
+                  </ul>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Histórico mensual (60 meses)</CardTitle>
+              <CardDescription>
+                Selecciona un mes para confirmar la UMA disponible o identificar periodos pendientes de publicación.
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[400px]">
-                {trazabilidad.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <History className="h-12 w-12 mx-auto mb-4" />
-                    <h3 className="font-medium mb-2">Sin actividad registrada</h3>
-                    <p>Las acciones realizadas aparecerán aquí</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {trazabilidad.map((entry) => (
-                      <div key={entry.id} className="flex items-start space-x-4 p-4 border rounded-lg">
-                        <div className="bg-primary/10 rounded-full p-2">
-                          <Clock className="h-4 w-4 text-primary" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium">{entry.action}</span>
-                            <Badge variant="outline">{entry.section}</Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-2">{entry.details}</p>
-                          <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                            <span>Usuario: {entry.user}</span>
-                            <span>•</span>
-                            <span>{entry.timestamp.toLocaleString()}</span>
-                          </div>
-                        </div>
+              <ScrollArea className="h-80">
+                <div className="grid gap-2 md:grid-cols-2">
+                  {monthOptions.map((month) => (
+                    <div
+                      key={month.key}
+                      className={`flex items-center justify-between rounded-lg border p-3 text-sm ${
+                        month.published ? "bg-background" : "bg-muted/40"
+                      }`}
+                    >
+                      <div>
+                        <p className="font-medium">{month.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {month.period
+                            ? `UMA diaria ${formatCurrency(month.period.daily)} · Mensual ${formatCurrency(
+                                month.period.monthly,
+                              )}`
+                            : "Publicación pendiente"}
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          month.published ? "bg-emerald-500/10 text-emerald-700" : "bg-amber-500/10 text-amber-700"
+                        }`}
+                      >
+                        {month.published ? "Disponible" : "Pendiente"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </ScrollArea>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            cerrarDialogoEliminacion()
-          } else {
-            setIsDeleteDialogOpen(true)
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar documento</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Deseas eliminar el documento "{documentoAEliminar?.name}"? Esta acción no se puede deshacer y se eliminará del
-              expediente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={cerrarDialogoEliminacion}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmarEliminacionDocumento}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive"
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Card>
+        <CardHeader>
+          <CardTitle>Guía de datos para registro SAT y responsables de cumplimiento</CardTitle>
+          <CardDescription>
+            Checklist de información institucional obligatoria para mantener la autorización ante el SAT y la UIF.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2 text-sm">
+            <p className="font-semibold">Datos del sujeto obligado</p>
+            <ul className="space-y-1">
+              <li>RFC del sujeto obligado y denominación social.</li>
+              <li>Domicilio fiscal y sucursales registradas.</li>
+              <li>Reglas internas de prevención de lavado de dinero aprobadas por el órgano de gobierno.</li>
+              <li>Datos del representante legal y del oficial de cumplimiento.</li>
+            </ul>
+          </div>
+          <div className="space-y-2 text-sm">
+            <p className="font-semibold">Responsables y controles</p>
+            <ul className="space-y-1">
+              <li>Alta en el portal PLD SAT y asignación de usuarios certificados.</li>
+              <li>Bitácora de avisos y reportes 27 BIS con acuses XML.</li>
+              <li>Plan anual de capacitación y evaluaciones a colaboradores.</li>
+              <li>Registro de alertas, reportes de operaciones inusuales y documentación soporte.</li>
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
