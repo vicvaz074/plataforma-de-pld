@@ -1,6 +1,8 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -8,39 +10,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/use-toast"
-import { Badge } from "@/components/ui/badge"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import {
-  AlertTriangle,
-  CheckCircle2,
-  FileText,
-  Globe2,
-  MapPin,
-  ShieldCheck,
-  Users,
-} from "lucide-react"
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { useToast } from "@/components/ui/use-toast"
+import { CheckCircle2, Globe2, MapPin, ShieldCheck, UserCheck } from "lucide-react"
 
 const IDENTIFICACION_CAMPOS = [
   {
@@ -72,41 +49,49 @@ const FACTORES_RIESGO = [
     id: "actividad",
     titulo: "Actividad del cliente",
     descripcion: "Giro comercial o profesional y su vinculación con actividades vulnerables.",
+    categoria: "actividad",
   },
   {
     id: "monto-frecuencia",
     titulo: "Monto y frecuencia",
     descripcion: "Volumen transaccional habitual y operaciones extraordinarias.",
+    categoria: "actividad",
   },
   {
     id: "geografia",
     titulo: "Zona geográfica",
     descripcion: "Países o entidades federativas donde opera o tiene vínculos comerciales.",
+    categoria: "cliente",
   },
   {
     id: "divisa",
     titulo: "Tipo de divisa",
     descripcion: "Monedas utilizadas de manera recurrente en las operaciones.",
+    categoria: "cliente",
   },
   {
     id: "origen-destino",
     titulo: "Origen y destino de recursos",
     descripcion: "Procedencia del capital y destino de los fondos.",
+    categoria: "cliente",
   },
   {
     id: "naturaleza-operaciones",
     titulo: "Naturaleza de las operaciones",
     descripcion: "Forma de pago, instrumentos financieros y contrapartes.",
+    categoria: "actividad",
   },
   {
     id: "comportamiento",
     titulo: "Comportamiento inusual",
     descripcion: "Alertas por operaciones atípicas o inconsistentes con el perfil.",
+    categoria: "cliente",
   },
   {
     id: "pep",
     titulo: "Personas políticamente expuestas",
     descripcion: "Determinación de exposición pública o vínculos con PEPs.",
+    categoria: "cliente",
   },
 ]
 
@@ -115,6 +100,24 @@ const RISK_LEVELS = [
   { value: "medio", label: "Medio", color: "bg-amber-100 text-amber-700" },
   { value: "alto", label: "Alto", color: "bg-rose-100 text-rose-700" },
 ]
+
+const RISK_BANDS: Record<string, { label: string; gradient: string; description: string }> = {
+  bajo: {
+    label: "Riesgo bajo",
+    gradient: "bg-gradient-to-r from-emerald-200 via-emerald-100 to-white",
+    description: "Perfil alineado con documentación completa y operaciones consistentes.",
+  },
+  medio: {
+    label: "Riesgo medio",
+    gradient: "bg-gradient-to-r from-amber-200 via-amber-100 to-white",
+    description: "Requiere seguimiento adicional, validación de origen de recursos y monitoreo reforzado.",
+  },
+  alto: {
+    label: "Riesgo alto",
+    gradient: "bg-gradient-to-r from-rose-200 via-rose-100 to-white",
+    description: "Aplicar debida diligencia reforzada, aprobación de alta dirección y revisión continua.",
+  },
+}
 
 type RiskValue = (typeof RISK_LEVELS)[number]["value"]
 
@@ -171,13 +174,42 @@ export default function KycExpedientePage() {
     return "bajo"
   }, [respuestas])
 
-  const matrizCalor = useMemo(() => {
-    const data = [
+  const nivelIntegral = useMemo<RiskValue>(() => {
+    if (nivelIdentificacion === "alto" || nivelConocimiento === "alto") return "alto"
+    if (nivelIdentificacion === "medio" || nivelConocimiento === "medio") return "medio"
+    return "bajo"
+  }, [nivelIdentificacion, nivelConocimiento])
+
+  const matrizCalor = useMemo(
+    () => [
       { seccion: "Identificación", nivel: nivelIdentificacion },
       { seccion: "Conocimiento", nivel: nivelConocimiento },
-    ]
-    return data
-  }, [nivelIdentificacion, nivelConocimiento])
+      { seccion: "Riesgo integral", nivel: nivelIntegral },
+    ],
+    [nivelIdentificacion, nivelConocimiento, nivelIntegral],
+  )
+
+  const divisionEnfoque = useMemo(() => {
+    const agrupado: Record<"cliente" | "actividad", RiskValue[]> = { cliente: [], actividad: [] }
+    FACTORES_RIESGO.forEach((factor) => {
+      const respuesta = respuestas[factor.id]
+      if (respuesta) {
+        agrupado[factor.categoria as "cliente" | "actividad"].push(respuesta.valor)
+      }
+    })
+
+    const calcularNivel = (valores: RiskValue[]): RiskValue => {
+      if (valores.some((valor) => valor === "alto")) return "alto"
+      if (valores.some((valor) => valor === "medio")) return "medio"
+      if (valores.length === 0) return "alto"
+      return "bajo"
+    }
+
+    return {
+      cliente: calcularNivel(agrupado.cliente),
+      actividad: calcularNivel(agrupado.actividad),
+    }
+  }, [respuestas])
 
   const generarAlerta = (factorId: string) => {
     const factor = FACTORES_RIESGO.find((item) => item.id === factorId)
@@ -202,325 +234,285 @@ export default function KycExpedientePage() {
     setAlertas((prev) => [nuevaAlerta, ...prev])
     toast({
       title: "Alerta generada",
-      description: `${factor.titulo} clasificado como riesgo ${respuesta.valor}.`,
+      description: `Se creó una alerta inmediata para el factor ${factor.titulo}.`,
     })
   }
 
-  const riesgoIntegral = useMemo<RiskValue>(() => {
-    if (nivelIdentificacion === "alto" || nivelConocimiento === "alto") return "alto"
-    if (nivelIdentificacion === "medio" || nivelConocimiento === "medio") return "medio"
-    return "bajo"
-  }, [nivelIdentificacion, nivelConocimiento])
+  const actualizarRespuesta = (factorId: string, campo: keyof FactorRespuesta, valor: string) => {
+    setRespuestas((prev) => {
+      const actual = prev[factorId] ?? { valor: "medio", comentario: "" }
+      return {
+        ...prev,
+        [factorId]: {
+          ...actual,
+          [campo]: campo === "valor" ? (valor as RiskValue) : valor,
+        },
+      }
+    })
+  }
+
+  const guardarEvaluacion = () => {
+    toast({
+      title: "Evaluación guardada",
+      description: "Se actualizó el expediente KYC con la segmentación de riesgo basada en metodología EBR.",
+    })
+  }
+
+  const bandaActual = RISK_BANDS[nivelIntegral]
 
   return (
-    <div className="space-y-6">
-      <header className="grid gap-4 lg:grid-cols-2">
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-slate-700">
-              <ShieldCheck className="h-5 w-5 text-emerald-600" /> Módulo KYC – Identificación & Conocimiento
-            </CardTitle>
-            <CardDescription>
-              Integra expedientes conforme a la Ley Federal antilavado y evalúa el riesgo con enfoque basado en riesgo (EBR).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded border bg-emerald-50 p-4 text-sm">
-              <p className="font-semibold text-emerald-700">Identificación</p>
-              <p className="mt-2 text-emerald-800">
-                Recaba y verifica los documentos obligatorios para acreditar identidad, domicilio y representación.
-              </p>
+    <div className="space-y-8">
+      <section className={`rounded-xl border p-6 shadow-sm ${bandaActual.gradient}`}>
+        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-slate-800">Mapa integral de riesgo por cliente</h1>
+            <p className="mt-1 text-sm text-slate-600">
+              Clasificación automática para identificación y conocimiento del cliente bajo el enfoque basado en riesgo (EBR).
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+              <Badge variant="secondary">{tipoCliente}</Badge>
+              {responsable && <Badge variant="outline">Responsable: {responsable}</Badge>}
+              <Badge className={CLIENTE_COLORES[nivelIntegral] + " text-white"}>{bandaActual.label}</Badge>
             </div>
-            <div className="rounded border bg-blue-50 p-4 text-sm">
-              <p className="font-semibold text-blue-700">Conocimiento del cliente</p>
-              <p className="mt-2 text-blue-800">
-                Evalúa actividad, montos, geografía, comportamiento y PEP para determinar el riesgo residual.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-slate-700">
-              <Users className="h-5 w-5 text-slate-500" /> Datos del expediente
-            </CardTitle>
-            <CardDescription>Captura responsable, tipo de cliente y nivel de riesgo integral.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2 text-sm">
-              <Label>Tipo de cliente</Label>
-              <Input value={tipoCliente} onChange={(event) => setTipoCliente(event.target.value)} placeholder="Persona física, moral, fideicomiso…" />
-            </div>
-            <div className="space-y-2 text-sm">
-              <Label>Responsable del expediente</Label>
-              <Input value={responsable} onChange={(event) => setResponsable(event.target.value)} placeholder="Nombre del oficial de cumplimiento" />
-            </div>
-            <div className="rounded-xl border bg-white p-4 text-sm">
-              <p className="text-xs font-semibold uppercase text-slate-500">Riesgo integral</p>
-              <div className="mt-2 flex items-center gap-3">
-                <span className={`inline-flex h-3 w-3 rounded-full ${CLIENTE_COLORES[riesgoIntegral]}`}></span>
-                <span className="text-base font-semibold capitalize">{riesgoIntegral}</span>
-                <Badge variant="outline" className="border-slate-300 text-slate-600">
-                  Identificación: {nivelIdentificacion}
-                </Badge>
-                <Badge variant="outline" className="border-slate-300 text-slate-600">
-                  Conocimiento: {nivelConocimiento}
-                </Badge>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </header>
-
-      <section className="grid gap-6 lg:grid-cols-[1.4fr,1fr]">
-        <Card className="border-emerald-200">
-          <CardHeader>
-            <CardTitle className="text-emerald-700">Bloque 1 – Identificación</CardTitle>
-            <CardDescription>
-              Captura de datos y documentación soporte para validar identidad y representación.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {IDENTIFICACION_CAMPOS.map((grupo) => (
-              <div key={grupo.id} className="rounded border border-emerald-100 bg-white p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-semibold text-emerald-700">{grupo.titulo}</h3>
-                    <p className="text-sm text-muted-foreground">{grupo.descripcion}</p>
-                  </div>
-                  <Badge variant="outline" className="border-emerald-200 text-emerald-600">
-                    {grupo.campos.filter((campo) => datosIdentificacion[campo.id]?.trim()).length}/{grupo.campos.length}
-                  </Badge>
-                </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  {grupo.campos.map((campo) => (
-                    <div key={campo.id} className="space-y-1">
-                      <Label className="text-sm">
-                        {campo.label}
-                        {campo.requerido && <span className="text-rose-500"> *</span>}
-                      </Label>
-                      <Input
-                        value={datosIdentificacion[campo.id] ?? ""}
-                        onChange={(event) =>
-                          setDatosIdentificacion((prev) => ({
-                            ...prev,
-                            [campo.id]: event.target.value,
-                          }))
-                        }
-                        placeholder={campo.label}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-slate-600" /> Checklist documental
-            </CardTitle>
-            <CardDescription>
-              Verifica que todos los documentos obligatorios estén completos y vigentes.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-[420px] pr-4">
-              <ul className="space-y-2 text-sm">
-                {IDENTIFICACION_CAMPOS.flatMap((grupo) => grupo.campos).map((campo) => (
-                  <li
-                    key={campo.id}
-                    className={`flex items-center gap-2 rounded border p-2 ${datosIdentificacion[campo.id]?.trim() ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-600"}`}
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>
-                      {campo.label}
-                      {campo.requerido && " (requerido)"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </ScrollArea>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="min-w-[240px] rounded-lg border border-white/50 bg-white/70 p-4 text-sm text-slate-700">
+            <p className="font-semibold">Recomendaciones inmediatas</p>
+            <ul className="mt-2 list-disc space-y-1 pl-4">
+              <li>Documentar revisiones reforzadas cuando el riesgo sea medio o alto.</li>
+              <li>Generar alertas inmediatas para desviaciones inusuales detectadas.</li>
+              <li>Actualizar matrices de riesgo al registrar nuevas operaciones relevantes.</li>
+            </ul>
+          </div>
+        </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[1.4fr,1fr]">
-        <Card className="border-blue-200">
-          <CardHeader>
-            <CardTitle className="text-blue-700">Bloque 2 – Conocimiento del cliente</CardTitle>
-            <CardDescription>
-              Evalúa factores de riesgo con un mapa de calor que prioriza la atención inmediata.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {FACTORES_RIESGO.map((factor) => (
-              <div key={factor.id} className="rounded border border-blue-100 bg-white p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-semibold text-blue-700">{factor.titulo}</h3>
-                    <p className="text-sm text-muted-foreground">{factor.descripcion}</p>
-                  </div>
-                  {respuestas[factor.id]?.valor && (
-                    <Badge className={`capitalize ${RISK_LEVELS.find((level) => level.value === respuestas[factor.id]?.valor)?.color}`}>
-                      {respuestas[factor.id]?.valor}
-                    </Badge>
-                  )}
-                </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-[1fr,2fr]">
-                  <div className="space-y-2">
-                    <Label>Nivel de riesgo</Label>
-                    <Select
-                      value={respuestas[factor.id]?.valor}
-                      onValueChange={(value: RiskValue) =>
-                        setRespuestas((prev) => ({
-                          ...prev,
-                          [factor.id]: {
-                            valor: value,
-                            comentario: prev[factor.id]?.comentario ?? "",
-                          },
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="Selecciona riesgo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {RISK_LEVELS.map((nivel) => (
-                          <SelectItem key={nivel.value} value={nivel.value}>
-                            {nivel.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Comentario y soporte</Label>
-                    <Textarea
-                      value={respuestas[factor.id]?.comentario ?? ""}
-                      onChange={(event) =>
-                        setRespuestas((prev) => ({
-                          ...prev,
-                          [factor.id]: {
-                            valor: prev[factor.id]?.valor ?? "medio",
-                            comentario: event.target.value,
-                          },
-                        }))
-                      }
-                      placeholder="Describe actividad, evidencias y controles aplicados."
-                    />
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => generarAlerta(factor.id)}>
-                    Generar alerta inmediata
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+      <section className="grid gap-6 lg:grid-cols-[1.3fr,1fr]">
         <Card className="border-slate-200">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Globe2 className="h-5 w-5 text-slate-600" /> Mapa de calor de riesgo
+              <UserCheck className="h-5 w-5 text-slate-600" /> Identificación del cliente
             </CardTitle>
             <CardDescription>
-              Visualiza la madurez del expediente por bloque y atención prioritaria.
+              Datos y documentos para validar la identidad y la estructura corporativa del cliente.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3">
-              {matrizCalor.map((item) => (
-                <div key={item.seccion} className="flex items-center justify-between rounded border border-slate-200 bg-white p-3">
-                  <div className="flex items-center gap-3">
-                    <span className={`inline-flex h-3 w-3 rounded-full ${CLIENTE_COLORES[item.nivel]}`}></span>
-                    <p className="font-semibold text-slate-700">{item.seccion}</p>
+          <CardContent className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Tipo de cliente</Label>
+                <Select value={tipoCliente} onValueChange={setTipoCliente}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Selecciona tipo de cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Persona física mexicana">Persona física mexicana</SelectItem>
+                    <SelectItem value="Persona física extranjera">Persona física extranjera</SelectItem>
+                    <SelectItem value="Persona moral mexicana">Persona moral mexicana</SelectItem>
+                    <SelectItem value="Persona moral extranjera">Persona moral extranjera</SelectItem>
+                    <SelectItem value="Fideicomiso">Fideicomiso</SelectItem>
+                    <SelectItem value="Dependencia pública">Dependencia pública</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Responsable del expediente</Label>
+                <Input value={responsable} onChange={(event) => setResponsable(event.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {IDENTIFICACION_CAMPOS.map((grupo) => (
+                <div key={grupo.id} className="space-y-3 rounded border bg-slate-50 p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold text-slate-700">{grupo.titulo}</p>
+                    <Badge variant="outline" className="text-xs">
+                      {grupo.campos.filter((campo) => datosIdentificacion[campo.id]?.trim()).length}/
+                      {grupo.campos.length}
+                    </Badge>
                   </div>
-                  <Badge className={`capitalize ${RISK_LEVELS.find((nivel) => nivel.value === item.nivel)?.color}`}>
-                    {item.nivel}
-                  </Badge>
+                  <p className="text-xs text-slate-500">{grupo.descripcion}</p>
+                  <div className="space-y-3">
+                    {grupo.campos.map((campo) => (
+                      <div key={campo.id} className="space-y-1 text-sm">
+                        <Label className="flex items-center justify-between text-xs font-semibold uppercase text-slate-600">
+                          {campo.label}
+                          {campo.requerido && <span className="text-rose-500">*</span>}
+                        </Label>
+                        <Input
+                          value={datosIdentificacion[campo.id] ?? ""}
+                          onChange={(event) =>
+                            setDatosIdentificacion((prev) => ({ ...prev, [campo.id]: event.target.value }))
+                          }
+                          placeholder="Captura información o referencia documental"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
-            <div className="rounded border bg-white p-4 text-sm text-slate-700">
-              <p className="font-semibold">Metodología EBR</p>
-              <p className="mt-2 text-muted-foreground">
-                Combina controles de identificación y conocimiento para definir planes de acción diferenciados. El nivel integral determina periodicidad de actualización documental y monitoreo transaccional.
+
+            <div className="rounded-lg border bg-white p-4 text-sm text-slate-700">
+              <p className="font-semibold">Resultado identificación</p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className={`inline-flex h-3 w-3 rounded-full ${CLIENTE_COLORES[nivelIdentificacion]}`} />
+                <span className="font-semibold uppercase">{RISK_BANDS[nivelIdentificacion].label}</span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {RISK_BANDS[nivelIdentificacion].description}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-slate-600" /> Mapa de calor EBR
+            </CardTitle>
+            <CardDescription>Visualiza los niveles de riesgo por sección y el resultado integral.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {matrizCalor.map((item) => (
+              <div
+                key={item.seccion}
+                className={`rounded-lg border px-3 py-2 text-sm shadow-sm ${RISK_BANDS[item.nivel].gradient}`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-800">{item.seccion}</span>
+                  <span className={`text-xs font-semibold uppercase ${CLIENTE_COLORES[item.nivel]} text-white px-2 py-1 rounded`}>
+                    {item.nivel}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-600">{RISK_BANDS[item.nivel].description}</p>
+              </div>
+            ))}
+
+            <div className="rounded-lg border bg-slate-50 p-4 text-xs text-slate-600">
+              <p className="font-semibold text-slate-700">Segmentación EBR</p>
+              <p className="mt-2">
+                Riesgo del cliente: <strong className="capitalize">{divisionEnfoque.cliente}</strong> · Riesgo de la actividad: {" "}
+                <strong className="capitalize">{divisionEnfoque.actividad}</strong>
+              </p>
+              <p className="mt-2">
+                Ajusta la periodicidad de actualización del expediente según el nivel integral y registra el dictamen del oficial de
+                cumplimiento.
               </p>
             </div>
           </CardContent>
         </Card>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[1.2fr,1fr]">
+      <section className="grid gap-6 lg:grid-cols-[1.3fr,1fr]">
         <Card className="border-slate-200">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-rose-600" /> Alertas generadas
+              <Globe2 className="h-5 w-5 text-slate-600" /> Conocimiento del cliente
             </CardTitle>
-            <CardDescription>Seguimiento inmediato a factores de riesgo identificados.</CardDescription>
+            <CardDescription>
+              Evalúa cada factor de riesgo y genera alertas inmediatas para operaciones inusuales.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {alertas.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No hay alertas registradas aún.</p>
-            ) : (
-              <ScrollArea className="h-72 pr-4">
-                <ul className="space-y-3 text-sm">
-                  {alertas.map((alerta) => (
-                    <li
-                      key={alerta.id}
-                      className="rounded border border-slate-200 bg-white p-3 hover:border-emerald-300"
-                    >
-                      <div className="flex items-center justify-between">
-                        <p className="font-semibold text-slate-700">{alerta.factor}</p>
-                        <Badge className={`capitalize ${RISK_LEVELS.find((nivel) => nivel.value === alerta.nivel)?.color}`}>
-                          {alerta.nivel}
-                        </Badge>
+            <ScrollArea className="h-[520px] pr-4">
+              <div className="space-y-4">
+                {FACTORES_RIESGO.map((factor) => {
+                  const respuesta = respuestas[factor.id]
+                  return (
+                    <div key={factor.id} className="rounded-lg border bg-white p-4 text-sm shadow-sm">
+                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="font-semibold text-slate-700">{factor.titulo}</p>
+                          <p className="text-xs text-slate-500">{factor.descripcion}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={respuesta?.valor ?? "medio"}
+                            onValueChange={(value) => actualizarRespuesta(factor.id, "valor", value)}
+                          >
+                            <SelectTrigger className="w-32 bg-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {RISK_LEVELS.map((nivel) => (
+                                <SelectItem key={nivel.value} value={nivel.value}>
+                                  {nivel.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button variant="outline" size="sm" onClick={() => generarAlerta(factor.id)}>
+                            Generar alerta
+                          </Button>
+                        </div>
                       </div>
-                      <p className="mt-1 text-muted-foreground">{alerta.descripcion}</p>
-                      <p className="mt-2 text-xs text-slate-500">
-                        Generada el {new Date(alerta.fecha).toLocaleString("es-MX")}
-                      </p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setAlertaSeleccionada(alerta)}>
-                          Ver detalle
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </ScrollArea>
-            )}
+                      <Textarea
+                        className="mt-3"
+                        placeholder="Describe el riesgo identificado, controles aplicados y fecha de la última revisión."
+                        value={respuesta?.comentario ?? ""}
+                        onChange={(event) => actualizarRespuesta(factor.id, "comentario", event.target.value)}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
+            </ScrollArea>
           </CardContent>
         </Card>
+
         <Card className="border-slate-200">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-slate-600" /> Plan de acción
+              <MapPin className="h-5 w-5 text-slate-600" /> Alertas y acciones inmediatas
             </CardTitle>
-            <CardDescription>Define acciones por nivel de riesgo y periodicidad de actualización.</CardDescription>
+            <CardDescription>
+              Consolida alertas generadas y define próximas acciones para el oficial de cumplimiento.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm text-slate-700">
-            <div className="rounded border bg-emerald-50 p-3">
-              <h4 className="font-semibold text-emerald-700">Riesgo bajo</h4>
-              <p>Actualización documental anual, monitoreo transaccional estándar y revisión de listas cada 6 meses.</p>
+          <CardContent className="space-y-4 text-sm">
+            <div className="rounded border bg-slate-50 p-3 text-xs text-slate-600">
+              <p className="font-semibold text-slate-700">Acciones sugeridas</p>
+              <ul className="mt-2 list-disc space-y-1 pl-4">
+                <li>Solicitar evidencia adicional para operaciones clasificadas como riesgo medio o alto.</li>
+                <li>Actualizar matriz de monitoreo con indicadores cuantitativos y cualitativos.</li>
+                <li>Escalar alertas a la alta dirección cuando involucren jurisdicciones de alto riesgo o PEPs.</li>
+              </ul>
             </div>
-            <div className="rounded border bg-amber-50 p-3">
-              <h4 className="font-semibold text-amber-700">Riesgo medio</h4>
-              <p>Actualización documental semestral, monitoreo reforzado y validación mensual de listas restrictivas.</p>
-            </div>
-            <div className="rounded border bg-rose-50 p-3">
-              <h4 className="font-semibold text-rose-700">Riesgo alto</h4>
-              <p>Actualización trimestral, autorización senior y monitoreo transaccional continuo con reportes excepcionales.</p>
-            </div>
+
             <div className="rounded border bg-white p-3">
-              <h4 className="font-semibold text-slate-700">Personas políticamente expuestas</h4>
-              <p className="text-muted-foreground">
-                Requieren aprobación de alta dirección, origen de recursos documentado y monitoreo reforzado independientemente del nivel calculado.
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-slate-700">Alertas generadas</p>
+                <Badge variant="outline">{alertas.length}</Badge>
+              </div>
+              <ScrollArea className="mt-3 h-48 pr-3">
+                <div className="space-y-3 text-xs text-slate-600">
+                  {alertas.length === 0 && <p>No se han generado alertas.</p>}
+                  {alertas.map((alerta) => (
+                    <button
+                      key={alerta.id}
+                      type="button"
+                      onClick={() => setAlertaSeleccionada(alerta)}
+                      className="w-full rounded border border-slate-200 bg-slate-50 p-2 text-left hover:border-slate-400"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-700">{alerta.factor}</span>
+                        <span className={`rounded px-2 py-0.5 text-xs capitalize text-white ${CLIENTE_COLORES[alerta.nivel]}`}>
+                          {alerta.nivel}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        {new Date(alerta.fecha).toLocaleString("es-MX")}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-[11px] text-slate-600">{alerta.descripcion}</p>
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
             </div>
+
+            <Button className="w-full" onClick={guardarEvaluacion}>
+              <CheckCircle2 className="mr-2 h-4 w-4" /> Guardar evaluación EBR
+            </Button>
           </CardContent>
         </Card>
       </section>
@@ -528,10 +520,7 @@ export default function KycExpedientePage() {
       <AlertDialog open={Boolean(alertaSeleccionada)} onOpenChange={() => setAlertaSeleccionada(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Detalle de alerta</AlertDialogTitle>
-            <AlertDialogDescription>
-              Información registrada para escalamiento y atención inmediata.
-            </AlertDialogDescription>
+            <AlertDialogTitle>Detalle de alerta generada</AlertDialogTitle>
           </AlertDialogHeader>
           {alertaSeleccionada && (
             <div className="space-y-2 text-sm text-slate-700">
@@ -539,20 +528,16 @@ export default function KycExpedientePage() {
                 <span className="font-semibold">Factor:</span> {alertaSeleccionada.factor}
               </p>
               <p>
-                <span className="font-semibold">Nivel:</span> {alertaSeleccionada.nivel}
-              </p>
-              <p>
-                <span className="font-semibold">Descripción:</span> {alertaSeleccionada.descripcion}
+                <span className="font-semibold">Nivel de riesgo:</span> {alertaSeleccionada.nivel.toUpperCase()}
               </p>
               <p>
                 <span className="font-semibold">Fecha:</span> {new Date(alertaSeleccionada.fecha).toLocaleString("es-MX")}
               </p>
+              <p>
+                <span className="font-semibold">Descripción:</span> {alertaSeleccionada.descripcion}
+              </p>
             </div>
           )}
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cerrar</AlertDialogCancel>
-            <AlertDialogAction>Cargar evidencia</AlertDialogAction>
-          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
