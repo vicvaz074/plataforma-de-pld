@@ -12,16 +12,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -216,8 +206,6 @@ export default function BeneficiarioControladorPage() {
   const [bcScreeningList, setBcScreeningList] = useState("UIF")
   const [screeningObservation, setScreeningObservation] = useState("")
   const [declarationNotes, setDeclarationNotes] = useState("")
-  const [documentoAEliminar, setDocumentoAEliminar] = useState<DocumentUpload | null>(null)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
   // Cargar datos del localStorage
   useEffect(() => {
@@ -377,42 +365,6 @@ export default function BeneficiarioControladorPage() {
       title: "Documento cargado",
       description: `El documento ${nuevoDocumento.name} ha sido cargado exitosamente.`,
     })
-  }
-
-  const solicitarEliminacionDocumento = (doc: DocumentUpload) => {
-    setDocumentoAEliminar(doc)
-    setIsDeleteDialogOpen(true)
-  }
-
-  const cerrarDialogoEliminacion = () => {
-    setIsDeleteDialogOpen(false)
-    setDocumentoAEliminar(null)
-  }
-
-  const confirmarEliminacionDocumento = () => {
-    if (!documentoAEliminar) {
-      return
-    }
-
-    const documento = documentoAEliminar
-    setDocumentos((prev) => prev.filter((item) => item.id !== documento.id))
-
-    const nuevaEntrada: TraceabilityEntry = {
-      id: Date.now().toString(),
-      action: "Documento eliminado",
-      user: "Usuario actual",
-      timestamp: new Date(),
-      details: `Documento eliminado: ${documento.name}`,
-      section: "Carga Documental",
-    }
-    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-
-    toast({
-      title: "Documento eliminado",
-      description: `El documento ${documento.name} fue eliminado correctamente.`,
-    })
-
-    cerrarDialogoEliminacion()
   }
 
   // Obtener color según respuesta
@@ -1110,15 +1062,6 @@ export default function BeneficiarioControladorPage() {
                         <Button size="sm" variant="ghost">
                           <Download className="h-4 w-4" />
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => solicitarEliminacionDocumento(doc)}
-                          className="text-destructive hover:text-destructive focus-visible:ring-destructive"
-                          aria-label={`Eliminar ${doc.name}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
                       </div>
                     </div>
                   ))}
@@ -1427,36 +1370,6 @@ export default function BeneficiarioControladorPage() {
         </TabsContent>
 
       </Tabs>
-
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            cerrarDialogoEliminacion()
-          } else {
-            setIsDeleteDialogOpen(true)
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar documento</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Deseas eliminar el documento "{documentoAEliminar?.name}"? Esta acción no se puede deshacer y se registrará en la
-              bitácora.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={cerrarDialogoEliminacion}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmarEliminacionDocumento}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive"
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

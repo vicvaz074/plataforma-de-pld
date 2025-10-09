@@ -10,16 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { readFileAsDataUrl } from "@/lib/storage/read-file"
@@ -34,7 +24,6 @@ import {
   Info,
   Download,
   Eye,
-  Trash2,
   UserCheck,
   Building2,
   Paperclip,
@@ -538,8 +527,6 @@ export default function RegistroSATPage() {
   const [preguntasState, setPreguntasState] = useState<ChecklistItem[]>(preguntasGenerales)
   const [documentos, setDocumentos] = useState<DocumentUpload[]>([])
   const [trazabilidad, setTrazabilidad] = useState<TraceabilityEntry[]>([])
-  const [documentoAEliminar, setDocumentoAEliminar] = useState<DocumentUpload | null>(null)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [progreso, setProgreso] = useState(0)
   const [activeTab, setActiveTab] = useState("preguntas")
   const [evidenciasPorPregunta, setEvidenciasPorPregunta] = useState<Record<string, string[]>>({})
@@ -723,43 +710,6 @@ export default function RegistroSATPage() {
     } finally {
       event.target.value = ""
     }
-  }
-
-  const solicitarEliminacionDocumento = (doc: DocumentUpload) => {
-    setDocumentoAEliminar(doc)
-    setIsDeleteDialogOpen(true)
-  }
-
-  const cerrarDialogoEliminacion = () => {
-    setIsDeleteDialogOpen(false)
-    setDocumentoAEliminar(null)
-  }
-
-  const confirmarEliminacionDocumento = () => {
-    if (!documentoAEliminar) {
-      return
-    }
-
-    const documento = documentoAEliminar
-    setDocumentos((prev) => prev.filter((item) => item.id !== documento.id))
-    setTrazabilidad((prev) => [
-      {
-        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
-        action: "Documento eliminado",
-        user: "Usuario actual",
-        timestamp: new Date(),
-        details: `Documento eliminado: ${documento.name}`,
-        section: "Carga Documental",
-      },
-      ...prev,
-    ])
-
-    toast({
-      title: "Documento eliminado",
-      description: `El documento ${documento.name} fue eliminado correctamente.`,
-    })
-
-    cerrarDialogoEliminacion()
   }
 
   const manejarCargaEvidencia = async (id: string, event: ChangeEvent<HTMLInputElement>) => {
@@ -1285,15 +1235,6 @@ export default function RegistroSATPage() {
                             <Download className="h-4 w-4" />
                           </a>
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => solicitarEliminacionDocumento(doc)}
-                          className="text-destructive hover:text-destructive focus-visible:ring-destructive"
-                          aria-label={`Eliminar ${doc.name}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
                       </div>
                     </div>
                   ))}
@@ -1413,36 +1354,6 @@ export default function RegistroSATPage() {
           </div>
         </TabsContent>
       </Tabs>
-
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            cerrarDialogoEliminacion()
-          } else {
-            setIsDeleteDialogOpen(true)
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar documento</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Deseas eliminar el documento "{documentoAEliminar?.name}"? Esta acción no se puede deshacer y se retirará del
-              repositorio digital.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={cerrarDialogoEliminacion}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmarEliminacionDocumento}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive"
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }
