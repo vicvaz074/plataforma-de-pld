@@ -544,7 +544,7 @@ export default function ActividadesVulnerablesPage() {
     })
 
     if (filtered.length >= 60) {
-      return filtered.slice(0, 60)
+      return filtered.slice(-60)
     }
 
     const faltantes = 60 - filtered.length
@@ -1684,7 +1684,8 @@ const cambiarMesCalendario = (delta: number) => {
                   ))}
                 </div>
                 <p className="rounded border border-emerald-200 bg-emerald-50/70 p-2 text-emerald-800">
-                  La ventana considera 60 meses continuos desde septiembre 2020 para validar obligaciones históricas.
+                  La ventana prioriza los 60 meses más recientes disponibles a partir de septiembre 2020 para validar
+                  obligaciones históricas.
                 </p>
               </CardContent>
             </Card>
