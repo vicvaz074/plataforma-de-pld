@@ -30,6 +30,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/components/ui/use-toast"
 import {
   AlertCircle,
@@ -838,6 +839,42 @@ export default function ActividadesVulnerablesPage() {
     if (!evaluacionActual) return []
     return CONTROLES_ARTICULO_17[evaluacionActual.status] ?? []
   }, [evaluacionActual])
+
+  const checklistEntriesOperacion = useMemo(
+    () => (operacionDocumentos ? Object.entries(operacionDocumentos.requisitosChecklist) : []),
+    [operacionDocumentos],
+  )
+  const checklistTotalesOperacion = checklistEntriesOperacion.length
+  const checklistCompletadosOperacion = useMemo(
+    () => checklistEntriesOperacion.filter(([, completado]) => completado).length,
+    [checklistEntriesOperacion],
+  )
+  const checklistProgresoOperacion = useMemo(
+    () =>
+      !operacionDocumentos
+        ? 0
+        : checklistTotalesOperacion > 0
+          ? Math.round((checklistCompletadosOperacion / checklistTotalesOperacion) * 100)
+          : 100,
+    [operacionDocumentos, checklistTotalesOperacion, checklistCompletadosOperacion],
+  )
+  const controlesOperacion = useMemo(
+    () => (operacionDocumentos ? CONTROLES_ARTICULO_17[operacionDocumentos.umbralStatus] ?? [] : []),
+    [operacionDocumentos],
+  )
+  const tipoClienteOperacionLabel = useMemo(
+    () =>
+      operacionDocumentos
+        ? CLIENTE_TIPOS.find((item) => item.value === operacionDocumentos.tipoCliente)?.label ??
+          operacionDocumentos.tipoCliente
+        : "",
+    [operacionDocumentos],
+  )
+  const evidenciasRegistradasOperacion = operacionDocumentos?.documentosSoporte.length ?? 0
+  const checklistPendientesOperacion = Math.max(
+    checklistTotalesOperacion - checklistCompletadosOperacion,
+    0,
+  )
 
   const resumenUmbrales = useMemo(() => {
     const acumulados = operaciones.reduce(
@@ -2880,183 +2917,312 @@ const cambiarMesCalendario = (delta: number) => {
           }
         }}
       >
-        <DialogContent className="sm:max-w-[720px]">
+        <DialogContent className="max-h-[90vh] overflow-hidden p-0 sm:max-w-[960px]">
           {operacionDocumentos && (
-            <>
-              <DialogHeader>
+            <div className="flex h-full flex-col">
+              <DialogHeader className="border-b bg-slate-50 p-6">
                 <DialogTitle>Requisitos y evidencias vinculadas</DialogTitle>
                 <DialogDescription>
                   Administra la documentación soporte para {operacionDocumentos.cliente} ({operacionDocumentos.rfc}).
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 text-sm text-slate-700">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge
-                    variant="outline"
-                    className={`${getStatusColor(operacionDocumentos.umbralStatus)} border-transparent text-white`}
-                  >
-                    {getStatusLabel(operacionDocumentos.umbralStatus)}
-                  </Badge>
-                  <Badge variant="outline">{operacionDocumentos.periodo}</Badge>
-                  <span className="font-semibold text-slate-800">{formatMontoOperacion(operacionDocumentos)}</span>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-3 rounded border bg-slate-50 p-3">
-                    <h4 className="text-sm font-semibold text-slate-700">Checklist documental</h4>
-                    {Object.keys(operacionDocumentos.requisitosChecklist).length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        Esta fracción no tiene requisitos específicos adicionales para el tipo de cliente seleccionado.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {Object.entries(operacionDocumentos.requisitosChecklist).map(([requisito, completado]) => (
-                          <label key={requisito} className="flex items-start gap-2 text-xs text-slate-600">
-                            <Checkbox
-                              checked={completado}
-                              onCheckedChange={() => alternarRequisitoChecklist(operacionDocumentos.id, requisito)}
-                              className="mt-0.5"
-                            />
-                            <span>{requisito}</span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 rounded border border-emerald-200 bg-white p-2">
-                      <Checkbox
-                        checked={operacionDocumentos.kycIntegrado}
-                        onCheckedChange={(checked) =>
-                          marcarKycIntegrado(operacionDocumentos.id, Boolean(checked))
-                        }
-                      />
-                      <div className="text-xs text-slate-600">
-                        <p className="font-semibold">Expediente KYC actualizado</p>
-                        <p>Marca esta casilla cuando el expediente esté integrado con la evidencia más reciente.</p>
-                        <Button variant="link" size="sm" className="px-0" asChild>
-                          <Link href={`/kyc-expediente?buscar=${operacionDocumentos.rfc}`}>
-                            <ExternalLink className="mr-1 h-3 w-3" /> Abrir expediente KYC
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 rounded border bg-white p-3">
-                    <h4 className="text-sm font-semibold text-slate-700">Controles del artículo 17</h4>
-                    <ul className="list-disc space-y-1 pl-4 text-xs text-slate-600">
-                      {(CONTROLES_ARTICULO_17[operacionDocumentos.umbralStatus] ?? []).map((control) => (
-                        <li key={control}>{control}</li>
-                      ))}
-                    </ul>
-                    <p className="text-xs text-muted-foreground">
-                      Actualiza la información cuando se atienda el aviso o se complete la debida diligencia reforzada.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-3 rounded border bg-slate-50 p-3">
-                  <h4 className="text-sm font-semibold text-slate-700">Registrar nueva evidencia</h4>
-                  {Object.keys(operacionDocumentos.requisitosChecklist).length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {Object.keys(operacionDocumentos.requisitosChecklist).map((requisito) => (
-                        <Button
-                          key={requisito}
-                          type="button"
-                          size="xs"
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="grid gap-6 lg:grid-cols-[300px,1fr] xl:grid-cols-[320px,1fr]">
+                  <aside className="space-y-4">
+                    <div className="rounded-lg border bg-white p-4 shadow-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge
                           variant="outline"
-                          onClick={() => setNuevoDocumento((prev) => ({ ...prev, requisito }))}
+                          className={`${getStatusColor(operacionDocumentos.umbralStatus)} border-transparent text-white`}
                         >
-                          {requisito}
-                        </Button>
-                      ))}
+                          {getStatusLabel(operacionDocumentos.umbralStatus)}
+                        </Badge>
+                        <Badge variant="outline" className="text-slate-700">
+                          Periodo {operacionDocumentos.periodo}
+                        </Badge>
+                        {tipoClienteOperacionLabel && (
+                          <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
+                            {tipoClienteOperacionLabel}
+                          </Badge>
+                        )}
+                        {operacionDocumentos.mismoGrupo && (
+                          <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-700">
+                            Mismo grupo empresarial
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-4 grid gap-3 text-xs text-slate-600">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-slate-500">Cliente</p>
+                          <p className="text-sm font-medium text-slate-700">{operacionDocumentos.cliente}</p>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">RFC</p>
+                            <p className="font-medium uppercase text-slate-700">{operacionDocumentos.rfc}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Fecha de operación</p>
+                            <p className="font-medium text-slate-700">{operacionDocumentos.fechaOperacion}</p>
+                          </div>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Monto de operación</p>
+                            <p className="font-semibold text-slate-800">{formatMontoOperacion(operacionDocumentos)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] uppercase tracking-wide text-slate-500">Acumulado del cliente</p>
+                            <p className="font-semibold text-slate-800">
+                              {formatCurrency(operacionDocumentos.acumuladoCliente, operacionDocumentos.moneda)}
+                            </p>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-slate-500">Tipo de operación</p>
+                          <p className="font-medium text-slate-700">
+                            {operacionDocumentos.tipoOperacion || "Sin clasificación específica"}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  )}
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-slate-500">Requisito vinculado</Label>
-                      <Input
-                        placeholder="Describe el requisito"
-                        value={nuevoDocumento.requisito}
-                        onChange={(event) => setNuevoDocumento((prev) => ({ ...prev, requisito: event.target.value }))}
-                      />
+
+                    <div className="rounded-lg border bg-white p-4 shadow-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-semibold text-slate-700">Progreso documental</h4>
+                        <Badge variant="outline" className="text-xs text-slate-600">
+                          {checklistProgresoOperacion}% completo
+                        </Badge>
+                      </div>
+                      <Progress value={checklistProgresoOperacion} className="mt-3 h-2" />
+                      <div className="mt-3 space-y-1 text-xs text-slate-600">
+                        {checklistTotalesOperacion > 0 ? (
+                          <>
+                            <p>
+                              {checklistCompletadosOperacion} de {checklistTotalesOperacion} requisitos validados.
+                            </p>
+                            {checklistPendientesOperacion > 0 && (
+                              <p className="text-amber-600">
+                                {checklistPendientesOperacion} requisito(s) pendientes de seguimiento.
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p>Esta fracción no tiene checklist documental adicional para este cliente.</p>
+                        )}
+                        <p>
+                          Evidencias cargadas: {" "}
+                          <span className="font-semibold text-slate-700">{evidenciasRegistradasOperacion}</span>
+                        </p>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-slate-500">Fecha de registro</Label>
-                      <Input
-                        type="date"
-                        value={nuevoDocumento.fechaRegistro}
-                        max={new Date().toISOString().substring(0, 10)}
-                        onChange={(event) => setNuevoDocumento((prev) => ({ ...prev, fechaRegistro: event.target.value }))}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-slate-500">Notas</Label>
-                    <Textarea
-                      placeholder="Detalle de la evidencia o comentarios de revisión"
-                      value={nuevoDocumento.notas}
-                      onChange={(event) => setNuevoDocumento((prev) => ({ ...prev, notas: event.target.value }))}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1 text-xs text-slate-600">
-                      <Label className="text-slate-500">Archivo digital (opcional)</Label>
-                      <Input type="file" accept="application/pdf,image/*" onChange={manejarArchivoDocumento} />
-                      {nuevoDocumento.archivoNombre && (
-                        <p className="text-[11px] text-muted-foreground">Archivo seleccionado: {nuevoDocumento.archivoNombre}</p>
+
+                    <div className="space-y-4 rounded-lg border bg-white p-4 shadow-sm">
+                      <div className="flex items-start gap-2 rounded border border-emerald-200 bg-emerald-50 p-3">
+                        <Checkbox
+                          checked={operacionDocumentos.kycIntegrado}
+                          onCheckedChange={(checked) =>
+                            marcarKycIntegrado(operacionDocumentos.id, Boolean(checked))
+                          }
+                          className="mt-0.5"
+                        />
+                        <div className="space-y-1 text-xs text-slate-600">
+                          <p className="font-semibold text-slate-700">Expediente KYC actualizado</p>
+                          <p>Marca esta casilla cuando el expediente esté integrado con la evidencia más reciente.</p>
+                          <Button variant="link" size="sm" className="px-0" asChild>
+                            <Link href={`/kyc-expediente?buscar=${operacionDocumentos.rfc}`}>
+                              <ExternalLink className="mr-1 h-3 w-3" /> Abrir expediente KYC
+                            </Link>
+                          </Button>
+                        </div>
+                      </div>
+
+                      {controlesOperacion.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-slate-700">Controles del artículo 17</p>
+                          <ScrollArea className="mt-2 max-h-40 pr-2">
+                            <ul className="list-disc space-y-2 pl-4 text-xs text-slate-600">
+                              {controlesOperacion.map((control) => (
+                                <li key={control}>{control}</li>
+                              ))}
+                            </ul>
+                          </ScrollArea>
+                          <p className="mt-2 text-[11px] text-muted-foreground">
+                            Actualiza la información cuando se atienda el aviso o se complete la debida diligencia reforzada.
+                          </p>
+                        </div>
                       )}
                     </div>
-                    <Button onClick={agregarDocumentoSoporte}>
-                      <Upload className="mr-2 h-4 w-4" /> Guardar evidencia
-                    </Button>
+                  </aside>
+
+                  <div className="space-y-6 text-sm text-slate-700">
+                    <div className="rounded-lg border bg-white p-4 shadow-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-semibold text-slate-700">Checklist documental</h4>
+                        {checklistTotalesOperacion > 0 && (
+                          <Badge variant="outline" className="text-xs text-slate-600">
+                            {checklistCompletadosOperacion}/{checklistTotalesOperacion}
+                          </Badge>
+                        )}
+                      </div>
+                      {checklistTotalesOperacion === 0 ? (
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          Esta fracción no tiene requisitos específicos adicionales para el tipo de cliente seleccionado.
+                        </p>
+                      ) : (
+                        <ScrollArea className="mt-3 max-h-60 pr-2">
+                          <div className="space-y-2">
+                            {checklistEntriesOperacion.map(([requisito, completado]) => (
+                              <label
+                                key={requisito}
+                                className="flex items-start gap-2 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600"
+                              >
+                                <Checkbox
+                                  checked={completado}
+                                  onCheckedChange={() => alternarRequisitoChecklist(operacionDocumentos.id, requisito)}
+                                  className="mt-0.5"
+                                />
+                                <span>{requisito}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border bg-white p-4 shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h4 className="text-sm font-semibold text-slate-700">Registrar nueva evidencia</h4>
+                        {checklistTotalesOperacion > 0 && (
+                          <p className="text-xs text-muted-foreground">Selecciona un requisito para prellenar el campo.</p>
+                        )}
+                      </div>
+                      {checklistTotalesOperacion > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {checklistEntriesOperacion.map(([requisito]) => (
+                            <Button
+                              key={requisito}
+                              type="button"
+                              size="xs"
+                              variant="outline"
+                              onClick={() => setNuevoDocumento((prev) => ({ ...prev, requisito }))}
+                            >
+                              {requisito}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-slate-500">Requisito vinculado</Label>
+                          <Input
+                            placeholder="Describe el requisito"
+                            value={nuevoDocumento.requisito}
+                            onChange={(event) =>
+                              setNuevoDocumento((prev) => ({ ...prev, requisito: event.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-slate-500">Fecha de registro</Label>
+                          <Input
+                            type="date"
+                            value={nuevoDocumento.fechaRegistro}
+                            max={new Date().toISOString().substring(0, 10)}
+                            onChange={(event) =>
+                              setNuevoDocumento((prev) => ({ ...prev, fechaRegistro: event.target.value }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-4 space-y-1">
+                        <Label className="text-xs text-slate-500">Notas</Label>
+                        <Textarea
+                          placeholder="Detalle de la evidencia o comentarios de revisión"
+                          value={nuevoDocumento.notas}
+                          onChange={(event) =>
+                            setNuevoDocumento((prev) => ({ ...prev, notas: event.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="space-y-1 text-xs text-slate-600">
+                          <Label className="text-slate-500">Archivo digital (opcional)</Label>
+                          <Input type="file" accept="application/pdf,image/*" onChange={manejarArchivoDocumento} />
+                          {nuevoDocumento.archivoNombre && (
+                            <p className="text-[11px] text-muted-foreground">
+                              Archivo seleccionado: {nuevoDocumento.archivoNombre}
+                            </p>
+                          )}
+                        </div>
+                        <Button onClick={agregarDocumentoSoporte}>
+                          <Upload className="mr-2 h-4 w-4" /> Guardar evidencia
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border bg-white p-4 shadow-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-semibold text-slate-700">Evidencias registradas</h4>
+                        <Badge variant="outline" className="text-xs text-slate-600">
+                          {evidenciasRegistradasOperacion} {" "}
+                          {evidenciasRegistradasOperacion === 1 ? "documento" : "documentos"}
+                        </Badge>
+                      </div>
+                      {evidenciasRegistradasOperacion === 0 ? (
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          Aún no se han cargado evidencias para esta operación.
+                        </p>
+                      ) : (
+                        <ScrollArea className="mt-3 max-h-[260px] pr-2">
+                          <div className="space-y-3 text-xs text-slate-600">
+                            {operacionDocumentos.documentosSoporte.map((documento) => (
+                              <div
+                                key={documento.id}
+                                className="rounded border border-slate-200 bg-slate-50 p-3 shadow-sm"
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <div className="space-y-1">
+                                    <p className="font-semibold text-slate-700">{documento.requisito}</p>
+                                    <p className="text-muted-foreground">Registrado el {documento.fechaRegistro}</p>
+                                    {documento.notas && (
+                                      <p className="text-slate-600">{documento.notas}</p>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {documento.archivoContenido && documento.archivoNombre && (
+                                      <Button variant="outline" size="sm" asChild>
+                                        <a href={documento.archivoContenido} download={documento.archivoNombre}>
+                                          <Download className="mr-2 h-4 w-4" /> Descargar
+                                        </a>
+                                      </Button>
+                                    )}
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={() => eliminarDocumentoSoporte(operacionDocumentos.id, documento.id)}
+                                      aria-label="Eliminar evidencia"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                <div className="space-y-2 rounded border bg-white p-3">
-                  <h4 className="text-sm font-semibold text-slate-700">Evidencias registradas</h4>
-                  {operacionDocumentos.documentosSoporte.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Aún no se han cargado evidencias para esta operación.</p>
-                  ) : (
-                    <div className="space-y-3 text-xs text-slate-600">
-                      {operacionDocumentos.documentosSoporte.map((documento) => (
-                        <div key={documento.id} className="rounded border border-slate-200 bg-slate-50 p-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div>
-                              <p className="font-semibold text-slate-700">{documento.requisito}</p>
-                              <p className="text-muted-foreground">Registrado el {documento.fechaRegistro}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {documento.archivoContenido && documento.archivoNombre && (
-                                <Button variant="outline" size="sm" asChild>
-                                  <a href={documento.archivoContenido} download={documento.archivoNombre}>
-                                    <Download className="mr-2 h-4 w-4" /> Descargar
-                                  </a>
-                                </Button>
-                              )}
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => eliminarDocumentoSoporte(operacionDocumentos.id, documento.id)}
-                                aria-label="Eliminar evidencia"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                          {documento.notas && <p className="mt-2 text-slate-600">{documento.notas}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </div>
-              <DialogFooter>
+              <DialogFooter className="border-t bg-slate-50 p-4">
                 <Button variant="outline" onClick={cerrarDocumentosOperacion}>
                   Cerrar
                 </Button>
               </DialogFooter>
-            </>
+            </div>
           )}
         </DialogContent>
       </Dialog>
