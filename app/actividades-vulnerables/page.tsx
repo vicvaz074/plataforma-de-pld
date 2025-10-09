@@ -149,6 +149,26 @@ interface OperacionCliente {
   acumuladoCliente: number
   alerta: string | null
   avisoPresentado: boolean
+  alertaResuelta: boolean
+}
+
+interface ClienteGuardado {
+  rfc: string
+  nombre: string
+  tipoCliente: string
+  mismoGrupo: boolean
+}
+
+type FormularioEdicion = {
+  cliente: string
+  rfc: string
+  tipoCliente: string
+  mismoGrupo: "si" | "no"
+  tipoOperacion: string
+  monto: string
+  moneda: string
+  fechaOperacion: string
+  evidencia: string
 }
 
 const now = new Date()
@@ -156,6 +176,79 @@ const currentYear = now.getFullYear()
 const currentMonth = now.getMonth() + 1
 const START_WINDOW = new Date(2020, 8, 1) // septiembre 2020
 type UmaMonthEntry = (typeof UMA_MONTHS)[number]
+
+const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
+const NUEVO_CLIENTE_VALUE = "__nuevo__"
+
+function ordenarClientesGuardados(clientes: ClienteGuardado[]) {
+  return [...clientes].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
+}
+
+function obtenerAlertaPorStatus(status: UmbralStatus) {
+  if (status === "aviso") {
+    return "Supera el umbral de aviso. Preparar aviso en 17 días y suspender acumulación."
+  }
+  if (status === "identificacion") {
+    return "Supera el umbral de identificación. Integrar expediente y vigilar acumulación por 6 meses."
+  }
+  return null
+}
+
+function recalcularOperaciones(lista: OperacionCliente[]) {
+  const acumulados = new Map<string, number>()
+
+  return lista.map((operacion) => {
+    const key = `${operacion.actividadKey}-${operacion.periodo}-${operacion.rfc}`
+    const acumuladoPrevio = acumulados.get(key) ?? 0
+
+    if (operacion.avisoPresentado) {
+      const statusPresentado: UmbralStatus =
+        operacion.monto >= operacion.avisoUmbralPesos
+          ? "aviso"
+          : operacion.monto >= operacion.identificacionUmbralPesos
+            ? "identificacion"
+            : "sin-obligacion"
+
+      acumulados.set(key, 0)
+
+      return {
+        ...operacion,
+        acumuladoCliente: operacion.monto,
+        umbralStatus: statusPresentado,
+        alerta: operacion.alerta ?? obtenerAlertaPorStatus(statusPresentado),
+        alertaResuelta: true,
+      }
+    }
+
+    const nuevoAcumulado = acumuladoPrevio + operacion.monto
+
+    let status: UmbralStatus = "sin-obligacion"
+    if (nuevoAcumulado >= operacion.avisoUmbralPesos) {
+      status = "aviso"
+    } else if (nuevoAcumulado >= operacion.identificacionUmbralPesos) {
+      status = "identificacion"
+    }
+
+    acumulados.set(key, nuevoAcumulado)
+
+    const alertaCalculada = obtenerAlertaPorStatus(status)
+    let alertaResuelta = operacion.alertaResuelta
+
+    if (!alertaCalculada) {
+      alertaResuelta = true
+    } else if (operacion.alerta !== alertaCalculada) {
+      alertaResuelta = false
+    }
+
+    return {
+      ...operacion,
+      acumuladoCliente: nuevoAcumulado,
+      umbralStatus: status,
+      alerta: alertaCalculada,
+      alertaResuelta,
+    }
+  })
+}
 
 function formatCurrency(value: number) {
   return value.toLocaleString("es-MX", {
@@ -239,6 +332,9 @@ export default function ActividadesVulnerablesPage() {
   const [fechaOperacion, setFechaOperacion] = useState<string>(new Date().toISOString().substring(0, 10))
   const [evidencia, setEvidencia] = useState<string>("")
   const [operaciones, setOperaciones] = useState<OperacionCliente[]>([])
+  const [clientesGuardados, setClientesGuardados] = useState<ClienteGuardado[]>([])
+  const [clientesGuardadosListo, setClientesGuardadosListo] = useState(false)
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<string | null>(null)
   const [avisoPreliminar, setAvisoPreliminar] = useState<OperacionCliente | null>(null)
   const [infoGrupoOpen, setInfoGrupoOpen] = useState(false)
   const [actividadInfoKey, setActividadInfoKey] = useState<string | null>(null)
@@ -248,6 +344,19 @@ export default function ActividadesVulnerablesPage() {
   const [mesCalendario, setMesCalendario] = useState<number>(currentMonth)
   const [anioCalendario, setAnioCalendario] = useState<number>(currentYear)
   const [diaSeleccionado, setDiaSeleccionado] = useState<string | null>(null)
+  const [operacionEnEdicion, setOperacionEnEdicion] = useState<OperacionCliente | null>(null)
+  const [datosEdicion, setDatosEdicion] = useState<FormularioEdicion>({
+    cliente: "",
+    rfc: "",
+    tipoCliente: CLIENTE_TIPOS[0]?.value ?? "",
+    mismoGrupo: "no",
+    tipoOperacion: "",
+    monto: "",
+    moneda: "MXN",
+    fechaOperacion: new Date().toISOString().substring(0, 10),
+    evidencia: "",
+  })
+  const [operacionPorEliminar, setOperacionPorEliminar] = useState<OperacionCliente | null>(null)
 
   const umaVentana = useMemo(() => {
     const filtered = UMA_MONTHS.filter((entry) => {
@@ -340,6 +449,81 @@ export default function ActividadesVulnerablesPage() {
     setDiaSeleccionado(normalizeDateKey(ultimaOperacion.fechaOperacion))
   }, [clienteCalendario, operaciones])
 
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    try {
+      const stored = window.localStorage.getItem(CLIENTES_STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored) as ClienteGuardado[]
+        if (Array.isArray(parsed)) {
+          setClientesGuardados(ordenarClientesGuardados(parsed))
+        }
+      }
+    } catch (_error) {
+      // ignorar errores de parseo de almacenamiento local
+    } finally {
+      setClientesGuardadosListo(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!clientesGuardadosListo) return
+    if (typeof window === "undefined") return
+
+    window.localStorage.setItem(CLIENTES_STORAGE_KEY, JSON.stringify(clientesGuardados))
+  }, [clientesGuardados, clientesGuardadosListo])
+
+  useEffect(() => {
+    if (operaciones.length === 0) return
+
+    setClientesGuardados((prev) => {
+      const mapa = new Map(prev.map((cliente) => [cliente.rfc, cliente]))
+      let actualizado = false
+
+      operaciones.forEach((operacion) => {
+        const datos: ClienteGuardado = {
+          rfc: operacion.rfc,
+          nombre: operacion.cliente,
+          tipoCliente: operacion.tipoCliente,
+          mismoGrupo: operacion.mismoGrupo,
+        }
+        const existente = mapa.get(operacion.rfc)
+        if (
+          !existente ||
+          existente.nombre !== datos.nombre ||
+          existente.tipoCliente !== datos.tipoCliente ||
+          existente.mismoGrupo !== datos.mismoGrupo
+        ) {
+          mapa.set(operacion.rfc, datos)
+          actualizado = true
+        }
+      })
+
+      if (!actualizado) {
+        return prev
+      }
+
+      return ordenarClientesGuardados(Array.from(mapa.values()))
+    })
+  }, [operaciones])
+
+  useEffect(() => {
+    if (!operacionEnEdicion) return
+
+    setDatosEdicion({
+      cliente: operacionEnEdicion.cliente,
+      rfc: operacionEnEdicion.rfc,
+      tipoCliente: operacionEnEdicion.tipoCliente,
+      mismoGrupo: operacionEnEdicion.mismoGrupo ? "si" : "no",
+      tipoOperacion: operacionEnEdicion.tipoOperacion,
+      monto: operacionEnEdicion.monto.toString(),
+      moneda: operacionEnEdicion.moneda,
+      fechaOperacion: operacionEnEdicion.fechaOperacion,
+      evidencia: operacionEnEdicion.evidencia,
+    })
+  }, [operacionEnEdicion])
+
   const mesesDisponibles = useMemo(
     () =>
       umaVentana
@@ -404,15 +588,14 @@ export default function ActividadesVulnerablesPage() {
     const acumuladoPrevio = operacionesRelacionadas.reduce((acc, operacion) => acc + operacion.monto, 0)
     const acumulado = acumuladoPrevio + monto
     let status: UmbralStatus = "sin-obligacion"
-    let alerta: string | null = null
 
     if (acumulado >= umbralPesos.aviso) {
       status = "aviso"
-      alerta = "Supera el umbral de aviso. Preparar aviso en 17 días y suspender acumulación."
     } else if (acumulado >= umbralPesos.identificacion) {
       status = "identificacion"
-      alerta = "Supera el umbral de identificación. Integrar expediente y vigilar acumulación por 6 meses."
     }
+
+    const alerta = obtenerAlertaPorStatus(status)
 
     return {
       status,
@@ -513,6 +696,22 @@ export default function ActividadesVulnerablesPage() {
     )
   }, [diaSeleccionado, operacionesClienteSeleccionado])
 
+  const alertasActivas = useMemo(
+    () =>
+      operaciones
+        .filter((operacion) => operacion.alerta && !operacion.alertaResuelta)
+        .sort((a, b) => toDate(b.fechaOperacion).getTime() - toDate(a.fechaOperacion).getTime()),
+    [operaciones],
+  )
+
+  const alertasResueltas = useMemo(
+    () =>
+      operaciones
+        .filter((operacion) => operacion.alerta && operacion.alertaResuelta)
+        .sort((a, b) => toDate(b.fechaOperacion).getTime() - toDate(a.fechaOperacion).getTime()),
+    [operaciones],
+  )
+
   useEffect(() => {
     if (!clienteCalendario) {
       return
@@ -568,15 +767,65 @@ const pasoValido = useMemo(() => {
   evaluacionActual,
 ])
 
+const limpiarClienteSeleccionado = () => {
+  setClienteSeleccionado(null)
+  setClienteNombre("")
+  setRfc("")
+}
+
 const limpiarFormulario = () => {
   setMontoOperacion("")
   setTipoOperacion("")
   setEvidencia("")
-  setClienteNombre("")
-  setRfc("")
+  limpiarClienteSeleccionado()
   setMismoGrupo("no")
   setMoneda("MXN")
   setFechaOperacion(new Date().toISOString().substring(0, 10))
+}
+
+const registrarClienteGuardado = (cliente: ClienteGuardado) => {
+  setClientesGuardados((prev) => {
+    const existente = prev.find((item) => item.rfc === cliente.rfc)
+    if (existente) {
+      if (
+        existente.nombre === cliente.nombre &&
+        existente.tipoCliente === cliente.tipoCliente &&
+        existente.mismoGrupo === cliente.mismoGrupo
+      ) {
+        return prev
+      }
+      return ordenarClientesGuardados(
+        prev.map((item) => (item.rfc === cliente.rfc ? { ...item, ...cliente } : item)),
+      )
+    }
+
+    return ordenarClientesGuardados([...prev, cliente])
+  })
+}
+
+const actualizarOperaciones = (
+  modifier: (operacionesActuales: OperacionCliente[]) => OperacionCliente[],
+) => {
+  setOperaciones((prev) => recalcularOperaciones(modifier(prev)))
+}
+
+const manejarSeleccionClienteGuardado = (valor: string) => {
+  if (valor === NUEVO_CLIENTE_VALUE) {
+    limpiarClienteSeleccionado()
+    return
+  }
+
+  const guardado = clientesGuardados.find((cliente) => cliente.rfc === valor)
+  if (!guardado) {
+    limpiarClienteSeleccionado()
+    return
+  }
+
+  setClienteSeleccionado(guardado.rfc)
+  setClienteNombre(guardado.nombre)
+  setRfc(guardado.rfc)
+  setTipoCliente(guardado.tipoCliente)
+  setMismoGrupo(guardado.mismoGrupo ? "si" : "no")
 }
 
 const agregarOperacion = () => {
@@ -622,15 +871,14 @@ const agregarOperacion = () => {
   const acumuladoCliente = acumuladoPrevio + monto
 
   let status: UmbralStatus = "sin-obligacion"
-  let alerta: string | null = null
 
   if (acumuladoCliente >= umbralPesos.aviso) {
     status = "aviso"
-    alerta = "Supera el umbral de aviso. Preparar aviso de 17 días y suspender acumulación."
   } else if (acumuladoCliente >= umbralPesos.identificacion) {
     status = "identificacion"
-    alerta = "Supera el umbral de identificación. Integrar expediente y vigilar acumulación por 6 meses."
   }
+
+  const alerta = obtenerAlertaPorStatus(status)
 
   const nuevaOperacion: OperacionCliente = {
     id: crypto.randomUUID(),
@@ -655,9 +903,16 @@ const agregarOperacion = () => {
     acumuladoCliente,
     alerta,
     avisoPresentado: false,
+    alertaResuelta: alerta ? false : true,
   }
 
-  setOperaciones((prev) => [...prev, nuevaOperacion])
+  actualizarOperaciones((prev) => [...prev, nuevaOperacion])
+  registrarClienteGuardado({
+    rfc: nuevaOperacion.rfc,
+    nombre: nuevaOperacion.cliente,
+    tipoCliente: nuevaOperacion.tipoCliente,
+    mismoGrupo: nuevaOperacion.mismoGrupo,
+  })
 
   if (status !== "sin-obligacion") {
     toast({
@@ -681,17 +936,129 @@ const agregarOperacion = () => {
 }
 
 const marcarAvisoPresentado = (id: string) => {
-  setOperaciones((prev) =>
+  actualizarOperaciones((prev) =>
     prev.map((operacion) =>
       operacion.id === id
         ? {
             ...operacion,
             avisoPresentado: true,
             alerta: "Aviso marcado como presentado. Reiniciar acumulación a partir de esta fecha.",
+            alertaResuelta: true,
           }
         : operacion,
     ),
   )
+
+  toast({
+    title: "Aviso actualizado",
+    description: "Se marcó la operación como atendida ante la autoridad.",
+  })
+}
+
+const abrirEdicionOperacion = (operacion: OperacionCliente) => {
+  setOperacionEnEdicion(operacion)
+}
+
+const guardarOperacionEditada = () => {
+  if (!operacionEnEdicion) return
+
+  if (
+    !datosEdicion.cliente.trim() ||
+    !datosEdicion.rfc.trim() ||
+    !datosEdicion.tipoOperacion.trim() ||
+    !datosEdicion.monto.trim()
+  ) {
+    toast({
+      title: "Faltan datos",
+      description: "Completa el nombre, RFC, tipo de operación y monto antes de guardar.",
+      variant: "destructive",
+    })
+    return
+  }
+
+  const monto = Number(datosEdicion.monto)
+  if (Number.isNaN(monto) || monto <= 0) {
+    toast({
+      title: "Monto inválido",
+      description: "El monto debe ser numérico y mayor a cero.",
+      variant: "destructive",
+    })
+    return
+  }
+
+  const rfcNormalizado = datosEdicion.rfc.trim().toUpperCase()
+
+  const operacionActualizada: OperacionCliente = {
+    ...operacionEnEdicion,
+    cliente: datosEdicion.cliente.trim(),
+    rfc: rfcNormalizado,
+    tipoCliente: datosEdicion.tipoCliente,
+    mismoGrupo: datosEdicion.mismoGrupo === "si",
+    tipoOperacion: datosEdicion.tipoOperacion.trim(),
+    monto,
+    moneda: datosEdicion.moneda,
+    fechaOperacion: datosEdicion.fechaOperacion,
+    evidencia: datosEdicion.evidencia,
+  }
+
+  actualizarOperaciones((prev) =>
+    prev.map((operacion) => (operacion.id === operacionEnEdicion.id ? operacionActualizada : operacion)),
+  )
+
+  registrarClienteGuardado({
+    rfc: operacionActualizada.rfc,
+    nombre: operacionActualizada.cliente,
+    tipoCliente: operacionActualizada.tipoCliente,
+    mismoGrupo: operacionActualizada.mismoGrupo,
+  })
+
+  setOperacionEnEdicion(null)
+
+  toast({
+    title: "Operación actualizada",
+    description: "Se guardaron los cambios de la operación seleccionada.",
+  })
+}
+
+const cancelarEdicionOperacion = () => {
+  setOperacionEnEdicion(null)
+}
+
+const solicitarEliminacionOperacion = (operacion: OperacionCliente) => {
+  setOperacionPorEliminar(operacion)
+}
+
+const confirmarEliminacionOperacion = () => {
+  if (!operacionPorEliminar) return
+
+  const id = operacionPorEliminar.id
+  actualizarOperaciones((prev) => prev.filter((operacion) => operacion.id !== id))
+  setOperacionPorEliminar(null)
+
+  toast({
+    title: "Operación eliminada",
+    description: "Se eliminó la operación del seguimiento.",
+  })
+}
+
+const actualizarEstadoAlerta = (id: string, resuelta: boolean) => {
+  actualizarOperaciones((prev) =>
+    prev.map((operacion) =>
+      operacion.id === id
+        ? {
+            ...operacion,
+            alertaResuelta: resuelta,
+          }
+        : operacion,
+    ),
+  )
+
+  toast({
+    title: resuelta ? "Alerta gestionada" : "Alerta reabierta",
+    description: resuelta
+      ? "Se marcó la alerta como atendida."
+      : "La alerta se reactivó para dar seguimiento pendiente.",
+  })
 }
 
 const generarAvisoPreliminar = (operacion: OperacionCliente) => {
@@ -1159,18 +1526,67 @@ const cambiarMesCalendario = (delta: number) => {
                   </div>
                   <div className="space-y-2">
                     <Label>Nombre o razón social</Label>
+                    {clientesGuardados.length > 0 && (
+                      <Select
+                        value={clienteSeleccionado ?? NUEVO_CLIENTE_VALUE}
+                        onValueChange={manejarSeleccionClienteGuardado}
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Selecciona un cliente guardado" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {clientesGuardados.map((cliente) => (
+                            <SelectItem key={cliente.rfc} value={cliente.rfc}>
+                              {cliente.nombre} ({cliente.rfc})
+                            </SelectItem>
+                          ))}
+                          <SelectItem value={NUEVO_CLIENTE_VALUE}>Añadir cliente nuevo…</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                     <Input
+                      list="clientes-guardados"
                       placeholder="Ejemplo: Grupo Alfa S.A. de C.V."
                       value={clienteNombre}
-                      onChange={(event) => setClienteNombre(event.target.value)}
+                      onChange={(event) => {
+                        if (clienteSeleccionado) {
+                          setClienteSeleccionado(null)
+                        }
+                        setClienteNombre(event.target.value)
+                      }}
                     />
+                    {clientesGuardados.length > 0 && (
+                      <>
+                        <datalist id="clientes-guardados">
+                          {clientesGuardados.map((cliente) => (
+                            <option key={cliente.rfc} value={cliente.nombre} />
+                          ))}
+                        </datalist>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start px-2 text-xs"
+                          onClick={() => {
+                            limpiarClienteSeleccionado()
+                          }}
+                        >
+                          Añadir otro cliente
+                        </Button>
+                      </>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>RFC</Label>
                     <Input
                       placeholder="RFC del cliente"
                       value={rfc}
-                      onChange={(event) => setRfc(event.target.value.toUpperCase())}
+                      onChange={(event) => {
+                        if (clienteSeleccionado) {
+                          setClienteSeleccionado(null)
+                        }
+                        setRfc(event.target.value.toUpperCase())
+                      }}
                     />
                   </div>
                 </div>
@@ -1536,6 +1952,16 @@ const cambiarMesCalendario = (delta: number) => {
                                 <Button size="sm" variant="outline" onClick={() => exportarXml(operacion)}>
                                   <Download className="mr-1 h-4 w-4" /> XML
                                 </Button>
+                                <Button size="sm" variant="outline" onClick={() => abrirEdicionOperacion(operacion)}>
+                                  Editar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => solicitarEliminacionOperacion(operacion)}
+                                >
+                                  Eliminar
+                                </Button>
                               </div>
                             </div>
                           ))}
@@ -1545,6 +1971,112 @@ const cambiarMesCalendario = (delta: number) => {
                   </Card>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-600" /> Centro de alertas operativas
+              </CardTitle>
+              <CardDescription>Gestiona los recordatorios generados por cruces con los umbrales.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {alertasActivas.length === 0 && alertasResueltas.length === 0 ? (
+                <div className="rounded border bg-slate-50 p-4 text-sm text-slate-600">
+                  No se han generado alertas todavía. Registra operaciones para activar el monitoreo.
+                </div>
+              ) : (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="space-y-3 rounded-lg border bg-white p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="text-sm font-semibold text-slate-700">Alertas activas</h4>
+                      <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                        {alertasActivas.length}
+                      </Badge>
+                    </div>
+                    {alertasActivas.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No hay alertas pendientes.</p>
+                    ) : (
+                      <div className="space-y-3 text-xs text-slate-600">
+                        {alertasActivas.map((operacion) => (
+                          <div
+                            key={operacion.id}
+                            className="space-y-2 rounded border border-amber-200 bg-amber-50/70 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-semibold text-slate-800">{operacion.cliente}</p>
+                              <Badge variant="outline">{getStatusLabel(operacion.umbralStatus)}</Badge>
+                            </div>
+                            <p className="text-slate-600">RFC: {operacion.rfc}</p>
+                            <p className="text-slate-600">Monto: {formatCurrency(operacion.monto)} {operacion.moneda}</p>
+                            {operacion.alerta && (
+                              <div className="flex items-start gap-2 rounded bg-white/60 p-2 text-amber-800">
+                                <AlertCircle className="mt-0.5 h-4 w-4" />
+                                <span>{operacion.alerta}</span>
+                              </div>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button size="sm" onClick={() => reutilizarDatosCliente(operacion)}>
+                                Capturar nueva operación
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => actualizarEstadoAlerta(operacion.id, true)}
+                              >
+                                Marcar como atendida
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-3 rounded-lg border bg-white p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="text-sm font-semibold text-slate-700">Alertas gestionadas</h4>
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
+                        {alertasResueltas.length}
+                      </Badge>
+                    </div>
+                    {alertasResueltas.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Aún no se han atendido alertas.</p>
+                    ) : (
+                      <div className="space-y-3 text-xs text-slate-600">
+                        {alertasResueltas.map((operacion) => (
+                          <div
+                            key={operacion.id}
+                            className="space-y-2 rounded border border-emerald-200 bg-emerald-50/70 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-semibold text-slate-800">{operacion.cliente}</p>
+                              <Badge variant="outline">{getStatusLabel(operacion.umbralStatus)}</Badge>
+                            </div>
+                            <p className="text-slate-600">RFC: {operacion.rfc}</p>
+                            <p className="text-slate-600">Monto: {formatCurrency(operacion.monto)} {operacion.moneda}</p>
+                            {operacion.alerta && (
+                              <div className="flex items-start gap-2 rounded bg-white/60 p-2 text-emerald-800">
+                                <CheckCircle2 className="mt-0.5 h-4 w-4" />
+                                <span>{operacion.alerta}</span>
+                              </div>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => actualizarEstadoAlerta(operacion.id, false)}
+                              >
+                                Reabrir alerta
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -1781,11 +2313,11 @@ const cambiarMesCalendario = (delta: number) => {
           }
         }}
       >
-        <DialogContent>
-          {infoModal && (
-            <>
-              <DialogHeader>
-                <DialogTitle>{INFO_MODAL_CONTENT[infoModal].title}</DialogTitle>
+      <DialogContent>
+        {infoModal && (
+          <>
+            <DialogHeader>
+              <DialogTitle>{INFO_MODAL_CONTENT[infoModal].title}</DialogTitle>
                 <DialogDescription>
                   <div className="space-y-3 text-left text-slate-600">
                     {INFO_MODAL_CONTENT[infoModal].body.map((paragraph) => (
@@ -1814,6 +2346,195 @@ const cambiarMesCalendario = (delta: number) => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogAction>Cerrar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog
+        open={Boolean(operacionEnEdicion)}
+        onOpenChange={(open) => {
+          if (!open) {
+            cancelarEdicionOperacion()
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>Editar operación</DialogTitle>
+            <DialogDescription>
+              Ajusta los datos capturados para mantener actualizado el seguimiento del cliente.
+            </DialogDescription>
+          </DialogHeader>
+          {operacionEnEdicion && (
+            <div className="space-y-4 text-sm text-slate-700">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Cliente</Label>
+                  <Input
+                    value={datosEdicion.cliente}
+                    onChange={(event) =>
+                      setDatosEdicion((prev) => ({ ...prev, cliente: event.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>RFC</Label>
+                  <Input
+                    value={datosEdicion.rfc}
+                    onChange={(event) =>
+                      setDatosEdicion((prev) => ({ ...prev, rfc: event.target.value.toUpperCase() }))
+                    }
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Tipo de cliente</Label>
+                  <Select
+                    value={datosEdicion.tipoCliente}
+                    onValueChange={(value) =>
+                      setDatosEdicion((prev) => ({ ...prev, tipoCliente: value }))
+                    }
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Selecciona tipo de cliente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CLIENTE_TIPOS.map((tipo) => (
+                        <SelectItem key={tipo.value} value={tipo.value}>
+                          {tipo.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>¿Pertenece al mismo grupo?</Label>
+                  <div className="flex items-center gap-2">
+                    {[{ value: "si", label: "Sí" }, { value: "no", label: "No" }].map((option) => (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        variant={datosEdicion.mismoGrupo === option.value ? "default" : "outline"}
+                        onClick={() => setDatosEdicion((prev) => ({ ...prev, mismoGrupo: option.value }))}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Tipo de operación</Label>
+                  <Input
+                    value={datosEdicion.tipoOperacion}
+                    onChange={(event) =>
+                      setDatosEdicion((prev) => ({ ...prev, tipoOperacion: event.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Monto</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={datosEdicion.monto}
+                    onChange={(event) =>
+                      setDatosEdicion((prev) => ({ ...prev, monto: event.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Moneda</Label>
+                  <Select
+                    value={datosEdicion.moneda}
+                    onValueChange={(value) =>
+                      setDatosEdicion((prev) => ({ ...prev, moneda: value }))
+                    }
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Selecciona moneda" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MXN">Peso mexicano (MXN)</SelectItem>
+                      <SelectItem value="USD">Dólar estadounidense (USD)</SelectItem>
+                      <SelectItem value="EUR">Euro (EUR)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Fecha de la operación</Label>
+                  <Input
+                    type="date"
+                    value={datosEdicion.fechaOperacion}
+                    max={new Date().toISOString().substring(0, 10)}
+                    onChange={(event) =>
+                      setDatosEdicion((prev) => ({ ...prev, fechaOperacion: event.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Evidencia o comentarios</Label>
+                <Textarea
+                  value={datosEdicion.evidencia}
+                  onChange={(event) =>
+                    setDatosEdicion((prev) => ({ ...prev, evidencia: event.target.value }))
+                  }
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={cancelarEdicionOperacion}>
+              Cancelar
+            </Button>
+            <Button onClick={guardarOperacionEditada}>Guardar cambios</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(operacionPorEliminar)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setOperacionPorEliminar(null)
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar operación</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción quitará la operación del tablero y actualizará los acumulados del cliente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {operacionPorEliminar && (
+            <div className="space-y-1 text-sm text-slate-700">
+              <p>
+                <span className="font-semibold">Cliente:</span> {operacionPorEliminar.cliente} ({operacionPorEliminar.rfc})
+              </p>
+              <p>
+                <span className="font-semibold">Periodo:</span> {operacionPorEliminar.periodo}
+              </p>
+              <p>
+                <span className="font-semibold">Monto:</span> {formatCurrency(operacionPorEliminar.monto)} {" "}
+                {operacionPorEliminar.moneda}
+              </p>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmarEliminacionOperacion}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Eliminar
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
