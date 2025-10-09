@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import { type ChangeEvent, useEffect, useMemo, useState } from "react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,6 +23,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -38,14 +40,18 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  ExternalLink,
   FileText,
   Info,
   Layers,
   ListChecks,
+  Paperclip,
   PlayCircle,
   Plus,
   ShieldAlert,
+  Trash2,
   TrendingUp,
+  Upload,
   Users,
 } from "lucide-react"
 import type { ActividadVulnerable } from "@/lib/data/actividades"
@@ -80,6 +86,18 @@ const CLIENTE_TIPOS = [
   { value: "otro", label: "Otro sujeto obligado" },
 ]
 
+const MONEDAS = [
+  { value: "MXN", label: "Peso mexicano (MXN)" },
+  { value: "USD", label: "Dólar estadounidense (USD)" },
+  { value: "EUR", label: "Euro (EUR)" },
+  { value: "CAD", label: "Dólar canadiense (CAD)" },
+  { value: "GBP", label: "Libra esterlina (GBP)" },
+  { value: "JPY", label: "Yen japonés (JPY)" },
+  { value: "CHF", label: "Franco suizo (CHF)" },
+  { value: "BRL", label: "Real brasileño (BRL)" },
+  { value: "OTRA", label: "Otra divisa (especificar)" },
+]
+
 const STEPS = [
   {
     id: 0,
@@ -101,6 +119,26 @@ const STEPS = [
 type UmbralStatus = "sin-obligacion" | "identificacion" | "aviso"
 
 type InfoModalKey = "umbral-identificacion" | "umbral-aviso" | "uma-validacion"
+
+const OPERACIONES_STORAGE_KEY = "actividades_vulnerables_operaciones"
+
+const CONTROLES_ARTICULO_17: Record<UmbralStatus, string[]> = {
+  "sin-obligacion": [
+    "Conservar registro de operaciones y responsables durante al menos cinco años.",
+    "Designar oficial de cumplimiento y mantener políticas de identificación actualizadas.",
+    "Aplicar monitoreo transaccional básico y listas restrictivas internas.",
+  ],
+  identificacion: [
+    "Integrar expediente único con documentación de identificación completa.",
+    "Verificar listas de personas bloqueadas y reportar coincidencias inmediatas.",
+    "Aplicar medidas reforzadas de debida diligencia y validar beneficiario final.",
+  ],
+  aviso: [
+    "Generar aviso ante la Unidad de Inteligencia Financiera dentro de los 17 días hábiles.",
+    "Adjuntar soportes documentales y conservar acuse de envío o informe 27 Bis.",
+    "Suspender el cómputo de acumulación hasta confirmar atención del aviso.",
+  ],
+}
 
 const INFO_MODAL_CONTENT: Record<InfoModalKey, { title: string; body: string[] }> = {
   "umbral-identificacion": {
@@ -139,6 +177,7 @@ interface OperacionCliente {
   anio: number
   monto: number
   moneda: string
+  monedaDescripcion: string
   fechaOperacion: string
   tipoOperacion: string
   evidencia: string
@@ -150,6 +189,9 @@ interface OperacionCliente {
   alerta: string | null
   avisoPresentado: boolean
   alertaResuelta: boolean
+  documentosSoporte: DocumentoSoporte[]
+  requisitosChecklist: Record<string, boolean>
+  kycIntegrado: boolean
 }
 
 interface ClienteGuardado {
@@ -167,8 +209,19 @@ type FormularioEdicion = {
   tipoOperacion: string
   monto: string
   moneda: string
+  monedaPersonalizadaCodigo: string
+  monedaPersonalizadaDescripcion: string
   fechaOperacion: string
   evidencia: string
+}
+
+interface DocumentoSoporte {
+  id: string
+  requisito: string
+  notas: string
+  archivoNombre?: string
+  archivoContenido?: string
+  fechaRegistro: string
 }
 
 const now = new Date()
@@ -180,8 +233,40 @@ type UmaMonthEntry = (typeof UMA_MONTHS)[number]
 const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
 const NUEVO_CLIENTE_VALUE = "__nuevo__"
 
+const TIPO_CLIENTE_OBLIGACIONES: Record<string, keyof ActividadVulnerable["clienteObligaciones"]> = {
+  pfn: "personaFisica",
+  pfe: "personaExtranjera",
+  pmn: "personaMoral",
+  pme: "personaExtranjera",
+  fideicomiso: "fideicomiso",
+  dependencia: "autoridad",
+  vehiculo: "vehiculo",
+  otro: "otro",
+}
+
 function ordenarClientesGuardados(clientes: ClienteGuardado[]) {
   return [...clientes].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
+}
+
+function getMonedaLabel(value: string) {
+  const found = MONEDAS.find((moneda) => moneda.value === value)
+  return found ? found.label : value
+}
+
+function buildChecklist(
+  actividad: ActividadVulnerable,
+  tipoCliente: string,
+  existente?: Record<string, boolean>,
+) {
+  const key = TIPO_CLIENTE_OBLIGACIONES[tipoCliente as keyof typeof TIPO_CLIENTE_OBLIGACIONES] ?? "otro"
+  const requisitosBase = actividad.clienteObligaciones[key]
+  const checklist: Record<string, boolean> = {}
+
+  requisitosBase.forEach((item) => {
+    checklist[item] = existente?.[item] ?? false
+  })
+
+  return checklist
 }
 
 function obtenerAlertaPorStatus(status: UmbralStatus) {
@@ -250,12 +335,19 @@ function recalcularOperaciones(lista: OperacionCliente[]) {
   })
 }
 
-function formatCurrency(value: number) {
-  return value.toLocaleString("es-MX", {
-    style: "currency",
-    currency: "MXN",
-    minimumFractionDigits: 2,
-  })
+function formatCurrency(value: number, currency = "MXN") {
+  try {
+    return value.toLocaleString("es-MX", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+    })
+  } catch (_error) {
+    return `${value.toLocaleString("es-MX", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })} ${currency}`
+  }
 }
 
 function monthLabel(month: number) {
@@ -283,6 +375,80 @@ function formatUmbralTexto(uma: number, pesos: number) {
     return "Siempre"
   }
   return `${formatCurrency(pesos)} (${uma.toLocaleString("es-MX")} UMA)`
+}
+
+function formatMontoOperacion(operacion: OperacionCliente) {
+  const currencyCode = operacion.moneda && operacion.moneda.length === 3 ? operacion.moneda : "MXN"
+  return `${formatCurrency(operacion.monto, currencyCode)} (${operacion.monedaDescripcion})`
+}
+
+function sanitizeDocumento(raw: any): DocumentoSoporte | null {
+  if (!raw || typeof raw !== "object") return null
+  const id = typeof raw.id === "string" ? raw.id : typeof crypto !== "undefined" ? crypto.randomUUID() : `${Date.now()}`
+  const requisito = typeof raw.requisito === "string" ? raw.requisito : "Documento adjunto"
+  const notas = typeof raw.notas === "string" ? raw.notas : ""
+  const archivoNombre = typeof raw.archivoNombre === "string" ? raw.archivoNombre : undefined
+  const archivoContenido = typeof raw.archivoContenido === "string" ? raw.archivoContenido : undefined
+  const fechaRegistro =
+    typeof raw.fechaRegistro === "string" ? raw.fechaRegistro : new Date().toISOString().substring(0, 10)
+
+  return { id, requisito, notas, archivoNombre, archivoContenido, fechaRegistro }
+}
+
+function sanitizeOperacion(raw: any): OperacionCliente | null {
+  if (!raw || typeof raw !== "object") return null
+
+  const actividad = actividadesVulnerables.find((item) => item.key === raw.actividadKey)
+  if (!actividad) return null
+
+  const id = typeof raw.id === "string" ? raw.id : typeof crypto !== "undefined" ? crypto.randomUUID() : `${Date.now()}`
+  const tipoCliente = typeof raw.tipoCliente === "string" ? raw.tipoCliente : CLIENTE_TIPOS[0]?.value ?? "pfn"
+  const moneda = typeof raw.moneda === "string" ? raw.moneda : "MXN"
+  const monedaDescripcion =
+    typeof raw.monedaDescripcion === "string" ? raw.monedaDescripcion : getMonedaLabel(moneda)
+
+  const documentosRaw = Array.isArray(raw.documentosSoporte) ? raw.documentosSoporte : []
+  const documentosSoporte = documentosRaw
+    .map((doc) => sanitizeDocumento(doc))
+    .filter((doc): doc is DocumentoSoporte => Boolean(doc))
+
+  const requisitosChecklist = buildChecklist(actividad, tipoCliente, raw.requisitosChecklist)
+
+  return {
+    id,
+    actividadKey: actividad.key,
+    actividadNombre:
+      typeof raw.actividadNombre === "string"
+        ? raw.actividadNombre
+        : `${actividad.fraccion} – ${actividad.nombre}`,
+    tipoCliente,
+    cliente: typeof raw.cliente === "string" ? raw.cliente : "Cliente sin nombre",
+    rfc: typeof raw.rfc === "string" ? raw.rfc : "RFC",
+    mismoGrupo: Boolean(raw.mismoGrupo),
+    periodo: typeof raw.periodo === "string" ? raw.periodo : "",
+    mes: Number(raw.mes) || currentMonth,
+    anio: Number(raw.anio) || currentYear,
+    monto: Number(raw.monto) || 0,
+    moneda,
+    monedaDescripcion,
+    fechaOperacion:
+      typeof raw.fechaOperacion === "string"
+        ? raw.fechaOperacion
+        : new Date().toISOString().substring(0, 10),
+    tipoOperacion: typeof raw.tipoOperacion === "string" ? raw.tipoOperacion : "",
+    evidencia: typeof raw.evidencia === "string" ? raw.evidencia : "",
+    umaDiaria: Number(raw.umaDiaria) || 0,
+    identificacionUmbralPesos: Number(raw.identificacionUmbralPesos) || 0,
+    avisoUmbralPesos: Number(raw.avisoUmbralPesos) || 0,
+    umbralStatus: (raw.umbralStatus as UmbralStatus) ?? "sin-obligacion",
+    acumuladoCliente: Number(raw.acumuladoCliente) || Number(raw.monto) || 0,
+    alerta: typeof raw.alerta === "string" ? raw.alerta : obtenerAlertaPorStatus(raw.umbralStatus),
+    avisoPresentado: Boolean(raw.avisoPresentado),
+    alertaResuelta: Boolean(raw.alertaResuelta),
+    documentosSoporte,
+    requisitosChecklist,
+    kycIntegrado: Boolean(raw.kycIntegrado),
+  }
 }
 
 function toDate(value: string | Date) {
@@ -329,9 +495,12 @@ export default function ActividadesVulnerablesPage() {
   const [mismoGrupo, setMismoGrupo] = useState<string>("no")
   const [tipoOperacion, setTipoOperacion] = useState<string>("")
   const [moneda, setMoneda] = useState<string>("MXN")
+  const [monedaPersonalizadaCodigo, setMonedaPersonalizadaCodigo] = useState<string>("")
+  const [monedaPersonalizadaDescripcion, setMonedaPersonalizadaDescripcion] = useState<string>("")
   const [fechaOperacion, setFechaOperacion] = useState<string>(new Date().toISOString().substring(0, 10))
   const [evidencia, setEvidencia] = useState<string>("")
   const [operaciones, setOperaciones] = useState<OperacionCliente[]>([])
+  const [operacionesCargadas, setOperacionesCargadas] = useState(false)
   const [clientesGuardados, setClientesGuardados] = useState<ClienteGuardado[]>([])
   const [clientesGuardadosListo, setClientesGuardadosListo] = useState(false)
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string | null>(null)
@@ -353,10 +522,20 @@ export default function ActividadesVulnerablesPage() {
     tipoOperacion: "",
     monto: "",
     moneda: "MXN",
+    monedaPersonalizadaCodigo: "",
+    monedaPersonalizadaDescripcion: "",
     fechaOperacion: new Date().toISOString().substring(0, 10),
     evidencia: "",
   })
   const [operacionPorEliminar, setOperacionPorEliminar] = useState<OperacionCliente | null>(null)
+  const [operacionDocumentos, setOperacionDocumentos] = useState<OperacionCliente | null>(null)
+  const [nuevoDocumento, setNuevoDocumento] = useState({
+    requisito: "",
+    notas: "",
+    archivoNombre: "",
+    archivoContenido: "",
+    fechaRegistro: new Date().toISOString().substring(0, 10),
+  })
 
   const umaVentana = useMemo(() => {
     const filtered = UMA_MONTHS.filter((entry) => {
@@ -406,6 +585,36 @@ export default function ActividadesVulnerablesPage() {
     () => Array.from(new Set(umaVentana.map((entry) => entry.year))).sort((a, b) => a - b),
     [umaVentana],
   )
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    try {
+      const stored = window.localStorage.getItem(OPERACIONES_STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored) as unknown
+        if (Array.isArray(parsed)) {
+          const sane = parsed
+            .map((item) => sanitizeOperacion(item))
+            .filter((item): item is OperacionCliente => Boolean(item))
+          if (sane.length > 0) {
+            setOperaciones(recalcularOperaciones(sane))
+          }
+        }
+      }
+    } catch (_error) {
+      // ignorar errores de parseo y continuar con estado vacío
+    } finally {
+      setOperacionesCargadas(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!operacionesCargadas) return
+    if (typeof window === "undefined") return
+
+    window.localStorage.setItem(OPERACIONES_STORAGE_KEY, JSON.stringify(operaciones))
+  }, [operaciones, operacionesCargadas])
 
   useEffect(() => {
     if (availableYears.length === 0) return
@@ -518,11 +727,30 @@ export default function ActividadesVulnerablesPage() {
       mismoGrupo: operacionEnEdicion.mismoGrupo ? "si" : "no",
       tipoOperacion: operacionEnEdicion.tipoOperacion,
       monto: operacionEnEdicion.monto.toString(),
-      moneda: operacionEnEdicion.moneda,
+      moneda: MONEDAS.some((item) => item.value === operacionEnEdicion.moneda)
+        ? operacionEnEdicion.moneda
+        : "OTRA",
+      monedaPersonalizadaCodigo:
+        MONEDAS.some((item) => item.value === operacionEnEdicion.moneda)
+          ? ""
+          : operacionEnEdicion.moneda,
+      monedaPersonalizadaDescripcion:
+        MONEDAS.some((item) => item.value === operacionEnEdicion.moneda)
+          ? ""
+          : operacionEnEdicion.monedaDescripcion.split(" – ")[1] ?? operacionEnEdicion.monedaDescripcion,
       fechaOperacion: operacionEnEdicion.fechaOperacion,
       evidencia: operacionEnEdicion.evidencia,
     })
   }, [operacionEnEdicion])
+
+  useEffect(() => {
+    if (!operacionDocumentos) return
+
+    const actualizada = operaciones.find((operacion) => operacion.id === operacionDocumentos.id)
+    if (actualizada && actualizada !== operacionDocumentos) {
+      setOperacionDocumentos(actualizada)
+    }
+  }, [operaciones, operacionDocumentos])
 
   const mesesDisponibles = useMemo(
     () =>
@@ -605,6 +833,11 @@ export default function ActividadesVulnerablesPage() {
       periodo: buildPeriodo(anioSeleccionado, mesSeleccionado),
     }
   }, [actividadSeleccionada, umaSeleccionada, umbralPesos, montoOperacion, operacionesRelacionadas, anioSeleccionado, mesSeleccionado])
+
+  const controlesEvaluacion = useMemo(() => {
+    if (!evaluacionActual) return []
+    return CONTROLES_ARTICULO_17[evaluacionActual.status] ?? []
+  }, [evaluacionActual])
 
   const resumenUmbrales = useMemo(() => {
     const acumulados = operaciones.reduce(
@@ -780,6 +1013,8 @@ const limpiarFormulario = () => {
   limpiarClienteSeleccionado()
   setMismoGrupo("no")
   setMoneda("MXN")
+  setMonedaPersonalizadaCodigo("")
+  setMonedaPersonalizadaDescripcion("")
   setFechaOperacion(new Date().toISOString().substring(0, 10))
 }
 
@@ -857,6 +1092,27 @@ const agregarOperacion = () => {
     return
   }
 
+  let monedaCodigoFinal = moneda
+  let monedaDescripcionFinal = getMonedaLabel(moneda)
+
+  if (moneda === "OTRA") {
+    const codigoLimpio = monedaPersonalizadaCodigo.trim().toUpperCase()
+    if (!codigoLimpio || codigoLimpio.length !== 3) {
+      toast({
+        title: "Código de moneda requerido",
+        description: "Ingresa el código ISO de tres letras para la divisa personalizada.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    monedaCodigoFinal = codigoLimpio
+    const descripcionLimpia = monedaPersonalizadaDescripcion.trim()
+    monedaDescripcionFinal = descripcionLimpia
+      ? `${codigoLimpio} – ${descripcionLimpia}`
+      : `${codigoLimpio} – Divisa personalizada`
+  }
+
   const periodo = buildPeriodo(anioSeleccionado, mesSeleccionado)
 
   const operacionesPrevias = operaciones.filter(
@@ -892,7 +1148,8 @@ const agregarOperacion = () => {
     mes: mesSeleccionado,
     anio: anioSeleccionado,
     monto,
-    moneda,
+    moneda: monedaCodigoFinal,
+    monedaDescripcion: monedaDescripcionFinal,
     fechaOperacion,
     tipoOperacion,
     evidencia,
@@ -904,6 +1161,9 @@ const agregarOperacion = () => {
     alerta,
     avisoPresentado: false,
     alertaResuelta: alerta ? false : true,
+    documentosSoporte: [],
+    requisitosChecklist: buildChecklist(actividadSeleccionada, tipoCliente),
+    kycIntegrado: false,
   }
 
   actualizarOperaciones((prev) => [...prev, nuevaOperacion])
@@ -988,6 +1248,27 @@ const guardarOperacionEditada = () => {
 
   const rfcNormalizado = datosEdicion.rfc.trim().toUpperCase()
 
+  let monedaCodigoFinal = datosEdicion.moneda
+  let monedaDescripcionFinal = getMonedaLabel(datosEdicion.moneda)
+
+  if (datosEdicion.moneda === "OTRA") {
+    const codigoLimpio = datosEdicion.monedaPersonalizadaCodigo.trim().toUpperCase()
+    if (!codigoLimpio || codigoLimpio.length !== 3) {
+      toast({
+        title: "Código de moneda requerido",
+        description: "Define el código ISO de tres letras para la divisa personalizada.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    monedaCodigoFinal = codigoLimpio
+    const descripcionLimpia = datosEdicion.monedaPersonalizadaDescripcion.trim()
+    monedaDescripcionFinal = descripcionLimpia
+      ? `${codigoLimpio} – ${descripcionLimpia}`
+      : `${codigoLimpio} – Divisa personalizada`
+  }
+
   const operacionActualizada: OperacionCliente = {
     ...operacionEnEdicion,
     cliente: datosEdicion.cliente.trim(),
@@ -996,9 +1277,21 @@ const guardarOperacionEditada = () => {
     mismoGrupo: datosEdicion.mismoGrupo === "si",
     tipoOperacion: datosEdicion.tipoOperacion.trim(),
     monto,
-    moneda: datosEdicion.moneda,
+    moneda: monedaCodigoFinal,
+    monedaDescripcion: monedaDescripcionFinal,
     fechaOperacion: datosEdicion.fechaOperacion,
     evidencia: datosEdicion.evidencia,
+  }
+
+  const actividadReferencia = actividadesVulnerables.find(
+    (item) => item.key === operacionActualizada.actividadKey,
+  )
+  if (actividadReferencia) {
+    operacionActualizada.requisitosChecklist = buildChecklist(
+      actividadReferencia,
+      operacionActualizada.tipoCliente,
+      operacionActualizada.requisitosChecklist,
+    )
   }
 
   actualizarOperaciones((prev) =>
@@ -1094,7 +1387,16 @@ const reutilizarDatosCliente = (operacion: OperacionCliente) => {
   setRfc(operacion.rfc)
   setMismoGrupo(operacion.mismoGrupo ? "si" : "no")
   setTipoOperacion(operacion.tipoOperacion)
-  setMoneda(operacion.moneda)
+  if (MONEDAS.some((item) => item.value === operacion.moneda)) {
+    setMoneda(operacion.moneda)
+    setMonedaPersonalizadaCodigo("")
+    setMonedaPersonalizadaDescripcion("")
+  } else {
+    setMoneda("OTRA")
+    setMonedaPersonalizadaCodigo(operacion.moneda)
+    const descripcion = operacion.monedaDescripcion.split(" – ")[1] ?? ""
+    setMonedaPersonalizadaDescripcion(descripcion)
+  }
   setFechaOperacion(new Date().toISOString().substring(0, 10))
   setEvidencia(operacion.evidencia)
   setMontoOperacion("")
@@ -1102,6 +1404,148 @@ const reutilizarDatosCliente = (operacion: OperacionCliente) => {
   toast({
     title: "Datos precargados",
     description: "Actualiza el monto y confirma la nueva operación del cliente seleccionado.",
+  })
+}
+
+const abrirDocumentosOperacion = (operacion: OperacionCliente) => {
+  setOperacionDocumentos(operacion)
+  setNuevoDocumento({
+    requisito: "",
+    notas: "",
+    archivoNombre: "",
+    archivoContenido: "",
+    fechaRegistro: new Date().toISOString().substring(0, 10),
+  })
+}
+
+const cerrarDocumentosOperacion = () => {
+  setOperacionDocumentos(null)
+  setNuevoDocumento({
+    requisito: "",
+    notas: "",
+    archivoNombre: "",
+    archivoContenido: "",
+    fechaRegistro: new Date().toISOString().substring(0, 10),
+  })
+}
+
+const alternarRequisitoChecklist = (operacionId: string, requisito: string) => {
+  actualizarOperaciones((prev) =>
+    prev.map((operacion) =>
+      operacion.id === operacionId
+        ? {
+            ...operacion,
+            requisitosChecklist: {
+              ...operacion.requisitosChecklist,
+              [requisito]: !operacion.requisitosChecklist[requisito],
+            },
+          }
+        : operacion,
+    ),
+  )
+}
+
+const marcarKycIntegrado = (operacionId: string, valor: boolean) => {
+  actualizarOperaciones((prev) =>
+    prev.map((operacion) =>
+      operacion.id === operacionId
+        ? {
+            ...operacion,
+            kycIntegrado: valor,
+          }
+        : operacion,
+    ),
+  )
+
+  toast({
+    title: valor ? "Expediente KYC vinculado" : "Seguimiento pendiente",
+    description: valor
+      ? "Se marcó la integración del expediente KYC actualizado."
+      : "Se reactivó la tarea de actualización del expediente KYC.",
+  })
+}
+
+const manejarArchivoDocumento = (event: ChangeEvent<HTMLInputElement>) => {
+  const archivo = event.target.files?.[0]
+  if (!archivo) {
+    setNuevoDocumento((prev) => ({ ...prev, archivoNombre: "", archivoContenido: "" }))
+    return
+  }
+
+  const lector = new FileReader()
+  lector.onload = () => {
+    setNuevoDocumento((prev) => ({
+      ...prev,
+      archivoNombre: archivo.name,
+      archivoContenido: typeof lector.result === "string" ? lector.result : "",
+    }))
+  }
+  lector.readAsDataURL(archivo)
+  event.target.value = ""
+}
+
+const agregarDocumentoSoporte = () => {
+  if (!operacionDocumentos) return
+
+  const requisito = nuevoDocumento.requisito.trim()
+  if (!requisito) {
+    toast({
+      title: "Selecciona un requisito",
+      description: "Elige o describe el requisito al que corresponde la evidencia.",
+      variant: "destructive",
+    })
+    return
+  }
+
+  const documento: DocumentoSoporte = {
+    id: typeof crypto !== "undefined" ? crypto.randomUUID() : `${Date.now()}`,
+    requisito,
+    notas: nuevoDocumento.notas.trim(),
+    archivoNombre: nuevoDocumento.archivoNombre || undefined,
+    archivoContenido: nuevoDocumento.archivoContenido || undefined,
+    fechaRegistro: nuevoDocumento.fechaRegistro,
+  }
+
+  actualizarOperaciones((prev) =>
+    prev.map((operacion) =>
+      operacion.id === operacionDocumentos.id
+        ? {
+            ...operacion,
+            documentosSoporte: [...operacion.documentosSoporte, documento],
+          }
+        : operacion,
+    ),
+  )
+
+  setNuevoDocumento({
+    requisito: "",
+    notas: "",
+    archivoNombre: "",
+    archivoContenido: "",
+    fechaRegistro: new Date().toISOString().substring(0, 10),
+  })
+
+  toast({
+    title: "Evidencia registrada",
+    description: "Se guardó la evidencia local para el requisito seleccionado.",
+  })
+}
+
+const eliminarDocumentoSoporte = (operacionId: string, documentoId: string) => {
+  actualizarOperaciones((prev) =>
+    prev.map((operacion) =>
+      operacion.id === operacionId
+        ? {
+            ...operacion,
+            documentosSoporte: operacion.documentosSoporte.filter((doc) => doc.id !== documentoId),
+          }
+        : operacion,
+    ),
+  )
+
+  toast({
+    title: "Evidencia eliminada",
+    description: "Se removió el documento de la operación seleccionada.",
   })
 }
 
@@ -1276,7 +1720,7 @@ const cambiarMesCalendario = (delta: number) => {
                           >
                             {getStatusLabel(operacion.umbralStatus)}
                           </span>
-                          <span className="font-semibold text-slate-700">{formatCurrency(operacion.monto)}</span>
+                          <span className="font-semibold text-slate-700">{formatMontoOperacion(operacion)}</span>
                         </div>
                       </div>
                     </div>
@@ -1642,16 +2086,48 @@ const cambiarMesCalendario = (delta: number) => {
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
                     <Label>Moneda</Label>
-                    <Select value={moneda} onValueChange={setMoneda}>
+                    <Select
+                      value={moneda}
+                      onValueChange={(value) => {
+                        setMoneda(value)
+                        if (value !== "OTRA") {
+                          setMonedaPersonalizadaCodigo("")
+                          setMonedaPersonalizadaDescripcion("")
+                        }
+                      }}
+                    >
                       <SelectTrigger className="bg-white">
                         <SelectValue placeholder="Selecciona moneda" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="MXN">Peso mexicano (MXN)</SelectItem>
-                        <SelectItem value="USD">Dólar estadounidense (USD)</SelectItem>
-                        <SelectItem value="EUR">Euro (EUR)</SelectItem>
+                        {MONEDAS.map((item) => (
+                          <SelectItem key={item.value} value={item.value}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
+                    {moneda === "OTRA" && (
+                      <div className="space-y-2 rounded border border-dashed border-emerald-200 bg-emerald-50/60 p-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-emerald-700">Código ISO de la divisa</Label>
+                          <Input
+                            placeholder="Ejemplo: AUD"
+                            value={monedaPersonalizadaCodigo}
+                            onChange={(event) => setMonedaPersonalizadaCodigo(event.target.value.toUpperCase())}
+                            maxLength={3}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-emerald-700">Descripción</Label>
+                          <Input
+                            placeholder="Nombre de la divisa"
+                            value={monedaPersonalizadaDescripcion}
+                            onChange={(event) => setMonedaPersonalizadaDescripcion(event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Fecha de la operación</Label>
@@ -1721,6 +2197,23 @@ const cambiarMesCalendario = (delta: number) => {
                             <AlertCircle className="mt-0.5 h-4 w-4" />
                             <span>{evaluacionActual.alerta}</span>
                           </div>
+                        )}
+                        {controlesEvaluacion.length > 0 && (
+                          <div className="space-y-1 rounded border border-emerald-100 bg-emerald-50/60 p-2 text-emerald-800">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide">Controles aplicables</p>
+                            <ul className="list-disc space-y-1 pl-4">
+                              {controlesEvaluacion.map((control) => (
+                                <li key={control}>{control}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {evaluacionActual.status !== "sin-obligacion" && (
+                          <Button size="sm" variant="ghost" className="justify-start px-2" asChild>
+                            <Link href="/kyc-expediente" className="flex items-center gap-2">
+                              <ExternalLink className="h-4 w-4" /> Abrir módulo KYC vinculado
+                            </Link>
+                          </Button>
                         )}
                       </div>
                     )}
@@ -1824,7 +2317,22 @@ const cambiarMesCalendario = (delta: number) => {
                         <span className="font-semibold">Periodo:</span> {monthLabel(mesSeleccionado)} {anioSeleccionado}
                       </li>
                       <li>
-                        <span className="font-semibold">Monto:</span> {montoOperacion ? formatCurrency(Number(montoOperacion)) : "0.00"} {moneda}
+                        <span className="font-semibold">Monto:</span>{" "}
+                        {montoOperacion
+                          ? formatCurrency(
+                              Number(montoOperacion),
+                              moneda === "OTRA"
+                                ? monedaPersonalizadaCodigo.trim().toUpperCase() || "MXN"
+                                : moneda,
+                            )
+                          : "0.00"}{" "}
+                        {moneda === "OTRA"
+                          ? `${monedaPersonalizadaCodigo.trim().toUpperCase()}${
+                              monedaPersonalizadaDescripcion.trim()
+                                ? ` – ${monedaPersonalizadaDescripcion.trim()}`
+                                : ""
+                            }`
+                          : getMonedaLabel(moneda)}
                       </li>
                       <li>
                         <span className="font-semibold">Actividad:</span> {actividadSeleccionada?.fraccion} – {actividadSeleccionada?.nombre}
@@ -1855,6 +2363,16 @@ const cambiarMesCalendario = (delta: number) => {
                         Guardar operación y semáforo
                       </Button>
                     </div>
+                    {controlesEvaluacion.length > 0 && (
+                      <div className="space-y-1 rounded border border-emerald-100 bg-emerald-50/60 p-3 text-xs text-emerald-800">
+                        <p className="font-semibold uppercase tracking-wide">Controles aplicables</p>
+                        <ul className="list-disc space-y-1 pl-4">
+                          {controlesEvaluacion.map((control) => (
+                            <li key={control}>{control}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -1952,6 +2470,9 @@ const cambiarMesCalendario = (delta: number) => {
                                 <Button size="sm" variant="outline" onClick={() => exportarXml(operacion)}>
                                   <Download className="mr-1 h-4 w-4" /> XML
                                 </Button>
+                                <Button size="sm" variant="outline" onClick={() => abrirDocumentosOperacion(operacion)}>
+                                  <Paperclip className="mr-1 h-4 w-4" /> Evidencias
+                                </Button>
                                 <Button size="sm" variant="outline" onClick={() => abrirEdicionOperacion(operacion)}>
                                   Editar
                                 </Button>
@@ -2009,7 +2530,7 @@ const cambiarMesCalendario = (delta: number) => {
                               <Badge variant="outline">{getStatusLabel(operacion.umbralStatus)}</Badge>
                             </div>
                             <p className="text-slate-600">RFC: {operacion.rfc}</p>
-                            <p className="text-slate-600">Monto: {formatCurrency(operacion.monto)} {operacion.moneda}</p>
+                            <p className="text-slate-600">Monto: {formatMontoOperacion(operacion)}</p>
                             {operacion.alerta && (
                               <div className="flex items-start gap-2 rounded bg-white/60 p-2 text-amber-800">
                                 <AlertCircle className="mt-0.5 h-4 w-4" />
@@ -2026,6 +2547,13 @@ const cambiarMesCalendario = (delta: number) => {
                                 onClick={() => actualizarEstadoAlerta(operacion.id, true)}
                               >
                                 Marcar como atendida
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => abrirDocumentosOperacion(operacion)}
+                              >
+                                <Paperclip className="mr-1 h-4 w-4" /> Evidencias
                               </Button>
                             </div>
                           </div>
@@ -2054,7 +2582,7 @@ const cambiarMesCalendario = (delta: number) => {
                               <Badge variant="outline">{getStatusLabel(operacion.umbralStatus)}</Badge>
                             </div>
                             <p className="text-slate-600">RFC: {operacion.rfc}</p>
-                            <p className="text-slate-600">Monto: {formatCurrency(operacion.monto)} {operacion.moneda}</p>
+                            <p className="text-slate-600">Monto: {formatMontoOperacion(operacion)}</p>
                             {operacion.alerta && (
                               <div className="flex items-start gap-2 rounded bg-white/60 p-2 text-emerald-800">
                                 <CheckCircle2 className="mt-0.5 h-4 w-4" />
@@ -2068,6 +2596,13 @@ const cambiarMesCalendario = (delta: number) => {
                                 onClick={() => actualizarEstadoAlerta(operacion.id, false)}
                               >
                                 Reabrir alerta
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => abrirDocumentosOperacion(operacion)}
+                              >
+                                <Paperclip className="mr-1 h-4 w-4" /> Evidencias
                               </Button>
                             </div>
                           </div>
@@ -2191,7 +2726,7 @@ const cambiarMesCalendario = (delta: number) => {
                           <div key={operacion.id} className="rounded border border-slate-200 bg-white p-2">
                             <p className="font-semibold text-slate-700">{operacion.cliente}</p>
                             <p>Actividad: {operacion.actividadNombre}</p>
-                            <p>Monto: {formatCurrency(operacion.monto)} {operacion.moneda}</p>
+                            <p>Monto: {formatMontoOperacion(operacion)}</p>
                             <p>Estado: {getStatusLabel(operacion.umbralStatus)}</p>
                           </div>
                         ))}
@@ -2313,11 +2848,11 @@ const cambiarMesCalendario = (delta: number) => {
           }
         }}
       >
-      <DialogContent>
-        {infoModal && (
-          <>
-            <DialogHeader>
-              <DialogTitle>{INFO_MODAL_CONTENT[infoModal].title}</DialogTitle>
+        <DialogContent>
+          {infoModal && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{INFO_MODAL_CONTENT[infoModal].title}</DialogTitle>
                 <DialogDescription>
                   <div className="space-y-3 text-left text-slate-600">
                     {INFO_MODAL_CONTENT[infoModal].body.map((paragraph) => (
@@ -2328,6 +2863,195 @@ const cambiarMesCalendario = (delta: number) => {
               </DialogHeader>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setInfoModal(null)}>
+                  Cerrar
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(operacionDocumentos)}
+        onOpenChange={(open) => {
+          if (!open) {
+            cerrarDocumentosOperacion()
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[720px]">
+          {operacionDocumentos && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Requisitos y evidencias vinculadas</DialogTitle>
+                <DialogDescription>
+                  Administra la documentación soporte para {operacionDocumentos.cliente} ({operacionDocumentos.rfc}).
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 text-sm text-slate-700">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className={`${getStatusColor(operacionDocumentos.umbralStatus)} border-transparent text-white`}
+                  >
+                    {getStatusLabel(operacionDocumentos.umbralStatus)}
+                  </Badge>
+                  <Badge variant="outline">{operacionDocumentos.periodo}</Badge>
+                  <span className="font-semibold text-slate-800">{formatMontoOperacion(operacionDocumentos)}</span>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-3 rounded border bg-slate-50 p-3">
+                    <h4 className="text-sm font-semibold text-slate-700">Checklist documental</h4>
+                    {Object.keys(operacionDocumentos.requisitosChecklist).length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Esta fracción no tiene requisitos específicos adicionales para el tipo de cliente seleccionado.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {Object.entries(operacionDocumentos.requisitosChecklist).map(([requisito, completado]) => (
+                          <label key={requisito} className="flex items-start gap-2 text-xs text-slate-600">
+                            <Checkbox
+                              checked={completado}
+                              onCheckedChange={() => alternarRequisitoChecklist(operacionDocumentos.id, requisito)}
+                              className="mt-0.5"
+                            />
+                            <span>{requisito}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 rounded border border-emerald-200 bg-white p-2">
+                      <Checkbox
+                        checked={operacionDocumentos.kycIntegrado}
+                        onCheckedChange={(checked) =>
+                          marcarKycIntegrado(operacionDocumentos.id, Boolean(checked))
+                        }
+                      />
+                      <div className="text-xs text-slate-600">
+                        <p className="font-semibold">Expediente KYC actualizado</p>
+                        <p>Marca esta casilla cuando el expediente esté integrado con la evidencia más reciente.</p>
+                        <Button variant="link" size="sm" className="px-0" asChild>
+                          <Link href={`/kyc-expediente?buscar=${operacionDocumentos.rfc}`}>
+                            <ExternalLink className="mr-1 h-3 w-3" /> Abrir expediente KYC
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 rounded border bg-white p-3">
+                    <h4 className="text-sm font-semibold text-slate-700">Controles del artículo 17</h4>
+                    <ul className="list-disc space-y-1 pl-4 text-xs text-slate-600">
+                      {(CONTROLES_ARTICULO_17[operacionDocumentos.umbralStatus] ?? []).map((control) => (
+                        <li key={control}>{control}</li>
+                      ))}
+                    </ul>
+                    <p className="text-xs text-muted-foreground">
+                      Actualiza la información cuando se atienda el aviso o se complete la debida diligencia reforzada.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded border bg-slate-50 p-3">
+                  <h4 className="text-sm font-semibold text-slate-700">Registrar nueva evidencia</h4>
+                  {Object.keys(operacionDocumentos.requisitosChecklist).length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {Object.keys(operacionDocumentos.requisitosChecklist).map((requisito) => (
+                        <Button
+                          key={requisito}
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          onClick={() => setNuevoDocumento((prev) => ({ ...prev, requisito }))}
+                        >
+                          {requisito}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-slate-500">Requisito vinculado</Label>
+                      <Input
+                        placeholder="Describe el requisito"
+                        value={nuevoDocumento.requisito}
+                        onChange={(event) => setNuevoDocumento((prev) => ({ ...prev, requisito: event.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-slate-500">Fecha de registro</Label>
+                      <Input
+                        type="date"
+                        value={nuevoDocumento.fechaRegistro}
+                        max={new Date().toISOString().substring(0, 10)}
+                        onChange={(event) => setNuevoDocumento((prev) => ({ ...prev, fechaRegistro: event.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-slate-500">Notas</Label>
+                    <Textarea
+                      placeholder="Detalle de la evidencia o comentarios de revisión"
+                      value={nuevoDocumento.notas}
+                      onChange={(event) => setNuevoDocumento((prev) => ({ ...prev, notas: event.target.value }))}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1 text-xs text-slate-600">
+                      <Label className="text-slate-500">Archivo digital (opcional)</Label>
+                      <Input type="file" accept="application/pdf,image/*" onChange={manejarArchivoDocumento} />
+                      {nuevoDocumento.archivoNombre && (
+                        <p className="text-[11px] text-muted-foreground">Archivo seleccionado: {nuevoDocumento.archivoNombre}</p>
+                      )}
+                    </div>
+                    <Button onClick={agregarDocumentoSoporte}>
+                      <Upload className="mr-2 h-4 w-4" /> Guardar evidencia
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 rounded border bg-white p-3">
+                  <h4 className="text-sm font-semibold text-slate-700">Evidencias registradas</h4>
+                  {operacionDocumentos.documentosSoporte.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Aún no se han cargado evidencias para esta operación.</p>
+                  ) : (
+                    <div className="space-y-3 text-xs text-slate-600">
+                      {operacionDocumentos.documentosSoporte.map((documento) => (
+                        <div key={documento.id} className="rounded border border-slate-200 bg-slate-50 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="font-semibold text-slate-700">{documento.requisito}</p>
+                              <p className="text-muted-foreground">Registrado el {documento.fechaRegistro}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {documento.archivoContenido && documento.archivoNombre && (
+                                <Button variant="outline" size="sm" asChild>
+                                  <a href={documento.archivoContenido} download={documento.archivoNombre}>
+                                    <Download className="mr-2 h-4 w-4" /> Descargar
+                                  </a>
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => eliminarDocumentoSoporte(operacionDocumentos.id, documento.id)}
+                                aria-label="Eliminar evidencia"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          {documento.notas && <p className="mt-2 text-slate-600">{documento.notas}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={cerrarDocumentosOperacion}>
                   Cerrar
                 </Button>
               </DialogFooter>
@@ -2453,18 +3177,55 @@ const cambiarMesCalendario = (delta: number) => {
                   <Select
                     value={datosEdicion.moneda}
                     onValueChange={(value) =>
-                      setDatosEdicion((prev) => ({ ...prev, moneda: value }))
+                      setDatosEdicion((prev) => ({
+                        ...prev,
+                        moneda: value,
+                        monedaPersonalizadaCodigo: value === "OTRA" ? prev.monedaPersonalizadaCodigo : "",
+                        monedaPersonalizadaDescripcion:
+                          value === "OTRA" ? prev.monedaPersonalizadaDescripcion : "",
+                      }))
                     }
                   >
                     <SelectTrigger className="bg-white">
                       <SelectValue placeholder="Selecciona moneda" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="MXN">Peso mexicano (MXN)</SelectItem>
-                      <SelectItem value="USD">Dólar estadounidense (USD)</SelectItem>
-                      <SelectItem value="EUR">Euro (EUR)</SelectItem>
+                      {MONEDAS.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                  {datosEdicion.moneda === "OTRA" && (
+                    <div className="space-y-2 rounded border border-dashed border-emerald-200 bg-emerald-50/60 p-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-emerald-700">Código ISO de la divisa</Label>
+                        <Input
+                          value={datosEdicion.monedaPersonalizadaCodigo}
+                          maxLength={3}
+                          onChange={(event) =>
+                            setDatosEdicion((prev) => ({
+                              ...prev,
+                              monedaPersonalizadaCodigo: event.target.value.toUpperCase(),
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-emerald-700">Descripción</Label>
+                        <Input
+                          value={datosEdicion.monedaPersonalizadaDescripcion}
+                          onChange={(event) =>
+                            setDatosEdicion((prev) => ({
+                              ...prev,
+                              monedaPersonalizadaDescripcion: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Fecha de la operación</Label>
@@ -2559,7 +3320,7 @@ const cambiarMesCalendario = (delta: number) => {
                 <span className="font-semibold">Actividad:</span> {avisoPreliminar.actividadNombre}
               </p>
               <p>
-                <span className="font-semibold">Monto:</span> {formatCurrency(avisoPreliminar.monto)} ({avisoPreliminar.moneda})
+                <span className="font-semibold">Monto:</span> {formatMontoOperacion(avisoPreliminar)}
               </p>
               <p>
                 <span className="font-semibold">Operación:</span> {avisoPreliminar.tipoOperacion}
