@@ -11,6 +11,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -86,6 +94,32 @@ const STEPS = [
 
 type UmbralStatus = "sin-obligacion" | "identificacion" | "aviso"
 
+type InfoModalKey = "umbral-identificacion" | "umbral-aviso" | "uma-validacion"
+
+const INFO_MODAL_CONTENT: Record<InfoModalKey, { title: string; body: string[] }> = {
+  "umbral-identificacion": {
+    title: "¿Qué es el umbral de identificación?",
+    body: [
+      "Algunas de las Actividades Vulnerables del artículo 17 de la Ley Federal para la Prevención e Identificación de Operaciones con Recursos de Procedencia Ilícita se consideran como tales por el simple hecho de su realización; en otras, la obligación surge cuando el monto rebasa el umbral previsto.",
+      "El umbral de identificación se determina multiplicando la UMA diaria vigente del periodo seleccionado por el número de UMAs que la ley asigna a cada fracción. Al rebasarlo se debe integrar expediente completo, validar listas y monitorear al cliente durante los seis meses siguientes.",
+    ],
+  },
+  "umbral-aviso": {
+    title: "¿Cuándo se genera el umbral de aviso?",
+    body: [
+      "Quienes realizan Actividades Vulnerables deben presentar avisos ante la Secretaría de Hacienda y Crédito Público cuando las operaciones de sus clientes superan los montos que establece la LFPIORPI.",
+      "En algunas fracciones el aviso procede por la simple realización de la actividad, mientras que en otras se activa cuando el monto acumulado rebasa el umbral correspondiente. El aviso debe enviarse dentro de los 17 días posteriores, incluyendo detalle del acto, participantes y soportes documentales.",
+    ],
+  },
+  "uma-validacion": {
+    title: "Validación de UMAs por año",
+    body: [
+      "El valor diario de la UMA para 2025 es de $113.14 MXN conforme al decreto publicado por el INEGI el 10 de enero de 2025. Los montos en pesos del módulo se calculan automáticamente a partir del año y mes seleccionados.",
+      "Selecciona un año diferente para verificar cómo cambian los umbrales con base en la UMA vigente de cada ciclo (1.º de febrero al 31 de enero). Así puedes validar obligaciones históricas y proyectar escenarios futuros con información consistente.",
+    ],
+  },
+}
+
 interface OperacionCliente {
   id: string
   actividadKey: string
@@ -145,6 +179,13 @@ function getStatusColor(status: UmbralStatus) {
   return "bg-emerald-500"
 }
 
+function formatUmbralTexto(uma: number, pesos: number) {
+  if (uma === 0) {
+    return "Siempre"
+  }
+  return `${formatCurrency(pesos)} (${uma.toLocaleString("es-MX")} UMA)`
+}
+
 export default function ActividadesVulnerablesPage() {
   const { toast } = useToast()
   const [wizardActivo, setWizardActivo] = useState(false)
@@ -165,6 +206,7 @@ export default function ActividadesVulnerablesPage() {
   const [avisoPreliminar, setAvisoPreliminar] = useState<OperacionCliente | null>(null)
   const [infoGrupoOpen, setInfoGrupoOpen] = useState(false)
   const [actividadInfoKey, setActividadInfoKey] = useState<string | null>(null)
+  const [infoModal, setInfoModal] = useState<InfoModalKey | null>(null)
 
   const umaVentana = useMemo(() => {
     const filtered = UMA_MONTHS.filter((entry) => {
@@ -253,6 +295,19 @@ export default function ActividadesVulnerablesPage() {
       aviso: actividadSeleccionada.avisoUmbralUma * diaria,
     }
   }, [umaSeleccionada, actividadSeleccionada])
+
+  const umbralTexto = useMemo(() => {
+    if (!actividadSeleccionada || !umbralPesos) {
+      return { identificacion: null, aviso: null }
+    }
+    return {
+      identificacion: formatUmbralTexto(
+        actividadSeleccionada.identificacionUmbralUma,
+        umbralPesos.identificacion,
+      ),
+      aviso: formatUmbralTexto(actividadSeleccionada.avisoUmbralUma, umbralPesos.aviso),
+    }
+  }, [actividadSeleccionada, umbralPesos])
 
   const operacionesRelacionadas = useMemo(() => {
     if (!actividadSeleccionada) return []
@@ -715,7 +770,19 @@ export default function ActividadesVulnerablesPage() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Año</Label>
+                    <Label className="flex items-center gap-2">
+                      Año
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={() => setInfoModal("uma-validacion")}
+                        aria-label="Información sobre UMA por año"
+                      >
+                        <Info className="h-4 w-4" />
+                      </Button>
+                    </Label>
                     <Select
                       value={anioSeleccionado.toString()}
                       onValueChange={(value) => {
@@ -983,12 +1050,42 @@ export default function ActividadesVulnerablesPage() {
                           Acumulado mensual cliente: {" "}
                           <span className="font-semibold">{formatCurrency(evaluacionActual.acumulado)}</span>
                         </p>
-                        <p>
-                          Umbral identificación: {formatCurrency(umbralPesos.identificacion)} ({actividadSeleccionada?.identificacionUmbralUma.toLocaleString("es-MX")} UMA)
-                        </p>
-                        <p>
-                          Umbral aviso: {formatCurrency(umbralPesos.aviso)} ({actividadSeleccionada?.avisoUmbralUma.toLocaleString("es-MX")} UMA)
-                        </p>
+                        {umbralTexto.identificacion && (
+                          <div className="flex items-center justify-between gap-2">
+                            <p>
+                              Umbral identificación:{" "}
+                              <span className="font-semibold">{umbralTexto.identificacion}</span>
+                            </p>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => setInfoModal("umbral-identificacion")}
+                              aria-label="Más información sobre el umbral de identificación"
+                            >
+                              <Info className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                        {umbralTexto.aviso && (
+                          <div className="flex items-center justify-between gap-2">
+                            <p>
+                              Umbral aviso:{" "}
+                              <span className="font-semibold">{umbralTexto.aviso}</span>
+                            </p>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => setInfoModal("umbral-aviso")}
+                              aria-label="Más información sobre el umbral de aviso"
+                            >
+                              <Info className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
                         {evaluacionActual.alerta && (
                           <div className="flex items-start gap-2 rounded bg-amber-50 p-2 text-amber-800">
                             <AlertCircle className="mt-0.5 h-4 w-4" />
@@ -1272,6 +1369,37 @@ export default function ActividadesVulnerablesPage() {
           </CardContent>
         </Card>
       </section>
+
+      <Dialog
+        open={infoModal !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setInfoModal(null)
+          }
+        }}
+      >
+        <DialogContent>
+          {infoModal && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{INFO_MODAL_CONTENT[infoModal].title}</DialogTitle>
+                <DialogDescription>
+                  <div className="space-y-3 text-left text-slate-600">
+                    {INFO_MODAL_CONTENT[infoModal].body.map((paragraph) => (
+                      <p key={paragraph}>{paragraph}</p>
+                    ))}
+                  </div>
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setInfoModal(null)}>
+                  Cerrar
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={infoGrupoOpen} onOpenChange={setInfoGrupoOpen}>
         <AlertDialogContent>
