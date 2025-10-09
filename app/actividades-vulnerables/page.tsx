@@ -26,13 +26,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import {
   AlertCircle,
   ArrowRight,
   Building2,
+  CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Download,
   FileText,
   Info,
@@ -62,6 +66,8 @@ const MONTHS = [
   "Noviembre",
   "Diciembre",
 ]
+
+const WEEK_DAYS = ["L", "M", "M", "J", "V", "S", "D"]
 
 const CLIENTE_TIPOS = [
   { value: "pfn", label: "Persona física mexicana" },
@@ -186,9 +192,39 @@ function formatUmbralTexto(uma: number, pesos: number) {
   return `${formatCurrency(pesos)} (${uma.toLocaleString("es-MX")} UMA)`
 }
 
+function toDate(value: string | Date) {
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate())
+  }
+
+  const [year, month, day] = value.split("-").map(Number)
+  if (!year || !month || !day) {
+    return new Date()
+  }
+
+  return new Date(year, month - 1, day)
+}
+
+function normalizeDateKey(value: string | Date) {
+  const date = toDate(value)
+  const year = date.getFullYear()
+  const month = (date.getMonth() + 1).toString().padStart(2, "0")
+  const day = date.getDate().toString().padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function getCalendarSeverityClass(operaciones: OperacionCliente[]) {
+  if (operaciones.some((operacion) => operacion.umbralStatus === "aviso")) {
+    return "bg-rose-500"
+  }
+  if (operaciones.some((operacion) => operacion.umbralStatus === "identificacion")) {
+    return "bg-amber-500"
+  }
+  return "bg-emerald-500"
+}
+
 export default function ActividadesVulnerablesPage() {
   const { toast } = useToast()
-  const [wizardActivo, setWizardActivo] = useState(false)
   const [pasoActual, setPasoActual] = useState(0)
   const [actividadKey, setActividadKey] = useState<string>(actividadesVulnerables[0]?.key ?? "")
   const [anioSeleccionado, setAnioSeleccionado] = useState<number>(currentYear)
@@ -207,6 +243,11 @@ export default function ActividadesVulnerablesPage() {
   const [infoGrupoOpen, setInfoGrupoOpen] = useState(false)
   const [actividadInfoKey, setActividadInfoKey] = useState<string | null>(null)
   const [infoModal, setInfoModal] = useState<InfoModalKey | null>(null)
+  const [tabActiva, setTabActiva] = useState<"resumen" | "captura" | "seguimiento" | "explorar">("resumen")
+  const [clienteCalendario, setClienteCalendario] = useState<string | null>(null)
+  const [mesCalendario, setMesCalendario] = useState<number>(currentMonth)
+  const [anioCalendario, setAnioCalendario] = useState<number>(currentYear)
+  const [diaSeleccionado, setDiaSeleccionado] = useState<string | null>(null)
 
   const umaVentana = useMemo(() => {
     const filtered = UMA_MONTHS.filter((entry) => {
@@ -263,6 +304,41 @@ export default function ActividadesVulnerablesPage() {
       setAnioSeleccionado(availableYears[availableYears.length - 1])
     }
   }, [availableYears, anioSeleccionado])
+
+  useEffect(() => {
+    if (operaciones.length === 0) {
+      setClienteCalendario(null)
+      setDiaSeleccionado(null)
+      return
+    }
+
+    if (clienteCalendario && operaciones.some((operacion) => operacion.rfc === clienteCalendario)) {
+      return
+    }
+
+    const ultimaOperacion = operaciones[operaciones.length - 1]
+    setClienteCalendario(ultimaOperacion.rfc)
+    setMesCalendario(ultimaOperacion.mes)
+    setAnioCalendario(ultimaOperacion.anio)
+    setDiaSeleccionado(normalizeDateKey(ultimaOperacion.fechaOperacion))
+  }, [operaciones, clienteCalendario])
+
+  useEffect(() => {
+    if (!clienteCalendario) {
+      return
+    }
+
+    const operacionesCliente = operaciones.filter((operacion) => operacion.rfc === clienteCalendario)
+    if (operacionesCliente.length === 0) {
+      setDiaSeleccionado(null)
+      return
+    }
+
+    const ultimaOperacion = operacionesCliente[operacionesCliente.length - 1]
+    setMesCalendario(ultimaOperacion.mes)
+    setAnioCalendario(ultimaOperacion.anio)
+    setDiaSeleccionado(normalizeDateKey(ultimaOperacion.fechaOperacion))
+  }, [clienteCalendario, operaciones])
 
   const mesesDisponibles = useMemo(
     () =>
@@ -373,329 +449,478 @@ export default function ActividadesVulnerablesPage() {
     return mapa
   }, [operaciones])
 
-  const documentoRequerido = useMemo(() => {
-    if (!actividadSeleccionada) return []
+  const operacionesRecientes = useMemo(() => {
+    return [...operaciones]
+      .sort((a, b) => toDate(b.fechaOperacion).getTime() - toDate(a.fechaOperacion).getTime())
+      .slice(0, 5)
+  }, [operaciones])
 
-    const clienteKey = (() => {
-      switch (tipoCliente) {
-        case "pfn":
-          return "personaFisica"
-        case "pfe":
-          return "personaExtranjera"
-        case "pmn":
-          return "personaMoral"
-        case "pme":
-          return "personaMoral"
-        case "fideicomiso":
-          return "fideicomiso"
-        case "vehiculo":
-          return "vehiculo"
-        case "dependencia":
-          return "autoridad"
-        default:
-          return "otro"
+  const clientesRegistrados = useMemo(() => {
+    const mapa = new Map<string, { rfc: string; nombre: string }>()
+    operaciones.forEach((operacion) => {
+      if (!mapa.has(operacion.rfc)) {
+        mapa.set(operacion.rfc, { rfc: operacion.rfc, nombre: operacion.cliente })
       }
-    })()
+    })
+    return Array.from(mapa.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
+  }, [operaciones])
 
-    // @ts-expect-error – acceso controlado a la propiedad
-    return actividadSeleccionada.clienteObligaciones[clienteKey] ?? []
-  }, [actividadSeleccionada, tipoCliente])
+  const operacionesClienteSeleccionado = useMemo(() => {
+    if (!clienteCalendario) return []
+    return operaciones
+      .filter((operacion) => operacion.rfc === clienteCalendario)
+      .sort((a, b) => toDate(a.fechaOperacion).getTime() - toDate(b.fechaOperacion).getTime())
+  }, [clienteCalendario, operaciones])
 
-  const pasoValido = useMemo(() => {
-    if (pasoActual === 0) {
-      return Boolean(actividadKey && umaSeleccionada)
-    }
-    if (pasoActual === 1) {
-      return (
-        Boolean(clienteNombre.trim()) &&
-        Boolean(rfc.trim()) &&
-        Boolean(tipoOperacion.trim()) &&
-        Boolean(montoOperacion.trim())
-      )
-    }
-    if (pasoActual === 2) {
-      return Boolean(evaluacionActual)
-    }
-    return false
-  }, [pasoActual, actividadKey, umaSeleccionada, clienteNombre, rfc, tipoOperacion, montoOperacion, evaluacionActual])
-
-  const limpiarFormulario = () => {
-    setMontoOperacion("")
-    setTipoOperacion("")
-    setEvidencia("")
-    setClienteNombre("")
-    setRfc("")
-    setMismoGrupo("no")
-    setMoneda("MXN")
-    setFechaOperacion(new Date().toISOString().substring(0, 10))
-  }
-
-  const agregarOperacion = () => {
-    if (!actividadSeleccionada || !umaSeleccionada || !umbralPesos) {
-      toast({
-        title: "Información incompleta",
-        description: "Selecciona la actividad, año, mes y verifica que existan UMAs disponibles.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (!clienteNombre || !rfc || !tipoOperacion || !montoOperacion) {
-      toast({
-        title: "Faltan datos",
-        description: "Completa la información del cliente, RFC, tipo de operación y monto.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const monto = Number(montoOperacion)
-    if (Number.isNaN(monto) || monto <= 0) {
-      toast({
-        title: "Monto inválido",
-        description: "El monto debe ser numérico y mayor a cero.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const periodo = buildPeriodo(anioSeleccionado, mesSeleccionado)
-
-    const operacionesPrevias = operaciones.filter(
-      (operacion) =>
-        operacion.actividadKey === actividadSeleccionada.key &&
-        operacion.periodo === periodo &&
-        operacion.rfc.toUpperCase() === rfc.trim().toUpperCase() &&
-        !operacion.avisoPresentado,
+  const operacionesCalendario = useMemo(() => {
+    if (!clienteCalendario) return []
+    return operacionesClienteSeleccionado.filter(
+      (operacion) => operacion.mes === mesCalendario && operacion.anio === anioCalendario,
     )
+  }, [clienteCalendario, operacionesClienteSeleccionado, mesCalendario, anioCalendario])
 
-    const acumuladoPrevio = operacionesPrevias.reduce((acc, operacion) => acc + operacion.monto, 0)
-    const acumuladoCliente = acumuladoPrevio + monto
+  const calendarioDias = useMemo(() => {
+    if (!clienteCalendario) return []
 
-    let status: UmbralStatus = "sin-obligacion"
-    let alerta: string | null = null
+    const mapaPorDia = new Map<string, OperacionCliente[]>()
+    operacionesClienteSeleccionado.forEach((operacion) => {
+      const clave = normalizeDateKey(operacion.fechaOperacion)
+      const lista = mapaPorDia.get(clave) ?? []
+      lista.push(operacion)
+      mapaPorDia.set(clave, lista)
+    })
 
-    if (acumuladoCliente >= umbralPesos.aviso) {
-      status = "aviso"
-      alerta = "Supera el umbral de aviso. Preparar aviso de 17 días y suspender acumulación."
-    } else if (acumuladoCliente >= umbralPesos.identificacion) {
-      status = "identificacion"
-      alerta = "Supera el umbral de identificación. Integrar expediente y vigilar acumulación por 6 meses."
+    const base = new Date(anioCalendario, mesCalendario - 1, 1)
+    const offset = (base.getDay() + 6) % 7
+    const inicio = new Date(base.getFullYear(), base.getMonth(), base.getDate() - offset)
+
+    return Array.from({ length: 42 }, (_, index) => {
+      const fecha = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate() + index)
+      const clave = normalizeDateKey(fecha)
+      return {
+        clave,
+        dia: fecha.getDate(),
+        esMesActual: fecha.getMonth() === mesCalendario - 1 && fecha.getFullYear() === anioCalendario,
+        operaciones: mapaPorDia.get(clave) ?? [],
+      }
+    })
+  }, [clienteCalendario, operacionesClienteSeleccionado, anioCalendario, mesCalendario])
+
+  const operacionesDiaSeleccionado = useMemo(() => {
+    if (!diaSeleccionado) return []
+    return operacionesClienteSeleccionado.filter(
+      (operacion) => normalizeDateKey(operacion.fechaOperacion) === diaSeleccionado,
+    )
+  }, [diaSeleccionado, operacionesClienteSeleccionado])
+
+  useEffect(() => {
+    if (!clienteCalendario) {
+      return
     }
 
-    const nuevaOperacion: OperacionCliente = {
-      id: crypto.randomUUID(),
-      actividadKey: actividadSeleccionada.key,
-      actividadNombre: `${actividadSeleccionada.fraccion} – ${actividadSeleccionada.nombre}`,
-      tipoCliente,
-      cliente: clienteNombre.trim(),
-      rfc: rfc.trim().toUpperCase(),
-      mismoGrupo: mismoGrupo === "si",
-      periodo,
-      mes: mesSeleccionado,
-      anio: anioSeleccionado,
-      monto,
-      moneda,
-      fechaOperacion,
-      tipoOperacion,
-      evidencia,
-      umaDiaria: umaSeleccionada.daily,
-      identificacionUmbralPesos: umbralPesos.identificacion,
-      avisoUmbralPesos: umbralPesos.aviso,
-      umbralStatus: status,
-      acumuladoCliente,
-      alerta,
-      avisoPresentado: false,
+    if (calendarioDias.length === 0) {
+      setDiaSeleccionado(null)
+      return
     }
 
-    setOperaciones((prev) => [...prev, nuevaOperacion])
+    const diaExiste = diaSeleccionado
+      ? calendarioDias.some((dia) => dia.clave === diaSeleccionado)
+      : false
 
-    if (status !== "sin-obligacion") {
-      toast({
-        title: getStatusLabel(status),
-        description: alerta ?? "Revisar obligaciones aplicables.",
-      })
-    } else {
-      toast({
-        title: "Operación registrada",
-        description: "Se registró la operación sin obligaciones activas.",
-      })
+    if (diaExiste) {
+      return
     }
 
-    setWizardActivo(false)
-    setPasoActual(0)
-    limpiarFormulario()
+    const primerDiaConOperaciones = calendarioDias.find((dia) => dia.operaciones.length > 0)
+    if (primerDiaConOperaciones) {
+      setDiaSeleccionado(primerDiaConOperaciones.clave)
+      return
+    }
+
+    const diaMesActual = calendarioDias.find((dia) => dia.esMesActual)
+    setDiaSeleccionado(diaMesActual ? diaMesActual.clave : calendarioDias[0]?.clave ?? null)
+  }, [clienteCalendario, calendarioDias, diaSeleccionado])
+
+const pasoValido = useMemo(() => {
+  if (pasoActual === 0) {
+    return Boolean(actividadKey && umaSeleccionada)
   }
-
-  const marcarAvisoPresentado = (id: string) => {
-    setOperaciones((prev) =>
-      prev.map((operacion) =>
-        operacion.id === id
-          ? {
-              ...operacion,
-              avisoPresentado: true,
-              alerta: "Aviso marcado como presentado. Reiniciar acumulación a partir de esta fecha.",
-            }
-          : operacion,
-      ),
+  if (pasoActual === 1) {
+    return (
+      Boolean(clienteNombre.trim()) &&
+      Boolean(rfc.trim()) &&
+      Boolean(tipoOperacion.trim()) &&
+      Boolean(montoOperacion.trim())
     )
   }
-
-  const generarAvisoPreliminar = (operacion: OperacionCliente) => {
-    setAvisoPreliminar(operacion)
+  if (pasoActual === 2) {
+    return Boolean(evaluacionActual)
   }
+  return false
+}, [
+  pasoActual,
+  actividadKey,
+  umaSeleccionada,
+  clienteNombre,
+  rfc,
+  tipoOperacion,
+  montoOperacion,
+  evaluacionActual,
+])
 
-  const exportarXml = (operacion: OperacionCliente) => {
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<avisoPLD>\n  <periodo>${operacion.periodo}</periodo>\n  <actividad>${operacion.actividadKey}</actividad>\n  <claveActividad>${operacion.actividadKey.toUpperCase()}</claveActividad>\n  <sujetoObligado>${operacion.rfc}</sujetoObligado>\n  <cliente>\n    <nombre>${operacion.cliente}</nombre>\n    <tipoCliente>${operacion.tipoCliente}</tipoCliente>\n    <mismoGrupo>${operacion.mismoGrupo ? "SI" : "NO"}</mismoGrupo>\n  </cliente>\n  <operacion>\n    <fecha>${operacion.fechaOperacion}</fecha>\n    <monto moneda="${operacion.moneda}">${operacion.monto.toFixed(2)}</monto>\n    <tipo>${operacion.tipoOperacion}</tipo>\n    <evidencia>${operacion.evidencia.replace(/&/g, "&amp;")}</evidencia>\n  </operacion>\n</avisoPLD>`
+const limpiarFormulario = () => {
+  setMontoOperacion("")
+  setTipoOperacion("")
+  setEvidencia("")
+  setClienteNombre("")
+  setRfc("")
+  setMismoGrupo("no")
+  setMoneda("MXN")
+  setFechaOperacion(new Date().toISOString().substring(0, 10))
+}
 
-    const blob = new Blob([xml], { type: "application/xml" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `aviso-${operacion.periodo}-${operacion.rfc}.xml`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+const agregarOperacion = () => {
+  if (!actividadSeleccionada || !umaSeleccionada || !umbralPesos) {
     toast({
-      title: "XML generado",
-      description: "Se descargó el archivo XML preliminar para revisión.",
+      title: "Información incompleta",
+      description: "Selecciona la actividad, año, mes y verifica que existan UMAs disponibles.",
+      variant: "destructive",
+    })
+    return
+  }
+
+  if (!clienteNombre || !rfc || !tipoOperacion || !montoOperacion) {
+    toast({
+      title: "Faltan datos",
+      description: "Completa la información del cliente, RFC, tipo de operación y monto.",
+      variant: "destructive",
+    })
+    return
+  }
+
+  const monto = Number(montoOperacion)
+  if (Number.isNaN(monto) || monto <= 0) {
+    toast({
+      title: "Monto inválido",
+      description: "El monto debe ser numérico y mayor a cero.",
+      variant: "destructive",
+    })
+    return
+  }
+
+  const periodo = buildPeriodo(anioSeleccionado, mesSeleccionado)
+
+  const operacionesPrevias = operaciones.filter(
+    (operacion) =>
+      operacion.actividadKey === actividadSeleccionada.key &&
+      operacion.periodo === periodo &&
+      operacion.rfc.toUpperCase() === rfc.trim().toUpperCase() &&
+      !operacion.avisoPresentado,
+  )
+
+  const acumuladoPrevio = operacionesPrevias.reduce((acc, operacion) => acc + operacion.monto, 0)
+  const acumuladoCliente = acumuladoPrevio + monto
+
+  let status: UmbralStatus = "sin-obligacion"
+  let alerta: string | null = null
+
+  if (acumuladoCliente >= umbralPesos.aviso) {
+    status = "aviso"
+    alerta = "Supera el umbral de aviso. Preparar aviso de 17 días y suspender acumulación."
+  } else if (acumuladoCliente >= umbralPesos.identificacion) {
+    status = "identificacion"
+    alerta = "Supera el umbral de identificación. Integrar expediente y vigilar acumulación por 6 meses."
+  }
+
+  const nuevaOperacion: OperacionCliente = {
+    id: crypto.randomUUID(),
+    actividadKey: actividadSeleccionada.key,
+    actividadNombre: `${actividadSeleccionada.fraccion} – ${actividadSeleccionada.nombre}`,
+    tipoCliente,
+    cliente: clienteNombre.trim(),
+    rfc: rfc.trim().toUpperCase(),
+    mismoGrupo: mismoGrupo === "si",
+    periodo,
+    mes: mesSeleccionado,
+    anio: anioSeleccionado,
+    monto,
+    moneda,
+    fechaOperacion,
+    tipoOperacion,
+    evidencia,
+    umaDiaria: umaSeleccionada.daily,
+    identificacionUmbralPesos: umbralPesos.identificacion,
+    avisoUmbralPesos: umbralPesos.aviso,
+    umbralStatus: status,
+    acumuladoCliente,
+    alerta,
+    avisoPresentado: false,
+  }
+
+  setOperaciones((prev) => [...prev, nuevaOperacion])
+
+  if (status !== "sin-obligacion") {
+    toast({
+      title: getStatusLabel(status),
+      description: alerta ?? "Revisar obligaciones aplicables.",
+    })
+  } else {
+    toast({
+      title: "Operación registrada",
+      description: "Se registró la operación sin obligaciones activas.",
     })
   }
 
-  const obligacionesTexto = actividadSeleccionada?.obligaciones ?? null
+  setPasoActual(0)
+  limpiarFormulario()
+  setTabActiva("seguimiento")
+  setClienteCalendario(nuevaOperacion.rfc)
+  setAnioCalendario(nuevaOperacion.anio)
+  setMesCalendario(nuevaOperacion.mes)
+  setDiaSeleccionado(normalizeDateKey(nuevaOperacion.fechaOperacion))
+}
 
-  const requiereInforme27Bis = useMemo(
-    () => evaluacionActual?.status === "aviso" && mismoGrupo === "si",
-    [evaluacionActual, mismoGrupo],
+const marcarAvisoPresentado = (id: string) => {
+  setOperaciones((prev) =>
+    prev.map((operacion) =>
+      operacion.id === id
+        ? {
+            ...operacion,
+            avisoPresentado: true,
+            alerta: "Aviso marcado como presentado. Reiniciar acumulación a partir de esta fecha.",
+          }
+        : operacion,
+    ),
   )
+}
 
-  const avanzar = () => {
-    if (pasoActual < STEPS.length - 1 && pasoValido) {
-      setPasoActual((prev) => prev + 1)
-    }
+const generarAvisoPreliminar = (operacion: OperacionCliente) => {
+  setAvisoPreliminar(operacion)
+}
+
+const exportarXml = (operacion: OperacionCliente) => {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<avisoPLD>\n  <periodo>${operacion.periodo}</periodo>\n  <actividad>${operacion.actividadKey}</actividad>\n  <claveActividad>${operacion.actividadKey.toUpperCase()}</claveActividad>\n  <sujetoObligado>${operacion.rfc}</sujetoObligado>\n  <cliente>\n    <nombre>${operacion.cliente}</nombre>\n    <tipoCliente>${operacion.tipoCliente}</tipoCliente>\n    <mismoGrupo>${operacion.mismoGrupo ? "SI" : "NO"}</mismoGrupo>\n  </cliente>\n  <operacion>\n    <fecha>${operacion.fechaOperacion}</fecha>\n    <monto moneda="${operacion.moneda}">${operacion.monto.toFixed(2)}</monto>\n    <tipo>${operacion.tipoOperacion}</tipo>\n    <evidencia>${operacion.evidencia.replace(/&/g, "&amp;")}</evidencia>\n  </operacion>\n</avisoPLD>`
+
+  const blob = new Blob([xml], { type: "application/xml" })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = `aviso-${operacion.periodo}-${operacion.rfc}.xml`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+  toast({
+    title: "XML generado",
+    description: "Se descargó el archivo XML preliminar para revisión.",
+  })
+}
+
+const reutilizarDatosCliente = (operacion: OperacionCliente) => {
+  setTabActiva("captura")
+  setActividadKey(operacion.actividadKey)
+  setActividadInfoKey(operacion.actividadKey)
+  setAnioSeleccionado(operacion.anio)
+  setMesSeleccionado(operacion.mes)
+  setTipoCliente(operacion.tipoCliente)
+  setClienteNombre(operacion.cliente)
+  setRfc(operacion.rfc)
+  setMismoGrupo(operacion.mismoGrupo ? "si" : "no")
+  setTipoOperacion(operacion.tipoOperacion)
+  setMoneda(operacion.moneda)
+  setFechaOperacion(new Date().toISOString().substring(0, 10))
+  setEvidencia(operacion.evidencia)
+  setMontoOperacion("")
+  setPasoActual(1)
+  toast({
+    title: "Datos precargados",
+    description: "Actualiza el monto y confirma la nueva operación del cliente seleccionado.",
+  })
+}
+
+const obligacionesTexto = actividadSeleccionada?.obligaciones ?? null
+
+const requiereInforme27Bis = useMemo(
+  () => evaluacionActual?.status === "aviso" && mismoGrupo === "si",
+  [evaluacionActual, mismoGrupo],
+)
+
+const avanzar = () => {
+  if (pasoActual < STEPS.length - 1 && pasoValido) {
+    setPasoActual((prev) => prev + 1)
+  }
+}
+
+const retroceder = () => {
+  if (pasoActual > 0) {
+    setPasoActual((prev) => prev - 1)
+  }
+}
+
+const cambiarMesCalendario = (delta: number) => {
+  let nuevoMes = mesCalendario + delta
+  let nuevoAnio = anioCalendario
+
+  if (nuevoMes < 1) {
+    nuevoMes = 12
+    nuevoAnio -= 1
+  } else if (nuevoMes > 12) {
+    nuevoMes = 1
+    nuevoAnio += 1
   }
 
-  const retroceder = () => {
-    if (pasoActual > 0) {
-      setPasoActual((prev) => prev - 1)
-    }
-  }
+  setMesCalendario(nuevoMes)
+  setAnioCalendario(nuevoAnio)
+}
 
   return (
     <div className="space-y-8">
-      <header className="grid gap-4 lg:grid-cols-3">
-        <Card className="border-emerald-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-emerald-700">
-              <ShieldAlert className="h-5 w-5" /> Identificación de Actividades Vulnerables y Umbrales SAT
-            </CardTitle>
-            <CardDescription>
-              UMAs oficiales por ciclo (del 1.º de febrero al 31 de enero) y umbrales por fracción para identificar obligaciones de
-              identificación y aviso.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Ciclos UMA vigentes</p>
-              <div className="mt-2 space-y-1 text-xs">
-                {UMA_PERIODS.map((periodo) => (
-                  <div key={periodo.cycle} className="flex items-center justify-between rounded border px-3 py-1">
-                    <span>
-                      {periodo.cycle} ({new Date(periodo.validFrom).toLocaleDateString("es-MX", {
-                        month: "short",
-                        year: "numeric",
-                      })} 
-                      - {new Date(periodo.validTo).toLocaleDateString("es-MX", { month: "short", year: "numeric" })})
-                    </span>
-                    <span className="font-semibold">{formatCurrency(periodo.daily)}</span>
-                  </div>
-                ))}
-              </div>
+      <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/60 p-6">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+              <ShieldAlert className="h-4 w-4" />
+              Monitor de actividades vulnerables
             </div>
-            <div className="rounded border bg-emerald-50/70 p-3 text-sm text-emerald-900">
-              <p className="font-semibold">Ventana histórica</p>
-              <p>
-                Se incluyen 60 meses continuos desde septiembre de 2020 para alinear la evaluación mensual con las obligaciones de la
-                Ley Federal para la Prevención e Identificación de Operaciones con Recursos de Procedencia Ilícita.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" /> Resumen de umbrales
-            </CardTitle>
-            <CardDescription>Seguimiento automático de obligaciones por operación y acumulado mensual.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border bg-emerald-50 p-3 text-center">
-              <p className="text-xs font-semibold uppercase text-emerald-600">Sin obligación</p>
-              <p className="mt-2 text-2xl font-bold text-emerald-700">{resumenUmbrales.sinObligacion}</p>
-              <p className="text-xs text-muted-foreground">No supera umbral de identificación.</p>
-            </div>
-            <div className="rounded-xl border bg-amber-50 p-3 text-center">
-              <p className="text-xs font-semibold uppercase text-amber-600">Identificación</p>
-              <p className="mt-2 text-2xl font-bold text-amber-700">{resumenUmbrales.identificacion}</p>
-              <p className="text-xs text-muted-foreground">Requiere expediente y monitoreo 6 meses.</p>
-            </div>
-            <div className="rounded-xl border bg-rose-50 p-3 text-center">
-              <p className="text-xs font-semibold uppercase text-rose-600">Aviso SAT</p>
-              <p className="mt-2 text-2xl font-bold text-rose-700">{resumenUmbrales.aviso}</p>
-              <p className="text-xs text-muted-foreground">Aviso en 17 días y controles reforzados.</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" /> Gestión de actividades vulnerables
-            </CardTitle>
-            <CardDescription>Administra nuevas evaluaciones o retoma registros previos.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+            <h1 className="text-2xl font-semibold text-slate-900">Tablero operativo de Actividades Vulnerables</h1>
+            <p className="text-sm text-slate-600">
+              Organiza la captura guiada, el seguimiento de obligaciones y la exploración normativa en un solo espacio dividido por áreas.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
             <Button
-              className="w-full"
               onClick={() => {
-                setWizardActivo(true)
+                setTabActiva("captura")
                 setPasoActual(0)
                 setActividadInfoKey(actividadKey)
               }}
             >
-              <Plus className="mr-2 h-4 w-4" /> Registrar nueva actividad vulnerable
+              <Plus className="mr-2 h-4 w-4" /> Nueva evaluación
             </Button>
             <Button
               variant="outline"
-              className="w-full"
               onClick={() => {
+                setTabActiva("seguimiento")
                 if (operaciones.length === 0) {
                   toast({
                     title: "Sin registros",
                     description: "Aún no existen actividades registradas. Inicia una nueva evaluación.",
                   })
-                } else {
-                  toast({
-                    title: "Registros disponibles",
-                    description: "Desplázate a la sección de seguimiento para gestionar avisos y acumulaciones.",
-                  })
                 }
               }}
             >
-              <Layers className="mr-2 h-4 w-4" /> Gestionar registros existentes
+              <ListChecks className="mr-2 h-4 w-4" /> Seguimiento activo
             </Button>
-            <div className="rounded border bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
-              <p>
-                Las operaciones del mismo grupo empresarial que superen el umbral de aviso deben analizarse para determinar si procede
-                aviso o informe 27 Bis en ceros.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </header>
+          </div>
+        </div>
+      </section>
 
-      {wizardActivo && (
-        <section className="space-y-4">
+      <Tabs value={tabActiva} onValueChange={setTabActiva} className="space-y-6">
+        <TabsList className="grid w-full gap-2 rounded-xl border bg-white p-1 sm:grid-cols-4">
+          <TabsTrigger value="resumen" className="text-sm">Resumen ejecutivo</TabsTrigger>
+          <TabsTrigger value="captura" className="text-sm">Captura guiada</TabsTrigger>
+          <TabsTrigger value="seguimiento" className="text-sm">Seguimiento y calendario</TabsTrigger>
+          <TabsTrigger value="explorar" className="text-sm">Explorar fracciones</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="resumen" className="space-y-6">
+          <section className="grid gap-4 lg:grid-cols-3">
+            <Card className="border-slate-200 lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-emerald-600" /> Resumen de obligaciones activas
+                </CardTitle>
+                <CardDescription>Supervisión del semáforo mensual y acumulados por estatus.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border bg-emerald-50 p-4 text-center">
+                  <p className="text-xs font-semibold uppercase text-emerald-600">Sin obligación</p>
+                  <p className="mt-2 text-2xl font-bold text-emerald-700">{resumenUmbrales.sinObligacion}</p>
+                  <p className="text-xs text-muted-foreground">Operaciones bajo umbral.</p>
+                </div>
+                <div className="rounded-xl border bg-amber-50 p-4 text-center">
+                  <p className="text-xs font-semibold uppercase text-amber-600">Identificación</p>
+                  <p className="mt-2 text-2xl font-bold text-amber-700">{resumenUmbrales.identificacion}</p>
+                  <p className="text-xs text-muted-foreground">Expediente completo y monitoreo.</p>
+                </div>
+                <div className="rounded-xl border bg-rose-50 p-4 text-center">
+                  <p className="text-xs font-semibold uppercase text-rose-600">Aviso SAT</p>
+                  <p className="mt-2 text-2xl font-bold text-rose-700">{resumenUmbrales.aviso}</p>
+                  <p className="text-xs text-muted-foreground">Aviso en 17 días o informe 27 Bis.</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-emerald-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-emerald-700">
+                  <ShieldAlert className="h-5 w-5" /> Ciclos UMA vigentes
+                </CardTitle>
+                <CardDescription>Actualización automática por periodo oficial.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-xs">
+                <div className="space-y-1">
+                  {UMA_PERIODS.slice(0, 4).map((periodo) => (
+                    <div key={periodo.cycle} className="flex items-center justify-between rounded border px-3 py-1">
+                      <span>
+                        {periodo.cycle} ({new Date(periodo.validFrom).toLocaleDateString("es-MX", {
+                          month: "short",
+                          year: "numeric",
+                        })}
+                        {" "}– {new Date(periodo.validTo).toLocaleDateString("es-MX", { month: "short", year: "numeric" })})
+                      </span>
+                      <span className="font-semibold">{formatCurrency(periodo.daily)}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="rounded border border-emerald-200 bg-emerald-50/70 p-2 text-emerald-800">
+                  La ventana considera 60 meses continuos desde septiembre 2020 para validar obligaciones históricas.
+                </p>
+              </CardContent>
+            </Card>
+          </section>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Layers className="h-5 w-5 text-slate-600" /> Últimos registros capturados
+              </CardTitle>
+              <CardDescription>Visualiza rápidamente las operaciones más recientes y su semáforo.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {operacionesRecientes.length === 0 ? (
+                <div className="rounded border bg-slate-50 p-4 text-sm text-slate-600">
+                  Aún no hay registros disponibles. Inicia la captura guiada para evaluar tu primera operación.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {operacionesRecientes.map((operacion) => (
+                    <div key={operacion.id} className="rounded-lg border bg-white p-3 text-sm">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-slate-800">{operacion.cliente}</p>
+                          <p className="text-xs text-slate-500">{operacion.actividadNombre}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <Badge variant="outline" className="bg-white">
+                            {monthLabel(operacion.mes)} {operacion.anio}
+                          </Badge>
+                          <span
+                            className={`inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-xs font-medium text-white ${getStatusColor(operacion.umbralStatus)}`}
+                          >
+                            {getStatusLabel(operacion.umbralStatus)}
+                          </span>
+                          <span className="font-semibold text-slate-700">{formatCurrency(operacion.monto)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="captura" className="space-y-4">
           <Card className="border-emerald-200">
             <CardContent className="pt-6">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -742,8 +967,7 @@ export default function ActividadesVulnerablesPage() {
                   <FileText className="h-5 w-5 text-slate-600" /> Paso 1. Actividad vulnerable y periodo
                 </CardTitle>
                 <CardDescription>
-                  Selecciona la fracción aplicable y define el mes y año a evaluar. Las UMAs se muestran agrupadas por ciclo oficial del
-                  SAT.
+                  Selecciona la fracción aplicable y define el mes y año a evaluar. Las UMAs se muestran agrupadas por ciclo oficial del SAT.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -834,8 +1058,7 @@ export default function ActividadesVulnerablesPage() {
                     <div>
                       <p className="text-sm font-semibold text-slate-700">UMAs por año</p>
                       <p className="text-xs text-muted-foreground">
-                        Cada UMA es válida del 1.º de febrero al 31 de enero del año siguiente. Consulta los valores diarios, mensuales y
-                        anuales aplicables.
+                        Cada UMA es válida del 1.º de febrero al 31 de enero del año siguiente. Consulta los valores diarios, mensuales y anuales aplicables.
                       </p>
                     </div>
                   </div>
@@ -843,30 +1066,28 @@ export default function ActividadesVulnerablesPage() {
                     {Array.from(umaVentanaAgrupada.entries())
                       .sort((a, b) => a[0] - b[0])
                       .map(([year, registros]) => (
-                      <div key={year} className="rounded border bg-white p-3 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold">{year}</span>
-                          <span className="text-muted-foreground">
-                            UMA diaria {formatCurrency(registros[0]?.daily ?? 0)}
-                          </span>
+                        <div key={year} className="rounded border bg-white p-3 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold">{year}</span>
+                            <span className="text-muted-foreground">UMA diaria {formatCurrency(registros[0]?.daily ?? 0)}</span>
+                          </div>
+                          <div className="mt-2 grid grid-cols-3 gap-2">
+                            {registros.map((registro) => (
+                              <div
+                                key={`${year}-${registro.month}`}
+                                className={`rounded border px-2 py-1 text-center ${
+                                  registro.month === mesSeleccionado && registro.year === anioSeleccionado
+                                    ? "border-emerald-400 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-200 bg-slate-50"
+                                }`}
+                              >
+                                <p className="font-semibold">{monthLabel(registro.month).slice(0, 3)}</p>
+                                <p>{formatCurrency(registro.monthly)}</p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <div className="mt-2 grid grid-cols-3 gap-2">
-                          {registros.map((registro) => (
-                            <div
-                              key={`${year}-${registro.month}`}
-                              className={`rounded border px-2 py-1 text-center ${
-                                registro.month === mesSeleccionado && registro.year === anioSeleccionado
-                                  ? "border-emerald-400 bg-emerald-50 text-emerald-700"
-                                  : "border-slate-200 bg-slate-50"
-                              }`}
-                            >
-                              <p className="font-semibold">{monthLabel(registro.month).slice(0, 3)}</p>
-                              <p>{formatCurrency(registro.monthly)}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 </div>
 
@@ -916,12 +1137,11 @@ export default function ActividadesVulnerablesPage() {
                   <Users className="h-5 w-5 text-slate-600" /> Paso 2. Datos del cliente y operación
                 </CardTitle>
                 <CardDescription>
-                  Clasifica el tipo de cliente, define si pertenece al mismo grupo empresarial y captura los datos necesarios para la
-                  validación del umbral.
+                  Clasifica el tipo de cliente, define si pertenece al mismo grupo empresarial y captura los datos necesarios para la validación del umbral.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
                     <Label>Tipo de cliente</Label>
                     <Select value={tipoCliente} onValueChange={setTipoCliente}>
@@ -938,55 +1158,72 @@ export default function ActividadesVulnerablesPage() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>
-                      ¿Forma parte del mismo grupo empresarial?
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="ml-2 h-6 w-6"
-                        onClick={() => setInfoGrupoOpen(true)}
-                      >
-                        <Info className="h-4 w-4" />
-                      </Button>
-                    </Label>
-                    <Select value={mismoGrupo} onValueChange={setMismoGrupo}>
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="Selecciona una opción" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="no">No</SelectItem>
-                        <SelectItem value="si">Sí</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Nombre del cliente / responsable</Label>
-                    <Input value={clienteNombre} onChange={(event) => setClienteNombre(event.target.value)} />
+                    <Label>Nombre o razón social</Label>
+                    <Input
+                      placeholder="Ejemplo: Grupo Alfa S.A. de C.V."
+                      value={clienteNombre}
+                      onChange={(event) => setClienteNombre(event.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>RFC</Label>
-                    <Input value={rfc} onChange={(event) => setRfc(event.target.value.toUpperCase())} />
+                    <Input
+                      placeholder="RFC del cliente"
+                      value={rfc}
+                      onChange={(event) => setRfc(event.target.value.toUpperCase())}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>¿Pertenece al mismo grupo empresarial?</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { value: "si", label: "Sí" },
+                        { value: "no", label: "No" },
+                      ].map((option) => (
+                        <Button
+                          key={option.value}
+                          type="button"
+                          variant={mismoGrupo === option.value ? "default" : "outline"}
+                          onClick={() => setMismoGrupo(option.value)}
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start text-xs"
+                      onClick={() => setInfoGrupoOpen(true)}
+                    >
+                      <Info className="mr-2 h-4 w-4" /> ¿Cómo identificar el mismo grupo?
+                    </Button>
                   </div>
                   <div className="space-y-2">
                     <Label>Tipo de operación</Label>
                     <Input
+                      placeholder="Ejemplo: Compra de inmueble"
                       value={tipoOperacion}
                       onChange={(event) => setTipoOperacion(event.target.value)}
-                      placeholder="Venta de boletos, entrega de premio, preventa, etc."
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Monto de la operación (MXN)</Label>
+                    <Label>Monto</Label>
                     <Input
+                      placeholder="0.00"
+                      type="number"
+                      min="0"
+                      step="0.01"
                       value={montoOperacion}
                       onChange={(event) => setMontoOperacion(event.target.value)}
-                      placeholder="0.00"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Fecha de realización</Label>
-                    <Input type="date" value={fechaOperacion} onChange={(event) => setFechaOperacion(event.target.value)} />
-                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
                     <Label>Moneda</Label>
                     <Select value={moneda} onValueChange={setMoneda}>
@@ -994,98 +1231,75 @@ export default function ActividadesVulnerablesPage() {
                         <SelectValue placeholder="Selecciona moneda" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="MXN">MXN</SelectItem>
-                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="MXN">Peso mexicano (MXN)</SelectItem>
+                        <SelectItem value="USD">Dólar estadounidense (USD)</SelectItem>
+                        <SelectItem value="EUR">Euro (EUR)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="md:col-span-2 space-y-2">
-                    <Label>Evidencia documental o notas internas</Label>
+                  <div className="space-y-2">
+                    <Label>Fecha de la operación</Label>
+                    <Input
+                      type="date"
+                      value={fechaOperacion}
+                      max={new Date().toISOString().substring(0, 10)}
+                      onChange={(event) => setFechaOperacion(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Evidencia o comentarios</Label>
                     <Textarea
+                      placeholder="Describe brevemente la evidencia documental"
                       value={evidencia}
                       onChange={(event) => setEvidencia(event.target.value)}
-                      placeholder="Describe la evidencia de la operación (contratos, comprobantes bancarios, CFDI, etc.)."
                     />
                   </div>
                 </div>
 
-                <div className="rounded border bg-slate-50 p-4 text-sm text-slate-700">
-                  <p className="font-semibold">Checklist documental según tipo de cliente</p>
-                  <ul className="mt-2 list-disc space-y-1 pl-4">
-                    {documentoRequerido.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {pasoActual === 2 && (
-            <Card className="border-slate-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <PlayCircle className="h-5 w-5 text-slate-600" /> Paso 3. Resultado del umbral y obligaciones aplicables
-                </CardTitle>
-                <CardDescription>
-                  Confirma el semáforo de obligaciones, determina si aplica aviso o informe y genera la documentación preliminar.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-3 rounded border bg-white p-4">
-                    <p className="text-sm font-semibold text-slate-700">Evaluación automática</p>
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-flex h-3 w-3 rounded-full ${getStatusColor(evaluacionActual?.status ?? "sin-obligacion")}`} />
-                      <span className="text-sm font-semibold text-slate-700">
-                        {evaluacionActual ? getStatusLabel(evaluacionActual.status) : "Captura los datos para evaluar"}
-                      </span>
+                <div className="rounded border bg-slate-50 p-4">
+                  <h4 className="text-sm font-semibold text-slate-700">Resultado preliminar</h4>
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2 text-sm text-slate-600">
+                      <p>
+                        <span className="font-semibold">Umbral de identificación:</span> {umbralTexto.identificacion ?? "-"}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Umbral de aviso:</span> {umbralTexto.aviso ?? "-"}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Acumulado:</span> {evaluacionActual ? formatCurrency(evaluacionActual.acumulado) : "0.00"}
+                      </p>
+                      {evaluacionActual && (
+                        <Badge
+                          variant="outline"
+                          className={`border-0 ${
+                            evaluacionActual.status === "aviso"
+                              ? "bg-rose-500/10 text-rose-600"
+                              : evaluacionActual.status === "identificacion"
+                                ? "bg-amber-500/10 text-amber-600"
+                                : "bg-emerald-500/10 text-emerald-600"
+                          }`}
+                        >
+                          {getStatusLabel(evaluacionActual.status)}
+                        </Badge>
+                      )}
                     </div>
-                    {evaluacionActual && umbralPesos && (
-                      <div className="space-y-2 text-sm text-slate-600">
+                    {evaluacionActual && (
+                      <div className="space-y-2 text-xs text-slate-600">
                         <p>
-                          Monto individual: <span className="font-semibold">{formatCurrency(evaluacionActual.monto)}</span>
+                          {evaluacionActual.status === "sin-obligacion"
+                            ? "La operación no supera umbrales, monitorear acumulado mensual."
+                            : evaluacionActual.status === "identificacion"
+                              ? "Integra expediente completo, valida listas y conserva evidencia."
+                              : "Prepara aviso ante el SAT o informe 27 Bis según el grupo empresarial."}
                         </p>
-                        <p>
-                          Acumulado mensual cliente: {" "}
-                          <span className="font-semibold">{formatCurrency(evaluacionActual.acumulado)}</span>
-                        </p>
-                        {umbralTexto.identificacion && (
-                          <div className="flex items-center justify-between gap-2">
-                            <p>
-                              Umbral identificación:{" "}
-                              <span className="font-semibold">{umbralTexto.identificacion}</span>
-                            </p>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7"
-                              onClick={() => setInfoModal("umbral-identificacion")}
-                              aria-label="Más información sobre el umbral de identificación"
-                            >
-                              <Info className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        )}
-                        {umbralTexto.aviso && (
-                          <div className="flex items-center justify-between gap-2">
-                            <p>
-                              Umbral aviso:{" "}
-                              <span className="font-semibold">{umbralTexto.aviso}</span>
-                            </p>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7"
-                              onClick={() => setInfoModal("umbral-aviso")}
-                              aria-label="Más información sobre el umbral de aviso"
-                            >
-                              <Info className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setInfoModal(evaluacionActual.status === "aviso" ? "umbral-aviso" : "umbral-identificacion")}
+                        >
+                          <Info className="mr-2 h-4 w-4" /> Más información sobre el umbral
+                        </Button>
                         {evaluacionActual.alerta && (
                           <div className="flex items-start gap-2 rounded bg-amber-50 p-2 text-amber-800">
                             <AlertCircle className="mt-0.5 h-4 w-4" />
@@ -1143,8 +1357,7 @@ export default function ActividadesVulnerablesPage() {
                   <div className="rounded border border-emerald-400 bg-emerald-50 p-4 text-sm text-emerald-800">
                     <p className="font-semibold">Informe 27 Bis</p>
                     <p>
-                      La operación rebasa el umbral de aviso y el cliente pertenece al mismo grupo empresarial. Preparar informe en ceros
-                      (27 Bis) en lugar del aviso directo, preservando evidencia documental.
+                      La operación rebasa el umbral de aviso y el cliente pertenece al mismo grupo empresarial. Preparar informe en ceros (27 Bis) en lugar del aviso directo, preservando evidencia documental.
                     </p>
                   </div>
                 )}
@@ -1173,9 +1386,75 @@ export default function ActividadesVulnerablesPage() {
             </Card>
           )}
 
+          {pasoActual === 2 && (
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PlayCircle className="h-5 w-5 text-slate-600" /> Paso 3. Resultado del umbral y obligaciones aplicables
+                </CardTitle>
+                <CardDescription>
+                  Confirma el resultado de la evaluación, genera avisos preliminares y exporta XML para revisión interna.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-3 rounded border bg-slate-50 p-4 text-sm text-slate-700">
+                    <p className="font-semibold">Resumen del registro</p>
+                    <ul className="space-y-1 text-xs">
+                      <li>
+                        <span className="font-semibold">Cliente:</span> {clienteNombre || "Sin registrar"} ({rfc || "RFC pendiente"})
+                      </li>
+                      <li>
+                        <span className="font-semibold">Periodo:</span> {monthLabel(mesSeleccionado)} {anioSeleccionado}
+                      </li>
+                      <li>
+                        <span className="font-semibold">Monto:</span> {montoOperacion ? formatCurrency(Number(montoOperacion)) : "0.00"} {moneda}
+                      </li>
+                      <li>
+                        <span className="font-semibold">Actividad:</span> {actividadSeleccionada?.fraccion} – {actividadSeleccionada?.nombre}
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="space-y-3 rounded border bg-white p-4 text-sm text-slate-700">
+                    <p className="font-semibold">Recomendaciones</p>
+                    <p className="text-xs text-muted-foreground">
+                      Genera un aviso preliminar para revisar la información con el responsable de cumplimiento antes de cargarla en el portal del SAT.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!evaluacionActual}
+                        onClick={() => {
+                          if (!evaluacionActual) return
+                          toast({
+                            title: "Previsualización lista",
+                            description: "Verifica los datos antes de enviar el aviso al SAT.",
+                          })
+                        }}
+                      >
+                        Vista previa
+                      </Button>
+                      <Button type="button" onClick={agregarOperacion} disabled={!pasoValido}>
+                        Guardar operación y semáforo
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-2">
-              <Button variant="ghost" onClick={() => { setWizardActivo(false); setPasoActual(0) }}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setPasoActual(0)
+                  limpiarFormulario()
+                  setTabActiva("resumen")
+                }}
+              >
                 Cancelar
               </Button>
               {pasoActual > 0 && (
@@ -1198,177 +1477,301 @@ export default function ActividadesVulnerablesPage() {
               )}
             </div>
           </div>
-        </section>
-      )}
+        </TabsContent>
 
-      <section className="grid gap-6 lg:grid-cols-[2fr,1fr]">
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ListChecks className="h-5 w-5 text-slate-600" /> Seguimiento de operaciones por semáforo
-            </CardTitle>
-            <CardDescription>
-              Clasifica a los clientes según los umbrales alcanzados y gestiona la generación de avisos o informes.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 lg:grid-cols-3">
-              {["sin-obligacion", "identificacion", "aviso"].map((status) => (
-                <Card key={status} className="border-slate-200">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-sm">
-                      <span className={`inline-flex h-3 w-3 rounded-full ${getStatusColor(status as UmbralStatus)}`} />
-                      {getStatusLabel(status as UmbralStatus)}
-                    </CardTitle>
-                    <CardDescription>
-                      {(operacionesAgrupadas.get(status as UmbralStatus) ?? []).length} operaciones
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ScrollArea className="h-64 pr-3">
-                      <div className="space-y-3 text-xs">
-                        {(operacionesAgrupadas.get(status as UmbralStatus) ?? []).map((operacion) => (
-                          <div key={operacion.id} className="rounded border border-slate-200/80 bg-white p-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="font-semibold text-slate-700">{operacion.cliente}</p>
-                              <Badge variant="outline">{operacion.periodo}</Badge>
-                            </div>
-                            <p className="mt-1 text-slate-600">RFC: {operacion.rfc}</p>
-                            <p className="text-slate-600">Actividad: {operacion.actividadNombre}</p>
-                            <p className="text-slate-600">Monto acumulado: {formatCurrency(operacion.acumuladoCliente)}</p>
-                            <p className="text-slate-600">Operación: {operacion.tipoOperacion}</p>
-                            {operacion.alerta && (
-                              <div className="mt-2 flex items-center gap-2 rounded bg-amber-50 p-2 text-amber-800">
-                                <AlertCircle className="h-4 w-4" />
-                                <span>{operacion.alerta}</span>
+        <TabsContent value="seguimiento" className="space-y-6">
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ListChecks className="h-5 w-5 text-slate-600" /> Seguimiento de operaciones por semáforo
+              </CardTitle>
+              <CardDescription>
+                Clasifica a los clientes según los umbrales alcanzados y gestiona la generación de avisos o informes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 lg:grid-cols-3">
+                {["sin-obligacion", "identificacion", "aviso"].map((status) => (
+                  <Card key={status} className="border-slate-200">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-sm">
+                        <span className={`inline-flex h-3 w-3 rounded-full ${getStatusColor(status as UmbralStatus)}`} />
+                        {getStatusLabel(status as UmbralStatus)}
+                      </CardTitle>
+                      <CardDescription>
+                        {(operacionesAgrupadas.get(status as UmbralStatus) ?? []).length} operaciones
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ScrollArea className="h-64 pr-3">
+                        <div className="space-y-3 text-xs">
+                          {(operacionesAgrupadas.get(status as UmbralStatus) ?? []).map((operacion) => (
+                            <div key={operacion.id} className="rounded border border-slate-200/80 bg-white p-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-semibold text-slate-700">{operacion.cliente}</p>
+                                <Badge variant="outline">{operacion.periodo}</Badge>
                               </div>
-                            )}
-                            <div className="mt-3 flex flex-wrap items-center gap-2">
-                              {status === "aviso" && !operacion.avisoPresentado && (
-                                <Button size="sm" variant="outline" onClick={() => marcarAvisoPresentado(operacion.id)}>
-                                  Marcar aviso presentado
-                                </Button>
+                              <p className="mt-1 text-slate-600">RFC: {operacion.rfc}</p>
+                              <p className="text-slate-600">Actividad: {operacion.actividadNombre}</p>
+                              <p className="text-slate-600">Monto acumulado: {formatCurrency(operacion.acumuladoCliente)}</p>
+                              <p className="text-slate-600">Operación: {operacion.tipoOperacion}</p>
+                              {operacion.alerta && (
+                                <div className="mt-2 flex items-center gap-2 rounded bg-amber-50 p-2 text-amber-800">
+                                  <AlertCircle className="h-4 w-4" />
+                                  <span>{operacion.alerta}</span>
+                                </div>
                               )}
-                              <Button size="sm" variant="outline" onClick={() => generarAvisoPreliminar(operacion)}>
-                                Generar aviso preliminar
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => exportarXml(operacion)}>
-                                <Download className="mr-1 h-4 w-4" /> XML
-                              </Button>
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <Button size="sm" onClick={() => reutilizarDatosCliente(operacion)}>
+                                  Reutilizar datos
+                                </Button>
+                                {status === "aviso" && !operacion.avisoPresentado && (
+                                  <Button size="sm" variant="outline" onClick={() => marcarAvisoPresentado(operacion.id)}>
+                                    Marcar aviso presentado
+                                  </Button>
+                                )}
+                                <Button size="sm" variant="outline" onClick={() => generarAvisoPreliminar(operacion)}>
+                                  Generar aviso preliminar
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => exportarXml(operacion)}>
+                                  <Download className="mr-1 h-4 w-4" /> XML
+                                </Button>
+                              </div>
                             </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="h-5 w-5 text-slate-600" /> Calendario de operaciones por cliente
+              </CardTitle>
+              <CardDescription>Ubica visualmente las fechas con operaciones registradas y navega por mes.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-1 flex-col gap-3 md:flex-row md:items-center">
+                  <div className="w-full md:w-72">
+                    <Label className="text-xs font-semibold uppercase text-slate-500">Cliente registrado</Label>
+                    <Select
+                      value={clienteCalendario ?? ""}
+                      onValueChange={(value) => setClienteCalendario(value)}
+                      disabled={clientesRegistrados.length === 0}
+                    >
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Selecciona un cliente" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clientesRegistrados.map((cliente) => (
+                          <SelectItem key={cliente.rfc} value={cliente.rfc}>
+                            {cliente.nombre} ({cliente.rfc})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-lg border bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    <Badge variant="outline" className="bg-white text-slate-700">
+                      {monthLabel(mesCalendario)} {anioCalendario}
+                    </Badge>
+                    <span>{operacionesCalendario.length} {operacionesCalendario.length === 1 ? "operación" : "operaciones"}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => cambiarMesCalendario(-1)}
+                    aria-label="Mes anterior"
+                    disabled={clientesRegistrados.length === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="min-w-[140px] text-center text-sm font-semibold text-slate-700">
+                    {monthLabel(mesCalendario)} {anioCalendario}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => cambiarMesCalendario(1)}
+                    aria-label="Mes siguiente"
+                    disabled={clientesRegistrados.length === 0}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {clientesRegistrados.length === 0 ? (
+                <div className="rounded border bg-slate-50 p-4 text-sm text-slate-600">
+                  Registra una operación para activar el calendario mensual por cliente.
+                </div>
+              ) : (
+                <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-7 text-center text-xs font-semibold uppercase text-slate-500">
+                      {WEEK_DAYS.map((dia) => (
+                        <span key={dia}>{dia}</span>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-7 gap-2">
+                      {calendarioDias.map((dia) => (
+                        <button
+                          key={dia.clave}
+                          type="button"
+                          onClick={() => setDiaSeleccionado(dia.clave)}
+                          className={`flex min-h-[82px] flex-col items-start justify-between rounded-lg border px-2 py-2 text-left text-xs transition ${
+                            dia.esMesActual ? "bg-white text-slate-700" : "bg-slate-50 text-slate-400"
+                          } ${
+                            diaSeleccionado === dia.clave
+                              ? "border-emerald-500 ring-2 ring-emerald-200"
+                              : "border-slate-200 hover:border-emerald-300"
+                          }`}
+                        >
+                          <span className="text-sm font-semibold">{dia.dia}</span>
+                          {dia.operaciones.length > 0 && (
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${getCalendarSeverityClass(dia.operaciones)}`}>
+                              {dia.operaciones.length} {dia.operaciones.length === 1 ? "operación" : "operaciones"}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-3 rounded-lg border bg-slate-50 p-4 text-sm text-slate-700">
+                    <h4 className="font-semibold text-slate-700">
+                      {diaSeleccionado
+                        ? `Detalle ${new Date(diaSeleccionado).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })}`
+                        : "Selecciona un día"}
+                    </h4>
+                    {operacionesDiaSeleccionado.length === 0 ? (
+                      <p className="text-xs text-slate-500">No hay operaciones registradas en la fecha seleccionada.</p>
+                    ) : (
+                      <div className="space-y-2 text-xs text-slate-600">
+                        {operacionesDiaSeleccionado.map((operacion) => (
+                          <div key={operacion.id} className="rounded border border-slate-200 bg-white p-2">
+                            <p className="font-semibold text-slate-700">{operacion.cliente}</p>
+                            <p>Actividad: {operacion.actividadNombre}</p>
+                            <p>Monto: {formatCurrency(operacion.monto)} {operacion.moneda}</p>
+                            <p>Estado: {getStatusLabel(operacion.umbralStatus)}</p>
                           </div>
                         ))}
                       </div>
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-slate-600" /> Seguimiento y acumulación
-            </CardTitle>
-            <CardDescription>Controla operaciones acumulables por cliente hasta 6 meses posteriores al umbral de identificación.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <p>
-              Una vez superado el umbral de identificación, se deben monitorear las operaciones del mismo cliente durante los 6 meses
-              siguientes. Solo se acumulan aquellas operaciones que individualmente superan el umbral de identificación. Cuando se marca
-              el aviso como presentado, se reinicia el seguimiento acumulado.
-            </p>
-            <div className="grid gap-3">
-              <div className="rounded border bg-slate-50 p-3">
-                <h4 className="font-semibold text-slate-700">Alertas por acumulación</h4>
-                <ul className="mt-2 list-disc space-y-1 pl-4">
-                  <li>Semáforo verde: sin obligación activa.</li>
-                  <li>Semáforo ámbar: identificar y preparar controles documentales.</li>
-                  <li>Semáforo rojo: preparar aviso SAT o informe 27 Bis según corresponda.</li>
-                </ul>
-              </div>
-              <div className="rounded border bg-white p-3">
-                <h4 className="font-semibold text-slate-700">Controles sugeridos</h4>
-                <ul className="mt-2 list-disc space-y-1 pl-4">
-                  <li>Validación de listas restrictivas y PEPs.</li>
-                  <li>Confirmación bancaria de origen de recursos.</li>
-                  <li>Checklist de documentación completo y vigente.</li>
-                  <li>Bitácora de comunicación con el cliente.</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-[1.5fr,1fr]">
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Layers className="h-5 w-5 text-slate-600" /> Fracciones y actividades registradas
-            </CardTitle>
-            <CardDescription>
-              Consulta cada subsección de la ley y sus actividades vulnerables correspondientes para orientar nuevos registros.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-72 pr-4">
-              <div className="space-y-4 text-sm">
-                {Array.from(actividadesPorFraccion.entries())
-                  .sort((a, b) => a[0].localeCompare(b[0]))
-                  .map(([fraccion, actividades]) => (
-                  <div key={fraccion} className="rounded border bg-white p-3">
-                    <p className="font-semibold text-slate-700">{fraccion}</p>
-                    <ul className="mt-2 space-y-2">
-                      {actividades.map((actividad) => (
-                        <li key={actividad.key} className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-medium text-slate-700">{actividad.nombre}</p>
-                            <p className="text-xs text-muted-foreground">{actividad.descripcion}</p>
-                          </div>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              setWizardActivo(true)
-                              setPasoActual(0)
-                              setActividadKey(actividad.key)
-                              setActividadInfoKey(actividad.key)
-                            }}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
+                    )}
                   </div>
-                ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-slate-600" /> Seguimiento y acumulación
+              </CardTitle>
+              <CardDescription>Controla operaciones acumulables por cliente hasta 6 meses posteriores al umbral de identificación.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <p>
+                Una vez superado el umbral de identificación, se deben monitorear las operaciones del mismo cliente durante los 6 meses siguientes. Solo se acumulan aquellas operaciones que individualmente superan el umbral de identificación. Cuando se marca el aviso como presentado, se reinicia el seguimiento acumulado.
+              </p>
+              <div className="grid gap-3">
+                <div className="rounded border bg-slate-50 p-3">
+                  <h4 className="font-semibold text-slate-700">Alertas por acumulación</h4>
+                  <ul className="mt-2 list-disc space-y-1 pl-4">
+                    <li>Semáforo verde: sin obligación activa.</li>
+                    <li>Semáforo ámbar: identificar y preparar controles documentales.</li>
+                    <li>Semáforo rojo: preparar aviso SAT o informe 27 Bis según corresponda.</li>
+                  </ul>
+                </div>
+                <div className="rounded border bg-white p-3">
+                  <h4 className="font-semibold text-slate-700">Controles sugeridos</h4>
+                  <ul className="mt-2 list-disc space-y-1 pl-4">
+                    <li>Validación de listas restrictivas y PEPs.</li>
+                    <li>Confirmación bancaria de origen de recursos.</li>
+                    <li>Checklist de documentación completo y vigente.</li>
+                    <li>Bitácora de comunicación con el cliente.</li>
+                  </ul>
+                </div>
               </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-slate-600" /> Validación de datos y documentos
-            </CardTitle>
-            <CardDescription>
-              Confirma el cumplimiento documental previo a la integración del expediente o a la generación del aviso.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-slate-700">
-            <p>
-              Verifica que los datos recabados coincidan con la documentación soporte (RFC, identificación oficial, comprobante de
-              domicilio y evidencia de operaciones).
-            </p>
-            <p>
-              Los avisos o informes deben conservar evidencia digital y física, incluyendo contratos, estados de cuenta, medios de pago,
-              CFDI y documentación del beneficiario final.
-            </p>
-          </CardContent>
-        </Card>
-      </section>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="explorar" className="space-y-6">
+          <section className="grid gap-6 lg:grid-cols-[1.5fr,1fr]">
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-slate-600" /> Fracciones y actividades registradas
+                </CardTitle>
+                <CardDescription>
+                  Consulta cada subsección de la ley y sus actividades vulnerables correspondientes para orientar nuevos registros.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-72 pr-4">
+                  <div className="space-y-4 text-sm">
+                    {Array.from(actividadesPorFraccion.entries())
+                      .sort((a, b) => a[0].localeCompare(b[0]))
+                      .map(([fraccion, actividades]) => (
+                        <div key={fraccion} className="rounded border bg-white p-3">
+                          <h4 className="font-semibold text-slate-700">{fraccion}</h4>
+                          <ul className="mt-2 space-y-1 text-slate-600">
+                            {actividades.map((actividad) => (
+                              <li key={actividad.key} className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="font-medium text-slate-700">{actividad.nombre}</p>
+                                  <p className="text-xs text-muted-foreground">{actividad.descripcion}</p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setActividadKey(actividad.key)
+                                    setActividadInfoKey(actividad.key)
+                                    setTabActiva("captura")
+                                  }}
+                                >
+                                  <ArrowRight className="h-4 w-4" />
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-slate-600" /> Validación de datos y documentos
+                </CardTitle>
+                <CardDescription>
+                  Confirma el cumplimiento documental previo a la integración del expediente o a la generación del aviso.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-slate-700">
+                <p>
+                  Verifica que los datos recabados coincidan con la documentación soporte (RFC, identificación oficial, comprobante de domicilio y evidencia de operaciones).
+                </p>
+                <p>
+                  Los avisos o informes deben conservar evidencia digital y física, incluyendo contratos, estados de cuenta, medios de pago, CFDI y documentación del beneficiario final.
+                </p>
+              </CardContent>
+            </Card>
+          </section>
+        </TabsContent>
+      </Tabs>
 
       <Dialog
         open={infoModal !== null}
@@ -1406,9 +1809,7 @@ export default function ActividadesVulnerablesPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Qué significa mismo grupo empresarial?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se considera que pertenece al mismo grupo empresarial cuando existe control común, coincidencia accionaria relevante o
-              participación mayoritaria que implique dirección o administración conjunta. En esos casos, si se supera el umbral de
-              aviso, procede el informe 27 Bis en ceros en lugar de un aviso por operación individual.
+              Se considera que pertenece al mismo grupo empresarial cuando existe control común, coincidencia accionaria relevante o participación mayoritaria que implique dirección o administración conjunta. En esos casos, si se supera el umbral de aviso, procede el informe 27 Bis en ceros en lugar de un aviso por operación individual.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
