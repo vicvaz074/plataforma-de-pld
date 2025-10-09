@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { addBusinessDays, differenceInBusinessDays, differenceInCalendarDays, format, formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 import {
@@ -163,6 +163,162 @@ const formatBytes = (bytes: number) => {
 const sortByRecentDate = <T,>(items: T[], getDate: (item: T) => Date) =>
   [...items].sort((a, b) => getDate(b).getTime() - getDate(a).getTime())
 
+const STORAGE_KEYS = {
+  lineamientos: "auditoria-lineamientos",
+  auditorias: "auditoria-interna-registros",
+  observaciones: "auditoria-observaciones-autoridades",
+  planes: "auditoria-planes-accion",
+} as const
+
+type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS]
+
+const storeWithDates = <T,>(key: StorageKey, value: T) => {
+  if (typeof window === "undefined") return
+  const payload = JSON.stringify(value, (_storageKey, storageValue) =>
+    storageValue instanceof Date ? storageValue.toISOString() : storageValue
+  )
+  window.localStorage.setItem(key, payload)
+}
+
+const parseStoredLineamientos = (raw: unknown): LineamientoVersion[] => {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null
+      const { version, date, approvedBy, notes } = item as Partial<LineamientoVersion> & {
+        date?: string
+      }
+      if (!version || !date || !approvedBy) return null
+      const parsedDate = new Date(date)
+      if (Number.isNaN(parsedDate.getTime())) return null
+      return { version, date: parsedDate, approvedBy, notes }
+    })
+    .filter((item): item is LineamientoVersion => item !== null)
+}
+
+const parseStoredAudits = (raw: unknown): InternalAuditRecord[] => {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null
+      const { id, date, scope, findings, responsible, status, followUpDue } = item as Partial<
+        InternalAuditRecord
+      > & {
+        date?: string
+        followUpDue?: string
+        scope?: unknown
+      }
+
+      if (!id || !date || !findings || !responsible || !status || !Array.isArray(scope)) {
+        return null
+      }
+
+      const parsedDate = new Date(date)
+      if (Number.isNaN(parsedDate.getTime())) return null
+
+      const parsedFollowUp = followUpDue ? new Date(followUpDue) : undefined
+      if (parsedFollowUp && Number.isNaN(parsedFollowUp.getTime())) return null
+
+      const normalizedScope = scope
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter((value) => value.length > 0)
+
+      if (!normalizedScope.length) return null
+
+      if (!["Cerrado", "En seguimiento", "Abierto"].includes(status)) return null
+
+      return {
+        id,
+        date: parsedDate,
+        scope: normalizedScope,
+        findings,
+        responsible,
+        status: status as InternalAuditRecord["status"],
+        followUpDue: parsedFollowUp,
+      }
+    })
+    .filter((item): item is InternalAuditRecord => item !== null)
+}
+
+const parseStoredRequests = (raw: unknown): AuthorityRequest[] => {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null
+      const { id, authority, receivedAt, dueDate, respondedAt, status, responsible, documents } = item as Partial<
+        AuthorityRequest
+      > & {
+        receivedAt?: string
+        dueDate?: string
+        respondedAt?: string
+        documents?: unknown
+      }
+
+      if (!id || !authority || !receivedAt || !dueDate || !status || !responsible) return null
+
+      if (!["SAT", "UIF"].includes(authority)) return null
+      if (!["Pendiente", "En progreso", "Cerrado"].includes(status)) return null
+
+      const parsedReceived = new Date(receivedAt)
+      const parsedDue = new Date(dueDate)
+      if (Number.isNaN(parsedReceived.getTime()) || Number.isNaN(parsedDue.getTime())) return null
+
+      const parsedResponded = respondedAt ? new Date(respondedAt) : undefined
+      if (parsedResponded && Number.isNaN(parsedResponded.getTime())) return null
+
+      const normalizedDocuments = Array.isArray(documents)
+        ? documents.map((value) => (typeof value === "string" ? value : String(value)))
+        : []
+
+      return {
+        id,
+        authority: authority as AuthorityRequest["authority"],
+        receivedAt: parsedReceived,
+        dueDate: parsedDue,
+        respondedAt: parsedResponded,
+        status: status as AuthorityRequest["status"],
+        responsible,
+        documents: normalizedDocuments,
+      }
+    })
+    .filter((item): item is AuthorityRequest => item !== null)
+}
+
+const parseStoredActionPlans = (raw: unknown): ActionPlan[] => {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      if (!item || typeof item !== "object") return null
+      const { id, source, action, responsible, deadline, status, progress } = item as Partial<
+        ActionPlan
+      > & {
+        deadline?: string
+      }
+
+      if (!id || !source || !action || !responsible || !deadline) return null
+
+      const parsedDeadline = new Date(deadline)
+      if (Number.isNaN(parsedDeadline.getTime())) return null
+
+      const normalizedStatus = status && ["En seguimiento", "Cerrado", "Pendiente"].includes(status)
+        ? status
+        : "Pendiente"
+
+      const normalizedProgress = typeof progress === "number" && progress >= 0 && progress <= 100 ? progress : 0
+
+      return {
+        id,
+        source,
+        action,
+        responsible,
+        deadline: parsedDeadline,
+        status: normalizedStatus as ActionPlan["status"],
+        progress: normalizedProgress,
+      }
+    })
+    .filter((item): item is ActionPlan => item !== null)
+}
+
 export default function AuditoriaVerificacionPage() {
   const { toast } = useToast()
   const [responses, setResponses] = useState<Record<string, ControlResponse>>(() =>
@@ -171,42 +327,13 @@ export default function AuditoriaVerificacionPage() {
     )
   )
 
-  const [lineamientosVersions, setLineamientosVersions] = useState<LineamientoVersion[]>([
-    {
-      version: "1.0",
-      date: new Date("2023-06-15"),
-      approvedBy: "Comité de Comunicación y Control",
-      notes: "Versión inicial de los lineamientos internos.",
-    },
-    {
-      version: "1.1",
-      date: new Date("2024-02-02"),
-      approvedBy: "Oficial de Cumplimiento",
-      notes: "Actualización por reforma de las RCG en enero 2024.",
-    },
-  ])
+  const [lineamientosVersions, setLineamientosVersions] = useState<LineamientoVersion[]>([])
+  const [lineamientosInitialized, setLineamientosInitialized] = useState(false)
 
   const [newVersion, setNewVersion] = useState({ version: "", date: "", approvedBy: "", notes: "" })
 
-  const [auditLog, setAuditLog] = useState<InternalAuditRecord[]>([
-    {
-      id: "AUD-2024-Q1",
-      date: new Date("2024-03-25"),
-      scope: ["KYC", "Monitoreo", "Reportes UIF"],
-      findings: "Hallazgos menores en conciliación de operaciones inusuales. Plan de acción asignado.",
-      responsible: "Auditor Interno",
-      status: "Cerrado",
-      followUpDue: new Date("2024-04-15"),
-    },
-    {
-      id: "AUD-2023-Q3",
-      date: new Date("2023-09-10"),
-      scope: ["Beneficiario Controlador", "Capacitación"],
-      findings: "Se solicitaron refuerzos de capacitación al personal de mesa de control.",
-      responsible: "Auditor Externo",
-      status: "Cerrado",
-    },
-  ])
+  const [auditLog, setAuditLog] = useState<InternalAuditRecord[]>([])
+  const [auditLogInitialized, setAuditLogInitialized] = useState(false)
 
   const [newAudit, setNewAudit] = useState({
     id: "",
@@ -217,27 +344,8 @@ export default function AuditoriaVerificacionPage() {
     followUpDue: "",
   })
 
-  const [authorityRequests, setAuthorityRequests] = useState<AuthorityRequest[]>([
-    {
-      id: "SAT-2024-01",
-      authority: "SAT",
-      receivedAt: new Date("2024-05-20"),
-      dueDate: addBusinessDays(new Date("2024-05-20"), 10),
-      status: "En progreso",
-      responsible: "Oficial de Cumplimiento",
-      documents: ["Oficio SAT del 20/05/2024"],
-    },
-    {
-      id: "UIF-2023-11",
-      authority: "UIF",
-      receivedAt: new Date("2023-11-08"),
-      dueDate: addBusinessDays(new Date("2023-11-08"), 10),
-      respondedAt: new Date("2023-11-21"),
-      status: "Cerrado",
-      responsible: "Dirección Jurídica",
-      documents: ["Oficio UIF 11/2023", "Acuse UIF 21/11/2023"],
-    },
-  ])
+  const [authorityRequests, setAuthorityRequests] = useState<AuthorityRequest[]>([])
+  const [authorityRequestsInitialized, setAuthorityRequestsInitialized] = useState(false)
 
   const [newRequest, setNewRequest] = useState({
     id: "",
@@ -248,26 +356,96 @@ export default function AuditoriaVerificacionPage() {
     responsible: "",
   })
 
-  const [actionPlans, setActionPlans] = useState<ActionPlan[]>([
-    {
-      id: "PA-2024-01",
-      source: "Auditoría interna AUD-2024-Q1",
-      action: "Actualizar matriz de conciliación de operaciones inusuales y capacitar al equipo.",
-      responsible: "Coordinación de Cumplimiento",
-      deadline: new Date("2024-04-30"),
-      status: "En seguimiento",
-      progress: 60,
-    },
-    {
-      id: "PA-2023-05",
-      source: "Observación UIF-2023-11",
-      action: "Documentar justificación de operaciones relevantes de octubre 2023.",
-      responsible: "Mesa de Control",
-      deadline: new Date("2023-12-15"),
-      status: "Cerrado",
-      progress: 100,
-    },
-  ])
+  const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
+  const [actionPlansInitialized, setActionPlansInitialized] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEYS.lineamientos)
+      if (stored) {
+        const parsed = parseStoredLineamientos(JSON.parse(stored))
+        if (parsed.length) {
+          setLineamientosVersions(sortByRecentDate(parsed, (item) => item.date))
+        }
+      }
+    } catch (error) {
+      console.error("Error al cargar lineamientos desde almacenamiento local", error)
+    } finally {
+      setLineamientosInitialized(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!lineamientosInitialized) return
+    storeWithDates(STORAGE_KEYS.lineamientos, lineamientosVersions)
+  }, [lineamientosInitialized, lineamientosVersions])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEYS.auditorias)
+      if (stored) {
+        const parsed = parseStoredAudits(JSON.parse(stored))
+        if (parsed.length) {
+          setAuditLog(sortByRecentDate(parsed, (item) => item.date))
+        }
+      }
+    } catch (error) {
+      console.error("Error al cargar auditorías internas", error)
+    } finally {
+      setAuditLogInitialized(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!auditLogInitialized) return
+    storeWithDates(STORAGE_KEYS.auditorias, auditLog)
+  }, [auditLogInitialized, auditLog])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEYS.observaciones)
+      if (stored) {
+        const parsed = parseStoredRequests(JSON.parse(stored))
+        if (parsed.length) {
+          setAuthorityRequests(sortByRecentDate(parsed, (item) => item.receivedAt))
+        }
+      }
+    } catch (error) {
+      console.error("Error al cargar observaciones de autoridades", error)
+    } finally {
+      setAuthorityRequestsInitialized(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!authorityRequestsInitialized) return
+    storeWithDates(STORAGE_KEYS.observaciones, authorityRequests)
+  }, [authorityRequestsInitialized, authorityRequests])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEYS.planes)
+      if (stored) {
+        const parsed = parseStoredActionPlans(JSON.parse(stored))
+        if (parsed.length) {
+          setActionPlans(sortByRecentDate(parsed, (item) => item.deadline))
+        }
+      }
+    } catch (error) {
+      console.error("Error al cargar planes de acción", error)
+    } finally {
+      setActionPlansInitialized(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!actionPlansInitialized) return
+    storeWithDates(STORAGE_KEYS.planes, actionPlans)
+  }, [actionPlansInitialized, actionPlans])
 
   const [newActionPlan, setNewActionPlan] = useState({
     id: "",
@@ -808,25 +986,31 @@ export default function AuditoriaVerificacionPage() {
               </Button>
 
               <div className="space-y-3">
-                {lineamientosVersions.map((version) => (
-                  <div
-                    key={`${version.version}-${version.date.toISOString()}`}
-                    className="rounded-md border border-border/60 bg-muted/30 p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold">Versión {version.version}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(version.date, "dd/MM/yyyy", { locale: es })} · {version.approvedBy}
-                        </p>
+                {lineamientosVersions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Registra la primera versión para habilitar el historial de lineamientos internos.
+                  </p>
+                ) : (
+                  lineamientosVersions.map((version) => (
+                    <div
+                      key={`${version.version}-${version.date.toISOString()}`}
+                      className="rounded-md border border-border/60 bg-muted/30 p-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">Versión {version.version}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(version.date, "dd/MM/yyyy", { locale: es })} · {version.approvedBy}
+                          </p>
+                        </div>
+                        <Badge variant="secondary">Histórico</Badge>
                       </div>
-                      <Badge variant="secondary">Histórico</Badge>
+                      {version.notes && (
+                        <p className="mt-2 text-sm text-muted-foreground">{version.notes}</p>
+                      )}
                     </div>
-                    {version.notes && (
-                      <p className="mt-2 text-sm text-muted-foreground">{version.notes}</p>
-                    )}
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
@@ -880,29 +1064,35 @@ export default function AuditoriaVerificacionPage() {
               </Button>
 
               <div className="space-y-4">
-                {auditLog.map((record) => (
-                  <div
-                    key={record.id}
-                    className="rounded-md border border-border/60 bg-muted/30 p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold">{record.id}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(record.date, "dd/MM/yyyy", { locale: es })} · Alcance: {record.scope.join(", ")}
-                        </p>
+                {auditLog.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Registra la primera auditoría interna para generar la bitácora histórica.
+                  </p>
+                ) : (
+                  auditLog.map((record) => (
+                    <div
+                      key={record.id}
+                      className="rounded-md border border-border/60 bg-muted/30 p-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">{record.id}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(record.date, "dd/MM/yyyy", { locale: es })} · Alcance: {record.scope.join(", ")}
+                          </p>
+                        </div>
+                        <Badge variant={record.status === "Cerrado" ? "default" : "secondary"}>{record.status}</Badge>
                       </div>
-                      <Badge variant={record.status === "Cerrado" ? "default" : "secondary"}>{record.status}</Badge>
+                      <p className="mt-2 text-sm">{record.findings}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Responsable: {record.responsible}</p>
+                      {record.followUpDue && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Seguimiento comprometido al {format(record.followUpDue, "dd/MM/yyyy", { locale: es })}
+                        </p>
+                      )}
                     </div>
-                    <p className="mt-2 text-sm">{record.findings}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Responsable: {record.responsible}</p>
-                    {record.followUpDue && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Seguimiento comprometido al {format(record.followUpDue, "dd/MM/yyyy", { locale: es })}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -974,60 +1164,67 @@ export default function AuditoriaVerificacionPage() {
               </Button>
 
               <div className="space-y-4">
-                {authorityRequests.map((request) => {
-                  const overdue = request.status !== "Cerrado" && differenceInBusinessDays(new Date(), request.dueDate) > 0
-                  const dueIn = differenceInBusinessDays(request.dueDate, new Date())
+                {authorityRequests.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Registra los oficios recibidos para activar el seguimiento automático de plazos.
+                  </p>
+                ) : (
+                  authorityRequests.map((request) => {
+                    const overdue = request.status !== "Cerrado" && differenceInBusinessDays(new Date(), request.dueDate) > 0
+                    const dueIn = differenceInBusinessDays(request.dueDate, new Date())
 
-                  return (
-                    <div
-                      key={request.id}
-                      className="rounded-md border border-border/60 bg-muted/30 p-4"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold">{request.id} · {request.authority}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Recibido el {format(request.receivedAt, "dd/MM/yyyy", { locale: es })} · vence {format(request.dueDate, "dd/MM/yyyy", { locale: es })}
-                          </p>
+                    return (
+                      <div
+                        key={request.id}
+                        className="rounded-md border border-border/60 bg-muted/30 p-4"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold">{request.id} · {request.authority}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Recibido el {format(request.receivedAt, "dd/MM/yyyy", { locale: es })} · vence {format(request.dueDate, "dd/MM/yyyy", { locale: es })}
+                            </p>
+                          </div>
+                          <Badge variant={overdue ? "destructive" : "secondary"}>{request.status}</Badge>
                         </div>
-                        <Badge variant={overdue ? "destructive" : "secondary"}>{request.status}</Badge>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Responsable: {request.responsible} · Documentos: {request.documents.join(", ") || "Sin adjuntar"}
+                        </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                          {request.respondedAt ? (
+                            <span>
+                              Respondido el {format(request.respondedAt, "dd/MM/yyyy", { locale: es })} ({formatDistanceToNow(request.respondedAt, { addSuffix: true, locale: es })})
+                            </span>
+                          ) : (
+                            <span>
+                              {overdue
+                                ? `Vencido hace ${Math.abs(differenceInBusinessDays(new Date(), request.dueDate))} día(s) hábil(es)`
+                                : `Restan ${dueIn} día(s) hábil(es)`}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateRequestStatus(request.id, "En progreso")}
+                          >
+                            Marcar en seguimiento
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateRequestStatus(request.id, "Cerrado")}
+                          >
+                            Cerrar requerimiento
+                          </Button>
+                        </div>
                       </div>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        Responsable: {request.responsible} · Documentos: {request.documents.join(", ") || "Sin adjuntar"}
-                      </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                        {request.respondedAt ? (
-                          <span>
-                            Respondido el {format(request.respondedAt, "dd/MM/yyyy", { locale: es })} ({formatDistanceToNow(request.respondedAt, { addSuffix: true, locale: es })})
-                          </span>
-                        ) : (
-                          <span>
-                            {overdue
-                              ? `Vencido hace ${Math.abs(differenceInBusinessDays(new Date(), request.dueDate))} día(s) hábil(es)`
-                              : `Restan ${dueIn} día(s) hábil(es)`}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => updateRequestStatus(request.id, "En progreso")}
-                        >
-                          Marcar en seguimiento
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => updateRequestStatus(request.id, "Cerrado")}
-                        >
-                          Cerrar requerimiento
-                        </Button>
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1075,61 +1272,67 @@ export default function AuditoriaVerificacionPage() {
               </Button>
 
               <div className="space-y-4">
-                {actionPlans.map((plan) => {
-                  const overdue = plan.status !== "Cerrado" && differenceInCalendarDays(new Date(), plan.deadline) > 0
+                {actionPlans.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Registra un plan de acción para iniciar el seguimiento de remediaciones.
+                  </p>
+                ) : (
+                  actionPlans.map((plan) => {
+                    const overdue = plan.status !== "Cerrado" && differenceInCalendarDays(new Date(), plan.deadline) > 0
 
-                  return (
-                    <div
-                      key={plan.id}
-                      className="rounded-md border border-border/60 bg-muted/30 p-4"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold">{plan.id}</p>
-                          <p className="text-xs text-muted-foreground">Origen: {plan.source}</p>
+                    return (
+                      <div
+                        key={plan.id}
+                        className="rounded-md border border-border/60 bg-muted/30 p-4"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold">{plan.id}</p>
+                            <p className="text-xs text-muted-foreground">Origen: {plan.source}</p>
+                          </div>
+                          <Badge variant={overdue ? "destructive" : "secondary"}>{plan.status}</Badge>
                         </div>
-                        <Badge variant={overdue ? "destructive" : "secondary"}>{plan.status}</Badge>
-                      </div>
-                      <p className="mt-2 text-sm">{plan.action}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Responsable: {plan.responsible} · Compromiso {format(plan.deadline, "dd/MM/yyyy", { locale: es })}
-                      </p>
-                      <div className="mt-3 space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span>Avance</span>
-                          <span>{plan.progress}%</span>
+                        <p className="mt-2 text-sm">{plan.action}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Responsable: {plan.responsible} · Compromiso {format(plan.deadline, "dd/MM/yyyy", { locale: es })}
+                        </p>
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span>Avance</span>
+                            <span>{plan.progress}%</span>
+                          </div>
+                          <Progress value={plan.progress} className="h-2" />
                         </div>
-                        <Progress value={plan.progress} className="h-2" />
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updatePlanStatus(plan.id, "En seguimiento")}
+                          >
+                            Marcar en seguimiento
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updatePlanStatus(plan.id, "Cerrado")}
+                          >
+                            Cerrar plan
+                          </Button>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={plan.progress}
+                            onChange={(event) => updatePlanProgress(plan.id, Number(event.target.value))}
+                            className="w-24"
+                          />
+                        </div>
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => updatePlanStatus(plan.id, "En seguimiento")}
-                        >
-                          Marcar en seguimiento
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => updatePlanStatus(plan.id, "Cerrado")}
-                        >
-                          Cerrar plan
-                        </Button>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={plan.progress}
-                          onChange={(event) => updatePlanProgress(plan.id, Number(event.target.value))}
-                          className="w-24"
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })
+                )}
               </div>
             </CardContent>
           </Card>
