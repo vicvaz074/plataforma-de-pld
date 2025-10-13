@@ -2753,7 +2753,7 @@ const cambiarMesCalendario = (delta: number) => {
                   <div className="space-y-3 rounded-lg border bg-slate-50 p-4 text-sm text-slate-700">
                     <h4 className="font-semibold text-slate-700">
                       {diaSeleccionado
-                        ? `Detalle ${new Date(diaSeleccionado).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })}`
+                        ? `Detalle ${toDate(diaSeleccionado).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })}`
                         : "Selecciona un día"}
                     </h4>
                     {operacionesDiaSeleccionado.length === 0 ? (
