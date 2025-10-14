@@ -25,7 +25,7 @@ export const translations = {
     nistPrivacy: "NIST Privacy Framework",
     actividadesVulnerables: "Identificación de Actividades Vulnerables y Umbrales SAT",
     registroSat: "Registro y Alta ante el SAT",
-    expedienteUnico: "Identificación y Expediente Único (KYC)",
+    expedienteUnico: "Expediente único de identificación",
     beneficiarioControlador: "Beneficiario Controlador",
     monitoreoOperaciones: "Monitoreo y Acumulación de Operaciones",
     reportesUif: "Reportes a la UIF vía SAT",
@@ -179,7 +179,7 @@ export const translations = {
     registroSatTitle: "Registro y Alta ante el SAT",
     registroSatSubtitle:
       "Módulo para asegurar el registro formal en el padrón de Actividades Vulnerables y designación del REC",
-    expedienteUnicoTitle: "Identificación y Expediente Único (KYC)",
+    expedienteUnicoTitle: "Expediente único de identificación",
     expedienteUnicoSubtitle:
       "Módulo para la verificación de identidad, documentación de clientes y cumplimiento de debida diligencia",
     beneficiarioControladorTitle: "Beneficiario Controlador",
@@ -268,7 +268,7 @@ export const translations = {
     nistPrivacy: "NIST Privacy Framework",
     actividadesVulnerables: "Vulnerable Activities Identification and SAT Thresholds",
     registroSat: "SAT Registration and Registration",
-    expedienteUnico: "Identification and Unique File (KYC)",
+    expedienteUnico: "Unique Identification File",
     beneficiarioControlador: "Controlling Beneficiary",
     monitoreoOperaciones: "Operations Monitoring and Accumulation",
     reportesUif: "UIF Reports via SAT",
@@ -417,7 +417,7 @@ export const translations = {
     registroSatTitle: "SAT Registration and Registration",
     registroSatSubtitle:
       "Module to ensure formal registration in the Vulnerable Activities registry and REC designation",
-    expedienteUnicoTitle: "Identification and Unique File (KYC)",
+    expedienteUnicoTitle: "Unique Identification File",
     expedienteUnicoSubtitle: "Module for identity verification, client documentation and due diligence compliance",
     beneficiarioControladorTitle: "Controlling Beneficiary",
     beneficiarioControladorSubtitle:
