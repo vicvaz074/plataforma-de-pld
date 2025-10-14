@@ -8,7 +8,6 @@ import {
   Shield,
   FileCheck,
   Users,
-  Eye,
   FileText,
   GraduationCap,
   Search,
@@ -23,15 +22,15 @@ import { aliciaTranslations } from "@/lib/alicia-translations"
 import Image from "next/image"
 
 const options = [
-  { name: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },
   { name: "registroSat", icon: FileCheck, href: "/registro-sat" },
   { name: "expedienteUnico", icon: Users, href: "/kyc-expediente" },
-  { name: "beneficiarioControlador", icon: Eye, href: "/beneficiario-controlador" },
+  { name: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },
   { name: "monitoreoOperaciones", icon: FileText, href: "/monitoreo-operaciones" },
+  { name: "avisosInformes", icon: FileText, href: "/reportes-uif?view=avisos" },
+  { name: "evidenciasTrazabilidad", icon: Database, href: "/evidencias-trazabilidad" },
   { name: "reportesUif", icon: FileText, href: "/reportes-uif" },
   { name: "capacitacionControl", icon: GraduationCap, href: "/capacitacion-control" },
   { name: "auditoriaVerificacion", icon: Search, href: "/auditoria-verificacion" },
-  { name: "evidenciasTrazabilidad", icon: Database, href: "/evidencias-trazabilidad" },
   { name: "gobernanzaControl", icon: Settings, href: "/gobernanza-control" },
   { name: "compiladoLeyes", icon: Book, href: "/marco-normativo-aplicable" },
   {

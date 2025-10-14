@@ -9,7 +9,6 @@ import {
   Shield,
   FileCheck,
   Users,
-  Eye,
   FileText,
   GraduationCap,
   Search,
@@ -23,11 +22,11 @@ import { aliciaTranslations } from "@/lib/alicia-translations"
 
 const navigationItems = [
   { key: "dashboard", icon: LayoutDashboard, href: "/dashboard" },
-  { key: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },
   { key: "registroSat", icon: FileCheck, href: "/registro-sat" },
   { key: "expedienteUnico", icon: Users, href: "/kyc-expediente" },
-  { key: "beneficiarioControlador", icon: Eye, href: "/beneficiario-controlador" },
+  { key: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },
   { key: "monitoreoOperaciones", icon: FileText, href: "/monitoreo-operaciones" },
+  { key: "avisosInformes", icon: FileText, href: "/reportes-uif?view=avisos" },
   { key: "reportesUif", icon: FileText, href: "/reportes-uif" },
   { key: "capacitacionControl", icon: GraduationCap, href: "/capacitacion-control" },
   { key: "auditoriaVerificacion", icon: Search, href: "/auditoria-verificacion" },
