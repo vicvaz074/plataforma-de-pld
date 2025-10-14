@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,6 +19,21 @@ import { Textarea } from "@/components/ui/textarea"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { CheckCircle2, Globe2, MapPin, ShieldCheck, UserCheck } from "lucide-react"
+
+const CLIENTE_TIPOS = [
+  { value: "pfn", label: "Persona física mexicana" },
+  { value: "pfe", label: "Persona física extranjera" },
+  { value: "pmn", label: "Persona moral mexicana" },
+  { value: "pme", label: "Persona moral extranjera" },
+  { value: "fideicomiso", label: "Fideicomiso" },
+  { value: "dependencia", label: "Dependencia o entidad pública" },
+  { value: "vehiculo", label: "Vehículo corporativo" },
+  { value: "otro", label: "Otro sujeto obligado" },
+]
+
+function getTipoClienteLabel(value: string) {
+  return CLIENTE_TIPOS.find((tipo) => tipo.value === value)?.label ?? value
+}
 
 const IDENTIFICACION_CAMPOS = [
   {
@@ -141,13 +157,37 @@ const CLIENTE_COLORES: Record<RiskValue, string> = {
 }
 
 export default function KycExpedientePage() {
+  const searchParams = useSearchParams()
   const { toast } = useToast()
-  const [tipoCliente, setTipoCliente] = useState("Persona física mexicana")
+  const [tipoCliente, setTipoCliente] = useState(CLIENTE_TIPOS[0]?.value ?? "")
   const [responsable, setResponsable] = useState("")
   const [datosIdentificacion, setDatosIdentificacion] = useState<Record<string, string>>({})
   const [respuestas, setRespuestas] = useState<Record<string, FactorRespuesta>>({})
   const [alertas, setAlertas] = useState<AlertaRiesgo[]>([])
   const [alertaSeleccionada, setAlertaSeleccionada] = useState<AlertaRiesgo | null>(null)
+
+  useEffect(() => {
+    const clienteParam = searchParams.get("cliente")?.trim()
+    const tipoParam = searchParams.get("tipo")?.trim()
+    const rfcParam = searchParams.get("rfc")?.trim()
+
+    if (clienteParam && clienteParam !== datosIdentificacion.nombre) {
+      setDatosIdentificacion((prev) => ({ ...prev, nombre: clienteParam }))
+    }
+
+    if (rfcParam && rfcParam.toUpperCase() !== datosIdentificacion.rfc) {
+      setDatosIdentificacion((prev) => ({ ...prev, rfc: rfcParam.toUpperCase() }))
+    }
+
+    if (tipoParam && tipoParam !== tipoCliente) {
+      const tipoValido = CLIENTE_TIPOS.some((tipo) => tipo.value === tipoParam)
+      if (tipoValido) {
+        setTipoCliente(tipoParam)
+      }
+    }
+  }, [searchParams, datosIdentificacion.nombre, datosIdentificacion.rfc, tipoCliente])
+
+  const tipoClienteEtiqueta = getTipoClienteLabel(tipoCliente || CLIENTE_TIPOS[0]?.value ?? "")
 
   const nivelIdentificacion = useMemo<RiskValue>(() => {
     const totalCampos = IDENTIFICACION_CAMPOS.flatMap((grupo) => grupo.campos).length
@@ -270,7 +310,7 @@ export default function KycExpedientePage() {
               Clasificación automática para identificación y conocimiento del cliente bajo el enfoque basado en riesgo (EBR).
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-              <Badge variant="secondary">{tipoCliente}</Badge>
+              <Badge variant="secondary">{tipoClienteEtiqueta}</Badge>
               {responsable && <Badge variant="outline">Responsable: {responsable}</Badge>}
               <Badge className={CLIENTE_COLORES[nivelIntegral] + " text-white"}>{bandaActual.label}</Badge>
             </div>
@@ -305,12 +345,11 @@ export default function KycExpedientePage() {
                     <SelectValue placeholder="Selecciona tipo de cliente" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Persona física mexicana">Persona física mexicana</SelectItem>
-                    <SelectItem value="Persona física extranjera">Persona física extranjera</SelectItem>
-                    <SelectItem value="Persona moral mexicana">Persona moral mexicana</SelectItem>
-                    <SelectItem value="Persona moral extranjera">Persona moral extranjera</SelectItem>
-                    <SelectItem value="Fideicomiso">Fideicomiso</SelectItem>
-                    <SelectItem value="Dependencia pública">Dependencia pública</SelectItem>
+                    {CLIENTE_TIPOS.map((tipo) => (
+                      <SelectItem key={tipo.value} value={tipo.value}>
+                        {tipo.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

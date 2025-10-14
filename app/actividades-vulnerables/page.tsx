@@ -254,6 +254,33 @@ function getMonedaLabel(value: string) {
   return found ? found.label : value
 }
 
+function buildKycUrl({
+  cliente,
+  tipoCliente,
+  rfc,
+}: {
+  cliente?: string
+  tipoCliente?: string
+  rfc?: string
+}) {
+  const params = new URLSearchParams()
+
+  if (cliente?.trim()) {
+    params.set("cliente", cliente.trim())
+  }
+
+  if (tipoCliente?.trim()) {
+    params.set("tipo", tipoCliente.trim())
+  }
+
+  if (rfc?.trim()) {
+    params.set("rfc", rfc.trim())
+  }
+
+  const query = params.toString()
+  return query ? `/kyc-expediente?${query}` : "/kyc-expediente"
+}
+
 function buildChecklist(
   actividad: ActividadVulnerable,
   tipoCliente: string,
@@ -2248,7 +2275,14 @@ const cambiarMesCalendario = (delta: number) => {
                         )}
                         {evaluacionActual.status !== "sin-obligacion" && (
                           <Button size="sm" variant="ghost" className="justify-start px-2" asChild>
-                            <Link href="/kyc-expediente" className="flex items-center gap-2">
+                            <Link
+                              href={buildKycUrl({
+                                cliente: clienteNombre,
+                                tipoCliente,
+                                rfc,
+                              })}
+                              className="flex items-center gap-2"
+                            >
                               <ExternalLink className="h-4 w-4" /> Abrir módulo KYC vinculado
                             </Link>
                           </Button>
@@ -3030,7 +3064,13 @@ const cambiarMesCalendario = (delta: number) => {
                           <p className="font-semibold text-slate-700">Expediente KYC actualizado</p>
                           <p>Marca esta casilla cuando el expediente esté integrado con la evidencia más reciente.</p>
                           <Button variant="link" size="sm" className="px-0" asChild>
-                            <Link href={`/kyc-expediente?buscar=${operacionDocumentos.rfc}`}>
+                            <Link
+                              href={buildKycUrl({
+                                cliente: operacionDocumentos.cliente,
+                                tipoCliente: operacionDocumentos.tipoCliente,
+                                rfc: operacionDocumentos.rfc,
+                              })}
+                            >
                               <ExternalLink className="mr-1 h-3 w-3" /> Abrir expediente KYC
                             </Link>
                           </Button>
