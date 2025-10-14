@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -163,6 +163,21 @@ const CLIENTE_COLORES: Record<RiskValue, string> = {
 }
 
 export default function KycExpedientePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 text-sm text-slate-500">
+          <span className="h-3 w-3 animate-pulse rounded-full bg-slate-300" />
+          Cargando expediente KYC...
+        </div>
+      }
+    >
+      <KycExpedienteContent />
+    </Suspense>
+  )
+}
+
+function KycExpedienteContent() {
   const { toast } = useToast()
   const searchParams = useSearchParams()
   const [tipoCliente, setTipoCliente] = useState("Persona física mexicana")
