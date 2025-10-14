@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,6 +19,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { CheckCircle2, Globe2, MapPin, ShieldCheck, UserCheck } from "lucide-react"
+import {
+  CLIENTE_TIPOS,
+  CLIENTES_STORAGE_KEY,
+  CLIENTE_TIPOS_LABEL_MAP,
+  type ClienteGuardado,
+} from "@/lib/actividades-vulnerables/clientes"
 
 const IDENTIFICACION_CAMPOS = [
   {
@@ -142,12 +149,116 @@ const CLIENTE_COLORES: Record<RiskValue, string> = {
 
 export default function KycExpedientePage() {
   const { toast } = useToast()
-  const [tipoCliente, setTipoCliente] = useState("Persona física mexicana")
+  const searchParams = useSearchParams()
+  const processedQueryRef = useRef<string | null>(null)
+  const [tipoCliente, setTipoCliente] = useState(
+    () => CLIENTE_TIPOS[0]?.label ?? "Persona física mexicana",
+  )
   const [responsable, setResponsable] = useState("")
   const [datosIdentificacion, setDatosIdentificacion] = useState<Record<string, string>>({})
   const [respuestas, setRespuestas] = useState<Record<string, FactorRespuesta>>({})
   const [alertas, setAlertas] = useState<AlertaRiesgo[]>([])
   const [alertaSeleccionada, setAlertaSeleccionada] = useState<AlertaRiesgo | null>(null)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const buscar = searchParams.get("buscar")
+    const clave = buscar ?? "__sin_parametro__"
+
+    if (processedQueryRef.current === clave) {
+      return
+    }
+
+    processedQueryRef.current = clave
+
+    let clientes: ClienteGuardado[] = []
+
+    try {
+      const stored = window.localStorage.getItem(CLIENTES_STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed)) {
+          clientes = parsed.filter((cliente): cliente is ClienteGuardado => {
+            return (
+              cliente &&
+              typeof cliente === "object" &&
+              typeof cliente.rfc === "string" &&
+              typeof cliente.nombre === "string" &&
+              typeof cliente.tipoCliente === "string" &&
+              typeof cliente.mismoGrupo === "boolean"
+            )
+          })
+        }
+      }
+    } catch (_error) {
+      // Ignorar errores de lectura del almacenamiento local
+    }
+
+    if (clientes.length === 0) {
+      if (buscar) {
+        toast({
+          title: "Cliente no encontrado",
+          description:
+            "No se encontró un cliente asociado en actividades vulnerables con la referencia indicada.",
+          variant: "destructive",
+        })
+      }
+      return
+    }
+
+    const normalizar = (valor: string) => valor.trim().toLowerCase().replace(/\s+/g, "")
+
+    const cliente = buscar
+      ? clientes.find(
+          (item) =>
+            item.rfc.trim().toLowerCase() === buscar.trim().toLowerCase() ||
+            normalizar(item.nombre) === normalizar(buscar),
+        )
+      : clientes[0]
+
+    if (!cliente) {
+      if (buscar) {
+        toast({
+          title: "Cliente no encontrado",
+          description:
+            "Revisa que el RFC o nombre correspondan a un cliente registrado en actividades vulnerables.",
+          variant: "destructive",
+        })
+      }
+      return
+    }
+
+    const labelTipo = CLIENTE_TIPOS_LABEL_MAP[cliente.tipoCliente] ?? cliente.tipoCliente
+    const tipoCambio = tipoCliente !== labelTipo
+    if (tipoCambio) {
+      setTipoCliente(labelTipo)
+    }
+
+    let datosActualizados = false
+    setDatosIdentificacion((prev) => {
+      const siguiente = { ...prev }
+
+      if (cliente.nombre && prev.nombre !== cliente.nombre) {
+        siguiente.nombre = cliente.nombre
+        datosActualizados = true
+      }
+
+      if (cliente.rfc && prev.rfc !== cliente.rfc) {
+        siguiente.rfc = cliente.rfc
+        datosActualizados = true
+      }
+
+      return datosActualizados ? siguiente : prev
+    })
+
+    if (buscar && (tipoCambio || datosActualizados)) {
+      toast({
+        title: "Cliente sincronizado",
+        description: `Se importaron los datos de ${cliente.nombre} desde actividades vulnerables.`,
+      })
+    }
+  }, [searchParams, tipoCliente, toast])
 
   const nivelIdentificacion = useMemo<RiskValue>(() => {
     const totalCampos = IDENTIFICACION_CAMPOS.flatMap((grupo) => grupo.campos).length
@@ -305,12 +416,11 @@ export default function KycExpedientePage() {
                     <SelectValue placeholder="Selecciona tipo de cliente" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Persona física mexicana">Persona física mexicana</SelectItem>
-                    <SelectItem value="Persona física extranjera">Persona física extranjera</SelectItem>
-                    <SelectItem value="Persona moral mexicana">Persona moral mexicana</SelectItem>
-                    <SelectItem value="Persona moral extranjera">Persona moral extranjera</SelectItem>
-                    <SelectItem value="Fideicomiso">Fideicomiso</SelectItem>
-                    <SelectItem value="Dependencia pública">Dependencia pública</SelectItem>
+                    {CLIENTE_TIPOS.map((tipo) => (
+                      <SelectItem key={tipo.value} value={tipo.label}>
+                        {tipo.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

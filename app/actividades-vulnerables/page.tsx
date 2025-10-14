@@ -58,6 +58,11 @@ import {
 import type { ActividadVulnerable } from "@/lib/data/actividades"
 import { actividadesVulnerables } from "@/lib/data/actividades"
 import { UMA_MONTHS, UMA_PERIODS, findUmaByMonthYear } from "@/lib/data/uma"
+import {
+  CLIENTE_TIPOS,
+  CLIENTES_STORAGE_KEY,
+  type ClienteGuardado,
+} from "@/lib/actividades-vulnerables/clientes"
 
 const MONTHS = [
   "Enero",
@@ -75,17 +80,6 @@ const MONTHS = [
 ]
 
 const WEEK_DAYS = ["L", "M", "M", "J", "V", "S", "D"]
-
-const CLIENTE_TIPOS = [
-  { value: "pfn", label: "Persona física mexicana" },
-  { value: "pfe", label: "Persona física extranjera" },
-  { value: "pmn", label: "Persona moral mexicana" },
-  { value: "pme", label: "Persona moral extranjera" },
-  { value: "fideicomiso", label: "Fideicomiso" },
-  { value: "dependencia", label: "Dependencia o entidad pública" },
-  { value: "vehiculo", label: "Vehículo corporativo" },
-  { value: "otro", label: "Otro sujeto obligado" },
-]
 
 const MONEDAS = [
   { value: "MXN", label: "Peso mexicano (MXN)" },
@@ -195,13 +189,6 @@ interface OperacionCliente {
   kycIntegrado: boolean
 }
 
-interface ClienteGuardado {
-  rfc: string
-  nombre: string
-  tipoCliente: string
-  mismoGrupo: boolean
-}
-
 type FormularioEdicion = {
   cliente: string
   rfc: string
@@ -231,7 +218,6 @@ const currentMonth = now.getMonth() + 1
 const START_WINDOW = new Date(2020, 8, 1) // septiembre 2020
 type UmaMonthEntry = (typeof UMA_MONTHS)[number]
 
-const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
 const NUEVO_CLIENTE_VALUE = "__nuevo__"
 
 const TIPO_CLIENTE_OBLIGACIONES: Record<string, keyof ActividadVulnerable["clienteObligaciones"]> = {
