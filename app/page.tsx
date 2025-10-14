@@ -33,7 +33,7 @@ const options = [
   { name: "auditoriaVerificacion", icon: Search, href: "/auditoria-verificacion" },
   { name: "evidenciasTrazabilidad", icon: Database, href: "/evidencias-trazabilidad" },
   { name: "gobernanzaControl", icon: Settings, href: "/gobernanza-control" },
-  { name: "compiladoLeyes", icon: Book, href: "/compilado-leyes" },
+  { name: "compiladoLeyes", icon: Book, href: "/marco-normativo-aplicable" },
   {
     name: "alicia",
     icon: Sparkles,

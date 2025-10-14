@@ -33,7 +33,7 @@ export const translations = {
     auditoriaVerificacion: "Auditoría y Verificación Interna",
     evidenciasTrazabilidad: "Evidencias y Trazabilidad",
     gobernanzaControl: "Gobernanza y Control Interno",
-    compiladoLeyes: "Compilado de Leyes",
+    compiladoLeyes: "Marco Normativo Aplicable",
 
     // Descriptions for main cards
     aiSystemRegistryDescription: "Registra y gestiona todos los sistemas de inteligencia artificial de la organización",
@@ -81,7 +81,8 @@ export const translations = {
       "Repositorio digital centralizado con sellos de tiempo, control de versiones y logs de acceso.",
     gobernanzaControlDescription:
       "Acreditación de órganos de control como Oficial de Cumplimiento, manuales internos y Comité de Comunicación y Control.",
-    compiladoLeyesDescription: "Compilado de leyes mexicanas relevantes en materia de prevención de lavado de dinero.",
+    compiladoLeyesDescription:
+      "Normativa mexicana aplicable en materia de prevención de lavado de dinero y financiamiento al terrorismo.",
 
     // Header navigation
     profile: "Perfil",
@@ -275,7 +276,7 @@ export const translations = {
     auditoriaVerificacion: "Audit and Internal Verification",
     evidenciasTrazabilidad: "Evidence and Traceability",
     gobernanzaControl: "Governance and Internal Control",
-    compiladoLeyes: "AML Laws Compilation",
+    compiladoLeyes: "Applicable Legal Framework",
 
     // Descriptions for main cards
     aiSystemRegistryDescription: "Register and manage all artificial intelligence systems in the organization",
@@ -319,7 +320,8 @@ export const translations = {
       "Centralized digital repository with timestamps, version control and access logs.",
     gobernanzaControlDescription:
       "Accreditation of control bodies such as Compliance Officer, internal manuals and Communication and Control Committee.",
-    compiladoLeyesDescription: "Compilation of key Mexican laws on anti-money laundering.",
+    compiladoLeyesDescription:
+      "Collection of the applicable Mexican regulations on anti-money laundering and counter-terrorism financing.",
 
     // Header navigation
     profile: "Profile",
