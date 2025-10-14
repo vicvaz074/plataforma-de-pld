@@ -23,11 +23,12 @@ export const translations = {
     nistCsf: "NIST Cybersecurity Framework",
     nistSp80053: "NIST SP 800-53 Rev. 5",
     nistPrivacy: "NIST Privacy Framework",
-    actividadesVulnerables: "Identificación de Actividades Vulnerables y Umbrales SAT",
-    registroSat: "Registro y Alta ante el SAT",
+    actividadesVulnerables: "Identificación de actividades vulnerables",
+    registroSat: "Registro y alta",
     expedienteUnico: "Expediente único de identificación",
+    avisosInformes: "Avisos e informes",
     beneficiarioControlador: "Beneficiario Controlador",
-    monitoreoOperaciones: "Monitoreo y Acumulación de Operaciones",
+    monitoreoOperaciones: "Monitoreo y acumulación de operaciones",
     reportesUif: "Reportes a la UIF vía SAT",
     capacitacionControl: "Capacitación y Control Interno",
     auditoriaVerificacion: "Auditoría y Verificación Interna",
@@ -68,12 +69,15 @@ export const translations = {
     registroSatDescription:
       "Integración digital de requisitos, e.firma, acuses y designación del Representante de Cumplimiento.",
     expedienteUnicoDescription:
-      "Integración de expedientes completos de clientes (personas físicas, morales, extranjeras y fideicomisos).",
+      "Integración de expedientes completos con Conocimiento del Cliente y Beneficiario Controlador actualizable.",
+    avisosInformesDescription:
+      "Gestión de avisos regulatorios e informes internos con seguimiento de plazos y responsables.",
     beneficiarioControladorDescription:
       "Identificación y actualización periódica de las personas físicas con control directo o indirecto.",
     monitoreoOperacionesDescription:
-      "Vigilancia en tiempo real de operaciones relevantes, inusuales e internas preocupantes, con acumulación semestral.",
-    reportesUifDescription: "Generación y envío de avisos electrónicos dentro de los plazos legales.",
+      "Vigilancia en tiempo real de operaciones relevantes, inusuales e internas preocupantes con detalle por operación y acumulación semestral.",
+    reportesUifDescription:
+      "Generación y envío de avisos electrónicos dentro de los plazos legales con control de envíos mensuales.",
     capacitacionControlDescription: "Planificación, ejecución y registro de la capacitación anual obligatoria.",
     auditoriaVerificacionDescription:
       "Revisiones documentales y atención a observaciones de SAT/UIF con planes de acción.",
@@ -266,12 +270,13 @@ export const translations = {
     nistCsf: "NIST Cybersecurity Framework",
     nistSp80053: "NIST SP 800-53 Rev. 5",
     nistPrivacy: "NIST Privacy Framework",
-    actividadesVulnerables: "Vulnerable Activities Identification and SAT Thresholds",
-    registroSat: "SAT Registration and Registration",
-    expedienteUnico: "Unique Identification File",
+    actividadesVulnerables: "Identification of vulnerable activities",
+    registroSat: "Registration and onboarding",
+    expedienteUnico: "Unique identification file",
+    avisosInformes: "Notices and reports",
     beneficiarioControlador: "Controlling Beneficiary",
-    monitoreoOperaciones: "Operations Monitoring and Accumulation",
-    reportesUif: "UIF Reports via SAT",
+    monitoreoOperaciones: "Operations monitoring and accumulation",
+    reportesUif: "UIF reports via SAT",
     capacitacionControl: "Training and Internal Control",
     auditoriaVerificacion: "Audit and Internal Verification",
     evidenciasTrazabilidad: "Evidence and Traceability",
@@ -308,12 +313,15 @@ export const translations = {
     registroSatDescription:
       "Digital integration of requirements, e-signature, acknowledgments and designation of the Compliance Representative.",
     expedienteUnicoDescription:
-      "Integration of complete client files (individuals, corporations, foreign entities and trusts).",
+      "Integration of complete client records with Know Your Customer and updatable Controlling Beneficiary details.",
+    avisosInformesDescription:
+      "Management of regulatory notices and internal reports with deadline and owner tracking.",
     beneficiarioControladorDescription:
       "Identification and periodic updating of natural persons with direct or indirect control.",
     monitoreoOperacionesDescription:
-      "Real-time surveillance of relevant, unusual and concerning internal operations, with semi-annual accumulation.",
-    reportesUifDescription: "Generation and sending of electronic notices within legal deadlines.",
+      "Real-time surveillance of relevant, unusual and concerning internal operations with per-transaction detail and semi-annual accumulation.",
+    reportesUifDescription:
+      "Generation and sending of electronic notices within legal deadlines with monthly submission controls.",
     capacitacionControlDescription: "Planning, execution and recording of mandatory annual training.",
     auditoriaVerificacionDescription: "Documentary reviews and attention to SAT/UIF observations with action plans.",
     evidenciasTrazabilidadDescription:
