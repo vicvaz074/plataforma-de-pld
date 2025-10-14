@@ -559,7 +559,7 @@ export default function ReportesUIFPage() {
       <div className="flex items-center gap-3">
         <Shield className="h-10 w-10 text-primary" />
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reportes a la UIF vía SAT</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Avisos a la UIF vía SAT</h1>
           <p className="text-muted-foreground">
             Gestión integral de avisos relevantes, inusuales e internos preocupantes ante la UIF a través del Portal SAT.
           </p>
