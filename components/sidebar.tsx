@@ -33,7 +33,7 @@ const navigationItems = [
   { key: "auditoriaVerificacion", icon: Search, href: "/auditoria-verificacion" },
   { key: "evidenciasTrazabilidad", icon: Database, href: "/evidencias-trazabilidad" },
   { key: "gobernanzaControl", icon: Settings, href: "/gobernanza-control" },
-  { key: "compiladoLeyes", icon: Book, href: "/compilado-leyes" },
+  { key: "compiladoLeyes", icon: Book, href: "/marco-normativo-aplicable" },
   { key: "alicia", icon: Sparkles, href: "https://asistentelegal02.azurewebsites.net/", external: true },
 ]
 

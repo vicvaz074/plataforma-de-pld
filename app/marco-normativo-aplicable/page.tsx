@@ -1,7 +1,6 @@
 "use client"
 
 import Link from "next/link"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useLanguage } from "@/lib/LanguageContext"
 import { translations } from "@/lib/translations"
 
@@ -288,18 +287,43 @@ const sistemaFinanciero = {
   ],
 }
 
-export default function CompiladoLeyesPage() {
+const seccionesFinancieras = [
+  { key: "general", titulo: "General", leyes: sistemaFinanciero.general },
+  {
+    key: "institucionesCredito",
+    titulo: "Instituciones de Crédito",
+    leyes: sistemaFinanciero.institucionesCredito,
+  },
+  {
+    key: "institucionesTecnologia",
+    titulo: "Instituciones de Tecnología Financiera",
+    leyes: sistemaFinanciero.institucionesTecnologia,
+  },
+  { key: "segurosFianza", titulo: "Seguros y Fianzas", leyes: sistemaFinanciero.segurosFianza },
+  { key: "afores", titulo: "Afores", leyes: sistemaFinanciero.afores },
+  { key: "casasBolsas", titulo: "Casas de Bolsa", leyes: sistemaFinanciero.casasBolsas },
+  { key: "auxiliaresCredito", titulo: "Auxiliares de Crédito", leyes: sistemaFinanciero.auxiliaresCredito },
+  { key: "unionesCredito", titulo: "Uniones de Crédito", leyes: sistemaFinanciero.unionesCredito },
+  {
+    key: "sociedadesFinancierasPopulares",
+    titulo: "Sociedades Financieras Populares",
+    leyes: sistemaFinanciero.sociedadesFinancierasPopulares,
+  },
+  { key: "fondosInversion", titulo: "Fondos de Inversión", leyes: sistemaFinanciero.fondosInversion },
+]
+
+export default function MarcoNormativoAplicablePage() {
   const { language } = useLanguage()
   const t = translations[language]
 
   const renderLaw = (law: Law) => (
-    <details key={law.id} className="mb-4 border rounded">
-      <summary className="cursor-pointer flex justify-between items-center px-4 py-2">
-        <span className="font-medium">
+    <details key={law.id} className="group border rounded-lg transition-colors hover:border-orange-200">
+      <summary className="cursor-pointer flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <span className="font-semibold text-sm sm:text-base text-gray-800">
           {law.id}. {law.ley}
         </span>
         {law.links && law.links.length > 0 && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {law.links.map((link, idx) => (
               <Link
                 key={idx}
@@ -307,14 +331,16 @@ export default function CompiladoLeyesPage() {
                 target="_blank"
                 className="bg-orange-500 text-white text-xs px-3 py-1 rounded-md hover:bg-orange-600"
               >
-                Link {idx + 1}
+                Ver documento {idx + 1}
               </Link>
             ))}
           </div>
         )}
       </summary>
-      <p className="px-4 py-2 text-sm">{law.caracteristicas}</p>
-      {law.nota && <p className="px-4 pb-2 text-xs text-gray-500">{law.nota}</p>}
+      <div className="px-4 pb-3">
+        <p className="py-2 text-sm leading-relaxed text-gray-700">{law.caracteristicas}</p>
+        {law.nota && <p className="pb-1 text-xs text-gray-500">{law.nota}</p>}
+      </div>
     </details>
   )
 
@@ -324,69 +350,41 @@ export default function CompiladoLeyesPage() {
         {t.compiladoLeyes}
       </h1>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Leyes Generales</CardTitle>
-        </CardHeader>
-        <CardContent>{leyesGenerales.map(renderLaw)}</CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Actividades Vulnerables</CardTitle>
-        </CardHeader>
-        <CardContent>{actividadesVulnerables.map(renderLaw)}</CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Sistema Financiero</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            <div>
-              <h3 className="font-semibold mb-2">General</h3>
-              {sistemaFinanciero.general.map(renderLaw)}
-            </div>
-            <div>
-              <h3 className="font-semibold mb-2">Instituciones de Crédito</h3>
-              {sistemaFinanciero.institucionesCredito.map(renderLaw)}
-            </div>
-            <div>
-              <h3 className="font-semibold mb-2">Instituciones Tecnología Financieras</h3>
-              {sistemaFinanciero.institucionesTecnologia.map(renderLaw)}
-            </div>
-            <div>
-              <h3 className="font-semibold mb-2">Seguros y Fianza</h3>
-              {sistemaFinanciero.segurosFianza.map(renderLaw)}
-            </div>
-            <div>
-              <h3 className="font-semibold mb-2">Afores</h3>
-              {sistemaFinanciero.afores.map(renderLaw)}
-            </div>
-            <div>
-              <h3 className="font-semibold mb-2">Casas de Bolsas</h3>
-              {sistemaFinanciero.casasBolsas.map(renderLaw)}
-            </div>
-            <div>
-              <h3 className="font-semibold mb-2">Auxiliares de Crédito</h3>
-              {sistemaFinanciero.auxiliaresCredito.map(renderLaw)}
-            </div>
-            <div>
-              <h3 className="font-semibold mb-2">Uniones de Crédito</h3>
-              {sistemaFinanciero.unionesCredito.map(renderLaw)}
-            </div>
-            <div>
-              <h3 className="font-semibold mb-2">Sociedades Financieras Populares</h3>
-              {sistemaFinanciero.sociedadesFinancierasPopulares.map(renderLaw)}
-            </div>
-            <div>
-              <h3 className="font-semibold mb-2">Fondos de Inversión</h3>
-              {sistemaFinanciero.fondosInversion.map(renderLaw)}
-            </div>
+      <div className="space-y-6">
+        <details className="rounded-xl border shadow-sm">
+          <summary className="cursor-pointer select-none px-6 py-4 text-lg font-semibold text-gray-800">
+            Normativa de aplicación general
+          </summary>
+          <div className="px-6 pb-6">
+            <div className="space-y-4">{leyesGenerales.map(renderLaw)}</div>
           </div>
-        </CardContent>
-      </Card>
+        </details>
+
+        <details className="rounded-xl border shadow-sm">
+          <summary className="cursor-pointer select-none px-6 py-4 text-lg font-semibold text-gray-800">
+            Actividades Vulnerables
+          </summary>
+          <div className="px-6 pb-6">
+            <div className="space-y-4">{actividadesVulnerables.map(renderLaw)}</div>
+          </div>
+        </details>
+
+        <details className="rounded-xl border shadow-sm">
+          <summary className="cursor-pointer select-none px-6 py-4 text-lg font-semibold text-gray-800">
+            Sistema financiero
+          </summary>
+          <div className="px-6 pb-6 space-y-6">
+            {seccionesFinancieras.map((seccion) => (
+              <section key={seccion.key} className="space-y-3">
+                <h3 className="text-base font-semibold text-gray-700">
+                  {seccion.titulo}
+                </h3>
+                <div className="space-y-4">{seccion.leyes.map(renderLaw)}</div>
+              </section>
+            ))}
+          </div>
+        </details>
+      </div>
     </div>
   )
 }
