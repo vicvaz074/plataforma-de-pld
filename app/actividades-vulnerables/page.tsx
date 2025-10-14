@@ -57,7 +57,7 @@ import {
 } from "lucide-react"
 import type { ActividadVulnerable } from "@/lib/data/actividades"
 import { actividadesVulnerables } from "@/lib/data/actividades"
-import { UMA_MONTHS, UMA_PERIODS, findUmaByMonthYear } from "@/lib/data/uma"
+import { UMA_MONTHS, findUmaByMonthYear } from "@/lib/data/uma"
 
 const MONTHS = [
   "Enero",
@@ -76,16 +76,80 @@ const MONTHS = [
 
 const WEEK_DAYS = ["L", "M", "M", "J", "V", "S", "D"]
 
-const CLIENTE_TIPOS = [
-  { value: "pfn", label: "Persona física mexicana" },
-  { value: "pfe", label: "Persona física extranjera" },
-  { value: "pmn", label: "Persona moral mexicana" },
-  { value: "pme", label: "Persona moral extranjera" },
-  { value: "fideicomiso", label: "Fideicomiso" },
-  { value: "dependencia", label: "Dependencia o entidad pública" },
-  { value: "vehiculo", label: "Vehículo corporativo" },
-  { value: "otro", label: "Otro sujeto obligado" },
+type ClienteTipoOption = {
+  value: string
+  label: string
+  descripcion: string
+  requiresDetalle?: boolean
+  detalleLabel?: string
+  detallePlaceholder?: string
+}
+
+const CLIENTE_TIPOS: ClienteTipoOption[] = [
+  {
+    value: "pf_residente",
+    label: "Persona física residente (mexicana o extranjera)",
+    descripcion:
+      "Aplica a personas físicas con nacionalidad mexicana o extranjeras con condición de residencia temporal o permanente en México.",
+  },
+  {
+    value: "pf_visitante",
+    label: "Persona física extranjera visitante",
+    descripcion:
+      "Personas físicas extranjeras con condición de estancia de visitante sin residencia en territorio mexicano.",
+  },
+  {
+    value: "pm_mexicana",
+    label: "Persona moral mexicana",
+    descripcion: "Sociedades mercantiles o civiles constituidas conforme a las leyes mexicanas.",
+  },
+  {
+    value: "pm_extranjera",
+    label: "Persona moral extranjera",
+    descripcion: "Entidades jurídicas constituidas en el extranjero que operan o contratan en México.",
+  },
+  {
+    value: "entidad_financiera",
+    label: "Entidad financiera, sociedad o dependencia (seguros, fianzas y bursátil)",
+    descripcion:
+      "Sujetos obligados del sector asegurador, afianzador o bursátil, incluyendo sociedades y dependencias con operaciones financieras especializadas.",
+    requiresDetalle: true,
+    detalleLabel: "Tipo de entidad financiera",
+    detallePlaceholder: "Ej. Aseguradora, Casa de bolsa, Afianzadora",
+  },
+  {
+    value: "fideicomiso",
+    label: "Fideicomiso",
+    descripcion: "Estructuras fiduciarias constituidas ante una institución fiduciaria autorizada.",
+  },
+  {
+    value: "organismo_internacional",
+    label: "Embajada, consulado u organismo internacional",
+    descripcion: "Representaciones diplomáticas, consulares u organismos internacionales con operaciones en México.",
+  },
+  {
+    value: "pm_derecho_publico",
+    label: "Persona moral mexicana de derecho público",
+    descripcion: "Dependencias, entidades u organismos públicos con régimen de derecho público general.",
+  },
+  {
+    value: "pm_derecho_publico_simplificado",
+    label: "Persona moral mexicana de derecho público (régimen simplificado)",
+    descripcion:
+      "Entidades de derecho público incorporadas al régimen simplificado de confianza u homólogo permitido por ley.",
+  },
 ]
+
+const LEGACY_CLIENTE_TIPO_MAP: Record<string, ClienteTipoOption["value"]> = {
+  pfn: "pf_residente",
+  pfe: "pf_visitante",
+  pmn: "pm_mexicana",
+  pme: "pm_extranjera",
+  fideicomiso: "fideicomiso",
+  dependencia: "pm_derecho_publico",
+  vehiculo: "entidad_financiera",
+  otro: "entidad_financiera",
+}
 
 const MONEDAS = [
   { value: "MXN", label: "Peso mexicano (MXN)" },
@@ -170,6 +234,7 @@ interface OperacionCliente {
   actividadKey: string
   actividadNombre: string
   tipoCliente: string
+  detalleTipoCliente?: string
   cliente: string
   rfc: string
   mismoGrupo: boolean
@@ -200,6 +265,7 @@ interface ClienteGuardado {
   nombre: string
   tipoCliente: string
   mismoGrupo: boolean
+  detalleTipoCliente?: string
 }
 
 type FormularioEdicion = {
@@ -214,6 +280,7 @@ type FormularioEdicion = {
   monedaPersonalizadaDescripcion: string
   fechaOperacion: string
   evidencia: string
+  detalleTipoCliente: string
 }
 
 interface DocumentoSoporte {
@@ -229,17 +296,37 @@ const now = new Date()
 const currentYear = now.getFullYear()
 const currentMonth = now.getMonth() + 1
 const START_WINDOW = new Date(2020, 8, 1) // septiembre 2020
-type UmaMonthEntry = (typeof UMA_MONTHS)[number]
 
 const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
 const NUEVO_CLIENTE_VALUE = "__nuevo__"
 
+function normalizarTipoCliente(value: string) {
+  const option = CLIENTE_TIPOS.find((tipo) => tipo.value === value)
+  if (option) {
+    return option.value
+  }
+  return LEGACY_CLIENTE_TIPO_MAP[value] ?? value
+}
+
+function obtenerOpcionTipoCliente(value: string) {
+  return CLIENTE_TIPOS.find((tipo) => tipo.value === value)
+}
+
 const TIPO_CLIENTE_OBLIGACIONES: Record<string, keyof ActividadVulnerable["clienteObligaciones"]> = {
+  pf_residente: "personaFisica",
+  pf_visitante: "personaExtranjera",
+  pm_mexicana: "personaMoral",
+  pm_extranjera: "personaExtranjera",
+  entidad_financiera: "otro",
+  fideicomiso: "fideicomiso",
+  organismo_internacional: "autoridad",
+  pm_derecho_publico: "autoridad",
+  pm_derecho_publico_simplificado: "autoridad",
+  // valores legados
   pfn: "personaFisica",
   pfe: "personaExtranjera",
   pmn: "personaMoral",
   pme: "personaExtranjera",
-  fideicomiso: "fideicomiso",
   dependencia: "autoridad",
   vehiculo: "vehiculo",
   otro: "otro",
@@ -254,12 +341,34 @@ function getMonedaLabel(value: string) {
   return found ? found.label : value
 }
 
+function formatTipoClienteLabel(value: string, detalle?: string) {
+  const option = obtenerOpcionTipoCliente(normalizarTipoCliente(value))
+  const base = option ? option.label : value
+  return detalle ? `${base} – ${detalle}` : base
+}
+
+function formatDateDisplay(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return date.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  })
+}
+
 function buildChecklist(
   actividad: ActividadVulnerable,
   tipoCliente: string,
   existente?: Record<string, boolean>,
 ) {
-  const key = TIPO_CLIENTE_OBLIGACIONES[tipoCliente as keyof typeof TIPO_CLIENTE_OBLIGACIONES] ?? "otro"
+  const tipoNormalizado = normalizarTipoCliente(tipoCliente)
+  const key =
+    TIPO_CLIENTE_OBLIGACIONES[tipoNormalizado as keyof typeof TIPO_CLIENTE_OBLIGACIONES] ??
+    TIPO_CLIENTE_OBLIGACIONES[tipoCliente as keyof typeof TIPO_CLIENTE_OBLIGACIONES] ??
+    "otro"
   const requisitosBase = actividad.clienteObligaciones[key]
   const checklist: Record<string, boolean> = {}
 
@@ -403,7 +512,10 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
   if (!actividad) return null
 
   const id = typeof raw.id === "string" ? raw.id : typeof crypto !== "undefined" ? crypto.randomUUID() : `${Date.now()}`
-  const tipoCliente = typeof raw.tipoCliente === "string" ? raw.tipoCliente : CLIENTE_TIPOS[0]?.value ?? "pfn"
+  const tipoCliente =
+    typeof raw.tipoCliente === "string"
+      ? normalizarTipoCliente(raw.tipoCliente)
+      : CLIENTE_TIPOS[0]?.value ?? "pf_residente"
   const moneda = typeof raw.moneda === "string" ? raw.moneda : "MXN"
   const monedaDescripcion =
     typeof raw.monedaDescripcion === "string" ? raw.monedaDescripcion : getMonedaLabel(moneda)
@@ -423,6 +535,10 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
         ? raw.actividadNombre
         : `${actividad.fraccion} – ${actividad.nombre}`,
     tipoCliente,
+    detalleTipoCliente:
+      typeof raw.detalleTipoCliente === "string" && raw.detalleTipoCliente.trim().length > 0
+        ? raw.detalleTipoCliente.trim()
+        : undefined,
     cliente: typeof raw.cliente === "string" ? raw.cliente : "Cliente sin nombre",
     rfc: typeof raw.rfc === "string" ? raw.rfc : "RFC",
     mismoGrupo: Boolean(raw.mismoGrupo),
@@ -449,6 +565,32 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
     documentosSoporte,
     requisitosChecklist,
     kycIntegrado: Boolean(raw.kycIntegrado),
+  }
+}
+
+function sanitizeClienteGuardado(raw: any): ClienteGuardado | null {
+  if (!raw || typeof raw !== "object") return null
+
+  const rfc = typeof raw.rfc === "string" ? raw.rfc : ""
+  const nombre = typeof raw.nombre === "string" ? raw.nombre : ""
+  if (!rfc || !nombre) {
+    return null
+  }
+
+  const tipo =
+    typeof raw.tipoCliente === "string"
+      ? normalizarTipoCliente(raw.tipoCliente)
+      : CLIENTE_TIPOS[0]?.value ?? "pf_residente"
+
+  const detalle =
+    typeof raw.detalleTipoCliente === "string" ? raw.detalleTipoCliente.trim() : ""
+
+  return {
+    rfc,
+    nombre,
+    tipoCliente: tipo,
+    mismoGrupo: Boolean(raw.mismoGrupo),
+    detalleTipoCliente: detalle || undefined,
   }
 }
 
@@ -491,6 +633,7 @@ export default function ActividadesVulnerablesPage() {
   const [mesSeleccionado, setMesSeleccionado] = useState<number>(currentMonth)
   const [montoOperacion, setMontoOperacion] = useState<string>("")
   const [tipoCliente, setTipoCliente] = useState<string>(CLIENTE_TIPOS[0]?.value ?? "")
+  const [detalleTipoCliente, setDetalleTipoCliente] = useState<string>("")
   const [clienteNombre, setClienteNombre] = useState<string>("")
   const [rfc, setRfc] = useState<string>("")
   const [mismoGrupo, setMismoGrupo] = useState<string>("no")
@@ -507,6 +650,7 @@ export default function ActividadesVulnerablesPage() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string | null>(null)
   const [avisoPreliminar, setAvisoPreliminar] = useState<OperacionCliente | null>(null)
   const [infoGrupoOpen, setInfoGrupoOpen] = useState(false)
+  const [infoTipoClienteOpen, setInfoTipoClienteOpen] = useState(false)
   const [actividadInfoKey, setActividadInfoKey] = useState<string | null>(null)
   const [infoModal, setInfoModal] = useState<InfoModalKey | null>(null)
   const [tabActiva, setTabActiva] = useState<"resumen" | "captura" | "seguimiento" | "explorar">("resumen")
@@ -527,6 +671,7 @@ export default function ActividadesVulnerablesPage() {
     monedaPersonalizadaDescripcion: "",
     fechaOperacion: new Date().toISOString().substring(0, 10),
     evidencia: "",
+    detalleTipoCliente: "",
   })
   const [operacionPorEliminar, setOperacionPorEliminar] = useState<OperacionCliente | null>(null)
   const [operacionDocumentos, setOperacionDocumentos] = useState<OperacionCliente | null>(null)
@@ -537,6 +682,11 @@ export default function ActividadesVulnerablesPage() {
     archivoContenido: "",
     fechaRegistro: new Date().toISOString().substring(0, 10),
   })
+
+  const tipoClienteSeleccionado = useMemo(
+    () => obtenerOpcionTipoCliente(tipoCliente),
+    [tipoCliente],
+  )
 
   const umaVentana = useMemo(() => {
     const filtered = UMA_MONTHS.filter((entry) => {
@@ -560,15 +710,6 @@ export default function ActividadesVulnerablesPage() {
 
     return [...anteriores, ...filtered]
   }, [])
-
-  const umaVentanaAgrupada = useMemo(() => {
-    return umaVentana.reduce((acc, entry) => {
-      const registros = acc.get(entry.year) ?? []
-      registros.push(entry)
-      acc.set(entry.year, registros)
-      return acc
-    }, new Map<number, UmaMonthEntry[]>())
-  }, [umaVentana])
 
   const actividadesPorFraccion = useMemo(() => {
     return actividadesVulnerables.reduce(
@@ -665,9 +806,12 @@ export default function ActividadesVulnerablesPage() {
     try {
       const stored = window.localStorage.getItem(CLIENTES_STORAGE_KEY)
       if (stored) {
-        const parsed = JSON.parse(stored) as ClienteGuardado[]
+        const parsed = JSON.parse(stored) as unknown
         if (Array.isArray(parsed)) {
-          setClientesGuardados(ordenarClientesGuardados(parsed))
+          const sane = parsed
+            .map((item) => sanitizeClienteGuardado(item))
+            .filter((item): item is ClienteGuardado => Boolean(item))
+          setClientesGuardados(ordenarClientesGuardados(sane))
         }
       }
     } catch (_error) {
@@ -697,13 +841,15 @@ export default function ActividadesVulnerablesPage() {
           nombre: operacion.cliente,
           tipoCliente: operacion.tipoCliente,
           mismoGrupo: operacion.mismoGrupo,
+          detalleTipoCliente: operacion.detalleTipoCliente,
         }
         const existente = mapa.get(operacion.rfc)
         if (
           !existente ||
           existente.nombre !== datos.nombre ||
           existente.tipoCliente !== datos.tipoCliente ||
-          existente.mismoGrupo !== datos.mismoGrupo
+          existente.mismoGrupo !== datos.mismoGrupo ||
+          (existente.detalleTipoCliente ?? "") !== (datos.detalleTipoCliente ?? "")
         ) {
           mapa.set(operacion.rfc, datos)
           actualizado = true
@@ -741,6 +887,7 @@ export default function ActividadesVulnerablesPage() {
           : operacionEnEdicion.monedaDescripcion.split(" – ")[1] ?? operacionEnEdicion.monedaDescripcion,
       fechaOperacion: operacionEnEdicion.fechaOperacion,
       evidencia: operacionEnEdicion.evidencia,
+      detalleTipoCliente: operacionEnEdicion.detalleTipoCliente ?? "",
     })
   }, [operacionEnEdicion])
 
@@ -865,10 +1012,16 @@ export default function ActividadesVulnerablesPage() {
   const tipoClienteOperacionLabel = useMemo(
     () =>
       operacionDocumentos
-        ? CLIENTE_TIPOS.find((item) => item.value === operacionDocumentos.tipoCliente)?.label ??
-          operacionDocumentos.tipoCliente
+        ? formatTipoClienteLabel(
+            operacionDocumentos.tipoCliente,
+            operacionDocumentos.detalleTipoCliente,
+          )
         : "",
     [operacionDocumentos],
+  )
+  const tipoClienteEdicionSeleccionado = useMemo(
+    () => obtenerOpcionTipoCliente(datosEdicion.tipoCliente),
+    [datosEdicion.tipoCliente],
   )
   const evidenciasRegistradasOperacion = operacionDocumentos?.documentosSoporte.length ?? 0
   const checklistPendientesOperacion = Math.max(
@@ -1019,7 +1172,8 @@ const pasoValido = useMemo(() => {
       Boolean(clienteNombre.trim()) &&
       Boolean(rfc.trim()) &&
       Boolean(tipoOperacion.trim()) &&
-      Boolean(montoOperacion.trim())
+      Boolean(montoOperacion.trim()) &&
+      (!tipoClienteSeleccionado?.requiresDetalle || Boolean(detalleTipoCliente.trim()))
     )
   }
   if (pasoActual === 2) {
@@ -1035,12 +1189,15 @@ const pasoValido = useMemo(() => {
   tipoOperacion,
   montoOperacion,
   evaluacionActual,
+  tipoClienteSeleccionado,
+  detalleTipoCliente,
 ])
 
 const limpiarClienteSeleccionado = () => {
   setClienteSeleccionado(null)
   setClienteNombre("")
   setRfc("")
+  setDetalleTipoCliente("")
 }
 
 const limpiarFormulario = () => {
@@ -1053,6 +1210,7 @@ const limpiarFormulario = () => {
   setMonedaPersonalizadaCodigo("")
   setMonedaPersonalizadaDescripcion("")
   setFechaOperacion(new Date().toISOString().substring(0, 10))
+  setDetalleTipoCliente("")
 }
 
 const registrarClienteGuardado = (cliente: ClienteGuardado) => {
@@ -1062,7 +1220,8 @@ const registrarClienteGuardado = (cliente: ClienteGuardado) => {
       if (
         existente.nombre === cliente.nombre &&
         existente.tipoCliente === cliente.tipoCliente &&
-        existente.mismoGrupo === cliente.mismoGrupo
+        existente.mismoGrupo === cliente.mismoGrupo &&
+        (existente.detalleTipoCliente ?? "") === (cliente.detalleTipoCliente ?? "")
       ) {
         return prev
       }
@@ -1097,6 +1256,7 @@ const manejarSeleccionClienteGuardado = (valor: string) => {
   setClienteNombre(guardado.nombre)
   setRfc(guardado.rfc)
   setTipoCliente(guardado.tipoCliente)
+  setDetalleTipoCliente(guardado.detalleTipoCliente ?? "")
   setMismoGrupo(guardado.mismoGrupo ? "si" : "no")
 }
 
@@ -1129,6 +1289,15 @@ const agregarOperacion = () => {
     return
   }
 
+  if (tipoClienteSeleccionado?.requiresDetalle && !detalleTipoCliente.trim()) {
+    toast({
+      title: "Detalle requerido",
+      description: "Indica el tipo específico de entidad para el cliente seleccionado.",
+      variant: "destructive",
+    })
+    return
+  }
+
   let monedaCodigoFinal = moneda
   let monedaDescripcionFinal = getMonedaLabel(moneda)
 
@@ -1151,6 +1320,10 @@ const agregarOperacion = () => {
   }
 
   const periodo = buildPeriodo(anioSeleccionado, mesSeleccionado)
+  const detalleClienteNormalizado =
+    tipoClienteSeleccionado?.requiresDetalle && detalleTipoCliente.trim().length > 0
+      ? detalleTipoCliente.trim()
+      : undefined
 
   const operacionesPrevias = operaciones.filter(
     (operacion) =>
@@ -1178,6 +1351,7 @@ const agregarOperacion = () => {
     actividadKey: actividadSeleccionada.key,
     actividadNombre: `${actividadSeleccionada.fraccion} – ${actividadSeleccionada.nombre}`,
     tipoCliente,
+    detalleTipoCliente: detalleClienteNormalizado,
     cliente: clienteNombre.trim(),
     rfc: rfc.trim().toUpperCase(),
     mismoGrupo: mismoGrupo === "si",
@@ -1209,6 +1383,7 @@ const agregarOperacion = () => {
     nombre: nuevaOperacion.cliente,
     tipoCliente: nuevaOperacion.tipoCliente,
     mismoGrupo: nuevaOperacion.mismoGrupo,
+    detalleTipoCliente: nuevaOperacion.detalleTipoCliente,
   })
 
   if (status !== "sin-obligacion") {
@@ -1283,6 +1458,15 @@ const guardarOperacionEditada = () => {
     return
   }
 
+  if (tipoClienteEdicionSeleccionado?.requiresDetalle && !datosEdicion.detalleTipoCliente.trim()) {
+    toast({
+      title: "Detalle requerido",
+      description: "Especifica el tipo de entidad o detalle solicitado para este tipo de cliente.",
+      variant: "destructive",
+    })
+    return
+  }
+
   const rfcNormalizado = datosEdicion.rfc.trim().toUpperCase()
 
   let monedaCodigoFinal = datosEdicion.moneda
@@ -1306,11 +1490,17 @@ const guardarOperacionEditada = () => {
       : `${codigoLimpio} – Divisa personalizada`
   }
 
+  const detalleClienteNormalizado =
+    tipoClienteEdicionSeleccionado?.requiresDetalle && datosEdicion.detalleTipoCliente.trim().length > 0
+      ? datosEdicion.detalleTipoCliente.trim()
+      : undefined
+
   const operacionActualizada: OperacionCliente = {
     ...operacionEnEdicion,
     cliente: datosEdicion.cliente.trim(),
     rfc: rfcNormalizado,
     tipoCliente: datosEdicion.tipoCliente,
+    detalleTipoCliente: detalleClienteNormalizado,
     mismoGrupo: datosEdicion.mismoGrupo === "si",
     tipoOperacion: datosEdicion.tipoOperacion.trim(),
     monto,
@@ -1340,6 +1530,7 @@ const guardarOperacionEditada = () => {
     nombre: operacionActualizada.cliente,
     tipoCliente: operacionActualizada.tipoCliente,
     mismoGrupo: operacionActualizada.mismoGrupo,
+    detalleTipoCliente: operacionActualizada.detalleTipoCliente,
   })
 
   setOperacionEnEdicion(null)
@@ -1420,6 +1611,7 @@ const reutilizarDatosCliente = (operacion: OperacionCliente) => {
   setAnioSeleccionado(operacion.anio)
   setMesSeleccionado(operacion.mes)
   setTipoCliente(operacion.tipoCliente)
+  setDetalleTipoCliente(operacion.detalleTipoCliente ?? "")
   setClienteNombre(operacion.cliente)
   setRfc(operacion.rfc)
   setMismoGrupo(operacion.mismoGrupo ? "si" : "no")
@@ -1701,29 +1893,42 @@ const cambiarMesCalendario = (delta: number) => {
             <Card className="border-emerald-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-emerald-700">
-                  <ShieldAlert className="h-5 w-5" /> Ciclos UMA vigentes
+                  <ShieldAlert className="h-5 w-5" /> UMA vigente seleccionada
                 </CardTitle>
-                <CardDescription>Actualización automática por periodo oficial.</CardDescription>
+                <CardDescription>Valor diario oficial según el mes y año elegidos.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3 text-xs">
-                <div className="space-y-1">
-                  {UMA_PERIODS.slice(0, 4).map((periodo) => (
-                    <div key={periodo.cycle} className="flex items-center justify-between rounded border px-3 py-1">
-                      <span>
-                        {periodo.cycle} ({new Date(periodo.validFrom).toLocaleDateString("es-MX", {
-                          month: "short",
-                          year: "numeric",
-                        })}
-                        {" "}– {new Date(periodo.validTo).toLocaleDateString("es-MX", { month: "short", year: "numeric" })})
-                      </span>
-                      <span className="font-semibold">{formatCurrency(periodo.daily)}</span>
+              <CardContent className="space-y-3 text-sm text-slate-700">
+                {umaSeleccionada ? (
+                  <>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-500">Periodo</p>
+                        <p className="text-lg font-semibold text-slate-800">
+                          {monthLabel(umaSeleccionada.month)} {umaSeleccionada.year}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs uppercase tracking-wide text-emerald-600">UMA diaria</p>
+                        <p className="text-2xl font-bold text-emerald-700">
+                          {formatCurrency(umaSeleccionada.daily)}
+                        </p>
+                      </div>
                     </div>
-                  ))}
-                </div>
-                <p className="rounded border border-emerald-200 bg-emerald-50/70 p-2 text-emerald-800">
-                  La ventana prioriza los 60 meses más recientes disponibles a partir de septiembre 2020 para validar
-                  obligaciones históricas.
-                </p>
+                    <p className="text-xs text-muted-foreground">
+                      Vigente del {formatDateDisplay(umaSeleccionada.validFrom)} al
+                      {" "}
+                      {formatDateDisplay(umaSeleccionada.validTo)}.
+                    </p>
+                    <p className="rounded border border-emerald-200 bg-emerald-50/70 p-2 text-xs text-emerald-800">
+                      Multiplica la UMA diaria por el número de UMAs de la fracción para obtener el monto en pesos y
+                      determinar obligaciones.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-600">
+                    Selecciona un mes disponible para mostrar el valor diario de la UMA correspondiente.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </section>
@@ -1748,6 +1953,9 @@ const cambiarMesCalendario = (delta: number) => {
                         <div>
                           <p className="font-semibold text-slate-800">{operacion.cliente}</p>
                           <p className="text-xs text-slate-500">{operacion.actividadNombre}</p>
+                          <p className="text-xs text-slate-500">
+                            {formatTipoClienteLabel(operacion.tipoCliente, operacion.detalleTipoCliente)}
+                          </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <Badge variant="outline" className="bg-white">
@@ -1905,38 +2113,39 @@ const cambiarMesCalendario = (delta: number) => {
                 <div className="rounded border bg-slate-50 p-4">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-slate-700">UMAs por año</p>
+                      <p className="text-sm font-semibold text-slate-700">UMA del mes seleccionado</p>
                       <p className="text-xs text-muted-foreground">
-                        Cada UMA es válida del 1.º de febrero al 31 de enero del año siguiente. Consulta los valores diarios, mensuales y anuales aplicables.
+                        Se utiliza el valor diario vigente para calcular automáticamente los umbrales en pesos.
                       </p>
                     </div>
                   </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    {Array.from(umaVentanaAgrupada.entries())
-                      .sort((a, b) => a[0] - b[0])
-                      .map(([year, registros]) => (
-                        <div key={year} className="rounded border bg-white p-3 text-xs">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold">{year}</span>
-                            <span className="text-muted-foreground">UMA diaria {formatCurrency(registros[0]?.daily ?? 0)}</span>
+                  <div className="mt-4 rounded border border-emerald-200 bg-white p-4 text-sm text-slate-700">
+                    {umaSeleccionada ? (
+                      <>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-slate-500">Periodo</p>
+                            <p className="text-lg font-semibold text-slate-800">
+                              {monthLabel(umaSeleccionada.month)} {umaSeleccionada.year}
+                            </p>
                           </div>
-                          <div className="mt-2 grid grid-cols-3 gap-2">
-                            {registros.map((registro) => (
-                              <div
-                                key={`${year}-${registro.month}`}
-                                className={`rounded border px-2 py-1 text-center ${
-                                  registro.month === mesSeleccionado && registro.year === anioSeleccionado
-                                    ? "border-emerald-400 bg-emerald-50 text-emerald-700"
-                                    : "border-slate-200 bg-slate-50"
-                                }`}
-                              >
-                                <p className="font-semibold">{monthLabel(registro.month).slice(0, 3)}</p>
-                                <p>{formatCurrency(registro.monthly)}</p>
-                              </div>
-                            ))}
+                          <div className="text-right">
+                            <p className="text-xs uppercase tracking-wide text-emerald-600">UMA diaria</p>
+                            <p className="text-2xl font-bold text-emerald-700">
+                              {formatCurrency(umaSeleccionada.daily)}
+                            </p>
                           </div>
                         </div>
-                      ))}
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Vigencia del {formatDateDisplay(umaSeleccionada.validFrom)} al {" "}
+                          {formatDateDisplay(umaSeleccionada.validTo)}.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-600">
+                        No se encontró UMA para este periodo. Selecciona un mes disponible en el catálogo.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -1992,8 +2201,29 @@ const cambiarMesCalendario = (delta: number) => {
               <CardContent className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
-                    <Label>Tipo de cliente</Label>
-                    <Select value={tipoCliente} onValueChange={setTipoCliente}>
+                    <Label className="flex items-center gap-2">
+                      Tipo de cliente
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-slate-600 hover:text-slate-900"
+                        onClick={() => setInfoTipoClienteOpen(true)}
+                        aria-label="Información sobre tipos de cliente"
+                      >
+                        <Info className="h-4 w-4" />
+                      </Button>
+                    </Label>
+                    <Select
+                      value={tipoCliente}
+                      onValueChange={(value) => {
+                        setTipoCliente(value)
+                        const option = obtenerOpcionTipoCliente(value)
+                        if (!option?.requiresDetalle) {
+                          setDetalleTipoCliente("")
+                        }
+                      }}
+                    >
                       <SelectTrigger className="bg-white">
                         <SelectValue placeholder="Selecciona tipo de cliente" />
                       </SelectTrigger>
@@ -2005,6 +2235,24 @@ const cambiarMesCalendario = (delta: number) => {
                         ))}
                       </SelectContent>
                     </Select>
+                    {tipoClienteSeleccionado?.requiresDetalle && (
+                      <div className="space-y-2">
+                        <Label>
+                          {tipoClienteSeleccionado.detalleLabel ?? "Detalle del tipo de cliente"}
+                        </Label>
+                        <Input
+                          placeholder={
+                            tipoClienteSeleccionado.detallePlaceholder ?? "Describe la entidad o sociedad"
+                          }
+                          value={detalleTipoCliente}
+                          onChange={(event) => setDetalleTipoCliente(event.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Especifica el giro o naturaleza de la entidad seleccionada para personalizar los
+                          requisitos.
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Nombre o razón social</Label>
@@ -2019,7 +2267,8 @@ const cambiarMesCalendario = (delta: number) => {
                         <SelectContent>
                           {clientesGuardados.map((cliente) => (
                             <SelectItem key={cliente.rfc} value={cliente.rfc}>
-                              {cliente.nombre} ({cliente.rfc})
+                              {cliente.nombre} ({cliente.rfc}
+                              {cliente.detalleTipoCliente ? ` – ${cliente.detalleTipoCliente}` : ""})
                             </SelectItem>
                           ))}
                           <SelectItem value={NUEVO_CLIENTE_VALUE}>Añadir cliente nuevo…</SelectItem>
@@ -2352,6 +2601,12 @@ const cambiarMesCalendario = (delta: number) => {
                         <span className="font-semibold">Cliente:</span> {clienteNombre || "Sin registrar"} ({rfc || "RFC pendiente"})
                       </li>
                       <li>
+                        <span className="font-semibold">Tipo de cliente:</span> {formatTipoClienteLabel(
+                          tipoCliente,
+                          tipoClienteSeleccionado?.requiresDetalle ? detalleTipoCliente : undefined,
+                        )}
+                      </li>
+                      <li>
                         <span className="font-semibold">Periodo:</span> {monthLabel(mesSeleccionado)} {anioSeleccionado}
                       </li>
                       <li>
@@ -2484,6 +2739,12 @@ const cambiarMesCalendario = (delta: number) => {
                                 <Badge variant="outline">{operacion.periodo}</Badge>
                               </div>
                               <p className="mt-1 text-slate-600">RFC: {operacion.rfc}</p>
+                              <p className="text-slate-600">
+                                Tipo de cliente: {formatTipoClienteLabel(
+                                  operacion.tipoCliente,
+                                  operacion.detalleTipoCliente,
+                                )}
+                              </p>
                               <p className="text-slate-600">Actividad: {operacion.actividadNombre}</p>
                               <p className="text-slate-600">Monto acumulado: {formatCurrency(operacion.acumuladoCliente)}</p>
                               <p className="text-slate-600">Operación: {operacion.tipoOperacion}</p>
@@ -2764,6 +3025,9 @@ const cambiarMesCalendario = (delta: number) => {
                           <div key={operacion.id} className="rounded border border-slate-200 bg-white p-2">
                             <p className="font-semibold text-slate-700">{operacion.cliente}</p>
                             <p>Actividad: {operacion.actividadNombre}</p>
+                            <p>
+                              Tipo: {formatTipoClienteLabel(operacion.tipoCliente, operacion.detalleTipoCliente)}
+                            </p>
                             <p>Monto: {formatMontoOperacion(operacion)}</p>
                             <p>Estado: {getStatusLabel(operacion.umbralStatus)}</p>
                           </div>
@@ -3227,6 +3491,36 @@ const cambiarMesCalendario = (delta: number) => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={infoTipoClienteOpen} onOpenChange={setInfoTipoClienteOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Tipos de cliente disponibles</DialogTitle>
+            <DialogDescription>
+              Elige la categoría que represente la naturaleza jurídica o migratoria del cliente para
+              ajustar los requisitos y controles aplicables.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-slate-700">
+            {CLIENTE_TIPOS.map((tipo) => (
+              <div key={tipo.value} className="rounded border border-slate-200 bg-slate-50 p-3">
+                <p className="font-semibold text-slate-800">{tipo.label}</p>
+                <p className="mt-1 text-xs text-slate-600">{tipo.descripcion}</p>
+                {tipo.requiresDetalle && (
+                  <p className="mt-2 text-xs font-medium text-emerald-700">
+                    Requiere detalle adicional: {tipo.detalleLabel ?? "Especifica el tipo de entidad"}.
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="border-t bg-slate-50 p-4">
+            <Button variant="outline" onClick={() => setInfoTipoClienteOpen(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={infoGrupoOpen} onOpenChange={setInfoGrupoOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -3284,7 +3578,13 @@ const cambiarMesCalendario = (delta: number) => {
                   <Select
                     value={datosEdicion.tipoCliente}
                     onValueChange={(value) =>
-                      setDatosEdicion((prev) => ({ ...prev, tipoCliente: value }))
+                      setDatosEdicion((prev) => ({
+                        ...prev,
+                        tipoCliente: value,
+                        detalleTipoCliente: obtenerOpcionTipoCliente(value)?.requiresDetalle
+                          ? prev.detalleTipoCliente
+                          : "",
+                      }))
                     }
                   >
                     <SelectTrigger className="bg-white">
@@ -3298,6 +3598,30 @@ const cambiarMesCalendario = (delta: number) => {
                       ))}
                     </SelectContent>
                   </Select>
+                  {tipoClienteEdicionSeleccionado?.requiresDetalle && (
+                    <div className="space-y-2 text-sm">
+                      <Label>
+                        {tipoClienteEdicionSeleccionado.detalleLabel ?? "Detalle del tipo de cliente"}
+                      </Label>
+                      <Input
+                        value={datosEdicion.detalleTipoCliente}
+                        onChange={(event) =>
+                          setDatosEdicion((prev) => ({
+                            ...prev,
+                            detalleTipoCliente: event.target.value,
+                          }))
+                        }
+                        placeholder={
+                          tipoClienteEdicionSeleccionado.detallePlaceholder ??
+                          "Ej. Afianzadora estatal"
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Detalla el giro o naturaleza exacta del cliente para conservar el contexto de la
+                        operación.
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>¿Pertenece al mismo grupo?</Label>
