@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -121,6 +122,27 @@ const RISK_BANDS: Record<string, { label: string; gradient: string; description:
 
 type RiskValue = (typeof RISK_LEVELS)[number]["value"]
 
+const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
+
+const CLIENTE_TIPO_MAP: Record<string, string> = {
+  pfn: "Persona física mexicana",
+  pfe: "Persona física extranjera",
+  pmn: "Persona moral mexicana",
+  pme: "Persona moral extranjera",
+  fideicomiso: "Fideicomiso",
+  dependencia: "Dependencia o entidad pública",
+  vehiculo: "Vehículo corporativo",
+  otro: "Otro sujeto obligado",
+}
+
+function normalizeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase()
+}
+
 interface FactorRespuesta {
   valor: RiskValue
   comentario: string
@@ -142,12 +164,67 @@ const CLIENTE_COLORES: Record<RiskValue, string> = {
 
 export default function KycExpedientePage() {
   const { toast } = useToast()
+  const searchParams = useSearchParams()
   const [tipoCliente, setTipoCliente] = useState("Persona física mexicana")
   const [responsable, setResponsable] = useState("")
   const [datosIdentificacion, setDatosIdentificacion] = useState<Record<string, string>>({})
   const [respuestas, setRespuestas] = useState<Record<string, FactorRespuesta>>({})
   const [alertas, setAlertas] = useState<AlertaRiesgo[]>([])
   const [alertaSeleccionada, setAlertaSeleccionada] = useState<AlertaRiesgo | null>(null)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const parametro = searchParams?.get("buscar")?.trim()
+    if (!parametro) return
+
+    try {
+      const stored = window.localStorage.getItem(CLIENTES_STORAGE_KEY)
+      if (!stored) return
+
+      const parsed = JSON.parse(stored) as Array<{
+        rfc?: string
+        nombre?: string
+        tipoCliente?: string
+      }>
+
+      const criterio = normalizeText(parametro)
+      const coincidencia = parsed.find((item) => {
+        if (!item) return false
+        const rfc = typeof item.rfc === "string" ? normalizeText(item.rfc) : ""
+        const nombre = typeof item.nombre === "string" ? normalizeText(item.nombre) : ""
+        return rfc === criterio || (nombre !== "" && nombre === criterio)
+      })
+
+      if (!coincidencia) {
+        toast({
+          title: "Cliente no encontrado",
+          description: "No se localizó el cliente en las actividades vulnerables recientes.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const tipoGuardado = typeof coincidencia.tipoCliente === "string" ? coincidencia.tipoCliente : ""
+      const tipoLabel = CLIENTE_TIPO_MAP[tipoGuardado] ?? tipoGuardado
+      if (tipoLabel) {
+        setTipoCliente(tipoLabel)
+      }
+
+      setDatosIdentificacion((prev) => ({
+        ...prev,
+        nombre: typeof coincidencia.nombre === "string" ? coincidencia.nombre : prev.nombre ?? "",
+        rfc: typeof coincidencia.rfc === "string" ? coincidencia.rfc : prev.rfc ?? "",
+      }))
+
+      toast({
+        title: "Cliente sincronizado",
+        description: "Se importaron la razón social y el tipo de cliente desde actividades vulnerables.",
+      })
+    } catch (error) {
+      console.error("No fue posible sincronizar el cliente desde actividades vulnerables", error)
+    }
+  }, [searchParams, toast])
 
   const nivelIdentificacion = useMemo<RiskValue>(() => {
     const totalCampos = IDENTIFICACION_CAMPOS.flatMap((grupo) => grupo.campos).length
@@ -310,7 +387,9 @@ export default function KycExpedientePage() {
                     <SelectItem value="Persona moral mexicana">Persona moral mexicana</SelectItem>
                     <SelectItem value="Persona moral extranjera">Persona moral extranjera</SelectItem>
                     <SelectItem value="Fideicomiso">Fideicomiso</SelectItem>
-                    <SelectItem value="Dependencia pública">Dependencia pública</SelectItem>
+                    <SelectItem value="Dependencia o entidad pública">Dependencia o entidad pública</SelectItem>
+                    <SelectItem value="Vehículo corporativo">Vehículo corporativo</SelectItem>
+                    <SelectItem value="Otro sujeto obligado">Otro sujeto obligado</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
