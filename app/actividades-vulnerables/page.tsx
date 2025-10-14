@@ -2927,7 +2927,7 @@ const cambiarMesCalendario = (delta: number) => {
                 </DialogDescription>
               </DialogHeader>
               <div className="flex-1 overflow-y-auto p-6">
-                <div className="grid gap-6 lg:grid-cols-[300px,1fr] xl:grid-cols-[320px,1fr]">
+                <div className="grid gap-6 lg:grid-cols-[300px,minmax(0,1fr)] xl:grid-cols-[320px,minmax(0,1fr)]">
                   <aside className="space-y-4">
                     <div className="rounded-lg border bg-white p-4 shadow-sm">
                       <div className="flex flex-wrap items-center gap-2">
@@ -3055,7 +3055,7 @@ const cambiarMesCalendario = (delta: number) => {
                     </div>
                   </aside>
 
-                  <div className="space-y-6 text-sm text-slate-700">
+                  <div className="min-w-0 space-y-6 text-sm text-slate-700">
                     <div className="rounded-lg border bg-white p-4 shadow-sm">
                       <div className="flex items-center justify-between gap-2">
                         <h4 className="text-sm font-semibold text-slate-700">Checklist documental</h4>
