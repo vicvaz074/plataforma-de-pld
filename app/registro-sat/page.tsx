@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, type ChangeEvent } from "react"
+import { useState, useEffect, useMemo, type ChangeEvent } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,7 +40,13 @@ import {
   Building2,
   Paperclip,
   X,
+  ClipboardList,
+  Phone,
+  ShieldCheck,
+  MapPin,
+  UserCog,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { motion } from "framer-motion"
 
 // Tipos de datos para el módulo
@@ -85,6 +92,22 @@ interface TraceabilityEntry {
   timestamp: Date
   details: string
   section: string
+}
+
+interface RequiredDataField {
+  id: string
+  label: string
+  description: string
+  required: boolean
+  tips?: string[]
+}
+
+interface RequiredDataSection {
+  id: string
+  title: string
+  description: string
+  icon: LucideIcon
+  fields: RequiredDataField[]
 }
 
 const answerOptions: { value: AnswerValue; label: string }[] = [
@@ -139,6 +162,227 @@ const createRequirements = (
 
     return acc
   }, {} as ChecklistRequirements)
+
+const datosAltaRegistro: RequiredDataSection[] = [
+  {
+    id: "identidad-sociedad",
+    title: "Identidad de la sociedad",
+    description: "Información legal de la persona moral que se registra ante el SAT.",
+    icon: ClipboardList,
+    fields: [
+      {
+        id: "identidad-denominacion",
+        label: "Denominación o razón social",
+        description:
+          "Nombre legal completo de la sociedad conforme al acta constitutiva y al RFC.",
+        required: true,
+        tips: [
+          "Incluye el tipo societario (S.A. de C.V., S. de R.L., etc.).",
+          "Verifica que coincida con los documentos presentados en el portal del SAT.",
+        ],
+      },
+      {
+        id: "identidad-fecha-constitucion",
+        label: "Fecha de constitución",
+        description: "Fecha en la que se formalizó la constitución ante fedatario público.",
+        required: true,
+        tips: ["Debe coincidir con la fecha asentada en el acta constitutiva."],
+      },
+      {
+        id: "identidad-pais",
+        label: "País de nacionalidad",
+        description: "País donde la sociedad fue constituida legalmente.",
+        required: true,
+      },
+    ],
+  },
+  {
+    id: "contacto-sociedad",
+    title: "Datos de contacto de la sociedad",
+    description: "Medios de localización y persona de contacto del sujeto obligado.",
+    icon: Phone,
+    fields: [
+      {
+        id: "contacto-telefonos",
+        label: "Teléfonos fijos de contacto",
+        description: "Números con clave LADA, extensión y horario de atención.",
+        required: true,
+        tips: ["Documenta al menos un teléfono principal y uno alterno."],
+      },
+      {
+        id: "contacto-persona",
+        label: "Persona de contacto",
+        description:
+          "Nombre completo de la persona física que atenderá requerimientos en caso de no contar con REC designado.",
+        required: true,
+        tips: ["Registra apellidos completos sin abreviaturas."],
+      },
+      {
+        id: "contacto-correo",
+        label: "Correo electrónico oficial",
+        description:
+          "Correo habilitado para recibir comunicaciones, informes y alertas relacionadas con PLD.",
+        required: true,
+        tips: ["Debe coincidir con el registrado en el Buzón Tributario."],
+      },
+      {
+        id: "contacto-movil",
+        label: "Teléfonos móviles",
+        description: "Número(s) celular para contacto inmediato, en su caso.",
+        required: false,
+      },
+    ],
+  },
+  {
+    id: "actividad-vulnerable",
+    title: "Datos de la Actividad Vulnerable",
+    description: "Información que acredita el alta y operación de la actividad vulnerable declarada.",
+    icon: ShieldCheck,
+    fields: [
+      {
+        id: "actividad-identificacion",
+        label: "Actividad(es) vulnerable(s) registrada(s)",
+        description:
+          "Fracción del artículo 17 de la LFPIORPI seleccionada y descripción de la actividad realizada.",
+        required: true,
+        tips: ["Guarda evidencia del acuse de selección de fracción en el portal."],
+      },
+      {
+        id: "actividad-fecha-inicio",
+        label: "Fecha de primer operación",
+        description:
+          "Fecha en la que se realizó o realizará por primera vez la actividad vulnerable declarada.",
+        required: true,
+      },
+      {
+        id: "actividad-soporte",
+        label: "Documento que ampara la actividad",
+        description:
+          "Datos del registro, autorización, patente o certificado: tipo de documento, autoridad emisora, folio y vigencia.",
+        required: true,
+        tips: ["Digitaliza el documento completo e identifica su periodo de vigencia."],
+      },
+      {
+        id: "actividad-domicilio",
+        label: "Domicilio principal de operaciones",
+        description:
+          "Ubicación en territorio nacional donde se realizan la mayoría de las actividades vulnerables.",
+        required: true,
+        tips: [
+          "Incluye calle, número exterior e interior, colonia, municipio, ciudad, entidad federativa y código postal.",
+          "Verifica que coincida con el domicilio registrado ante el SAT.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "datos-rec",
+    title: "Datos del Responsable Encargado de Cumplimiento",
+    description: "Información personal del REC designado ante el SAT/UIF.",
+    icon: UserCheck,
+    fields: [
+      {
+        id: "rec-nombre",
+        label: "Nombre completo del REC",
+        description: "Nombre(s) y apellidos sin abreviaturas del representante encargado.",
+        required: true,
+      },
+      {
+        id: "rec-fecha-nacimiento",
+        label: "Fecha de nacimiento",
+        description: "Fecha de nacimiento según identificación oficial.",
+        required: true,
+      },
+      {
+        id: "rec-rfc",
+        label: "RFC del REC",
+        description: "Clave del Registro Federal de Contribuyentes del representante.",
+        required: true,
+      },
+      {
+        id: "rec-curp",
+        label: "CURP del REC",
+        description: "Clave Única de Registro de Población, en caso de contar con ella.",
+        required: false,
+      },
+      {
+        id: "rec-nacionalidad",
+        label: "País de nacionalidad",
+        description: "Nacionalidad del representante encargado de cumplimiento.",
+        required: true,
+      },
+      {
+        id: "rec-fecha-aceptacion",
+        label: "Fecha de aceptación del cargo",
+        description: "Fecha a partir de la cual el REC acepta formalmente la designación.",
+        required: true,
+        tips: ["Debe coincidir con el acuse de aceptación emitido por el portal PLD."],
+      },
+    ],
+  },
+  {
+    id: "contacto-rec",
+    title: "Contacto del REC",
+    description: "Medios de comunicación con la persona designada como REC.",
+    icon: UserCog,
+    fields: [
+      {
+        id: "rec-contacto-telefonos",
+        label: "Teléfonos del REC",
+        description: "Números con clave LADA donde se pueda localizar al REC.",
+        required: true,
+      },
+      {
+        id: "rec-contacto-correo",
+        label: "Correo electrónico del REC",
+        description: "Correo designado para recibir informes, comunicaciones o alertas.",
+        required: true,
+        tips: ["Debe monitorearse de manera frecuente y contar con respaldo de seguridad."],
+      },
+      {
+        id: "rec-contacto-movil",
+        label: "Teléfono móvil del REC",
+        description: "Número celular para notificaciones urgentes, en su caso.",
+        required: false,
+      },
+    ],
+  },
+  {
+    id: "domicilio-rec",
+    title: "Domicilio del REC",
+    description: "Domicilio completo del representante encargado de cumplimiento.",
+    icon: MapPin,
+    fields: [
+      {
+        id: "rec-domicilio",
+        label: "Domicilio completo",
+        description:
+          "Calle, número exterior e interior, colonia, municipio o demarcación, ciudad, entidad federativa y código postal.",
+        required: true,
+        tips: ["Asegúrate de que la información esté actualizada y sea consistente con identificaciones oficiales."],
+      },
+    ],
+  },
+]
+
+type DatosChecklistState = Record<string, { completed: boolean; notes: string }>
+
+const datosChecklistIndex = datosAltaRegistro.reduce<
+  Record<string, { sectionId: string; sectionTitle: string; field: RequiredDataField }>
+>((acc, section) => {
+  section.fields.forEach((field) => {
+    acc[field.id] = { sectionId: section.id, sectionTitle: section.title, field }
+  })
+  return acc
+}, {})
+
+const createDefaultDatosChecklistState = (): DatosChecklistState =>
+  datosAltaRegistro.reduce<DatosChecklistState>((acc, section) => {
+    section.fields.forEach((field) => {
+      acc[field.id] = { completed: false, notes: "" }
+    })
+    return acc
+  }, {})
 
 // Preguntas generales del módulo
 const preguntasGenerales: ChecklistItem[] = [
@@ -538,11 +782,25 @@ export default function RegistroSATPage() {
   const [preguntasState, setPreguntasState] = useState<ChecklistItem[]>(preguntasGenerales)
   const [documentos, setDocumentos] = useState<DocumentUpload[]>([])
   const [trazabilidad, setTrazabilidad] = useState<TraceabilityEntry[]>([])
+  const [datosChecklistState, setDatosChecklistState] = useState<DatosChecklistState>(() =>
+    createDefaultDatosChecklistState(),
+  )
   const [documentoAEliminar, setDocumentoAEliminar] = useState<DocumentUpload | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [progreso, setProgreso] = useState(0)
   const [activeTab, setActiveTab] = useState("preguntas")
   const [evidenciasPorPregunta, setEvidenciasPorPregunta] = useState<Record<string, string[]>>({})
+  const datosChecklistResumen = useMemo(() => {
+    const total = datosAltaRegistro.reduce((acc, section) => acc + section.fields.length, 0)
+    const completados = datosAltaRegistro.reduce(
+      (acc, section) =>
+        acc + section.fields.filter((field) => datosChecklistState[field.id]?.completed).length,
+      0,
+    )
+    const progresoDatos = total === 0 ? 0 : Math.round((completados / total) * 100)
+
+    return { total, completados, progreso: progresoDatos }
+  }, [datosChecklistState])
 
   // Cargar datos del localStorage
   useEffect(() => {
@@ -604,10 +862,28 @@ export default function RegistroSATPage() {
             )
           : {}
 
+      const defaultChecklist = createDefaultDatosChecklistState()
+      if (data.datosChecklist && typeof data.datosChecklist === "object") {
+        Object.entries(data.datosChecklist as Record<string, unknown>).forEach(([key, value]) => {
+          if (!(key in defaultChecklist)) return
+          if (typeof value === "object" && value !== null) {
+            const registro = value as Record<string, unknown>
+            const completedRaw = registro.completed
+            const notesRaw = registro.notes
+
+            defaultChecklist[key] = {
+              completed: completedRaw === true || completedRaw === "true",
+              notes: typeof notesRaw === "string" ? notesRaw : "",
+            }
+          }
+        })
+      }
+
       setPreguntasState(preguntasGuardadas)
       setDocumentos(documentosGuardados as DocumentUpload[])
       setTrazabilidad(trazabilidadGuardada as TraceabilityEntry[])
       setEvidenciasPorPregunta(evidenciasGuardadas)
+      setDatosChecklistState(defaultChecklist)
     } catch (error) {
       console.error("Error al cargar datos:", error)
     }
@@ -627,9 +903,57 @@ export default function RegistroSATPage() {
       documentos,
       trazabilidad,
       evidenciasPorPregunta,
+      datosChecklist: datosChecklistState,
     }
     localStorage.setItem("registro-sat-data", JSON.stringify(data))
-  }, [preguntasState, documentos, trazabilidad, evidenciasPorPregunta])
+  }, [preguntasState, documentos, trazabilidad, evidenciasPorPregunta, datosChecklistState])
+
+  const actualizarEstatusDatoChecklist = (id: string, completed: boolean) => {
+    const estadoActual = datosChecklistState[id] ?? { completed: false, notes: "" }
+    if (estadoActual.completed === completed) {
+      return
+    }
+
+    setDatosChecklistState((prev) => ({
+      ...prev,
+      [id]: {
+        completed,
+        notes: prev[id]?.notes ?? "",
+      },
+    }))
+
+    const info = datosChecklistIndex[id]
+    if (!info) {
+      return
+    }
+
+    setTrazabilidad((prev) => [
+      {
+        id: Date.now().toString(),
+        action: completed ? "Dato marcado como completo" : "Dato marcado como pendiente",
+        user: "Usuario actual",
+        timestamp: new Date(),
+        details: `${info.sectionTitle}: ${info.field.label}`,
+        section: "Checklist de Datos",
+      },
+      ...prev,
+    ])
+
+    toast({
+      title: completed ? "Dato listo" : "Dato pendiente",
+      description: `${info.field.label} en ${info.sectionTitle}`,
+    })
+  }
+
+  const actualizarNotasDatoChecklist = (id: string, notas: string) => {
+    setDatosChecklistState((prev) => ({
+      ...prev,
+      [id]: {
+        completed: prev[id]?.completed ?? false,
+        notes: notas,
+      },
+    }))
+  }
 
   // Actualizar respuesta de pregunta
   const actualizarRespuesta = (id: string, answer: AnswerValue) => {
@@ -921,10 +1245,14 @@ export default function RegistroSATPage() {
 
       {/* Tabs principales */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="preguntas" className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4" />
             Preguntas Normativas
+          </TabsTrigger>
+          <TabsTrigger value="datos" className="flex items-center gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Checklist de Datos
           </TabsTrigger>
           <TabsTrigger value="documentos" className="flex items-center gap-2">
             <Upload className="h-4 w-4" />
@@ -1101,6 +1429,131 @@ export default function RegistroSATPage() {
               })}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Tab: Checklist de Datos */}
+        <TabsContent value="datos" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardList className="h-5 w-5" />
+                Datos indispensables para el alta y registro
+              </CardTitle>
+              <CardDescription>
+                Marca cada dato conforme reúnas la información solicitada por el SAT para concluir el alta en el padrón.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-lg border bg-muted/20 p-4">
+                  <p className="text-sm font-medium text-muted-foreground">Datos completados</p>
+                  <p className="text-2xl font-semibold">{datosChecklistResumen.completados}</p>
+                </div>
+                <div className="rounded-lg border bg-muted/20 p-4">
+                  <p className="text-sm font-medium text-muted-foreground">Datos pendientes</p>
+                  <p className="text-2xl font-semibold">
+                    {datosChecklistResumen.total - datosChecklistResumen.completados}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-muted/20 p-4">
+                  <p className="text-sm font-medium text-muted-foreground">Total de datos</p>
+                  <p className="text-2xl font-semibold">{datosChecklistResumen.total}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Avance del checklist</span>
+                  <span className="text-sm font-semibold">{datosChecklistResumen.progreso}%</span>
+                </div>
+                <Progress value={datosChecklistResumen.progreso} className="h-2" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-6">
+            {datosAltaRegistro.map((section) => {
+              const completados = section.fields.filter(
+                (field) => datosChecklistState[field.id]?.completed,
+              ).length
+              const progresoSeccion = Math.round((completados / section.fields.length) * 100)
+              const Icon = section.icon
+
+              return (
+                <Card key={section.id}>
+                  <CardHeader>
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div className="space-y-2">
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                          <Icon className="h-5 w-5 text-primary" />
+                          {section.title}
+                        </CardTitle>
+                        <CardDescription>{section.description}</CardDescription>
+                      </div>
+                      <div className="space-y-2 text-right">
+                        <Badge variant="outline">
+                          {completados} de {section.fields.length} datos
+                        </Badge>
+                        <Progress value={progresoSeccion} className="ml-auto h-2 w-32" />
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {section.fields.map((field) => (
+                      <div
+                        key={field.id}
+                        className="space-y-3 rounded-lg border border-dashed bg-muted/30 p-4"
+                      >
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            id={`dato-${field.id}`}
+                            checked={datosChecklistState[field.id]?.completed ?? false}
+                            onCheckedChange={(checked) =>
+                              actualizarEstatusDatoChecklist(field.id, checked === true)
+                            }
+                            className="mt-1"
+                          />
+                          <div className="flex-1 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Label htmlFor={`dato-${field.id}`} className="font-medium">
+                                {field.label}
+                              </Label>
+                              <Badge variant={field.required ? "default" : "secondary"}>
+                                {field.required ? "Obligatorio" : "Opcional"}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{field.description}</p>
+                            {field.tips && field.tips.length > 0 && (
+                              <ul className="ml-5 list-disc space-y-1 text-xs text-muted-foreground">
+                                {field.tips.map((tip) => (
+                                  <li key={tip}>{tip}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                        <div className="ml-7 space-y-2">
+                          <Label
+                            htmlFor={`dato-notas-${field.id}`}
+                            className="text-xs font-semibold uppercase text-muted-foreground"
+                          >
+                            Notas y referencias
+                          </Label>
+                          <Textarea
+                            id={`dato-notas-${field.id}`}
+                            value={datosChecklistState[field.id]?.notes ?? ""}
+                            onChange={(event) =>
+                              actualizarNotasDatoChecklist(field.id, event.target.value)
+                            }
+                            placeholder="Anota folios, responsables, ubicaciones de archivos o comentarios relevantes."
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
         </TabsContent>
 
         {/* Tab: Carga Documental */}
