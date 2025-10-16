@@ -18,7 +18,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { useToast } from "@/components/ui/use-toast"
-import { CheckCircle2, Globe2, MapPin, ShieldCheck, UserCheck } from "lucide-react"
+import {
+  Building2,
+  CalendarDays,
+  CheckCircle2,
+  FileText,
+  Globe2,
+  Mail,
+  MapPin,
+  Phone,
+  PlayCircle,
+  Plus,
+  ShieldAlert,
+  ShieldCheck,
+  Trash2,
+  UserCheck,
+  Users,
+} from "lucide-react"
+import { CLIENTE_TIPOS, findClienteTipoLabel, findClienteTipoOption } from "@/lib/data/tipos-cliente"
 
 const IDENTIFICACION_CAMPOS = [
   {
@@ -124,17 +141,6 @@ type RiskValue = (typeof RISK_LEVELS)[number]["value"]
 
 const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
 
-const CLIENTE_TIPO_MAP: Record<string, string> = {
-  pfn: "Persona física mexicana",
-  pfe: "Persona física extranjera",
-  pmn: "Persona moral mexicana",
-  pme: "Persona moral extranjera",
-  fideicomiso: "Fideicomiso",
-  dependencia: "Dependencia o entidad pública",
-  vehiculo: "Vehículo corporativo",
-  otro: "Otro sujeto obligado",
-}
-
 function normalizeText(value: string) {
   return value
     .normalize("NFD")
@@ -162,6 +168,126 @@ const CLIENTE_COLORES: Record<RiskValue, string> = {
   alto: "bg-rose-500",
 }
 
+const MESES_AVISO = [
+  { value: "01", label: "Enero" },
+  { value: "02", label: "Febrero" },
+  { value: "03", label: "Marzo" },
+  { value: "04", label: "Abril" },
+  { value: "05", label: "Mayo" },
+  { value: "06", label: "Junio" },
+  { value: "07", label: "Julio" },
+  { value: "08", label: "Agosto" },
+  { value: "09", label: "Septiembre" },
+  { value: "10", label: "Octubre" },
+  { value: "11", label: "Noviembre" },
+  { value: "12", label: "Diciembre" },
+]
+
+const ALERTA_OPCIONES = [
+  "SIN ALERTA",
+  "Operación inusual",
+  "Operación relevante",
+  "Operación interna preocupante",
+]
+
+const PERSONA_TIPO_OPCIONES = [
+  { value: "persona_moral", label: "Persona moral" },
+  { value: "persona_fisica", label: "Persona física" },
+]
+
+const DOMICILIO_TIPOS = [
+  { value: "nacional", label: "Nacional" },
+  { value: "extranjero", label: "Extranjera" },
+]
+
+type RespuestaBinaria = "si" | "no"
+
+interface PersonaReportada {
+  id: string
+  tipo: (typeof PERSONA_TIPO_OPCIONES)[number]["value"]
+  denominacion: string
+  fechaConstitucion: string
+  rfc: string
+  pais: string
+  giro: string
+  representante: {
+    nombre: string
+    apellidoPaterno: string
+    apellidoMaterno: string
+    fechaNacimiento: string
+    rfc: string
+    curp: string
+  }
+  domicilio: {
+    ambito: (typeof DOMICILIO_TIPOS)[number]["value"]
+    pais: string
+    entidad: string
+    municipio: string
+    colonia: string
+    codigoPostal: string
+    calle: string
+    numeroExterior: string
+    numeroInterior: string
+  }
+  contacto: {
+    conoceTelefono: RespuestaBinaria
+    conocePaisTelefono: RespuestaBinaria
+    clavePais: string
+    telefono: string
+    correo: string
+  }
+  alerta: {
+    motivo: string
+    descripcion: string
+  }
+}
+
+function generarIdTemporal() {
+  return Math.random().toString(36).slice(2, 10)
+}
+
+function crearPersonaBase(): PersonaReportada {
+  return {
+    id: generarIdTemporal(),
+    tipo: "persona_moral",
+    denominacion: "",
+    fechaConstitucion: "",
+    rfc: "",
+    pais: "MEXICO",
+    giro: "",
+    representante: {
+      nombre: "",
+      apellidoPaterno: "",
+      apellidoMaterno: "",
+      fechaNacimiento: "",
+      rfc: "",
+      curp: "",
+    },
+    domicilio: {
+      ambito: "nacional",
+      pais: "México",
+      entidad: "",
+      municipio: "",
+      colonia: "",
+      codigoPostal: "",
+      calle: "",
+      numeroExterior: "",
+      numeroInterior: "",
+    },
+    contacto: {
+      conoceTelefono: "si",
+      conocePaisTelefono: "si",
+      clavePais: "MEXICO",
+      telefono: "",
+      correo: "",
+    },
+    alerta: {
+      motivo: ALERTA_OPCIONES[0] ?? "SIN ALERTA",
+      descripcion: "",
+    },
+  }
+}
+
 export default function KycExpedientePage() {
   return (
     <Suspense
@@ -180,12 +306,57 @@ export default function KycExpedientePage() {
 function KycExpedienteContent() {
   const { toast } = useToast()
   const searchParams = useSearchParams()
-  const [tipoCliente, setTipoCliente] = useState("Persona física mexicana")
+  const [tipoCliente, setTipoCliente] = useState<string>(CLIENTE_TIPOS[0]?.value ?? "")
+  const [detalleTipoCliente, setDetalleTipoCliente] = useState<string>("")
   const [responsable, setResponsable] = useState("")
+  const [nombreExpediente, setNombreExpediente] = useState("")
+  const [claveSujetoObligado, setClaveSujetoObligado] = useState("")
+  const [claveActividadVulnerable, setClaveActividadVulnerable] = useState("")
+  const [periodoAviso, setPeriodoAviso] = useState<{ mes: string; anio: string }>({ mes: "", anio: "" })
+  const [mesAviso, setMesAviso] = useState("")
+  const [reportaOperaciones, setReportaOperaciones] = useState<RespuestaBinaria>("no")
+  const [grupoEmpresarial, setGrupoEmpresarial] = useState<RespuestaBinaria>("no")
   const [datosIdentificacion, setDatosIdentificacion] = useState<Record<string, string>>({})
   const [respuestas, setRespuestas] = useState<Record<string, FactorRespuesta>>({})
   const [alertas, setAlertas] = useState<AlertaRiesgo[]>([])
+  const [personasReportadas, setPersonasReportadas] = useState<PersonaReportada[]>(() => [crearPersonaBase()])
   const [alertaSeleccionada, setAlertaSeleccionada] = useState<AlertaRiesgo | null>(null)
+
+  const tipoClienteSeleccionado = useMemo(() => findClienteTipoOption(tipoCliente), [tipoCliente])
+  const tipoClienteLabel = useMemo(() => findClienteTipoLabel(tipoCliente), [tipoCliente])
+  const tipoClienteResumen = useMemo(
+    () => (detalleTipoCliente ? `${tipoClienteLabel} – ${detalleTipoCliente}` : tipoClienteLabel),
+    [detalleTipoCliente, tipoClienteLabel],
+  )
+  const mesAvisoDescripcion = useMemo(() => {
+    if (!periodoAviso.anio || !periodoAviso.mes) return ""
+    const mes = MESES_AVISO.find((item) => item.value === periodoAviso.mes)
+    return mes ? `${mes.label} ${periodoAviso.anio}` : periodoAviso.anio
+  }, [periodoAviso])
+
+  useEffect(() => {
+    if (periodoAviso.anio && periodoAviso.mes) {
+      setMesAviso(`${periodoAviso.anio}${periodoAviso.mes}`)
+    } else {
+      setMesAviso("")
+    }
+  }, [periodoAviso])
+
+  useEffect(() => {
+    if (!tipoClienteSeleccionado?.requiresDetalle) {
+      setDetalleTipoCliente("")
+      return
+    }
+
+    if (tipoClienteSeleccionado.detalleOpciones) {
+      setDetalleTipoCliente((prev) => {
+        if (tipoClienteSeleccionado.detalleOpciones?.some((option) => option.value === prev)) {
+          return prev
+        }
+        return ""
+      })
+    }
+  }, [tipoClienteSeleccionado])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -201,6 +372,7 @@ function KycExpedienteContent() {
         rfc?: string
         nombre?: string
         tipoCliente?: string
+        detalleTipoCliente?: string
       }>
 
       const criterio = normalizeText(parametro)
@@ -221,9 +393,22 @@ function KycExpedienteContent() {
       }
 
       const tipoGuardado = typeof coincidencia.tipoCliente === "string" ? coincidencia.tipoCliente : ""
-      const tipoLabel = CLIENTE_TIPO_MAP[tipoGuardado] ?? tipoGuardado
-      if (tipoLabel) {
-        setTipoCliente(tipoLabel)
+      const detalleGuardado =
+        typeof coincidencia.detalleTipoCliente === "string" ? coincidencia.detalleTipoCliente : ""
+      const tipoDetectado = findClienteTipoOption(tipoGuardado)
+      if (tipoDetectado) {
+        setTipoCliente(tipoDetectado.value)
+        if (tipoDetectado.requiresDetalle) {
+          if (tipoDetectado.detalleOpciones) {
+            setDetalleTipoCliente(
+              tipoDetectado.detalleOpciones.some((detalle) => detalle.value === detalleGuardado)
+                ? detalleGuardado
+                : "",
+            )
+          } else {
+            setDetalleTipoCliente(detalleGuardado)
+          }
+        }
       }
 
       setDatosIdentificacion((prev) => ({
@@ -231,6 +416,9 @@ function KycExpedienteContent() {
         nombre: typeof coincidencia.nombre === "string" ? coincidencia.nombre : prev.nombre ?? "",
         rfc: typeof coincidencia.rfc === "string" ? coincidencia.rfc : prev.rfc ?? "",
       }))
+      if (typeof coincidencia.nombre === "string") {
+        setNombreExpediente(coincidencia.nombre)
+      }
 
       toast({
         title: "Cliente sincronizado",
@@ -240,6 +428,42 @@ function KycExpedienteContent() {
       console.error("No fue posible sincronizar el cliente desde actividades vulnerables", error)
     }
   }, [searchParams, toast])
+
+  const actualizarPersonaReportada = (
+    id: string,
+    updater: (persona: PersonaReportada) => PersonaReportada,
+  ) => {
+    setPersonasReportadas((prev) => prev.map((persona) => (persona.id === id ? updater(persona) : persona)))
+  }
+
+  const agregarPersonaReportada = () => {
+    const nuevaPersona = crearPersonaBase()
+    setPersonasReportadas((prev) => [...prev, nuevaPersona])
+    toast({
+      title: "Persona añadida",
+      description: "Se creó un espacio adicional para capturar otra persona reportada.",
+    })
+  }
+
+  const eliminarPersonaReportada = (id: string) => {
+    setPersonasReportadas((prev) => {
+      if (prev.length <= 1) {
+        toast({
+          title: "Acción no disponible",
+          description: "Debes conservar al menos una persona reportada en el aviso.",
+          variant: "destructive",
+        })
+        return prev
+      }
+
+      const actualizadas = prev.filter((persona) => persona.id !== id)
+      toast({
+        title: "Persona eliminada",
+        description: "Se retiró la persona del aviso mensual.",
+      })
+      return actualizadas
+    })
+  }
 
   const nivelIdentificacion = useMemo<RiskValue>(() => {
     const totalCampos = IDENTIFICACION_CAMPOS.flatMap((grupo) => grupo.campos).length
@@ -362,8 +586,12 @@ function KycExpedienteContent() {
               Clasificación automática para identificación y conocimiento del cliente bajo el enfoque basado en riesgo (EBR).
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-              <Badge variant="secondary">{tipoCliente}</Badge>
+              {tipoClienteResumen && <Badge variant="secondary">{tipoClienteResumen}</Badge>}
               {responsable && <Badge variant="outline">Responsable: {responsable}</Badge>}
+              {mesAviso && <Badge variant="outline">Periodo: {mesAviso}</Badge>}
+              <Badge variant="outline" className="capitalize">
+                Operaciones: {reportaOperaciones === "si" ? "Se reportan" : "Sin operaciones"}
+              </Badge>
               <Badge className={CLIENTE_COLORES[nivelIntegral] + " text-white"}>{bandaActual.label}</Badge>
             </div>
           </div>
@@ -377,6 +605,150 @@ function KycExpedienteContent() {
           </div>
         </div>
       </section>
+
+      <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5 text-slate-600" /> Datos del aviso mensual
+          </CardTitle>
+          <CardDescription>
+            Captura los campos obligatorios del expediente único para preparar el envío ante la UIF.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Nombre, denominación o razón social</Label>
+              <Input
+                value={nombreExpediente}
+                onChange={(event) => {
+                  const value = event.target.value
+                  setNombreExpediente(value)
+                  setDatosIdentificacion((prev) => ({ ...prev, nombre: value }))
+                }}
+                placeholder="Ej. Grupo Empresarial del Norte, S.A. de C.V."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Clave de quien realiza la actividad vulnerable</Label>
+              <Input
+                value={claveSujetoObligado}
+                onChange={(event) => setClaveSujetoObligado(event.target.value.toUpperCase())}
+                placeholder="Ej. CL123456"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Clave de la actividad vulnerable</Label>
+              <Input
+                value={claveActividadVulnerable}
+                onChange={(event) => setClaveActividadVulnerable(event.target.value.toUpperCase())}
+                placeholder="Ej. I11"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Mes al que corresponde el aviso</Label>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr),auto]">
+                <Select
+                  value={periodoAviso.mes || undefined}
+                  onValueChange={(value) => setPeriodoAviso((prev) => ({ ...prev, mes: value }))}
+                >
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Selecciona el mes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MESES_AVISO.map((mes) => (
+                      <SelectItem key={mes.value} value={mes.value}>
+                        {mes.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  value={periodoAviso.anio}
+                  onChange={(event) => {
+                    const value = event.target.value.replace(/[^0-9]/g, "").slice(0, 4)
+                    setPeriodoAviso((prev) => ({ ...prev, anio: value }))
+                  }}
+                  placeholder="Año"
+                  inputMode="numeric"
+                  maxLength={4}
+                  className="bg-white"
+                />
+              </div>
+              {(mesAvisoDescripcion || mesAviso) && (
+                <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <CalendarDays className="h-4 w-4" />
+                  {mesAvisoDescripcion || "Selecciona mes y año"}
+                  {mesAviso && (
+                    <Badge variant="outline" className="font-mono">
+                      {mesAviso}
+                    </Badge>
+                  )}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <Label>¿Se van a reportar operaciones?</Label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: "no" as RespuestaBinaria, label: "No, informe sin operaciones" },
+                { value: "si" as RespuestaBinaria, label: "Sí, capturar operaciones" },
+              ].map((option) => (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={reportaOperaciones === option.value ? "default" : "outline"}
+                  onClick={() => setReportaOperaciones(option.value)}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Selecciona «Sí» cuando el aviso mensual incluirá operaciones relevantes, inusuales o internas preocupantes.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <Label>¿Pertenece al mismo grupo empresarial?</Label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: "si" as RespuestaBinaria, label: "Sí" },
+                { value: "no" as RespuestaBinaria, label: "No" },
+              ].map((option) => (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={grupoEmpresarial === option.value ? "default" : "outline"}
+                  onClick={() => setGrupoEmpresarial(option.value)}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Esta respuesta determina si aplica el envío en ceros del artículo 27 Bis para entidades del mismo grupo.
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
+            <p className="flex items-center gap-2 font-semibold text-amber-900">
+              <ShieldAlert className="h-4 w-4" /> ¿El envío del informe corresponde al artículo 27 Bis de las Reglas de Carácter
+              General de la LFPIORPI?
+            </p>
+            <p className="mt-2">
+              {grupoEmpresarial === "si"
+                ? "Sí. Al pertenecer al mismo grupo empresarial procede el informe 27 Bis en ceros por las operaciones del periodo."
+                : "No. Debe presentarse el aviso individual detallando las operaciones realizadas en el periodo."}
+            </p>
+            <p className="mt-2 text-[11px] text-amber-700">
+              Puedes actualizar la respuesta desde el apartado de grupo empresarial para mantener coherencia en el expediente.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <section className="grid gap-6 lg:grid-cols-[1.3fr,1fr]">
         <Card className="border-slate-200">
@@ -392,21 +764,62 @@ function KycExpedienteContent() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Tipo de cliente</Label>
-                <Select value={tipoCliente} onValueChange={setTipoCliente}>
+                <Select
+                  value={tipoCliente}
+                  onValueChange={(value) => {
+                    setTipoCliente(value)
+                  }}
+                >
                   <SelectTrigger className="bg-white">
                     <SelectValue placeholder="Selecciona tipo de cliente" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Persona física mexicana">Persona física mexicana</SelectItem>
-                    <SelectItem value="Persona física extranjera">Persona física extranjera</SelectItem>
-                    <SelectItem value="Persona moral mexicana">Persona moral mexicana</SelectItem>
-                    <SelectItem value="Persona moral extranjera">Persona moral extranjera</SelectItem>
-                    <SelectItem value="Fideicomiso">Fideicomiso</SelectItem>
-                    <SelectItem value="Dependencia o entidad pública">Dependencia o entidad pública</SelectItem>
-                    <SelectItem value="Vehículo corporativo">Vehículo corporativo</SelectItem>
-                    <SelectItem value="Otro sujeto obligado">Otro sujeto obligado</SelectItem>
+                    {CLIENTE_TIPOS.map((opcion) => (
+                      <SelectItem key={opcion.value} value={opcion.value}>
+                        {opcion.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {tipoClienteSeleccionado?.requiresDetalle && (
+                  <div className="space-y-2 text-sm">
+                    <Label>{tipoClienteSeleccionado.detalleLabel ?? "Detalle del tipo de cliente"}</Label>
+                    {tipoClienteSeleccionado.detalleOpciones ? (
+                      <Select
+                        value={detalleTipoCliente || undefined}
+                        onValueChange={setDetalleTipoCliente}
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue
+                            placeholder={
+                              tipoClienteSeleccionado.detallePlaceholder ??
+                              "Selecciona la opción que corresponda"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tipoClienteSeleccionado.detalleOpciones.map((detalle) => (
+                            <SelectItem key={detalle.value} value={detalle.value}>
+                              {detalle.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={detalleTipoCliente}
+                        onChange={(event) => setDetalleTipoCliente(event.target.value)}
+                        placeholder={
+                          tipoClienteSeleccionado.detallePlaceholder ??
+                          "Describe la entidad o figura jurídica"
+                        }
+                      />
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Ajusta el detalle conforme al catálogo de sujetos obligados o dependencias aplicables.
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Responsable del expediente</Label>
@@ -434,9 +847,13 @@ function KycExpedienteContent() {
                         </Label>
                         <Input
                           value={datosIdentificacion[campo.id] ?? ""}
-                          onChange={(event) =>
-                            setDatosIdentificacion((prev) => ({ ...prev, [campo.id]: event.target.value }))
-                          }
+                          onChange={(event) => {
+                            const value = event.target.value
+                            setDatosIdentificacion((prev) => ({ ...prev, [campo.id]: value }))
+                            if (campo.id === "nombre") {
+                              setNombreExpediente(value)
+                            }
+                          }}
                           placeholder="Captura información o referencia documental"
                         />
                       </div>
@@ -496,6 +913,560 @@ function KycExpedienteContent() {
           </CardContent>
         </Card>
       </section>
+
+      <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-slate-600" /> Datos de identificación de la(s) persona(s) objeto del aviso
+          </CardTitle>
+          <CardDescription>
+            Captura los datos del cliente, su representante y la información de contacto para integrar el expediente en línea con
+            el SAT.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-xs text-slate-600">
+            <p>
+              Instrucciones: captura los datos del cliente o usuario (persona física, moral o fideicomiso) con quien se realizó la
+              operación. Si debes reportar más de una persona, utiliza el botón «Agregar persona reportada».
+            </p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="flex items-center gap-1"
+                onClick={() =>
+                  toast({
+                    title: "Videotutorial",
+                    description: "Próximamente podrás consultar el tutorial paso a paso dentro del portal.",
+                  })
+                }
+              >
+                <PlayCircle className="h-4 w-4" /> Videotutorial
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="link"
+                className="px-0"
+                onClick={() =>
+                  toast({
+                    title: "¿Qué es una alerta?",
+                    description:
+                      "Es una señal que indica operaciones inusuales, relevantes o internas preocupantes que deben analizarse y, en su caso, reportarse.",
+                    duration: 6000,
+                  })
+                }
+              >
+                ¿Qué es una alerta?
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {personasReportadas.map((persona, index) => {
+              const esPersonaMoral = persona.tipo === "persona_moral"
+              const etiquetaDenominacion = esPersonaMoral ? "Denominación o razón social" : "Nombre(s)"
+              const etiquetaFecha = esPersonaMoral ? "Fecha de constitución" : "Fecha de nacimiento"
+              const puedeEliminar = personasReportadas.length > 1
+
+              return (
+                <div key={persona.id} className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-800">Persona reportada #{index + 1}</p>
+                      <p className="text-xs text-muted-foreground">Completa la información conforme al formato oficial de avisos.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="capitalize">
+                        {persona.tipo === "persona_moral" ? "Persona moral" : "Persona física"}
+                      </Badge>
+                      <Badge variant="outline" className="uppercase">{persona.alerta.motivo}</Badge>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => eliminarPersonaReportada(persona.id)}
+                        disabled={!puedeEliminar}
+                        aria-label="Eliminar persona reportada"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                        <Building2 className="h-4 w-4" /> Datos de la persona reportada
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>¿El cliente o usuario objeto del presente aviso es?</Label>
+                          <Select
+                            value={persona.tipo}
+                            onValueChange={(value) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                tipo: value as PersonaReportada["tipo"],
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PERSONA_TIPO_OPCIONES.map((opcion) => (
+                                <SelectItem key={opcion.value} value={opcion.value}>
+                                  {opcion.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{etiquetaDenominacion}</Label>
+                          <Input
+                            value={persona.denominacion}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                denominacion: event.target.value,
+                              }))
+                            }
+                            placeholder={esPersonaMoral ? "Ej. Johnson Controls ASC Systems" : "Ej. Minerva Mireya"}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{etiquetaFecha}</Label>
+                          <Input
+                            type="date"
+                            value={persona.fechaConstitucion}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                fechaConstitucion: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Registro Federal de Contribuyentes</Label>
+                          <Input
+                            value={persona.rfc}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                rfc: event.target.value.toUpperCase(),
+                              }))
+                            }
+                            placeholder="Ej. AME8307251NA"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>País de nacionalidad</Label>
+                          <Input
+                            value={persona.pais}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                pais: event.target.value,
+                              }))
+                            }
+                            placeholder="Ej. México"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Giro mercantil</Label>
+                          <Input
+                            value={persona.giro}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                giro: event.target.value,
+                              }))
+                            }
+                            placeholder="Ej. Industria - Maquinaria y equipo"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                        <UserCheck className="h-4 w-4" /> Datos del representante o apoderado legal
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>Nombre(s)</Label>
+                          <Input
+                            value={persona.representante.nombre}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                representante: { ...prev.representante, nombre: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Apellido paterno</Label>
+                          <Input
+                            value={persona.representante.apellidoPaterno}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                representante: { ...prev.representante, apellidoPaterno: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Apellido materno</Label>
+                          <Input
+                            value={persona.representante.apellidoMaterno}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                representante: { ...prev.representante, apellidoMaterno: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Fecha de nacimiento</Label>
+                          <Input
+                            type="date"
+                            value={persona.representante.fechaNacimiento}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                representante: { ...prev.representante, fechaNacimiento: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>RFC</Label>
+                          <Input
+                            value={persona.representante.rfc}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                representante: { ...prev.representante, rfc: event.target.value.toUpperCase() },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>CURP</Label>
+                          <Input
+                            value={persona.representante.curp}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                representante: { ...prev.representante, curp: event.target.value.toUpperCase() },
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                        <MapPin className="h-4 w-4" /> Domicilio de la persona reportada
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {DOMICILIO_TIPOS.map((opcion) => (
+                          <Button
+                            key={opcion.value}
+                            type="button"
+                            variant={persona.domicilio.ambito === opcion.value ? "default" : "outline"}
+                            onClick={() =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                domicilio: {
+                                  ...prev.domicilio,
+                                  ambito: opcion.value,
+                                  pais: opcion.value === "nacional" ? "México" : prev.domicilio.pais,
+                                },
+                              }))
+                            }
+                          >
+                            {opcion.label}
+                          </Button>
+                        ))}
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>País</Label>
+                          <Input
+                            value={persona.domicilio.pais}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                domicilio: { ...prev.domicilio, pais: event.target.value },
+                              }))
+                            }
+                            disabled={persona.domicilio.ambito === "nacional"}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Entidad federativa</Label>
+                          <Input
+                            value={persona.domicilio.entidad}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                domicilio: { ...prev.domicilio, entidad: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Delegación o municipio</Label>
+                          <Input
+                            value={persona.domicilio.municipio}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                domicilio: { ...prev.domicilio, municipio: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Colonia</Label>
+                          <Input
+                            value={persona.domicilio.colonia}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                domicilio: { ...prev.domicilio, colonia: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Código postal</Label>
+                          <Input
+                            value={persona.domicilio.codigoPostal}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                domicilio: { ...prev.domicilio, codigoPostal: event.target.value.replace(/[^0-9]/g, "") },
+                              }))
+                            }
+                            inputMode="numeric"
+                            maxLength={10}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Calle, avenida o vía</Label>
+                          <Input
+                            value={persona.domicilio.calle}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                domicilio: { ...prev.domicilio, calle: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Número exterior</Label>
+                          <Input
+                            value={persona.domicilio.numeroExterior}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                domicilio: { ...prev.domicilio, numeroExterior: event.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Número interior</Label>
+                          <Input
+                            value={persona.domicilio.numeroInterior}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                domicilio: { ...prev.domicilio, numeroInterior: event.target.value },
+                              }))
+                            }
+                            placeholder="Opcional"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                        <Phone className="h-4 w-4" /> Contacto y notificaciones
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>¿Conoce el teléfono de la persona reportada?</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { value: "si" as RespuestaBinaria, label: "Sí" },
+                              { value: "no" as RespuestaBinaria, label: "No" },
+                            ].map((option) => (
+                              <Button
+                                key={option.value}
+                                type="button"
+                                variant={persona.contacto.conoceTelefono === option.value ? "default" : "outline"}
+                                onClick={() =>
+                                  actualizarPersonaReportada(persona.id, (prev) => ({
+                                    ...prev,
+                                    contacto: {
+                                      ...prev.contacto,
+                                      conoceTelefono: option.value,
+                                      telefono: option.value === "no" ? "" : prev.contacto.telefono,
+                                    },
+                                  }))
+                                }
+                              >
+                                {option.label}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>¿Conoce el país del número telefónico?</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { value: "si" as RespuestaBinaria, label: "Sí" },
+                              { value: "no" as RespuestaBinaria, label: "No" },
+                            ].map((option) => (
+                              <Button
+                                key={option.value}
+                                type="button"
+                                variant={persona.contacto.conocePaisTelefono === option.value ? "default" : "outline"}
+                                onClick={() =>
+                                  actualizarPersonaReportada(persona.id, (prev) => ({
+                                    ...prev,
+                                    contacto: {
+                                      ...prev.contacto,
+                                      conocePaisTelefono: option.value,
+                                      clavePais: option.value === "no" ? "" : prev.contacto.clavePais,
+                                    },
+                                  }))
+                                }
+                              >
+                                {option.label}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>Clave del país del número telefónico</Label>
+                          <Input
+                            value={persona.contacto.clavePais}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                contacto: { ...prev.contacto, clavePais: event.target.value },
+                              }))
+                            }
+                            disabled={persona.contacto.conocePaisTelefono === "no"}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Número telefónico</Label>
+                          <Input
+                            value={persona.contacto.telefono}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                contacto: {
+                                  ...prev.contacto,
+                                  telefono: event.target.value.replace(/[^0-9]/g, ""),
+                                },
+                              }))
+                            }
+                            disabled={persona.contacto.conoceTelefono === "no"}
+                            inputMode="numeric"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-2">
+                            <Mail className="h-4 w-4" /> Correo electrónico
+                          </Label>
+                          <Input
+                            type="email"
+                            value={persona.contacto.correo}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                contacto: { ...prev.contacto, correo: event.target.value },
+                              }))
+                            }
+                            placeholder="correo@dominio.com"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                        <ShieldCheck className="h-4 w-4" /> Alertas relacionadas con el aviso
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Alerta por la que realiza el aviso</Label>
+                          <Select
+                            value={persona.alerta.motivo}
+                            onValueChange={(value) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                alerta: { ...prev.alerta, motivo: value },
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ALERTA_OPCIONES.map((opcion) => (
+                                <SelectItem key={opcion} value={opcion}>
+                                  {opcion}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Descripción de la alerta</Label>
+                          <Textarea
+                            value={persona.alerta.descripcion}
+                            onChange={(event) =>
+                              actualizarPersonaReportada(persona.id, (prev) => ({
+                                ...prev,
+                                alerta: { ...prev.alerta, descripcion: event.target.value },
+                              }))
+                            }
+                            placeholder="Describe el contexto, señales detectadas y acciones tomadas."
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <Button type="button" variant="outline" className="w-full md:w-auto" onClick={agregarPersonaReportada}>
+            <Plus className="mr-2 h-4 w-4" /> Agregar persona reportada
+          </Button>
+        </CardContent>
+      </Card>
 
       <section className="grid gap-6 lg:grid-cols-[1.3fr,1fr]">
         <Card className="border-slate-200">
