@@ -557,6 +557,7 @@ const START_WINDOW = new Date(2020, 8, 1) // septiembre 2020
 const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
 const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
 const NUEVO_CLIENTE_VALUE = "__nuevo__"
+const MANUAL_EXPEDIENTE_VALUE = "__manual__"
 
 function normalizarTipoCliente(value: string) {
   const option = CLIENTE_TIPOS.find((tipo) => tipo.value === value)
@@ -1307,7 +1308,7 @@ export default function ActividadesVulnerablesPage() {
   const [evidencia, setEvidencia] = useState<string>("")
   const [expedientesDetalle, setExpedientesDetalle] = useState<Record<string, ExpedienteDetalle>>({})
   const [expedientesListo, setExpedientesListo] = useState(false)
-  const [expedienteSeleccionado, setExpedienteSeleccionado] = useState<string>("")
+  const [expedienteSeleccionado, setExpedienteSeleccionado] = useState<string | null>(null)
   const [personaExpedienteSeleccionada, setPersonaExpedienteSeleccionada] = useState<string>("")
   const [personaAvisoActual, setPersonaAvisoActual] = useState<PersonaAvisoOperacion | null>(null)
   const [codigoOperacionInmueble, setCodigoOperacionInmueble] = useState<string>("")
@@ -2436,7 +2437,7 @@ const agregarOperacion = () => {
     prioridadAviso: esActividadInmuebles ? prioridadAviso : undefined,
     claveSujetoObligado: claveSujetoObligado.trim() || undefined,
     claveActividadVulnerable: claveActividad.trim() || undefined,
-    expedienteReferenciado: expedienteSeleccionado || undefined,
+    expedienteReferenciado: expedienteSeleccionado ?? undefined,
     personaExpedienteId: personaExpedienteSeleccionada || undefined,
     personaAviso: personaAvisoSnapshot ?? null,
     inmueble: inmuebleOperacion,
@@ -3572,20 +3573,23 @@ const cambiarMesCalendario = (delta: number) => {
                       <div className="space-y-2">
                         <Label>Expediente relacionado</Label>
                         <Select
-                          value={expedienteSeleccionado || undefined}
+                          value={expedienteSeleccionado ?? undefined}
                           onValueChange={(value) => {
-                            setExpedienteSeleccionado(value)
-                            if (!value) {
+                            if (value === MANUAL_EXPEDIENTE_VALUE) {
+                              setExpedienteSeleccionado(null)
                               setPersonaExpedienteSeleccionada("")
                               setPersonaAvisoActual(null)
+                              return
                             }
+
+                            setExpedienteSeleccionado(value)
                           }}
                         >
                           <SelectTrigger className="bg-white">
                             <SelectValue placeholder="Selecciona expediente" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Capturar manualmente</SelectItem>
+                            <SelectItem value={MANUAL_EXPEDIENTE_VALUE}>Capturar manualmente</SelectItem>
                             {expedientesDisponibles.map((expediente) => (
                               <SelectItem key={expediente.rfc} value={expediente.rfc}>
                                 {expediente.nombre ?? expediente.rfc}
