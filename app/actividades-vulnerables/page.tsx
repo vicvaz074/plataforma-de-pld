@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react"
+import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,7 +62,8 @@ import { actividadesVulnerables } from "@/lib/data/actividades"
 import { normativasMonitoreo } from "@/lib/data/normativas"
 import { UMA_MONTHS, findUmaByMonthYear } from "@/lib/data/uma"
 import { CLIENTE_TIPOS, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
-import { CODIGOS_POSTALES, findCodigoPostalInfo } from "@/lib/data/codigos-postales"
+import { CIUDADES_MEXICO, findCodigoPostalInfo } from "@/lib/data/codigos-postales"
+import { demoFraccionXV } from "@/lib/demo/fraccion-xv"
 import { PAISES, findPaisByCodigo, findPaisByNombre } from "@/lib/data/paises"
 
 const MONTHS = [
@@ -81,6 +82,14 @@ const MONTHS = [
 ]
 
 const WEEK_DAYS = ["L", "M", "M", "J", "V", "S", "D"]
+
+function normalizarBusqueda(valor: string) {
+  return valor
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim()
+}
 
 const LEGACY_CLIENTE_TIPO_MAP: Record<string, ClienteTipoOption["value"]> = {
   pfn: "pf_residente",
@@ -179,6 +188,7 @@ const INMUEBLE_FORM_DEFAULT: DatosInmuebleFormState = {
   pais: "MX",
   entidad: "",
   municipio: "",
+  ciudad: "",
   colonia: "",
   codigoPostal: "",
   calle: "",
@@ -302,6 +312,7 @@ interface DomicilioAviso {
   pais?: string
   entidad?: string
   municipio?: string
+  ciudad?: string
   colonia?: string
   codigoPostal?: string
   calle?: string
@@ -340,6 +351,7 @@ interface DatosInmuebleOperacion {
   pais: string
   entidad: string
   municipio: string
+  ciudad?: string
   colonia: string
   codigoPostal: string
   calle: string
@@ -394,6 +406,7 @@ interface DatosInmuebleFormState {
   pais: string
   entidad: string
   municipio: string
+  ciudad: string
   colonia: string
   codigoPostal: string
   calle: string
@@ -945,6 +958,7 @@ function sanitizeExpedientePersona(raw: any): ExpedientePersona | null {
               : undefined,
           entidad: typeof domicilioRaw.entidad === "string" ? domicilioRaw.entidad : undefined,
           municipio: typeof domicilioRaw.municipio === "string" ? domicilioRaw.municipio : undefined,
+          ciudad: typeof domicilioRaw.ciudad === "string" ? domicilioRaw.ciudad : undefined,
           colonia: typeof domicilioRaw.colonia === "string" ? domicilioRaw.colonia : undefined,
           codigoPostal: typeof domicilioRaw.codigoPostal === "string" ? domicilioRaw.codigoPostal : undefined,
           calle: typeof domicilioRaw.calle === "string" ? domicilioRaw.calle : undefined,
@@ -1186,6 +1200,7 @@ function sanitizeInmueble(raw: any): DatosInmuebleOperacion | null {
     pais: typeof raw.pais === "string" ? raw.pais : "MX",
     entidad: typeof raw.entidad === "string" ? raw.entidad : "",
     municipio: typeof raw.municipio === "string" ? raw.municipio : "",
+    ciudad: typeof raw.ciudad === "string" ? raw.ciudad : undefined,
     colonia: typeof raw.colonia === "string" ? raw.colonia : "",
     codigoPostal,
     calle: typeof raw.calle === "string" ? raw.calle : "",
@@ -1379,6 +1394,11 @@ export default function ActividadesVulnerablesPage() {
     archivoContenido: "",
     fechaRegistro: new Date().toISOString().substring(0, 10),
   })
+  const [busquedaActividad, setBusquedaActividad] = useState("")
+  const [busquedaClienteGuardado, setBusquedaClienteGuardado] = useState("")
+  const [busquedaCiudadInmueble, setBusquedaCiudadInmueble] = useState("")
+  const [busquedaColoniaInmueble, setBusquedaColoniaInmueble] = useState("")
+  const demoCargaRef = useRef(false)
 
   const actualizarInmuebleForm = useCallback(
     (campo: keyof DatosInmuebleFormState, valor: string) => {
@@ -1800,6 +1820,7 @@ export default function ActividadesVulnerablesPage() {
         pais: INMUEBLE_FORM_DEFAULT.pais,
         entidad: "",
         municipio: "",
+        ciudad: "",
         colonia: "",
         codigoPostal: "",
         calle: "",
@@ -1841,6 +1862,7 @@ export default function ActividadesVulnerablesPage() {
         pais: domicilio.pais ?? prev.pais ?? INMUEBLE_FORM_DEFAULT.pais,
         entidad: domicilio.entidad ?? "",
         municipio: domicilio.municipio ?? "",
+        ciudad: domicilio.ciudad ?? "",
         colonia: domicilio.colonia ?? "",
         codigoPostal: domicilio.codigoPostal ?? "",
         calle: domicilio.calle ?? "",
@@ -1851,6 +1873,12 @@ export default function ActividadesVulnerablesPage() {
       if (domicilio.codigoPostal) {
         const info = findCodigoPostalInfo(domicilio.codigoPostal)
         setColoniasDisponibles(info?.asentamientos ?? [])
+        if (info?.ciudad) {
+          setInmuebleForm((prev) => ({
+            ...prev,
+            ciudad: prev.ciudad || info.ciudad || "",
+          }))
+        }
       } else {
         setColoniasDisponibles([])
       }
@@ -1929,6 +1957,7 @@ export default function ActividadesVulnerablesPage() {
       ...prev,
       entidad: prev.entidad || info.estado,
       municipio: prev.municipio || info.municipio,
+      ciudad: prev.ciudad || info.ciudad || "",
       colonia: info.asentamientos.includes(prev.colonia)
         ? prev.colonia
         : info.asentamientos[0] ?? prev.colonia,
@@ -1952,6 +1981,59 @@ export default function ActividadesVulnerablesPage() {
       aviso: actividadSeleccionada.avisoUmbralUma * diaria,
     }
   }, [umaSeleccionada, actividadSeleccionada])
+
+  const actividadesFiltradas = useMemo(() => {
+    const termino = normalizarBusqueda(busquedaActividad)
+    if (!termino) return actividadesVulnerables
+    return actividadesVulnerables.filter((actividad) => {
+      const texto = normalizarBusqueda(
+        `${actividad.fraccion} ${actividad.nombre} ${actividad.descripcion}`,
+      )
+      return texto.includes(termino)
+    })
+  }, [busquedaActividad])
+
+  const clientesGuardadosFiltrados = useMemo(() => {
+    const termino = normalizarBusqueda(busquedaClienteGuardado)
+    if (!termino) return clientesGuardados
+    return clientesGuardados.filter((cliente) => {
+      const texto = normalizarBusqueda(
+        `${cliente.nombre} ${cliente.rfc} ${cliente.detalleTipoCliente ?? ""}`,
+      )
+      return texto.includes(termino)
+    })
+  }, [clientesGuardados, busquedaClienteGuardado])
+
+  const coloniasFiltradasInmueble = useMemo(() => {
+    const termino = normalizarBusqueda(busquedaColoniaInmueble)
+    const base = coloniasDisponibles
+    let lista = termino
+      ? base.filter((colonia) => normalizarBusqueda(colonia).includes(termino))
+      : base
+    if (
+      inmuebleForm.colonia &&
+      base.includes(inmuebleForm.colonia) &&
+      !lista.includes(inmuebleForm.colonia)
+    ) {
+      lista = [inmuebleForm.colonia, ...lista]
+    }
+    return lista
+  }, [busquedaColoniaInmueble, coloniasDisponibles, inmuebleForm.colonia])
+
+  const ciudadesFiltradasInmueble = useMemo(() => {
+    if (inmuebleForm.pais !== "MX") {
+      return []
+    }
+    const termino = normalizarBusqueda(busquedaCiudadInmueble)
+    const base = CIUDADES_MEXICO
+    let lista = termino
+      ? base.filter((ciudad) => normalizarBusqueda(ciudad).includes(termino))
+      : base
+    if (inmuebleForm.ciudad && !lista.includes(inmuebleForm.ciudad)) {
+      lista = [inmuebleForm.ciudad, ...lista]
+    }
+    return Array.from(new Set(lista))
+  }, [busquedaCiudadInmueble, inmuebleForm.ciudad, inmuebleForm.pais])
 
   const umbralTexto = useMemo(() => {
     if (!actividadSeleccionada || !umbralPesos) {
@@ -2211,6 +2293,7 @@ const pasoValido = useMemo(() => {
         Boolean(inmuebleForm.pais.trim()) &&
         Boolean(inmuebleForm.entidad.trim()) &&
         Boolean(inmuebleForm.municipio.trim()) &&
+        Boolean(inmuebleForm.ciudad.trim()) &&
         Boolean(inmuebleForm.colonia.trim()) &&
         Boolean(inmuebleForm.calle.trim()) &&
         Boolean(inmuebleForm.numeroExterior.trim()) &&
@@ -2290,6 +2373,9 @@ const limpiarFormulario = () => {
   }
 }
 
+const DEMO_EVIDENCIA_DESCRIPCION =
+  "Contrato marco de arrendamiento 2025 firmado con Corporativo Norte S.A."
+
 const registrarClienteGuardado = (cliente: ClienteGuardado) => {
   setClientesGuardados((prev) => {
     const existente = prev.find((item) => item.rfc === cliente.rfc)
@@ -2309,6 +2395,109 @@ const registrarClienteGuardado = (cliente: ClienteGuardado) => {
 
     return ordenarClientesGuardados([...prev, cliente])
   })
+}
+
+const cargarDemoFraccionXV = () => {
+  const demo = demoFraccionXV
+
+  if (
+    operaciones.some((operacion) => operacion.referenciaAviso === demo.inmueble.referenciaAviso)
+  ) {
+    setTabActiva("seguimiento")
+    toast({
+      title: "Demo ya registrada",
+      description: "Elimina la operación demo existente para volver a generarla.",
+    })
+    return
+  }
+
+  setTabActiva("captura")
+  setPasoActual(0)
+  limpiarFormulario()
+  setActividadKey(demo.actividadKey)
+  setActividadInfoKey(demo.actividadKey)
+  setAnioSeleccionado(demo.periodo.anio)
+  setMesSeleccionado(demo.periodo.mes)
+  setFechaOperacion(demo.periodo.fechaOperacion)
+  setTipoOperacion(demo.cliente.tipoOperacion)
+  setMontoOperacion(demo.cliente.monto)
+  setMoneda(demo.cliente.moneda)
+  setClienteNombre(demo.cliente.nombre)
+  setRfc(demo.cliente.rfc)
+  setTipoCliente(demo.cliente.tipo)
+  setDetalleTipoCliente(demo.cliente.detalle)
+  setMismoGrupo(demo.cliente.mismoGrupo ? "si" : "no")
+  setEvidencia(DEMO_EVIDENCIA_DESCRIPCION)
+  setCodigoOperacionInmueble(demo.inmueble.codigoOperacion)
+  setFiguraClienteInmueble(demo.inmueble.figuraCliente)
+  setFiguraSujetoObligadoInmueble(demo.inmueble.figuraSujetoObligado)
+  setReferenciaAviso(demo.inmueble.referenciaAviso)
+  setAlertaCodigo(demo.inmueble.alertaCodigo)
+  setAlertaDescripcion(demo.inmueble.alertaDescripcion ?? "")
+  setPrioridadAviso(demo.inmueble.prioridadAviso)
+  setClaveSujetoObligado(demo.inmueble.claveSujetoObligado)
+  setClaveActividad(demo.inmueble.claveActividad)
+  setInmuebleForm({
+    fechaInicio: demo.periodo.fechaInicioContrato,
+    fechaFin: demo.periodo.fechaFinContrato,
+    tipoInmueble: demo.inmueble.tipoInmueble,
+    valorAvaluo: demo.inmueble.valorAvaluo,
+    folioReal: demo.inmueble.folioReal,
+    pais: demo.inmueble.pais,
+    entidad: demo.inmueble.entidad,
+    municipio: demo.inmueble.municipio,
+    ciudad: demo.inmueble.ciudad,
+    colonia: demo.inmueble.colonia,
+    codigoPostal: demo.inmueble.codigoPostal,
+    calle: demo.inmueble.calle,
+    numeroExterior: demo.inmueble.numeroExterior,
+    numeroInterior: demo.inmueble.numeroInterior,
+  })
+  const infoCodigo = findCodigoPostalInfo(demo.inmueble.codigoPostal)
+  setColoniasDisponibles(infoCodigo?.asentamientos ?? [])
+  setLiquidacionForm({
+    fechaPago: demo.periodo.fechaPago,
+    formaPago: demo.liquidacion.formaPago,
+    instrumento: demo.liquidacion.instrumento,
+  })
+  setBeneficiarioForm({
+    tipo: demo.beneficiario.tipo,
+    nombre: demo.beneficiario.nombre,
+    apellidoPaterno: demo.beneficiario.apellidoPaterno,
+    apellidoMaterno: demo.beneficiario.apellidoMaterno,
+    fechaNacimiento: demo.beneficiario.fechaNacimiento,
+    rfc: demo.beneficiario.rfc,
+    curp: demo.beneficiario.curp,
+    pais: demo.beneficiario.pais,
+  })
+  setContraparteForm({
+    tipo: demo.contraparte.tipo,
+    nombre: demo.contraparte.nombre,
+    apellidoPaterno: demo.contraparte.apellidoPaterno,
+    apellidoMaterno: demo.contraparte.apellidoMaterno,
+    fechaNacimiento: demo.contraparte.fechaNacimiento,
+    rfc: demo.contraparte.rfc,
+    pais: demo.contraparte.pais,
+  })
+  setInstrumentoForm({
+    numero: demo.instrumento.numero,
+    fecha: demo.instrumento.fecha,
+    notario: demo.instrumento.notario,
+    entidad: demo.instrumento.entidad,
+    valorAvaluo: demo.instrumento.valorAvaluo,
+  })
+  setPersonaAvisoActual(demoFraccionXV.personaAviso as PersonaAvisoOperacion)
+  setPersonaExpedienteSeleccionada("")
+  setAvisoPreliminar(null)
+
+  demoCargaRef.current = true
+  setTimeout(() => {
+    agregarOperacion()
+    toast({
+      title: "Demo cargada",
+      description: "Se agregó una operación de ejemplo de la Fracción XV para fines de demostración.",
+    })
+  }, 150)
 }
 
 const actualizarOperaciones = (
@@ -2423,6 +2612,7 @@ const agregarOperacion = () => {
       pais: inmuebleForm.pais,
       entidad: inmuebleForm.entidad,
       municipio: inmuebleForm.municipio,
+      ciudad: inmuebleForm.ciudad || undefined,
       colonia: inmuebleForm.colonia,
       codigoPostal: inmuebleForm.codigoPostal,
       calle: inmuebleForm.calle,
@@ -2497,6 +2687,7 @@ const agregarOperacion = () => {
   }
 
   const alerta = obtenerAlertaPorStatus(status)
+  const omitirToast = demoCargaRef.current
 
   const nuevaOperacion: OperacionCliente = {
     id: crypto.randomUUID(),
@@ -2557,16 +2748,18 @@ const agregarOperacion = () => {
     detalleTipoCliente: nuevaOperacion.detalleTipoCliente,
   })
 
-  if (status !== "sin-obligacion") {
-    toast({
-      title: getStatusLabel(status),
-      description: alerta ?? "Revisar obligaciones aplicables.",
-    })
-  } else {
-    toast({
-      title: "Operación registrada",
-      description: "Se registró la operación sin obligaciones activas.",
-    })
+  if (!omitirToast) {
+    if (status !== "sin-obligacion") {
+      toast({
+        title: getStatusLabel(status),
+        description: alerta ?? "Revisar obligaciones aplicables.",
+      })
+    } else {
+      toast({
+        title: "Operación registrada",
+        description: "Se registró la operación sin obligaciones activas.",
+      })
+    }
   }
 
   setPasoActual(0)
@@ -2576,6 +2769,7 @@ const agregarOperacion = () => {
   setAnioCalendario(nuevaOperacion.anio)
   setMesCalendario(nuevaOperacion.mes)
   setDiaSeleccionado(normalizeDateKey(nuevaOperacion.fechaOperacion))
+  demoCargaRef.current = false
 }
 
 const marcarAvisoPresentado = (id: string) => {
@@ -2831,6 +3025,7 @@ function generarXmlInmueble(operacion: OperacionCliente): string | null {
           ${domicilio.codigoPostal ? `<codigo_postal>${escapeXml(domicilio.codigoPostal)}</codigo_postal>` : ""}
           ${domicilio.entidad ? `<entidad_federativa>${escapeXml(domicilio.entidad)}</entidad_federativa>` : ""}
           ${domicilio.municipio ? `<municipio>${escapeXml(domicilio.municipio)}</municipio>` : ""}
+          ${domicilio.ciudad ? `<ciudad>${escapeXml(domicilio.ciudad)}</ciudad>` : ""}
           ${domicilio.pais ? `<pais>${escapeXml(domicilio.pais.toUpperCase())}</pais>` : ""}
         </${tipoDomicilio}>
       </tipo_domicilio>`
@@ -2914,6 +3109,7 @@ ${beneficiarioXml ? `${beneficiarioXml}\n` : ""}      <detalle_operaciones>
           <figura_so>${escapeXml(operacion.figuraSujetoObligado ?? "")}</figura_so>
 ${contraparteXml ? `${contraparteXml}\n` : ""}          <caracteristicas_inmueble>
             <tipo_inmueble>${escapeXml(tipoInmuebleCodigo)}</tipo_inmueble>
+            ${inmueble.ciudad ? `<ciudad>${escapeXml(inmueble.ciudad)}</ciudad>` : ""}
             <valor_pactado>${formatNumberXml(operacion.monto)}</valor_pactado>
             ${inmueble.colonia ? `<colonia>${escapeXml(inmueble.colonia)}</colonia>` : ""}
             ${inmueble.calle ? `<calle>${escapeXml(inmueble.calle)}</calle>` : ""}
@@ -3007,6 +3203,7 @@ const reutilizarDatosCliente = (operacion: OperacionCliente) => {
           pais: operacion.inmueble.pais,
           entidad: operacion.inmueble.entidad,
           municipio: operacion.inmueble.municipio,
+          ciudad: operacion.inmueble.ciudad ?? "",
           colonia: operacion.inmueble.colonia,
           codigoPostal: operacion.inmueble.codigoPostal,
           calle: operacion.inmueble.calle,
@@ -3561,6 +3758,14 @@ const cambiarMesCalendario = (delta: number) => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" onClick={cargarDemoFraccionXV}>
+                    Cargar demo Fracción XV
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={limpiarFormulario}>
+                    Limpiar campos
+                  </Button>
+                </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Actividad vulnerable</Label>
@@ -3570,16 +3775,35 @@ const cambiarMesCalendario = (delta: number) => {
                         setActividadKey(value)
                         setActividadInfoKey(value)
                       }}
+                      onOpenChange={(open) => {
+                        if (open) {
+                          setBusquedaActividad("")
+                        }
+                      }}
                     >
                       <SelectTrigger className="bg-white">
                         <SelectValue placeholder="Selecciona una actividad" />
                       </SelectTrigger>
                       <SelectContent>
-                        {actividadesVulnerables.map((actividad) => (
-                          <SelectItem key={actividad.key} value={actividad.key}>
-                            {actividad.fraccion} – {actividad.nombre}
-                          </SelectItem>
-                        ))}
+                        <div className="p-2">
+                          <Input
+                            autoFocus
+                            placeholder="Buscar actividad..."
+                            value={busquedaActividad}
+                            onChange={(event) => setBusquedaActividad(event.target.value)}
+                          />
+                        </div>
+                        {actividadesFiltradas.length > 0 ? (
+                          actividadesFiltradas.map((actividad) => (
+                            <SelectItem key={actividad.key} value={actividad.key}>
+                              {actividad.fraccion} – {actividad.nombre}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">
+                            Sin coincidencias
+                          </div>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -3930,17 +4154,36 @@ const cambiarMesCalendario = (delta: number) => {
                       <Select
                         value={clienteSeleccionado ?? NUEVO_CLIENTE_VALUE}
                         onValueChange={manejarSeleccionClienteGuardado}
+                        onOpenChange={(open) => {
+                          if (open) {
+                            setBusquedaClienteGuardado("")
+                          }
+                        }}
                       >
                         <SelectTrigger className="bg-white">
                           <SelectValue placeholder="Selecciona un cliente guardado" />
                         </SelectTrigger>
                         <SelectContent>
-                          {clientesGuardados.map((cliente) => (
-                            <SelectItem key={cliente.rfc} value={cliente.rfc}>
-                              {cliente.nombre} ({cliente.rfc}
-                              {cliente.detalleTipoCliente ? ` – ${cliente.detalleTipoCliente}` : ""})
-                            </SelectItem>
-                          ))}
+                          <div className="p-2">
+                            <Input
+                              autoFocus
+                              placeholder="Buscar cliente..."
+                              value={busquedaClienteGuardado}
+                              onChange={(event) => setBusquedaClienteGuardado(event.target.value)}
+                            />
+                          </div>
+                          {clientesGuardadosFiltrados.length > 0 ? (
+                            clientesGuardadosFiltrados.map((cliente) => (
+                              <SelectItem key={cliente.rfc} value={cliente.rfc}>
+                                {cliente.nombre} ({cliente.rfc}
+                                {cliente.detalleTipoCliente ? ` – ${cliente.detalleTipoCliente}` : ""})
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-sm text-muted-foreground">
+                              Sin coincidencias
+                            </div>
+                          )}
                           <SelectItem value={NUEVO_CLIENTE_VALUE}>Añadir cliente nuevo…</SelectItem>
                         </SelectContent>
                       </Select>
@@ -4376,6 +4619,51 @@ const cambiarMesCalendario = (delta: number) => {
                           />
                         </div>
                         <div className="space-y-2">
+                          <Label>Ciudad</Label>
+                          {inmuebleForm.pais === "MX" ? (
+                            <Select
+                              value={inmuebleForm.ciudad || undefined}
+                              onValueChange={(value) => actualizarInmuebleForm("ciudad", value)}
+                              onOpenChange={(open) => {
+                                if (open) {
+                                  setBusquedaCiudadInmueble("")
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="bg-white">
+                                <SelectValue placeholder="Selecciona ciudad" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <div className="p-2">
+                                  <Input
+                                    autoFocus
+                                    placeholder="Buscar ciudad..."
+                                    value={busquedaCiudadInmueble}
+                                    onChange={(event) => setBusquedaCiudadInmueble(event.target.value)}
+                                  />
+                                </div>
+                                {ciudadesFiltradasInmueble.length > 0 ? (
+                                  ciudadesFiltradasInmueble.map((ciudad) => (
+                                    <SelectItem key={ciudad} value={ciudad}>
+                                      {ciudad}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <div className="px-3 py-2 text-sm text-muted-foreground">
+                                    Sin coincidencias
+                                  </div>
+                                )}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              placeholder="Ciudad"
+                              value={inmuebleForm.ciudad}
+                              onChange={(event) => actualizarInmuebleForm("ciudad", event.target.value)}
+                            />
+                          )}
+                        </div>
+                        <div className="space-y-2">
                           <Label>Código postal</Label>
                           <Input
                             placeholder="Ejemplo: 66260"
@@ -4397,16 +4685,35 @@ const cambiarMesCalendario = (delta: number) => {
                             <Select
                               value={inmuebleForm.colonia || undefined}
                               onValueChange={(value) => actualizarInmuebleForm("colonia", value)}
+                              onOpenChange={(open) => {
+                                if (open) {
+                                  setBusquedaColoniaInmueble("")
+                                }
+                              }}
                             >
                               <SelectTrigger className="bg-white">
                                 <SelectValue placeholder="Selecciona colonia" />
                               </SelectTrigger>
                               <SelectContent>
-                                {coloniasDisponibles.map((colonia) => (
-                                  <SelectItem key={colonia} value={colonia}>
-                                    {colonia}
-                                  </SelectItem>
-                                ))}
+                                <div className="p-2">
+                                  <Input
+                                    autoFocus
+                                    placeholder="Buscar colonia..."
+                                    value={busquedaColoniaInmueble}
+                                    onChange={(event) => setBusquedaColoniaInmueble(event.target.value)}
+                                  />
+                                </div>
+                                {coloniasFiltradasInmueble.length > 0 ? (
+                                  coloniasFiltradasInmueble.map((colonia) => (
+                                    <SelectItem key={colonia} value={colonia}>
+                                      {colonia}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <div className="px-3 py-2 text-sm text-muted-foreground">
+                                    Sin coincidencias
+                                  </div>
+                                )}
                               </SelectContent>
                             </Select>
                           ) : (
