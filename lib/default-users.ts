@@ -21,4 +21,11 @@ export const DEFAULT_USERS: DefaultUser[] = [
     role: "user",
     approved: true,
   },
+  {
+    name: "Alexis Cervantes Padilla",
+    email: "acervantes@davara.com.mx",
+    password: "$2b$10$rqjB7jwBWh/vPuzg7HapWOrc3aEs.Ef8XBVYHI8eR5tDureIrdLYe",
+    role: "user",
+    approved: true,
+  },
 ]
