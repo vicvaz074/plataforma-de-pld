@@ -59,14 +59,6 @@ import type { ActividadVulnerable } from "@/lib/data/actividades"
 import { actividadesVulnerables } from "@/lib/data/actividades"
 import { UMA_MONTHS, findUmaByMonthYear } from "@/lib/data/uma"
 import { CLIENTE_TIPOS, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
-import {
-  CuestionarioInmuebles,
-  createInmueblesFormulario,
-  cloneInmueblesFormulario,
-  sanitizeInmueblesFormulario,
-  type InmueblesFormulario,
-} from "./inmuebles-form"
-import type { ExpedienteDetalle, ExpedientePersona } from "@/lib/types/expediente"
 
 const MONTHS = [
   "Enero",
@@ -203,7 +195,6 @@ interface OperacionCliente {
   documentosSoporte: DocumentoSoporte[]
   requisitosChecklist: Record<string, boolean>
   kycIntegrado: boolean
-  cuestionarioInmuebles?: InmueblesFormulario
 }
 
 interface ClienteGuardado {
@@ -244,7 +235,6 @@ const currentMonth = now.getMonth() + 1
 const START_WINDOW = new Date(2020, 8, 1) // septiembre 2020
 
 const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
-const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
 const NUEVO_CLIENTE_VALUE = "__nuevo__"
 
 function normalizarTipoCliente(value: string) {
@@ -281,120 +271,6 @@ const TIPO_CLIENTE_OBLIGACIONES: Record<string, keyof ActividadVulnerable["clien
 
 function ordenarClientesGuardados(clientes: ClienteGuardado[]) {
   return [...clientes].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
-}
-
-function sanitizeExpedientePersona(raw: any): ExpedientePersona | null {
-  if (!raw || typeof raw !== "object") return null
-  const persona: ExpedientePersona = {}
-  if (typeof raw.id === "string") persona.id = raw.id
-  if (typeof raw.tipo === "string") persona.tipo = raw.tipo
-  if (typeof raw.rolRelacion === "string") persona.rolRelacion = raw.rolRelacion
-  if (typeof raw.denominacion === "string") persona.denominacion = raw.denominacion
-  if (typeof raw.nombre === "string") persona.nombre = raw.nombre
-  if (typeof raw.apellidoPaterno === "string") persona.apellidoPaterno = raw.apellidoPaterno
-  if (typeof raw.apellidoMaterno === "string") persona.apellidoMaterno = raw.apellidoMaterno
-  if (typeof raw.fechaConstitucion === "string") persona.fechaConstitucion = raw.fechaConstitucion
-  if (typeof raw.fechaNacimiento === "string") persona.fechaNacimiento = raw.fechaNacimiento
-  if (typeof raw.rfc === "string") persona.rfc = raw.rfc
-  if (typeof raw.curp === "string") persona.curp = raw.curp
-  if (typeof raw.pais === "string") persona.pais = raw.pais
-  if (typeof raw.giro === "string") persona.giro = raw.giro
-
-  if (raw.representante && typeof raw.representante === "object") {
-    const representante = raw.representante as Record<string, unknown>
-    persona.representante = {}
-    if (typeof representante.nombre === "string") persona.representante.nombre = representante.nombre
-    if (typeof representante.apellidoPaterno === "string")
-      persona.representante.apellidoPaterno = representante.apellidoPaterno
-    if (typeof representante.apellidoMaterno === "string")
-      persona.representante.apellidoMaterno = representante.apellidoMaterno
-    if (typeof representante.fechaNacimiento === "string")
-      persona.representante.fechaNacimiento = representante.fechaNacimiento
-    if (typeof representante.rfc === "string") persona.representante.rfc = representante.rfc
-    if (typeof representante.curp === "string") persona.representante.curp = representante.curp
-  }
-
-  if (raw.domicilio && typeof raw.domicilio === "object") {
-    const domicilio = raw.domicilio as Record<string, unknown>
-    persona.domicilio = {}
-    if (typeof domicilio.ambito === "string") persona.domicilio.ambito = domicilio.ambito
-    if (typeof domicilio.pais === "string") persona.domicilio.pais = domicilio.pais
-    if (typeof domicilio.entidad === "string") persona.domicilio.entidad = domicilio.entidad
-    if (typeof domicilio.municipio === "string") persona.domicilio.municipio = domicilio.municipio
-    if (typeof domicilio.colonia === "string") persona.domicilio.colonia = domicilio.colonia
-    if (typeof domicilio.codigoPostal === "string") persona.domicilio.codigoPostal = domicilio.codigoPostal
-    if (typeof domicilio.calle === "string") persona.domicilio.calle = domicilio.calle
-    if (typeof domicilio.numeroExterior === "string")
-      persona.domicilio.numeroExterior = domicilio.numeroExterior
-    if (typeof domicilio.numeroInterior === "string")
-      persona.domicilio.numeroInterior = domicilio.numeroInterior
-    if (typeof domicilio.ciudad === "string") persona.domicilio.ciudad = domicilio.ciudad
-  }
-
-  if (raw.contacto && typeof raw.contacto === "object") {
-    const contacto = raw.contacto as Record<string, unknown>
-    persona.contacto = {}
-    if (typeof contacto.clavePais === "string") persona.contacto.clavePais = contacto.clavePais
-    if (typeof contacto.telefono === "string") persona.contacto.telefono = contacto.telefono
-    if (typeof contacto.correo === "string") persona.contacto.correo = contacto.correo
-  }
-
-  if (raw.identificacion && typeof raw.identificacion === "object") {
-    const identificacion = raw.identificacion as Record<string, unknown>
-    persona.identificacion = {}
-    if (typeof identificacion.tipo === "string") persona.identificacion.tipo = identificacion.tipo
-    if (typeof identificacion.numero === "string") persona.identificacion.numero = identificacion.numero
-    if (typeof identificacion.pais === "string") persona.identificacion.pais = identificacion.pais
-    if (typeof identificacion.fechaVencimiento === "string")
-      persona.identificacion.fechaVencimiento = identificacion.fechaVencimiento
-  }
-
-  if (raw.participacion && typeof raw.participacion === "object") {
-    const participacion = raw.participacion as Record<string, unknown>
-    persona.participacion = {}
-    if (typeof participacion.porcentajeCapital === "string")
-      persona.participacion.porcentajeCapital = participacion.porcentajeCapital
-    if (typeof participacion.origenRecursos === "string")
-      persona.participacion.origenRecursos = participacion.origenRecursos
-    if (typeof participacion.esPep === "string") persona.participacion.esPep = participacion.esPep
-    if (typeof participacion.detallePep === "string") persona.participacion.detallePep = participacion.detallePep
-  }
-
-  return persona
-}
-
-function sanitizeExpedienteDetalle(raw: any): ExpedienteDetalle | null {
-  if (!raw || typeof raw !== "object") return null
-  const rfc = typeof raw.rfc === "string" ? raw.rfc.trim().toUpperCase() : ""
-  if (!rfc) return null
-  const nombre = typeof raw.nombre === "string" ? raw.nombre : ""
-  const detalle: ExpedienteDetalle = {
-    rfc,
-    nombre,
-  }
-  if (typeof raw.tipoCliente === "string") detalle.tipoCliente = raw.tipoCliente
-  if (typeof raw.detalleTipoCliente === "string") detalle.detalleTipoCliente = raw.detalleTipoCliente
-  if (typeof raw.claveSujetoObligado === "string") detalle.claveSujetoObligado = raw.claveSujetoObligado
-  if (typeof raw.claveActividadVulnerable === "string")
-    detalle.claveActividadVulnerable = raw.claveActividadVulnerable
-  if (raw.identificacion && typeof raw.identificacion === "object" && !Array.isArray(raw.identificacion)) {
-    const record: Record<string, string> = {}
-    for (const [key, value] of Object.entries(raw.identificacion as Record<string, unknown>)) {
-      if (typeof value === "string") {
-        record[key] = value
-      }
-    }
-    detalle.identificacion = record
-  }
-  if (Array.isArray(raw.personas)) {
-    const personas = raw.personas
-      .map((item) => sanitizeExpedientePersona(item))
-      .filter((item): item is ExpedientePersona => Boolean(item))
-    if (personas.length > 0) {
-      detalle.personas = personas
-    }
-  }
-  return detalle
 }
 
 function getMonedaLabel(value: string) {
@@ -626,7 +502,6 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
     documentosSoporte,
     requisitosChecklist,
     kycIntegrado: Boolean(raw.kycIntegrado),
-    cuestionarioInmuebles: sanitizeInmueblesFormulario(raw.cuestionarioInmuebles) ?? undefined,
   }
 }
 
@@ -744,21 +619,11 @@ export default function ActividadesVulnerablesPage() {
     archivoContenido: "",
     fechaRegistro: new Date().toISOString().substring(0, 10),
   })
-  const [expedientesDetalle, setExpedientesDetalle] = useState<Record<string, ExpedienteDetalle>>({})
-  const [inmueblesFormulario, setInmueblesFormulario] = useState<InmueblesFormulario>(() =>
-    createInmueblesFormulario(buildPeriodo(currentYear, currentMonth)),
-  )
 
   const tipoClienteSeleccionado = useMemo(
     () => obtenerOpcionTipoCliente(tipoCliente),
     [tipoCliente],
   )
-
-  const expedienteSeleccionado = useMemo(() => {
-    const clave = rfc.trim().toUpperCase()
-    if (!clave) return null
-    return expedientesDetalle[clave] ?? null
-  }, [expedientesDetalle, rfc])
 
   const umaVentana = useMemo(() => {
     const filtered = UMA_MONTHS.filter((entry) => {
@@ -799,26 +664,6 @@ export default function ActividadesVulnerablesPage() {
     () => Array.from(new Set(umaVentana.map((entry) => entry.year))).sort((a, b) => a - b),
     [umaVentana],
   )
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    try {
-      const stored = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
-      if (!stored) return
-      const parsed = JSON.parse(stored)
-      if (!Array.isArray(parsed)) return
-      const mapa: Record<string, ExpedienteDetalle> = {}
-      parsed.forEach((item) => {
-        const detalle = sanitizeExpedienteDetalle(item)
-        if (detalle) {
-          mapa[detalle.rfc] = detalle
-        }
-      })
-      setExpedientesDetalle(mapa)
-    } catch (error) {
-      console.warn("No fue posible cargar expedientes guardados", error)
-    }
-  }, [])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -1005,15 +850,6 @@ export default function ActividadesVulnerablesPage() {
     () => actividadesVulnerables.find((actividad) => actividad.key === actividadKey),
     [actividadKey],
   )
-
-  useEffect(() => {
-    if (actividadSeleccionada?.key !== "fraccion-v-inmuebles") return
-    const periodoActual = buildPeriodo(anioSeleccionado, mesSeleccionado)
-    setInmueblesFormulario((prev) => {
-      if (prev.mesReportado === periodoActual) return prev
-      return { ...prev, mesReportado: periodoActual }
-    })
-  }, [actividadSeleccionada, anioSeleccionado, mesSeleccionado])
 
   const umaSeleccionada = useMemo(() => {
     const encontrada = umaVentana.find(
@@ -1312,7 +1148,6 @@ const limpiarFormulario = () => {
   setMonedaPersonalizadaDescripcion("")
   setFechaOperacion(new Date().toISOString().substring(0, 10))
   setDetalleTipoCliente("")
-  setInmueblesFormulario(createInmueblesFormulario(buildPeriodo(anioSeleccionado, mesSeleccionado)))
 }
 
 const registrarClienteGuardado = (cliente: ClienteGuardado) => {
@@ -1448,14 +1283,6 @@ const agregarOperacion = () => {
 
   const alerta = obtenerAlertaPorStatus(status)
 
-  const cuestionarioInmuebles =
-    actividadSeleccionada.key === "fraccion-v-inmuebles"
-      ? cloneInmueblesFormulario({
-          ...inmueblesFormulario,
-          mesReportado: periodo,
-        })
-      : undefined
-
   const nuevaOperacion: OperacionCliente = {
     id: crypto.randomUUID(),
     actividadKey: actividadSeleccionada.key,
@@ -1485,7 +1312,6 @@ const agregarOperacion = () => {
     documentosSoporte: [],
     requisitosChecklist: buildChecklist(actividadSeleccionada, tipoCliente),
     kycIntegrado: false,
-    cuestionarioInmuebles,
   }
 
   actualizarOperaciones((prev) => [...prev, nuevaOperacion])
@@ -1740,11 +1566,6 @@ const reutilizarDatosCliente = (operacion: OperacionCliente) => {
   setFechaOperacion(new Date().toISOString().substring(0, 10))
   setEvidencia(operacion.evidencia)
   setMontoOperacion("")
-  if (operacion.cuestionarioInmuebles) {
-    setInmueblesFormulario(cloneInmueblesFormulario(operacion.cuestionarioInmuebles))
-  } else {
-    setInmueblesFormulario(createInmueblesFormulario(operacion.periodo))
-  }
   setPasoActual(1)
   toast({
     title: "Datos precargados",
@@ -2573,18 +2394,6 @@ const cambiarMesCalendario = (delta: number) => {
                     />
                   </div>
                 </div>
-
-                {actividadSeleccionada?.key === "fraccion-v-inmuebles" && (
-                  <CuestionarioInmuebles
-                    value={inmueblesFormulario}
-                    onChange={setInmueblesFormulario}
-                    expediente={expedienteSeleccionado}
-                    periodo={buildPeriodo(anioSeleccionado, mesSeleccionado)}
-                    monedas={MONEDAS}
-                    fechaOperacion={fechaOperacion}
-                    monedaSeleccionada={moneda}
-                  />
-                )}
 
                 <div className="rounded border bg-slate-50 p-4">
                   <h4 className="text-sm font-semibold text-slate-700">Resultado preliminar</h4>
