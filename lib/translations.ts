@@ -24,7 +24,7 @@ export const translations = {
     nistSp80053: "NIST SP 800-53 Rev. 5",
     nistPrivacy: "NIST Privacy Framework",
     actividadesVulnerables: "Identificación de actividades vulnerables",
-    registroSat: "Registro y alta",
+    registroSat: "Alta y registro",
     expedienteUnico: "Expediente único de identificación",
     avisosInformes: "Avisos e informes",
     beneficiarioControlador: "Beneficiario Controlador",
@@ -177,7 +177,7 @@ export const translations = {
     actividadesVulnerablesTitle: "Identificación de Actividades Vulnerables y Umbrales SAT",
     actividadesVulnerablesSubtitle:
       "Módulo para determinar si la operación constituye una Actividad Vulnerable y los avisos requeridos",
-    registroSatTitle: "Registro y Alta ante el SAT",
+    registroSatTitle: "Alta y Registro ante el SAT",
     registroSatSubtitle:
       "Módulo para asegurar el registro formal en el padrón de Actividades Vulnerables y designación del REC",
     expedienteUnicoTitle: "Expediente único de identificación",
@@ -268,7 +268,7 @@ export const translations = {
     nistSp80053: "NIST SP 800-53 Rev. 5",
     nistPrivacy: "NIST Privacy Framework",
     actividadesVulnerables: "Identification of vulnerable activities",
-    registroSat: "Registration and onboarding",
+    registroSat: "Onboarding and registration",
     expedienteUnico: "Unique identification file",
     avisosInformes: "Notices and reports",
     beneficiarioControlador: "Controlling Beneficiary",
@@ -416,7 +416,7 @@ export const translations = {
     actividadesVulnerablesTitle: "Vulnerable Activities Identification and SAT Thresholds",
     actividadesVulnerablesSubtitle:
       "Module to determine if the operation constitutes a Vulnerable Activity and required notices",
-    registroSatTitle: "SAT Registration and Registration",
+    registroSatTitle: "SAT Onboarding and Registration",
     registroSatSubtitle:
       "Module to ensure formal registration in the Vulnerable Activities registry and REC designation",
     expedienteUnicoTitle: "Unique Identification File",
