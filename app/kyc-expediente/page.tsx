@@ -31,7 +31,8 @@ import {
 } from "lucide-react"
 import { CLIENTE_TIPOS, findClienteTipoLabel, findClienteTipoOption } from "@/lib/data/tipos-cliente"
 import { PAISES, findPaisByCodigo, findPaisByNombre } from "@/lib/data/paises"
-import { findCodigoPostalInfo } from "@/lib/data/codigos-postales"
+import { CIUDADES_MEXICO, findCodigoPostalInfo } from "@/lib/data/codigos-postales"
+import { demoFraccionXV } from "@/lib/demo/fraccion-xv"
 
 interface CampoExpediente {
   id: string
@@ -230,6 +231,14 @@ const PERSONA_TIPO_OPCIONES = [
   { value: "persona_fisica", label: "Persona física" },
 ]
 
+function normalizarBusqueda(valor: string) {
+  return valor
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim()
+}
+
 interface PersonaReportada {
   id: string
   tipo: (typeof PERSONA_TIPO_OPCIONES)[number]["value"]
@@ -253,6 +262,7 @@ interface PersonaReportada {
     pais: string
     entidad: string
     municipio: string
+    ciudad: string
     colonia: string
     codigoPostal: string
     calle: string
@@ -311,6 +321,7 @@ function crearPersonaBase(): PersonaReportada {
       pais: "MX",
       entidad: "",
       municipio: "",
+      ciudad: "",
       colonia: "",
       codigoPostal: "",
       calle: "",
@@ -459,6 +470,7 @@ function sanitizePersonaGuardada(raw: any): PersonaReportada | null {
           : "MX",
       entidad: typeof domicilioRaw.entidad === "string" ? domicilioRaw.entidad : base.domicilio.entidad,
       municipio: typeof domicilioRaw.municipio === "string" ? domicilioRaw.municipio : base.domicilio.municipio,
+      ciudad: typeof domicilioRaw.ciudad === "string" ? domicilioRaw.ciudad : base.domicilio.ciudad,
       colonia: typeof domicilioRaw.colonia === "string" ? domicilioRaw.colonia : base.domicilio.colonia,
       codigoPostal:
         typeof domicilioRaw.codigoPostal === "string"
@@ -534,6 +546,7 @@ function sanitizePersonaGuardada(raw: any): PersonaReportada | null {
     if (info) {
       persona.domicilio.entidad = info.estado
       persona.domicilio.municipio = info.municipio
+      persona.domicilio.ciudad = info.ciudad ?? ""
       if (info.asentamientos.length > 0) {
         persona.domicilio.colonia = info.asentamientos.includes(persona.domicilio.colonia)
           ? persona.domicilio.colonia
@@ -647,6 +660,10 @@ function KycExpedienteContent() {
   const [expedientesDetalle, setExpedientesDetalle] = useState<Record<string, ExpedienteDetalle>>({})
   const [expedienteSeleccionado, setExpedienteSeleccionado] = useState<string | null>(null)
   const [expedientesCargados, setExpedientesCargados] = useState(false)
+  const [busquedaPais, setBusquedaPais] = useState("")
+  const [busquedasColonias, setBusquedasColonias] = useState<Record<string, string>>({})
+  const [busquedasCiudades, setBusquedasCiudades] = useState<Record<string, string>>({})
+  const [busquedaExpedientes, setBusquedaExpedientes] = useState("")
 
   const tipoClienteSeleccionado = useMemo(() => findClienteTipoOption(tipoCliente), [tipoCliente])
   const tipoClienteLabel = useMemo(() => findClienteTipoLabel(tipoCliente), [tipoCliente])
@@ -723,6 +740,22 @@ function KycExpedienteContent() {
     return Array.from(mapa.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
   }, [expedientesDetalle, expedientesResumen])
 
+  const expedientesFiltrados = useMemo(() => {
+    const termino = normalizarBusqueda(busquedaExpedientes)
+    if (!termino) return expedientesDisponibles
+    return expedientesDisponibles.filter((item) =>
+      normalizarBusqueda(`${item.nombre} ${item.rfc}`).includes(termino),
+    )
+  }, [busquedaExpedientes, expedientesDisponibles])
+
+  const paisesFiltrados = useMemo(() => {
+    const termino = normalizarBusqueda(busquedaPais)
+    if (!termino) return PAISES
+    return PAISES.filter((pais) =>
+      normalizarBusqueda(`${pais.label} ${pais.code}`).includes(termino),
+    )
+  }, [busquedaPais])
+
   const expedienteSeleccionadoInfo = useMemo(
     () =>
       expedienteSeleccionado
@@ -756,8 +789,26 @@ function KycExpedienteContent() {
             }))
           : [crearPersonaBase()]
       setPersonasReportadas(personas)
+      setBusquedasColonias({})
+      setBusquedasCiudades({})
+      setBusquedaPais("")
     },
-    [setClaveActividadVulnerable, setClaveSujetoObligado, setDatosFiscales, setDatosIdentificacion, setDetalleTipoCliente, setDocumentacionEstado, setNombreExpediente, setPerfilOperaciones, setPersonasReportadas, setResponsable, setTipoCliente],
+    [
+      setClaveActividadVulnerable,
+      setClaveSujetoObligado,
+      setDatosFiscales,
+      setDatosIdentificacion,
+      setDetalleTipoCliente,
+      setDocumentacionEstado,
+      setNombreExpediente,
+      setPerfilOperaciones,
+      setPersonasReportadas,
+      setResponsable,
+      setTipoCliente,
+      setBusquedasColonias,
+      setBusquedasCiudades,
+      setBusquedaPais,
+    ],
   )
 
   const aplicarResumenEnFormulario = useCallback(
@@ -774,8 +825,26 @@ function KycExpedienteContent() {
       setDocumentacionEstado({})
       const base = crearPersonaBase()
       setPersonasReportadas([{ ...base, denominacion: resumen.nombre, rfc: resumen.rfc }])
+      setBusquedasColonias({})
+      setBusquedasCiudades({})
+      setBusquedaPais("")
     },
-    [setClaveActividadVulnerable, setClaveSujetoObligado, setDatosFiscales, setDatosIdentificacion, setDetalleTipoCliente, setDocumentacionEstado, setNombreExpediente, setPerfilOperaciones, setPersonasReportadas, setResponsable, setTipoCliente],
+    [
+      setClaveActividadVulnerable,
+      setClaveSujetoObligado,
+      setDatosFiscales,
+      setDatosIdentificacion,
+      setDetalleTipoCliente,
+      setDocumentacionEstado,
+      setNombreExpediente,
+      setPerfilOperaciones,
+      setPersonasReportadas,
+      setResponsable,
+      setTipoCliente,
+      setBusquedasColonias,
+      setBusquedasCiudades,
+      setBusquedaPais,
+    ],
   )
 
     const cargarExpediente = useCallback(
@@ -888,10 +957,10 @@ function KycExpedienteContent() {
 
     const handleCodigoPostalChange = useCallback(
       (personaId: string, value: string) => {
+        const limpio = value.replace(/[^0-9]/g, "").slice(0, 5)
         setPersonasReportadas((prev) =>
           prev.map((persona) => {
             if (persona.id !== personaId) return persona
-            const limpio = value.replace(/[^0-9]/g, "").slice(0, 5)
             if (persona.domicilio.ambito !== "nacional") {
               return {
                 ...persona,
@@ -899,7 +968,22 @@ function KycExpedienteContent() {
               }
             }
 
-            const info = limpio.length === 5 ? findCodigoPostalInfo(limpio) : undefined
+            if (limpio.length !== 5) {
+              return {
+                ...persona,
+                domicilio: {
+                  ...persona.domicilio,
+                  codigoPostal: limpio,
+                  pais: "MX",
+                  entidad: "",
+                  municipio: "",
+                  ciudad: "",
+                  colonia: "",
+                },
+              }
+            }
+
+            const info = findCodigoPostalInfo(limpio)
             const colonias = info?.asentamientos ?? []
 
             return {
@@ -908,36 +992,161 @@ function KycExpedienteContent() {
                 ...persona.domicilio,
                 codigoPostal: limpio,
                 pais: "MX",
-                entidad: info?.estado ?? persona.domicilio.entidad,
-                municipio: info?.municipio ?? persona.domicilio.municipio,
+                entidad: info?.estado ?? "",
+                municipio: info?.municipio ?? "",
+                ciudad: info?.ciudad ?? "",
                 colonia:
                   colonias.length > 0
                     ? colonias.includes(persona.domicilio.colonia)
                       ? persona.domicilio.colonia
                       : colonias[0]
-                    : persona.domicilio.colonia,
+                    : "",
               },
             }
           }),
         )
+        setBusquedasColonias((prev) => ({ ...prev, [personaId]: "" }))
+        setBusquedasCiudades((prev) => ({ ...prev, [personaId]: "" }))
       },
-      [],
+      [setBusquedasCiudades, setBusquedasColonias],
     )
 
-    const crearNuevoExpediente = useCallback(() => {
-      setExpedienteSeleccionado(null)
-      setNombreExpediente("")
-      setTipoCliente(CLIENTE_TIPOS[0]?.value ?? "")
-      setDetalleTipoCliente("")
-      setResponsable("")
-      setClaveSujetoObligado("")
-      setClaveActividadVulnerable("")
-      setDatosIdentificacion({})
-      setDatosFiscales({})
-      setPerfilOperaciones({})
-      setDocumentacionEstado({})
-      setPersonasReportadas([crearPersonaBase()])
-    }, [])
+  const crearNuevoExpediente = useCallback(() => {
+    setExpedienteSeleccionado(null)
+    setNombreExpediente("")
+    setTipoCliente(CLIENTE_TIPOS[0]?.value ?? "")
+    setDetalleTipoCliente("")
+    setResponsable("")
+    setClaveSujetoObligado("")
+    setClaveActividadVulnerable("")
+    setDatosIdentificacion({})
+    setDatosFiscales({})
+    setPerfilOperaciones({})
+    setDocumentacionEstado({})
+    setPersonasReportadas([crearPersonaBase()])
+    setBusquedasColonias({})
+    setBusquedasCiudades({})
+    setBusquedaPais("")
+  }, [])
+
+  const cargarDemoExpedienteFraccionXV = useCallback(() => {
+    const demo = demoFraccionXV.expediente
+
+    setNombreExpediente(demo.nombre ?? demo.rfc)
+    setTipoCliente(demo.tipoCliente ?? (CLIENTE_TIPOS[0]?.value ?? ""))
+    setDetalleTipoCliente(demo.detalleTipoCliente ?? "")
+    setResponsable(demo.responsable ?? "")
+    setClaveSujetoObligado(demo.claveSujetoObligado ?? "")
+    setClaveActividadVulnerable(demo.claveActividadVulnerable ?? "")
+    setDatosIdentificacion(demo.identificacion ?? {})
+    setDatosFiscales(demo.datosFiscales ?? {})
+    setPerfilOperaciones(demo.perfilOperaciones ?? {})
+    setDocumentacionEstado(demo.documentacion ?? {})
+    setBusquedaPais("")
+    setBusquedaExpedientes("")
+
+    const personasDemo: PersonaReportada[] = demo.personas.map((personaDemo) => {
+      const base = crearPersonaBase()
+      const ambito = personaDemo.domicilio?.ambito === "extranjero" ? "extranjero" : "nacional"
+      const codigoPostal =
+        typeof personaDemo.domicilio?.codigoPostal === "string"
+          ? personaDemo.domicilio.codigoPostal.replace(/[^0-9]/g, "").slice(0, 5)
+          : ""
+      const info = codigoPostal.length === 5 ? findCodigoPostalInfo(codigoPostal) : undefined
+      const colonias = info?.asentamientos ?? []
+
+      return {
+        ...base,
+        id: personaDemo.id ?? generarIdTemporal(),
+        tipo: personaDemo.tipo === "persona_fisica" ? "persona_fisica" : "persona_moral",
+        denominacion: personaDemo.denominacion ?? base.denominacion,
+        fechaConstitucion: personaDemo.fechaConstitucion ?? base.fechaConstitucion,
+        rfc: personaDemo.rfc ?? base.rfc,
+        curp: personaDemo.curp ?? base.curp,
+        pais: personaDemo.pais ?? base.pais,
+        giro: personaDemo.giro ?? base.giro,
+        rolRelacion: personaDemo.rolRelacion ?? base.rolRelacion,
+        representante: {
+          ...base.representante,
+          nombre: personaDemo.representante?.nombre ?? base.representante.nombre,
+          apellidoPaterno:
+            personaDemo.representante?.apellidoPaterno ?? base.representante.apellidoPaterno,
+          apellidoMaterno:
+            personaDemo.representante?.apellidoMaterno ?? base.representante.apellidoMaterno,
+          fechaNacimiento:
+            personaDemo.representante?.fechaNacimiento ?? base.representante.fechaNacimiento,
+          rfc: personaDemo.representante?.rfc ?? base.representante.rfc,
+          curp: personaDemo.representante?.curp ?? base.representante.curp,
+        },
+        domicilio: {
+          ...base.domicilio,
+          ambito,
+          pais: ambito === "extranjero" ? personaDemo.domicilio?.pais ?? base.domicilio.pais : "MX",
+          entidad: personaDemo.domicilio?.entidad ?? base.domicilio.entidad,
+          municipio: personaDemo.domicilio?.municipio ?? base.domicilio.municipio,
+          ciudad: personaDemo.domicilio?.ciudad ?? base.domicilio.ciudad,
+          colonia:
+            colonias.length > 0
+              ? colonias.includes(personaDemo.domicilio?.colonia ?? base.domicilio.colonia)
+                ? (personaDemo.domicilio?.colonia as string)
+                : colonias[0]
+              : personaDemo.domicilio?.colonia ?? base.domicilio.colonia,
+          codigoPostal,
+          calle: personaDemo.domicilio?.calle ?? base.domicilio.calle,
+          numeroExterior: personaDemo.domicilio?.numeroExterior ?? base.domicilio.numeroExterior,
+          numeroInterior: personaDemo.domicilio?.numeroInterior ?? base.domicilio.numeroInterior,
+        },
+        contacto: {
+          ...base.contacto,
+          conoceTelefono: personaDemo.contacto?.conoceTelefono === "no" ? "no" : "si",
+          conocePaisTelefono: personaDemo.contacto?.conocePaisTelefono === "no" ? "no" : "si",
+          clavePais: personaDemo.contacto?.clavePais ?? base.contacto.clavePais,
+          telefono: personaDemo.contacto?.telefono ?? base.contacto.telefono,
+          correo: personaDemo.contacto?.correo ?? base.contacto.correo,
+        },
+        identificacion: {
+          ...base.identificacion,
+          tipo: personaDemo.identificacion?.tipo ?? base.identificacion.tipo,
+          numero: personaDemo.identificacion?.numero ?? base.identificacion.numero,
+          pais: personaDemo.identificacion?.pais ?? base.identificacion.pais,
+          fechaVencimiento:
+            personaDemo.identificacion?.fechaVencimiento ?? base.identificacion.fechaVencimiento,
+        },
+        participacion: {
+          ...base.participacion,
+          porcentajeCapital:
+            personaDemo.participacion?.porcentajeCapital ?? base.participacion.porcentajeCapital,
+          origenRecursos:
+            personaDemo.participacion?.origenRecursos ?? base.participacion.origenRecursos,
+          esPep: personaDemo.participacion?.esPep === "si" ? "si" : "no",
+          detallePep: personaDemo.participacion?.detallePep ?? base.participacion.detallePep,
+        },
+      }
+    })
+
+    setPersonasReportadas(personasDemo)
+    setBusquedasColonias({})
+    setBusquedasCiudades({})
+    setExpedienteSeleccionado(null)
+
+    toast({
+      title: "Expediente demo cargado",
+      description: "Se llenó un expediente de ejemplo para la Fracción XV de inmuebles.",
+    })
+  }, [
+    setClaveActividadVulnerable,
+    setClaveSujetoObligado,
+    setDatosFiscales,
+    setDatosIdentificacion,
+    setDetalleTipoCliente,
+    setDocumentacionEstado,
+    setNombreExpediente,
+    setPerfilOperaciones,
+    setPersonasReportadas,
+    setResponsable,
+    setTipoCliente,
+    toast,
+  ])
 
     useEffect(() => {
       if (!tipoClienteSeleccionado?.requiresDetalle) {
@@ -964,6 +1173,8 @@ function KycExpedienteContent() {
   const agregarPersonaReportada = () => {
     const nuevaPersona = crearPersonaBase()
     setPersonasReportadas((prev) => [...prev, nuevaPersona])
+    setBusquedasColonias((prev) => ({ ...prev, [nuevaPersona.id]: "" }))
+    setBusquedasCiudades((prev) => ({ ...prev, [nuevaPersona.id]: "" }))
     toast({
       title: "Persona añadida",
       description: "Se agregó un nuevo registro para documentar otra persona relacionada.",
@@ -971,22 +1182,29 @@ function KycExpedienteContent() {
   }
 
   const eliminarPersonaReportada = (id: string) => {
-    setPersonasReportadas((prev) => {
-      if (prev.length <= 1) {
-        toast({
-          title: "Acción no disponible",
-          description: "Debes conservar al menos una persona registrada en el expediente.",
-          variant: "destructive",
-        })
-        return prev
-      }
-
-      const actualizadas = prev.filter((persona) => persona.id !== id)
+    if (personasReportadas.length <= 1) {
       toast({
-        title: "Persona eliminada",
-        description: "Se retiró la persona del expediente único.",
+        title: "Acción no disponible",
+        description: "Debes conservar al menos una persona registrada en el expediente.",
+        variant: "destructive",
       })
-      return actualizadas
+      return
+    }
+
+    setPersonasReportadas((prev) => prev.filter((persona) => persona.id !== id))
+    setBusquedasColonias((prev) => {
+      if (!(id in prev)) return prev
+      const { [id]: _omit, ...rest } = prev
+      return rest
+    })
+    setBusquedasCiudades((prev) => {
+      if (!(id in prev)) return prev
+      const { [id]: _omit, ...rest } = prev
+      return rest
+    })
+    toast({
+      title: "Persona eliminada",
+      description: "Se retiró la persona del expediente único.",
     })
   }
 
@@ -1121,16 +1339,33 @@ function KycExpedienteContent() {
                 value={expedienteSeleccionado ?? undefined}
                 onValueChange={(value) => cargarExpediente(value)}
                 disabled={expedientesDisponibles.length === 0}
+                onOpenChange={(open) => {
+                  if (open) {
+                    setBusquedaExpedientes("")
+                  }
+                }}
               >
                 <SelectTrigger className="bg-white">
                   <SelectValue placeholder="Selecciona un expediente" />
                 </SelectTrigger>
                 <SelectContent>
-                  {expedientesDisponibles.map((item) => (
-                    <SelectItem key={item.rfc} value={item.rfc}>
-                      {item.nombre} – {item.rfc}
-                    </SelectItem>
-                  ))}
+                  <div className="p-2">
+                    <Input
+                      autoFocus
+                      placeholder="Buscar expediente..."
+                      value={busquedaExpedientes}
+                      onChange={(event) => setBusquedaExpedientes(event.target.value)}
+                    />
+                  </div>
+                  {expedientesFiltrados.length > 0 ? (
+                    expedientesFiltrados.map((item) => (
+                      <SelectItem key={item.rfc} value={item.rfc}>
+                        {item.nombre} – {item.rfc}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">Sin coincidencias</div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1169,46 +1404,61 @@ function KycExpedienteContent() {
           )}
 
           {expedientesDisponibles.length > 0 ? (
-            <ScrollArea className="h-52 rounded border border-slate-200 bg-white">
-              <div className="divide-y divide-slate-200">
-                {expedientesDisponibles.map((item) => {
-                  const seleccionado = item.rfc === expedienteSeleccionado
-                  const actualizado = formatearFechaActualizacion(item.actualizadoEn)
-                  return (
-                    <button
-                      key={item.rfc}
-                      type="button"
-                      onClick={() => cargarExpediente(item.rfc)}
-                      className={`flex w-full flex-col gap-1 p-3 text-left transition ${
-                        seleccionado ? "bg-emerald-100/60" : "hover:bg-slate-100"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-700">{item.nombre}</p>
-                          <p className="text-xs text-slate-500">{item.rfc}</p>
-                        </div>
-                        {actualizado && (
-                          <span className="text-[11px] text-slate-500">{actualizado}</span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {item.tipoCliente && (
-                          <Badge variant="outline" className="border-slate-200">
-                            {findClienteTipoLabel(item.tipoCliente)}
-                          </Badge>
-                        )}
-                        {item.detalleTipoCliente && (
-                          <Badge variant="outline" className="border-slate-200">
-                            {item.detalleTipoCliente}
-                          </Badge>
-                        )}
-                      </div>
-                    </button>
-                  )
-                })}
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  className="max-w-sm"
+                  placeholder="Buscar en expedientes guardados..."
+                  value={busquedaExpedientes}
+                  onChange={(event) => setBusquedaExpedientes(event.target.value)}
+                />
+                {busquedaExpedientes && (
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setBusquedaExpedientes("")}>
+                    Limpiar
+                  </Button>
+                )}
               </div>
-            </ScrollArea>
+              <ScrollArea className="h-52 rounded border border-slate-200 bg-white">
+                <div className="divide-y divide-slate-200">
+                  {expedientesFiltrados.map((item) => {
+                    const seleccionado = item.rfc === expedienteSeleccionado
+                    const actualizado = formatearFechaActualizacion(item.actualizadoEn)
+                    return (
+                      <button
+                        key={item.rfc}
+                        type="button"
+                        onClick={() => cargarExpediente(item.rfc)}
+                        className={`flex w-full flex-col gap-1 p-3 text-left transition ${
+                          seleccionado ? "bg-emerald-100/60" : "hover:bg-slate-100"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-700">{item.nombre}</p>
+                            <p className="text-xs text-slate-500">{item.rfc}</p>
+                          </div>
+                          {actualizado && (
+                            <span className="text-[11px] text-slate-500">{actualizado}</span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {item.tipoCliente && (
+                            <Badge variant="outline" className="border-slate-200">
+                              {findClienteTipoLabel(item.tipoCliente)}
+                            </Badge>
+                          )}
+                          {item.detalleTipoCliente && (
+                            <Badge variant="outline" className="border-slate-200">
+                              {item.detalleTipoCliente}
+                            </Badge>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </ScrollArea>
+            </>
           ) : (
             <p className="text-sm text-slate-500">
               Aún no se han guardado expedientes desde este módulo. Captura los datos y utiliza el botón "Guardar" para
@@ -1219,14 +1469,21 @@ function KycExpedienteContent() {
       </Card>
 
       <Card className="border-slate-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-slate-600" /> Expediente único de identificación
-          </CardTitle>
-          <CardDescription>
-            Centraliza todos los datos y documentos del cliente para que los avisos se prellenan automáticamente al
-            registrarlo en actividades vulnerables.
-          </CardDescription>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-slate-600" /> Expediente único de identificación
+            </CardTitle>
+            <CardDescription>
+              Centraliza todos los datos y documentos del cliente para que los avisos se prellenan automáticamente al
+              registrarlo en actividades vulnerables.
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" onClick={cargarDemoExpedienteFraccionXV}>
+              Cargar demo Fracción XV
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
@@ -1389,16 +1646,31 @@ function KycExpedienteContent() {
                             onValueChange={(nuevoValor) =>
                               setDatosIdentificacion((prev) => ({ ...prev, [campo.id]: nuevoValor }))
                             }
+                            onOpenChange={(open) => {
+                              if (open) setBusquedaPais("")
+                            }}
                           >
                             <SelectTrigger className="bg-white">
                               <SelectValue placeholder="Selecciona país" />
                             </SelectTrigger>
                             <SelectContent>
-                              {PAISES.map((pais) => (
-                                <SelectItem key={pais.code} value={pais.label}>
-                                  {pais.label}
-                                </SelectItem>
-                              ))}
+                              <div className="p-2">
+                                <Input
+                                  autoFocus
+                                  placeholder="Buscar país..."
+                                  value={busquedaPais}
+                                  onChange={(event) => setBusquedaPais(event.target.value)}
+                                />
+                              </div>
+                              {paisesFiltrados.length > 0 ? (
+                                paisesFiltrados.map((pais) => (
+                                  <SelectItem key={pais.code} value={pais.label}>
+                                    {pais.label}
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <div className="px-3 py-2 text-sm text-muted-foreground">Sin coincidencias</div>
+                              )}
                             </SelectContent>
                           </Select>
                         ) : campo.multiline ? (
@@ -1578,6 +1850,41 @@ function KycExpedienteContent() {
                 ? findCodigoPostalInfo(persona.domicilio.codigoPostal)
                 : undefined
             const coloniasDisponibles = infoCodigoPostal?.asentamientos ?? []
+            const busquedaColonia = busquedasColonias[persona.id] ?? ""
+            const terminoColonia = normalizarBusqueda(busquedaColonia)
+            let coloniasFiltradas =
+              terminoColonia
+                ? coloniasDisponibles.filter((colonia) =>
+                    normalizarBusqueda(colonia).includes(terminoColonia),
+                  )
+                : coloniasDisponibles
+            if (
+              persona.domicilio.colonia &&
+              coloniasDisponibles.includes(persona.domicilio.colonia) &&
+              !coloniasFiltradas.includes(persona.domicilio.colonia)
+            ) {
+              coloniasFiltradas = [persona.domicilio.colonia, ...coloniasFiltradas]
+            }
+            coloniasFiltradas = Array.from(new Set(coloniasFiltradas))
+            const coloniaSeleccionada = coloniasDisponibles.includes(persona.domicilio.colonia)
+              ? persona.domicilio.colonia
+              : coloniasDisponibles[0] ?? ""
+            const busquedaCiudad = busquedasCiudades[persona.id] ?? ""
+            const terminoCiudad = normalizarBusqueda(busquedaCiudad)
+            const mostrarCiudadesMexico =
+              persona.domicilio.ambito === "nacional" && persona.domicilio.pais === "MX"
+            let ciudadesFiltradas: string[] = []
+            if (mostrarCiudadesMexico) {
+              ciudadesFiltradas = terminoCiudad
+                ? CIUDADES_MEXICO.filter((ciudad) =>
+                    normalizarBusqueda(ciudad).includes(terminoCiudad),
+                  )
+                : CIUDADES_MEXICO
+              if (persona.domicilio.ciudad && !ciudadesFiltradas.includes(persona.domicilio.ciudad)) {
+                ciudadesFiltradas = [persona.domicilio.ciudad, ...ciudadesFiltradas]
+              }
+              ciudadesFiltradas = Array.from(new Set(ciudadesFiltradas))
+            }
 
             return (
               <div key={persona.id} className="space-y-6 rounded border border-slate-200 bg-white p-4">
@@ -1681,16 +1988,31 @@ function KycExpedienteContent() {
                         pais: nuevoPais,
                       }))
                     }
+                    onOpenChange={(open) => {
+                      if (open) setBusquedaPais("")
+                    }}
                   >
                     <SelectTrigger className="bg-white">
                       <SelectValue placeholder="Selecciona país" />
                     </SelectTrigger>
                     <SelectContent>
-                      {PAISES.map((pais) => (
-                        <SelectItem key={pais.code} value={pais.code}>
-                          {pais.label}
-                        </SelectItem>
-                      ))}
+                      <div className="p-2">
+                        <Input
+                          autoFocus
+                          placeholder="Buscar país..."
+                          value={busquedaPais}
+                          onChange={(event) => setBusquedaPais(event.target.value)}
+                        />
+                      </div>
+                      {paisesFiltrados.length > 0 ? (
+                        paisesFiltrados.map((pais) => (
+                          <SelectItem key={pais.code} value={pais.code}>
+                            {pais.label}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">Sin coincidencias</div>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1814,16 +2136,31 @@ function KycExpedienteContent() {
                       key={opcion.value}
                       type="button"
                       variant={persona.domicilio.ambito === opcion.value ? "default" : "outline"}
-                      onClick={() =>
-                        actualizarPersonaReportada(persona.id, (prev) => ({
-                          ...prev,
-                          domicilio: {
-                            ...prev.domicilio,
-                            ambito: opcion.value,
-                            pais: opcion.value === "nacional" ? "MX" : prev.domicilio.pais,
-                          },
-                        }))
-                      }
+                      onClick={() => {
+                        if (persona.domicilio.ambito === opcion.value) return
+                        setBusquedasColonias((prev) => ({ ...prev, [persona.id]: "" }))
+                        setBusquedasCiudades((prev) => ({ ...prev, [persona.id]: "" }))
+                        actualizarPersonaReportada(persona.id, (prev) => {
+                          const esNacional = opcion.value === "nacional"
+                          return {
+                            ...prev,
+                            domicilio: {
+                              ...prev.domicilio,
+                              ambito: opcion.value,
+                              pais: esNacional
+                                ? "MX"
+                                : prev.domicilio.pais === "MX"
+                                  ? ""
+                                  : prev.domicilio.pais,
+                              codigoPostal: "",
+                              entidad: "",
+                              municipio: "",
+                              ciudad: "",
+                              colonia: "",
+                            },
+                          }
+                        })
+                      }}
                     >
                       {opcion.label}
                     </Button>
@@ -1834,23 +2171,48 @@ function KycExpedienteContent() {
                     <Label>País</Label>
                     <Select
                       value={paisDomicilioOption?.code ?? persona.domicilio.pais}
-                      onValueChange={(nuevoPais) =>
+                      onValueChange={(nuevoPais) => {
+                        setBusquedasColonias((prev) => ({ ...prev, [persona.id]: "" }))
+                        setBusquedasCiudades((prev) => ({ ...prev, [persona.id]: "" }))
                         actualizarPersonaReportada(persona.id, (prev) => ({
                           ...prev,
-                          domicilio: { ...prev.domicilio, pais: nuevoPais },
+                          domicilio: {
+                            ...prev.domicilio,
+                            pais: nuevoPais,
+                            codigoPostal: "",
+                            entidad: "",
+                            municipio: "",
+                            ciudad: "",
+                            colonia: "",
+                          },
                         }))
-                      }
+                      }}
                       disabled={persona.domicilio.ambito === "nacional"}
+                      onOpenChange={(open) => {
+                        if (open) setBusquedaPais("")
+                      }}
                     >
                       <SelectTrigger className="bg-white" disabled={persona.domicilio.ambito === "nacional"}>
                         <SelectValue placeholder="Selecciona país" />
                       </SelectTrigger>
                       <SelectContent>
-                        {PAISES.map((pais) => (
-                          <SelectItem key={pais.code} value={pais.code}>
-                            {pais.label}
-                          </SelectItem>
-                        ))}
+                        <div className="p-2">
+                          <Input
+                            autoFocus
+                            placeholder="Buscar país..."
+                            value={busquedaPais}
+                            onChange={(event) => setBusquedaPais(event.target.value)}
+                          />
+                        </div>
+                        {paisesFiltrados.length > 0 ? (
+                          paisesFiltrados.map((pais) => (
+                            <SelectItem key={pais.code} value={pais.code}>
+                              {pais.label}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">Sin coincidencias</div>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1879,30 +2241,105 @@ function KycExpedienteContent() {
                     />
                   </div>
                   <div className="space-y-2">
+                    <Label>Ciudad</Label>
+                    {mostrarCiudadesMexico ? (
+                      <Select
+                        value={persona.domicilio.ciudad}
+                        onValueChange={(nuevaCiudad) =>
+                          actualizarPersonaReportada(persona.id, (prev) => ({
+                            ...prev,
+                            domicilio: { ...prev.domicilio, ciudad: nuevaCiudad },
+                          }))
+                        }
+                        onOpenChange={(open) => {
+                          if (open) {
+                            setBusquedasCiudades((prev) => ({ ...prev, [persona.id]: "" }))
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Selecciona ciudad" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <div className="p-2">
+                            <Input
+                              autoFocus
+                              placeholder="Buscar ciudad..."
+                              value={busquedaCiudad}
+                              onChange={(event) =>
+                                setBusquedasCiudades((prev) => ({
+                                  ...prev,
+                                  [persona.id]: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          {ciudadesFiltradas.length > 0 ? (
+                            ciudadesFiltradas.map((ciudad) => (
+                              <SelectItem key={ciudad} value={ciudad}>
+                                {ciudad}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-sm text-muted-foreground">Sin coincidencias</div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={persona.domicilio.ciudad}
+                        onChange={(event) =>
+                          actualizarPersonaReportada(persona.id, (prev) => ({
+                            ...prev,
+                            domicilio: { ...prev.domicilio, ciudad: event.target.value },
+                          }))
+                        }
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-2">
                     <Label>Colonia o localidad</Label>
                     {coloniasDisponibles.length > 0 ? (
                       <Select
-                        value={
-                          coloniasDisponibles.includes(persona.domicilio.colonia)
-                            ? persona.domicilio.colonia
-                            : coloniasDisponibles[0] ?? ""
-                        }
+                        value={coloniaSeleccionada}
                         onValueChange={(nuevaColonia) =>
                           actualizarPersonaReportada(persona.id, (prev) => ({
                             ...prev,
                             domicilio: { ...prev.domicilio, colonia: nuevaColonia },
                           }))
                         }
+                        onOpenChange={(open) => {
+                          if (open) {
+                            setBusquedasColonias((prev) => ({ ...prev, [persona.id]: "" }))
+                          }
+                        }}
                       >
                         <SelectTrigger className="bg-white">
                           <SelectValue placeholder="Selecciona colonia" />
                         </SelectTrigger>
                         <SelectContent>
-                          {coloniasDisponibles.map((colonia) => (
-                            <SelectItem key={colonia} value={colonia}>
-                              {colonia}
-                            </SelectItem>
-                          ))}
+                          <div className="p-2">
+                            <Input
+                              autoFocus
+                              placeholder="Buscar colonia..."
+                              value={busquedaColonia}
+                              onChange={(event) =>
+                                setBusquedasColonias((prev) => ({
+                                  ...prev,
+                                  [persona.id]: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                          {coloniasFiltradas.length > 0 ? (
+                            coloniasFiltradas.map((colonia) => (
+                              <SelectItem key={colonia} value={colonia}>
+                                {colonia}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-sm text-muted-foreground">Sin coincidencias</div>
+                          )}
                         </SelectContent>
                       </Select>
                     ) : (
@@ -2026,6 +2463,9 @@ function KycExpedienteContent() {
                         }))
                       }
                       disabled={persona.contacto.conocePaisTelefono === "no"}
+                      onOpenChange={(open) => {
+                        if (open) setBusquedaPais("")
+                      }}
                     >
                       <SelectTrigger
                         className="bg-white"
@@ -2034,11 +2474,23 @@ function KycExpedienteContent() {
                         <SelectValue placeholder="Selecciona código" />
                       </SelectTrigger>
                       <SelectContent>
-                        {PAISES.map((pais) => (
-                          <SelectItem key={pais.code} value={pais.code}>
-                            {pais.code} – {pais.label}
-                          </SelectItem>
-                        ))}
+                        <div className="p-2">
+                          <Input
+                            autoFocus
+                            placeholder="Buscar país..."
+                            value={busquedaPais}
+                            onChange={(event) => setBusquedaPais(event.target.value)}
+                          />
+                        </div>
+                        {paisesFiltrados.length > 0 ? (
+                          paisesFiltrados.map((pais) => (
+                            <SelectItem key={pais.code} value={pais.code}>
+                              {pais.code} – {pais.label}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">Sin coincidencias</div>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -2114,16 +2566,31 @@ function KycExpedienteContent() {
                           identificacion: { ...prev.identificacion, pais: nuevoPais },
                         }))
                       }
+                      onOpenChange={(open) => {
+                        if (open) setBusquedaPais("")
+                      }}
                     >
                       <SelectTrigger className="bg-white">
                         <SelectValue placeholder="Selecciona país" />
                       </SelectTrigger>
                       <SelectContent>
-                        {PAISES.map((pais) => (
-                          <SelectItem key={pais.code} value={pais.code}>
-                            {pais.label}
-                          </SelectItem>
-                        ))}
+                        <div className="p-2">
+                          <Input
+                            autoFocus
+                            placeholder="Buscar país..."
+                            value={busquedaPais}
+                            onChange={(event) => setBusquedaPais(event.target.value)}
+                          />
+                        </div>
+                        {paisesFiltrados.length > 0 ? (
+                          paisesFiltrados.map((pais) => (
+                            <SelectItem key={pais.code} value={pais.code}>
+                              {pais.label}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">Sin coincidencias</div>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

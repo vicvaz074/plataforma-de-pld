@@ -38,7 +38,22 @@ export const CODIGOS_POSTALES: CodigoPostalInfo[] = [
 ]
 
 export function findCodigoPostalInfo(codigo: string): CodigoPostalInfo | undefined {
-  const limpio = codigo.trim()
+  const limpio = codigo.trim().replace(/[^0-9]/g, "")
   if (limpio.length < 5) return undefined
   return CODIGOS_POSTALES.find((item) => item.codigo === limpio)
+}
+
+export const CIUDADES_MEXICO: string[] = Array.from(
+  new Set(
+    CODIGOS_POSTALES
+      .map((item) => item.ciudad?.trim())
+      .filter((ciudad): ciudad is string => Boolean(ciudad && ciudad.length > 0)),
+  ),
+)
+  .sort((a, b) => a.localeCompare(b, "es"))
+
+export function filtrarCiudadesMexico(termino: string): string[] {
+  const criterio = termino.trim().toLowerCase()
+  if (!criterio) return CIUDADES_MEXICO
+  return CIUDADES_MEXICO.filter((ciudad) => ciudad.toLowerCase().includes(criterio))
 }
