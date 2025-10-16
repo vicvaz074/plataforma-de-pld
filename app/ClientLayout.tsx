@@ -8,12 +8,30 @@ import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { LanguageProvider } from "@/lib/LanguageContext"
 import { AppProvider } from "@/lib/AppContext"
+import { DEFAULT_USERS } from "@/lib/default-users"
 import { Toaster } from "@/components/ui/toaster"
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
+
+  useEffect(() => {
+    const storedUsers = JSON.parse(localStorage.getItem("users") || "[]")
+    let shouldUpdate = false
+
+    DEFAULT_USERS.forEach((defaultUser) => {
+      const exists = storedUsers.some((user: { email: string }) => user.email === defaultUser.email)
+      if (!exists) {
+        storedUsers.push(defaultUser)
+        shouldUpdate = true
+      }
+    })
+
+    if (shouldUpdate) {
+      localStorage.setItem("users", JSON.stringify(storedUsers))
+    }
+  }, [])
 
   useEffect(() => {
     const authStatus = localStorage.getItem("isAuthenticated")
