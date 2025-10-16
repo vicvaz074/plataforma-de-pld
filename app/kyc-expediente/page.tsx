@@ -29,6 +29,11 @@ import {
   Users,
 } from "lucide-react"
 import { CLIENTE_TIPOS, findClienteTipoLabel, findClienteTipoOption } from "@/lib/data/tipos-cliente"
+import {
+  type DocumentStatus,
+  type PersonaReportada,
+  type RespuestaBinaria,
+} from "@/lib/types/expediente"
 
 interface CampoExpediente {
   id: string
@@ -215,8 +220,6 @@ const PERFIL_OPERACION_CAMPOS: CampoExpediente[] = [
   },
 ]
 
-type RespuestaBinaria = "si" | "no"
-
 const DOMICILIO_TIPOS = [
   { value: "nacional", label: "Domicilio nacional" },
   { value: "extranjero", label: "Domicilio extranjero" },
@@ -226,56 +229,6 @@ const PERSONA_TIPO_OPCIONES = [
   { value: "persona_moral", label: "Persona moral" },
   { value: "persona_fisica", label: "Persona física" },
 ]
-
-interface PersonaReportada {
-  id: string
-  tipo: (typeof PERSONA_TIPO_OPCIONES)[number]["value"]
-  denominacion: string
-  fechaConstitucion: string
-  rfc: string
-  curp: string
-  pais: string
-  giro: string
-  rolRelacion: string
-  representante: {
-    nombre: string
-    apellidoPaterno: string
-    apellidoMaterno: string
-    fechaNacimiento: string
-    rfc: string
-    curp: string
-  }
-  domicilio: {
-    ambito: (typeof DOMICILIO_TIPOS)[number]["value"]
-    pais: string
-    entidad: string
-    municipio: string
-    colonia: string
-    codigoPostal: string
-    calle: string
-    numeroExterior: string
-    numeroInterior: string
-  }
-  contacto: {
-    conoceTelefono: RespuestaBinaria
-    conocePaisTelefono: RespuestaBinaria
-    clavePais: string
-    telefono: string
-    correo: string
-  }
-  identificacion: {
-    tipo: string
-    numero: string
-    pais: string
-    fechaVencimiento: string
-  }
-  participacion: {
-    porcentajeCapital: string
-    origenRecursos: string
-    esPep: RespuestaBinaria
-    detallePep: string
-  }
-}
 
 const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
 const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"

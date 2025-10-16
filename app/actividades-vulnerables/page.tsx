@@ -33,6 +33,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/components/ui/use-toast"
 import {
+  InmuebleCuestionario,
+  crearInmuebleDataInicial,
+  type InmuebleCuestionarioData,
+  type PersonaAvisoTipo,
+} from "@/components/actividades/inmueble-cuestionario"
+import {
   AlertCircle,
   ArrowRight,
   Building2,
@@ -59,6 +65,8 @@ import type { ActividadVulnerable } from "@/lib/data/actividades"
 import { actividadesVulnerables } from "@/lib/data/actividades"
 import { UMA_MONTHS, findUmaByMonthYear } from "@/lib/data/uma"
 import { CLIENTE_TIPOS, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
+import { MONEDAS_CATALOGO, buscarPaisPorNombre } from "@/lib/data/catalogos"
+import type { ExpedienteDetallado, PersonaReportada } from "@/lib/types/expediente"
 
 const MONTHS = [
   "Enero",
@@ -88,17 +96,7 @@ const LEGACY_CLIENTE_TIPO_MAP: Record<string, ClienteTipoOption["value"]> = {
   otro: "entidad_financiera",
 }
 
-const MONEDAS = [
-  { value: "MXN", label: "Peso mexicano (MXN)" },
-  { value: "USD", label: "Dólar estadounidense (USD)" },
-  { value: "EUR", label: "Euro (EUR)" },
-  { value: "CAD", label: "Dólar canadiense (CAD)" },
-  { value: "GBP", label: "Libra esterlina (GBP)" },
-  { value: "JPY", label: "Yen japonés (JPY)" },
-  { value: "CHF", label: "Franco suizo (CHF)" },
-  { value: "BRL", label: "Real brasileño (BRL)" },
-  { value: "OTRA", label: "Otra divisa (especificar)" },
-]
+const MONEDAS = MONEDAS_CATALOGO
 
 const STEPS = [
   {
@@ -123,6 +121,32 @@ type UmbralStatus = "sin-obligacion" | "identificacion" | "aviso"
 type InfoModalKey = "umbral-identificacion" | "umbral-aviso" | "uma-validacion"
 
 const OPERACIONES_STORAGE_KEY = "actividades_vulnerables_operaciones"
+const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
+
+const ACTIVIDADES_INMUEBLES = new Set<string>([
+  "fraccion-xii-notarios-a",
+  "fraccion-xii-corredores-a",
+])
+
+const MAPA_TIPO_CLIENTE_PERSONA: Record<string, PersonaAvisoTipo> = {
+  pf_residente: "persona_fisica",
+  pf_visitante: "persona_fisica",
+  pm_mexicana: "persona_moral",
+  pm_extranjera: "persona_moral",
+  fideicomiso: "fideicomiso",
+  pm_derecho_publico: "persona_moral",
+  pm_derecho_publico_simplificado: "persona_moral",
+  organismo_internacional: "persona_moral",
+  entidad_financiera: "persona_moral",
+  vehiculo: "persona_moral",
+  otro: "persona_moral",
+  // valores legados
+  pfn: "persona_fisica",
+  pfe: "persona_fisica",
+  pmn: "persona_moral",
+  pme: "persona_moral",
+  dependencia: "persona_moral",
+}
 
 const CONTROLES_ARTICULO_17: Record<UmbralStatus, string[]> = {
   "sin-obligacion": [
@@ -282,6 +306,436 @@ function formatTipoClienteLabel(value: string, detalle?: string) {
   const option = obtenerOpcionTipoCliente(normalizarTipoCliente(value))
   const base = option ? option.label : value
   return detalle ? `${base} – ${detalle}` : base
+}
+
+function obtenerPersonaTipoDesdeCliente(tipoCliente: string): PersonaAvisoTipo {
+  const normalizado = normalizarTipoCliente(tipoCliente)
+  return MAPA_TIPO_CLIENTE_PERSONA[normalizado] ?? MAPA_TIPO_CLIENTE_PERSONA[tipoCliente] ?? "persona_moral"
+}
+
+function separarNombreCompleto(nombre: string) {
+  const partes = nombre.trim().split(/\s+/).filter(Boolean)
+  if (partes.length === 0) {
+    return { nombre: "", apellidoPaterno: "", apellidoMaterno: "" }
+  }
+  if (partes.length === 1) {
+    return { nombre: partes[0], apellidoPaterno: "", apellidoMaterno: "" }
+  }
+  if (partes.length === 2) {
+    return { nombre: partes[0], apellidoPaterno: partes[1], apellidoMaterno: "" }
+  }
+
+  const apellidoMaterno = partes.pop() ?? ""
+  const apellidoPaterno = partes.pop() ?? ""
+  const nombreCompuesto = partes.join(" ")
+
+  return {
+    nombre: nombreCompuesto,
+    apellidoPaterno,
+    apellidoMaterno,
+  }
+}
+
+function encontrarPersonaCliente(expediente?: ExpedienteDetallado | null): PersonaReportada | undefined {
+  if (!expediente?.personas || expediente.personas.length === 0) {
+    return undefined
+  }
+
+  return (
+    expediente.personas.find((persona) =>
+      persona.rolRelacion?.toLowerCase().includes("cliente"),
+    ) ?? expediente.personas[0]
+  )
+}
+
+function encontrarBeneficiario(expediente?: ExpedienteDetallado | null): PersonaReportada | undefined {
+  if (!expediente?.personas) return undefined
+  return expediente.personas.find((persona) =>
+    persona.rolRelacion?.toLowerCase().includes("benef"),
+  )
+}
+
+interface PrefillInmuebleOptions {
+  expediente?: ExpedienteDetallado
+  anio?: number
+  mes?: number
+  actividadKey?: string | null
+}
+
+function aplicarPrefillInmueble(
+  actual: InmuebleCuestionarioData,
+  opciones: PrefillInmuebleOptions,
+): InmuebleCuestionarioData {
+  const { expediente, anio, mes, actividadKey } = opciones
+  let cambiado = false
+  let resultado: InmuebleCuestionarioData = {
+    ...actual,
+    personaFisica: { ...actual.personaFisica },
+    personaMoral: { ...actual.personaMoral, representante: { ...actual.personaMoral.representante } },
+    fideicomiso: { ...actual.fideicomiso, apoderado: { ...actual.fideicomiso.apoderado } },
+    domicilioNacional: { ...actual.domicilioNacional },
+    domicilioExtranjero: { ...actual.domicilioExtranjero },
+    telefono: { ...actual.telefono },
+    beneficiarioFisica: { ...actual.beneficiarioFisica },
+    beneficiarioMoral: { ...actual.beneficiarioMoral },
+    beneficiarioFideicomiso: { ...actual.beneficiarioFideicomiso },
+    operacion: { ...actual.operacion },
+  }
+
+  if (anio && mes) {
+    const mesReportado = `${anio}${mes.toString().padStart(2, "0")}`
+    if (resultado.mesReportado !== mesReportado) {
+      resultado = { ...resultado, mesReportado }
+      cambiado = true
+    }
+  }
+
+  if (!resultado.claveSujetoObligado && expediente?.claveSujetoObligado) {
+    resultado = { ...resultado, claveSujetoObligado: expediente.claveSujetoObligado.slice(0, 13) }
+    cambiado = true
+  }
+
+  if (!resultado.claveActividad) {
+    const clave = expediente?.claveActividadVulnerable?.slice(0, 3)
+    if (clave) {
+      resultado = { ...resultado, claveActividad: clave }
+      cambiado = true
+    } else if (actividadKey && ACTIVIDADES_INMUEBLES.has(actividadKey)) {
+      resultado = { ...resultado, claveActividad: "INM" }
+      cambiado = true
+    }
+  }
+
+  if (expediente?.tipoCliente) {
+    const personaTipo = obtenerPersonaTipoDesdeCliente(expediente.tipoCliente)
+    if (resultado.personaTipo !== personaTipo) {
+      resultado = { ...resultado, personaTipo }
+      cambiado = true
+    }
+  }
+
+  const personaCliente = encontrarPersonaCliente(expediente)
+
+  if (personaCliente) {
+    if (resultado.personaTipo === "persona_moral") {
+      const denominacion = personaCliente.denominacion || expediente?.nombre
+      const fecha = personaCliente.fechaConstitucion || expediente?.identificacion?.["fecha-constitucion"]
+      const rfc = personaCliente.rfc || expediente?.rfc
+      const pais = buscarPaisPorNombre(personaCliente.pais ?? expediente?.identificacion?.nacionalidad)?.value
+      const giro = personaCliente.giro.replace(/[^0-9]/g, "") || expediente?.datosFiscales?.["actividad-sat"]?.replace(/[^0-9]/g, "")
+
+      let personaMoral = resultado.personaMoral
+      let modificado = false
+
+      if (!personaMoral.denominacion && denominacion) {
+        personaMoral = { ...personaMoral, denominacion: denominacion.slice(0, 254) }
+        modificado = true
+      }
+      if (!personaMoral.fechaConstitucion && fecha) {
+        personaMoral = { ...personaMoral, fechaConstitucion: fecha.slice(0, 10) }
+        modificado = true
+      }
+      if (!personaMoral.rfc && rfc) {
+        personaMoral = { ...personaMoral, rfc: rfc.slice(0, 13).toUpperCase() }
+        modificado = true
+      }
+      if (!personaMoral.paisNacionalidad && pais) {
+        personaMoral = { ...personaMoral, paisNacionalidad: pais }
+        modificado = true
+      }
+      if (!personaMoral.giroMercantil && giro) {
+        personaMoral = { ...personaMoral, giroMercantil: giro.slice(0, 7) }
+        modificado = true
+      }
+
+      const representante = personaCliente.representante
+      if (representante) {
+        const nuevoRepresentante = { ...personaMoral.representante }
+        let cambioRepresentante = false
+        if (!nuevoRepresentante.nombre && representante.nombre) {
+          nuevoRepresentante.nombre = representante.nombre.slice(0, 200)
+          cambioRepresentante = true
+        }
+        if (!nuevoRepresentante.apellidoPaterno && representante.apellidoPaterno) {
+          nuevoRepresentante.apellidoPaterno = representante.apellidoPaterno.slice(0, 200)
+          cambioRepresentante = true
+        }
+        if (!nuevoRepresentante.apellidoMaterno && representante.apellidoMaterno) {
+          nuevoRepresentante.apellidoMaterno = representante.apellidoMaterno.slice(0, 200)
+          cambioRepresentante = true
+        }
+        if (!nuevoRepresentante.fechaNacimiento && representante.fechaNacimiento) {
+          nuevoRepresentante.fechaNacimiento = representante.fechaNacimiento.slice(0, 10)
+          cambioRepresentante = true
+        }
+        if (!nuevoRepresentante.rfc && representante.rfc) {
+          nuevoRepresentante.rfc = representante.rfc.slice(0, 13).toUpperCase()
+          cambioRepresentante = true
+        }
+        if (!nuevoRepresentante.curp && representante.curp) {
+          nuevoRepresentante.curp = representante.curp.slice(0, 18).toUpperCase()
+          cambioRepresentante = true
+        }
+        if (cambioRepresentante) {
+          personaMoral = { ...personaMoral, representante: nuevoRepresentante }
+          modificado = true
+        }
+      }
+
+      if (modificado) {
+        resultado = { ...resultado, personaMoral }
+        cambiado = true
+      }
+    } else if (resultado.personaTipo === "persona_fisica") {
+      const nombreReferencia = personaCliente.denominacion || expediente?.nombre || ""
+      const { nombre, apellidoPaterno, apellidoMaterno } = separarNombreCompleto(nombreReferencia)
+      const fecha = personaCliente.fechaConstitucion || expediente?.identificacion?.["fecha-constitucion"]
+      const rfc = personaCliente.rfc || expediente?.rfc
+      const curp = personaCliente.curp
+      const paisNacionalidad = buscarPaisPorNombre(personaCliente.pais ?? expediente?.identificacion?.nacionalidad)?.value
+
+      let personaFisica = resultado.personaFisica
+      let modificado = false
+      if (!personaFisica.nombre && nombre) {
+        personaFisica = { ...personaFisica, nombre: nombre.slice(0, 200) }
+        modificado = true
+      }
+      if (!personaFisica.apellidoPaterno && apellidoPaterno) {
+        personaFisica = { ...personaFisica, apellidoPaterno: apellidoPaterno.slice(0, 200) }
+        modificado = true
+      }
+      if (!personaFisica.apellidoMaterno && apellidoMaterno) {
+        personaFisica = { ...personaFisica, apellidoMaterno: apellidoMaterno.slice(0, 200) }
+        modificado = true
+      }
+      if (!personaFisica.fechaNacimiento && fecha) {
+        personaFisica = { ...personaFisica, fechaNacimiento: fecha.slice(0, 10) }
+        modificado = true
+      }
+      if (!personaFisica.rfc && rfc) {
+        personaFisica = { ...personaFisica, rfc: rfc.slice(0, 13).toUpperCase() }
+        modificado = true
+      }
+      if (!personaFisica.curp && curp) {
+        personaFisica = { ...personaFisica, curp: curp.slice(0, 18).toUpperCase() }
+        modificado = true
+      }
+      if (!personaFisica.paisNacionalidad && paisNacionalidad) {
+        personaFisica = { ...personaFisica, paisNacionalidad }
+        modificado = true
+      }
+      if (!personaFisica.paisNacimiento && paisNacionalidad) {
+        personaFisica = { ...personaFisica, paisNacimiento: paisNacionalidad }
+        modificado = true
+      }
+      if (!personaFisica.actividadEconomica && personaCliente.giro) {
+        personaFisica = {
+          ...personaFisica,
+          actividadEconomica: personaCliente.giro.replace(/[^0-9]/g, "").slice(0, 7),
+        }
+        modificado = true
+      }
+      if (modificado) {
+        resultado = { ...resultado, personaFisica }
+        cambiado = true
+      }
+    }
+
+    const domicilio = personaCliente.domicilio
+    if (domicilio && domicilio.ambito === "nacional") {
+      let domicilioNacional = resultado.domicilioNacional
+      let modificado = false
+      if (!domicilioNacional.codigoPostal && domicilio.codigoPostal) {
+        domicilioNacional = { ...domicilioNacional, codigoPostal: domicilio.codigoPostal.slice(0, 5) }
+        modificado = true
+      }
+      if (!domicilioNacional.estado && domicilio.entidad) {
+        domicilioNacional = { ...domicilioNacional, estado: domicilio.entidad }
+        modificado = true
+      }
+      if (!domicilioNacional.municipio && domicilio.municipio) {
+        domicilioNacional = { ...domicilioNacional, municipio: domicilio.municipio }
+        modificado = true
+      }
+      if (!domicilioNacional.ciudad && domicilio.ciudad) {
+        domicilioNacional = { ...domicilioNacional, ciudad: domicilio.ciudad }
+        modificado = true
+      }
+      if (!domicilioNacional.colonia && domicilio.colonia) {
+        domicilioNacional = { ...domicilioNacional, colonia: domicilio.colonia }
+        modificado = true
+      }
+      if (!domicilioNacional.calle && domicilio.calle) {
+        domicilioNacional = { ...domicilioNacional, calle: domicilio.calle }
+        modificado = true
+      }
+      if (!domicilioNacional.numeroExterior && domicilio.numeroExterior) {
+        domicilioNacional = { ...domicilioNacional, numeroExterior: domicilio.numeroExterior }
+        modificado = true
+      }
+      if (!domicilioNacional.numeroInterior && domicilio.numeroInterior) {
+        domicilioNacional = { ...domicilioNacional, numeroInterior: domicilio.numeroInterior }
+        modificado = true
+      }
+      if (modificado) {
+        resultado = { ...resultado, domicilioNacional }
+        cambiado = true
+      }
+
+      let operacion = resultado.operacion
+      let operacionModificada = false
+      if (!operacion.codigoPostalInmueble && domicilio.codigoPostal) {
+        operacion = { ...operacion, codigoPostalInmueble: domicilio.codigoPostal.slice(0, 5) }
+        operacionModificada = true
+      }
+      if (!operacion.coloniaInmueble && domicilio.colonia) {
+        operacion = { ...operacion, coloniaInmueble: domicilio.colonia }
+        operacionModificada = true
+      }
+      if (!operacion.calleInmueble && domicilio.calle) {
+        operacion = { ...operacion, calleInmueble: domicilio.calle }
+        operacionModificada = true
+      }
+      if (!operacion.numeroExteriorInmueble && domicilio.numeroExterior) {
+        operacion = { ...operacion, numeroExteriorInmueble: domicilio.numeroExterior }
+        operacionModificada = true
+      }
+      if (operacionModificada) {
+        resultado = { ...resultado, operacion }
+        cambiado = true
+      }
+    }
+
+    const contacto = personaCliente.contacto
+    if (contacto) {
+      let telefono = resultado.telefono
+      let modificadoTelefono = false
+      if (!telefono.clavePais && contacto.clavePais) {
+        telefono = { ...telefono, clavePais: contacto.clavePais.slice(0, 2).toUpperCase() }
+        modificadoTelefono = true
+      }
+      if (!telefono.numero && contacto.telefono) {
+        telefono = { ...telefono, numero: contacto.telefono.replace(/[^0-9]/g, "").slice(0, 12) }
+        modificadoTelefono = true
+      }
+      if (!telefono.correo && contacto.correo) {
+        telefono = { ...telefono, correo: contacto.correo.slice(0, 60) }
+        modificadoTelefono = true
+      }
+      if (modificadoTelefono) {
+        resultado = { ...resultado, telefono }
+        cambiado = true
+      }
+    }
+  }
+
+  const beneficiario = encontrarBeneficiario(expediente)
+  if (beneficiario) {
+    const beneficiarioTipo: PersonaAvisoTipo =
+      beneficiario.tipo === "persona_fisica" ? "persona_fisica" : "persona_moral"
+    if (!resultado.beneficiarioActivo) {
+      resultado = { ...resultado, beneficiarioActivo: true }
+      cambiado = true
+    }
+    if (resultado.beneficiarioTipo !== beneficiarioTipo) {
+      resultado = { ...resultado, beneficiarioTipo }
+      cambiado = true
+    }
+
+    if (beneficiarioTipo === "persona_fisica") {
+      const { nombre, apellidoPaterno, apellidoMaterno } = separarNombreCompleto(beneficiario.denominacion)
+      let beneficiarioFisica = resultado.beneficiarioFisica
+      let modificado = false
+      if (!beneficiarioFisica.nombre && nombre) {
+        beneficiarioFisica = { ...beneficiarioFisica, nombre: nombre.slice(0, 200) }
+        modificado = true
+      }
+      if (!beneficiarioFisica.apellidoPaterno && apellidoPaterno) {
+        beneficiarioFisica = {
+          ...beneficiarioFisica,
+          apellidoPaterno: apellidoPaterno.slice(0, 200),
+        }
+        modificado = true
+      }
+      if (!beneficiarioFisica.apellidoMaterno && apellidoMaterno) {
+        beneficiarioFisica = {
+          ...beneficiarioFisica,
+          apellidoMaterno: apellidoMaterno.slice(0, 200),
+        }
+        modificado = true
+      }
+      if (!beneficiarioFisica.fechaNacimiento && beneficiario.fechaConstitucion) {
+        beneficiarioFisica = {
+          ...beneficiarioFisica,
+          fechaNacimiento: beneficiario.fechaConstitucion.slice(0, 10),
+        }
+        modificado = true
+      }
+      if (!beneficiarioFisica.rfc && beneficiario.rfc) {
+        beneficiarioFisica = { ...beneficiarioFisica, rfc: beneficiario.rfc.slice(0, 13).toUpperCase() }
+        modificado = true
+      }
+      if (!beneficiarioFisica.curp && beneficiario.curp) {
+        beneficiarioFisica = { ...beneficiarioFisica, curp: beneficiario.curp.slice(0, 18).toUpperCase() }
+        modificado = true
+      }
+      if (!beneficiarioFisica.actividadEconomica && beneficiario.giro) {
+        beneficiarioFisica = {
+          ...beneficiarioFisica,
+          actividadEconomica: beneficiario.giro.replace(/[^0-9]/g, "").slice(0, 7),
+        }
+        modificado = true
+      }
+      const pais = buscarPaisPorNombre(beneficiario.pais)?.value
+      if (!beneficiarioFisica.paisNacionalidad && pais) {
+        beneficiarioFisica = { ...beneficiarioFisica, paisNacionalidad: pais, paisNacimiento: pais }
+        modificado = true
+      }
+      if (modificado) {
+        resultado = { ...resultado, beneficiarioFisica }
+        cambiado = true
+      }
+    } else {
+      let beneficiarioMoral = resultado.beneficiarioMoral
+      let modificado = false
+      if (!beneficiarioMoral.denominacion && beneficiario.denominacion) {
+        beneficiarioMoral = {
+          ...beneficiarioMoral,
+          denominacion: beneficiario.denominacion.slice(0, 254),
+        }
+        modificado = true
+      }
+      if (!beneficiarioMoral.fechaConstitucion && beneficiario.fechaConstitucion) {
+        beneficiarioMoral = {
+          ...beneficiarioMoral,
+          fechaConstitucion: beneficiario.fechaConstitucion.slice(0, 10),
+        }
+        modificado = true
+      }
+      if (!beneficiarioMoral.rfc && beneficiario.rfc) {
+        beneficiarioMoral = { ...beneficiarioMoral, rfc: beneficiario.rfc.slice(0, 12).toUpperCase() }
+        modificado = true
+      }
+      const pais = buscarPaisPorNombre(beneficiario.pais)?.value
+      if (!beneficiarioMoral.paisNacionalidad && pais) {
+        beneficiarioMoral = { ...beneficiarioMoral, paisNacionalidad: pais }
+        modificado = true
+      }
+      if (!beneficiarioMoral.giroMercantil && beneficiario.giro) {
+        beneficiarioMoral = {
+          ...beneficiarioMoral,
+          giroMercantil: beneficiario.giro.replace(/[^0-9]/g, "").slice(0, 7),
+        }
+        modificado = true
+      }
+      if (modificado) {
+        resultado = { ...resultado, beneficiarioMoral }
+        cambiado = true
+      }
+    }
+  }
+
+  return cambiado ? resultado : actual
 }
 
 function formatDateDisplay(value: string) {
@@ -619,11 +1073,20 @@ export default function ActividadesVulnerablesPage() {
     archivoContenido: "",
     fechaRegistro: new Date().toISOString().substring(0, 10),
   })
+  const [inmuebleCuestionario, setInmuebleCuestionario] = useState<InmuebleCuestionarioData>(
+    crearInmuebleDataInicial(),
+  )
+  const [expedientesDetalle, setExpedientesDetalle] = useState<Record<string, ExpedienteDetallado>>({})
 
   const tipoClienteSeleccionado = useMemo(
     () => obtenerOpcionTipoCliente(tipoCliente),
     [tipoCliente],
   )
+
+  const detalleExpedienteSeleccionado = useMemo(() => {
+    if (!rfc) return undefined
+    return expedientesDetalle[rfc.toUpperCase()]
+  }, [rfc, expedientesDetalle])
 
   const umaVentana = useMemo(() => {
     const filtered = UMA_MONTHS.filter((entry) => {
@@ -757,6 +1220,57 @@ export default function ActividadesVulnerablesPage() {
       setClientesGuardadosListo(true)
     }
   }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    try {
+      const stored = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
+      if (!stored) return
+      const parsed = JSON.parse(stored)
+      if (!Array.isArray(parsed)) return
+
+      const mapa = new Map<string, ExpedienteDetallado>()
+      parsed.forEach((item) => {
+        if (item && typeof item === "object" && typeof item.rfc === "string") {
+          mapa.set(item.rfc.toUpperCase(), item as ExpedienteDetallado)
+        }
+      })
+
+      if (mapa.size > 0) {
+        setExpedientesDetalle(Object.fromEntries(mapa))
+      }
+    } catch (error) {
+      console.warn("No fue posible leer los expedientes detallados", error)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!actividadKey) return
+    if (ACTIVIDADES_INMUEBLES.has(actividadKey)) return
+    setInmuebleCuestionario(crearInmuebleDataInicial())
+  }, [actividadKey])
+
+  useEffect(() => {
+    if (!actividadKey) return
+    if (!ACTIVIDADES_INMUEBLES.has(actividadKey)) return
+    const personaTipo = obtenerPersonaTipoDesdeCliente(tipoCliente)
+    setInmuebleCuestionario((prev) => (prev.personaTipo === personaTipo ? prev : { ...prev, personaTipo }))
+  }, [actividadKey, tipoCliente])
+
+  useEffect(() => {
+    if (!actividadKey) return
+    if (!ACTIVIDADES_INMUEBLES.has(actividadKey)) return
+
+    setInmuebleCuestionario((prev) =>
+      aplicarPrefillInmueble(prev, {
+        expediente: detalleExpedienteSeleccionado,
+        anio: anioSeleccionado,
+        mes: mesSeleccionado,
+        actividadKey,
+      }),
+    )
+  }, [actividadKey, anioSeleccionado, mesSeleccionado, detalleExpedienteSeleccionado])
 
   useEffect(() => {
     if (!clientesGuardadosListo) return
@@ -2536,11 +3050,28 @@ const cambiarMesCalendario = (delta: number) => {
                       <li>Medios de contacto y domicilio fiscal del sujeto obligado.</li>
                       <li>Designación de responsable de avisos, alta en el padrón de actividades vulnerables.</li>
                     </ul>
-                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+
+              {ACTIVIDADES_INMUEBLES.has(actividadKey) && (
+                <div className="space-y-4">
+                  <div className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                    <p className="font-semibold">Cuestionario especializado para operaciones con inmuebles</p>
+                    <p>
+                      Se prellenan los campos con la información disponible en el expediente único y se habilita el catálogo
+                      oficial de colonias, países y monedas para documentar el aviso inmobiliario sin errores de forma.
+                    </p>
+                    <p className="mt-1">
+                      Ajusta los datos antes de generar el aviso definitivo; el código postal completa municipio y estado y
+                      permite seleccionar la colonia correspondiente.
+                    </p>
+                  </div>
+                  <InmuebleCuestionario data={inmuebleCuestionario} onChange={setInmuebleCuestionario} />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
           {pasoActual === 2 && (
             <Card className="border-slate-200">
