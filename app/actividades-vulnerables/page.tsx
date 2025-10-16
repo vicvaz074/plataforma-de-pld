@@ -302,6 +302,7 @@ interface DomicilioAviso {
   pais?: string
   entidad?: string
   municipio?: string
+  ciudad?: string
   colonia?: string
   codigoPostal?: string
   calle?: string
@@ -666,6 +667,15 @@ function buildChecklist(
   return checklist
 }
 
+function normalizarTexto(value: string | undefined | null) {
+  if (!value) return ""
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase()
+}
+
 function obtenerAlertaPorStatus(status: UmbralStatus) {
   if (status === "aviso") {
     return "Supera el umbral de aviso. Preparar aviso en 17 días y suspender acumulación."
@@ -945,6 +955,7 @@ function sanitizeExpedientePersona(raw: any): ExpedientePersona | null {
               : undefined,
           entidad: typeof domicilioRaw.entidad === "string" ? domicilioRaw.entidad : undefined,
           municipio: typeof domicilioRaw.municipio === "string" ? domicilioRaw.municipio : undefined,
+          ciudad: typeof domicilioRaw.ciudad === "string" ? domicilioRaw.ciudad : undefined,
           colonia: typeof domicilioRaw.colonia === "string" ? domicilioRaw.colonia : undefined,
           codigoPostal: typeof domicilioRaw.codigoPostal === "string" ? domicilioRaw.codigoPostal : undefined,
           calle: typeof domicilioRaw.calle === "string" ? domicilioRaw.calle : undefined,
@@ -1025,6 +1036,209 @@ function sanitizeExpediente(raw: any): ExpedienteDetalle | null {
     personas,
     actualizadoEn: typeof raw.actualizadoEn === "string" ? raw.actualizadoEn : undefined,
   }
+}
+
+const DEMO_CLIENTE_RFC = "DEM010203AB1"
+const DEMO_CLIENTE_NOMBRE = "Demo Arrendamientos S.A. de C.V."
+const DEMO_EXPEDIENTE_PERSONA_ID = "demo-persona-moral"
+const DEMO_CODIGO_POSTAL = "01020"
+
+function crearMockExpedienteInmuebles(): ExpedienteDetalle | null {
+  return sanitizeExpediente({
+    rfc: DEMO_CLIENTE_RFC,
+    nombre: DEMO_CLIENTE_NOMBRE,
+    tipoCliente: "pm_mexicana",
+    detalleTipoCliente: "Arrendadora corporativa",
+    responsable: "Mariana López",
+    claveActividadVulnerable: ACTIVIDAD_INMUEBLES_KEY,
+    identificacion: {
+      nombre: DEMO_CLIENTE_NOMBRE,
+      rfc: DEMO_CLIENTE_RFC,
+      "actividad-economica": "Arrendamiento de oficinas corporativas",
+    },
+    datosFiscales: {
+      "regimen-fiscal": "General de Ley Personas Morales",
+      "fecha-inicio-operaciones": "2018-03-12",
+    },
+    perfilOperaciones: {
+      "origen-fondos": "Cobro de rentas comerciales",
+      "destino-fondos": "Mantenimiento de inmuebles arrendados",
+    },
+    documentacion: {
+      "identificacion-oficial": "completo",
+      "acta-constitutiva": "completo",
+      "comprobante-domicilio": "en-proceso",
+    },
+    personas: [
+      {
+        id: DEMO_EXPEDIENTE_PERSONA_ID,
+        tipo: "persona_moral",
+        denominacion: DEMO_CLIENTE_NOMBRE,
+        rfc: DEMO_CLIENTE_RFC,
+        pais: "MX",
+        giro: "Administración de inmuebles comerciales",
+        representante: {
+          nombre: "Laura",
+          apellidoPaterno: "Martínez",
+          apellidoMaterno: "Reyes",
+          fechaNacimiento: "1982-04-08",
+          rfc: "MARR820408AB1",
+          curp: "MARR820408MDFRYL05",
+        },
+        domicilio: {
+          ambito: "nacional",
+          pais: "MX",
+          entidad: "Ciudad de México",
+          municipio: "Álvaro Obregón",
+          ciudad: "Ciudad de México",
+          colonia: "Guadalupe Inn",
+          codigoPostal: DEMO_CODIGO_POSTAL,
+          calle: "Av. Insurgentes Sur",
+          numeroExterior: "123",
+          numeroInterior: "601",
+        },
+        contacto: {
+          clavePais: "MX",
+          telefono: "5555123456",
+          correo: "contacto@demoarrendamientos.mx",
+        },
+      },
+    ],
+    actualizadoEn: "2024-05-15T10:00:00.000Z",
+  })
+}
+
+function crearMockOperacionInmuebles(): OperacionCliente | null {
+  const actividad = actividadesVulnerables.find((item) => item.key === ACTIVIDAD_INMUEBLES_KEY)
+  const uma = UMA_MONTHS[UMA_MONTHS.length - 1]
+  if (!actividad || !uma) return null
+
+  const mes = uma.month
+  const anio = uma.year
+  const periodo = `${anio}-${`${mes}`.padStart(2, "0")}`
+  const fecha = `${periodo}-15`
+  const checklist = buildChecklist(actividad, "pm_mexicana")
+  Object.keys(checklist)
+    .slice(0, 2)
+    .forEach((key) => {
+      checklist[key] = true
+    })
+
+  return sanitizeOperacion({
+    id: "demo-operacion-inmuebles",
+    actividadKey: ACTIVIDAD_INMUEBLES_KEY,
+    actividadNombre: `${actividad.fraccion} – ${actividad.nombre}`,
+    tipoCliente: "pm_mexicana",
+    detalleTipoCliente: "Arrendadora corporativa",
+    cliente: DEMO_CLIENTE_NOMBRE,
+    rfc: DEMO_CLIENTE_RFC,
+    mismoGrupo: false,
+    periodo,
+    mes,
+    anio,
+    monto: 215000,
+    moneda: "MXN",
+    monedaDescripcion: getMonedaLabel("MXN"),
+    fechaOperacion: fecha,
+    tipoOperacion: INMUEBLE_OPERACIONES[0]?.value ?? "501",
+    evidencia: "Contrato demostrativo firmado con Grupo Visionario, S.A. de C.V.",
+    umaDiaria: uma.daily,
+    identificacionUmbralPesos: Number((uma.daily * actividad.identificacionUmbralUma).toFixed(2)),
+    avisoUmbralPesos: Number((uma.daily * actividad.avisoUmbralUma).toFixed(2)),
+    umbralStatus: "identificacion",
+    acumuladoCliente: 215000,
+    alerta: obtenerAlertaPorStatus("identificacion"),
+    documentosSoporte: [
+      {
+        id: "demo-contrato",
+        requisito: "Contrato de arrendamiento firmado",
+        notas: "Documento de referencia para demostración.",
+        fechaRegistro: fecha,
+      },
+    ],
+    requisitosChecklist: checklist,
+    kycIntegrado: true,
+    referenciaAviso: "DEMO-AV-0001",
+    alertaCodigo: ALERTA_TIPOS[1]?.value ?? ALERTA_TIPOS[0].value,
+    alertaDescripcion: "Ejemplo demostrativo de seguimiento.",
+    prioridadAviso: PRIORIDAD_AVISO_OPCIONES[0]?.value ?? "1",
+    claveSujetoObligado: "999999",
+    claveActividadVulnerable: ACTIVIDAD_INMUEBLES_KEY,
+    expedienteReferenciado: DEMO_CLIENTE_RFC,
+    personaExpedienteId: DEMO_EXPEDIENTE_PERSONA_ID,
+    personaAviso: {
+      tipo: "persona_moral",
+      denominacion: DEMO_CLIENTE_NOMBRE,
+      fechaConstitucion: "2018-03-12",
+      pais: "MX",
+      giro: "Administración de inmuebles comerciales",
+      rfc: DEMO_CLIENTE_RFC,
+      domicilio: {
+        ambito: "nacional",
+        pais: "MX",
+        entidad: "Ciudad de México",
+        municipio: "Álvaro Obregón",
+        ciudad: "Ciudad de México",
+        colonia: "Guadalupe Inn",
+        codigoPostal: DEMO_CODIGO_POSTAL,
+        calle: "Av. Insurgentes Sur",
+        numeroExterior: "123",
+      },
+      contacto: {
+        clavePais: "MX",
+        telefono: "5555123456",
+        correo: "contacto@demoarrendamientos.mx",
+      },
+    },
+    inmueble: {
+      codigoOperacion: "ARR-2024-001",
+      fechaInicio: `${periodo}-01`,
+      fechaFin: `${periodo}-30`,
+      tipoInmueble: TIPO_INMUEBLE_OPTIONS.find((option) => option.value === "oficina")?.value ?? "oficina",
+      valorAvaluo: "2500000",
+      folioReal: "CDMX-2024-56789",
+      pais: "MX",
+      entidad: "Ciudad de México",
+      municipio: "Álvaro Obregón",
+      colonia: "Guadalupe Inn",
+      codigoPostal: DEMO_CODIGO_POSTAL,
+      calle: "Av. Insurgentes Sur",
+      numeroExterior: "123",
+      numeroInterior: "601",
+    },
+    liquidacion: {
+      fechaPago: fecha,
+      formaPago: FORMA_PAGO_OPTIONS[0]?.value ?? "1",
+      instrumento: "Transferencia SPEI desde BBVA",
+      moneda: "MXN",
+      monedaDescripcion: getMonedaLabel("MXN"),
+      monto: 215000,
+    },
+    beneficiario: {
+      tipo: "persona_fisica",
+      nombre: "Carolina",
+      apellidoPaterno: "Sánchez",
+      apellidoMaterno: "Vega",
+      fechaNacimiento: "1985-07-22",
+      rfc: "SAVC8507221H1",
+      pais: "MX",
+    },
+    contraparte: {
+      tipo: "persona_moral",
+      nombre: "Grupo Visionario, S.A. de C.V.",
+      rfc: "GVI980101AA1",
+      pais: "MX",
+    },
+    instrumento: {
+      numero: "45,321",
+      fecha,
+      notario: "Lic. José Pérez Ramírez",
+      entidad: "Ciudad de México",
+      valorAvaluo: "2300000",
+    },
+    figuraCliente: FIGURA_CLIENTE_OPTIONS[0]?.value,
+    figuraSujetoObligado: FIGURA_SUJETO_OBLIGADO_OPTIONS[0]?.value,
+  })
 }
 
 function buildPersonaAvisoFromExpediente(persona: ExpedientePersona | null | undefined): PersonaAvisoOperacion | null {
@@ -1120,6 +1334,7 @@ function sanitizePersonaAviso(raw: any): PersonaAvisoOperacion | null {
               : undefined,
           entidad: typeof domicilioRaw.entidad === "string" ? domicilioRaw.entidad : undefined,
           municipio: typeof domicilioRaw.municipio === "string" ? domicilioRaw.municipio : undefined,
+          ciudad: typeof domicilioRaw.ciudad === "string" ? domicilioRaw.ciudad : undefined,
           colonia: typeof domicilioRaw.colonia === "string" ? domicilioRaw.colonia : undefined,
           codigoPostal: typeof domicilioRaw.codigoPostal === "string" ? domicilioRaw.codigoPostal : undefined,
           calle: typeof domicilioRaw.calle === "string" ? domicilioRaw.calle : undefined,
@@ -1295,6 +1510,7 @@ export default function ActividadesVulnerablesPage() {
   const { toast } = useToast()
   const [pasoActual, setPasoActual] = useState(0)
   const [actividadKey, setActividadKey] = useState<string>(actividadesVulnerables[0]?.key ?? "")
+  const [actividadSearch, setActividadSearch] = useState("")
   const [anioSeleccionado, setAnioSeleccionado] = useState<number>(currentYear)
   const [mesSeleccionado, setMesSeleccionado] = useState<number>(currentMonth)
   const [montoOperacion, setMontoOperacion] = useState<string>("")
@@ -1323,6 +1539,8 @@ export default function ActividadesVulnerablesPage() {
   const [prioridadAviso, setPrioridadAviso] = useState<string>(PRIORIDAD_DEFAULT)
   const [claveSujetoObligado, setClaveSujetoObligado] = useState<string>("")
   const [claveActividad, setClaveActividad] = useState<string>("")
+  const [expedienteSearch, setExpedienteSearch] = useState("")
+  const [personaExpedienteSearch, setPersonaExpedienteSearch] = useState("")
   const [coloniasDisponibles, setColoniasDisponibles] = useState<string[]>([])
   const [inmuebleForm, setInmuebleForm] = useState<DatosInmuebleFormState>(() => ({ ...INMUEBLE_FORM_DEFAULT }))
   const [liquidacionForm, setLiquidacionForm] = useState<DatosLiquidacionFormState>(
@@ -1345,6 +1563,7 @@ export default function ActividadesVulnerablesPage() {
   const [clientesGuardados, setClientesGuardados] = useState<ClienteGuardado[]>([])
   const [clientesGuardadosListo, setClientesGuardadosListo] = useState(false)
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string | null>(null)
+  const [clienteGuardadoSearch, setClienteGuardadoSearch] = useState("")
   const [avisoPreliminar, setAvisoPreliminar] = useState<OperacionCliente | null>(null)
   const [infoGrupoOpen, setInfoGrupoOpen] = useState(false)
   const [infoTipoClienteOpen, setInfoTipoClienteOpen] = useState(false)
@@ -1379,6 +1598,29 @@ export default function ActividadesVulnerablesPage() {
     archivoContenido: "",
     fechaRegistro: new Date().toISOString().substring(0, 10),
   })
+
+  const demoExpediente = useMemo(() => crearMockExpedienteInmuebles(), [])
+  const demoOperacion = useMemo(() => crearMockOperacionInmuebles(), [])
+
+  const clientesGuardadosFiltrados = useMemo(() => {
+    const criterio = normalizarTexto(clienteGuardadoSearch)
+    if (!criterio) return clientesGuardados
+    return clientesGuardados.filter((cliente) => {
+      const nombre = normalizarTexto(cliente.nombre)
+      const rfcNormalizado = normalizarTexto(cliente.rfc)
+      return nombre.includes(criterio) || rfcNormalizado.includes(criterio)
+    })
+  }, [clienteGuardadoSearch, clientesGuardados])
+
+  const clientesGuardadosDatalist = useMemo(() => {
+    if (clienteGuardadoSearch.trim().length === 0) {
+      return clientesGuardados
+    }
+    if (clientesGuardadosFiltrados.length > 0) {
+      return clientesGuardadosFiltrados
+    }
+    return clientesGuardados
+  }, [clienteGuardadoSearch, clientesGuardados, clientesGuardadosFiltrados])
 
   const actualizarInmuebleForm = useCallback(
     (campo: keyof DatosInmuebleFormState, valor: string) => {
@@ -1442,6 +1684,16 @@ export default function ActividadesVulnerablesPage() {
 
     return [...anteriores, ...filtered]
   }, [])
+
+  const actividadesFiltradas = useMemo(() => {
+    const criterio = normalizarTexto(actividadSearch)
+    if (!criterio) return actividadesVulnerables
+    return actividadesVulnerables.filter((actividad) => {
+      const nombre = normalizarTexto(actividad.nombre)
+      const fraccion = normalizarTexto(actividad.fraccion)
+      return nombre.includes(criterio) || fraccion.includes(criterio)
+    })
+  }, [actividadSearch])
 
   const actividadesPorFraccion = useMemo(() => {
     return actividadesVulnerables.reduce(
@@ -1514,23 +1766,30 @@ export default function ActividadesVulnerablesPage() {
 
     try {
       const stored = window.localStorage.getItem(OPERACIONES_STORAGE_KEY)
+      let sane: OperacionCliente[] = []
       if (stored) {
         const parsed = JSON.parse(stored) as unknown
         if (Array.isArray(parsed)) {
-          const sane = parsed
+          sane = parsed
             .map((item) => sanitizeOperacion(item))
             .filter((item): item is OperacionCliente => Boolean(item))
-          if (sane.length > 0) {
-            setOperaciones(recalcularOperaciones(sane))
-          }
         }
+      }
+
+      if (sane.length > 0) {
+        setOperaciones(recalcularOperaciones(sane))
+      } else if (demoOperacion) {
+        setOperaciones(recalcularOperaciones([demoOperacion]))
       }
     } catch (_error) {
       // ignorar errores de parseo y continuar con estado vacío
+      if (demoOperacion) {
+        setOperaciones(recalcularOperaciones([demoOperacion]))
+      }
     } finally {
       setOperacionesCargadas(true)
     }
-  }, [])
+  }, [demoOperacion])
 
   useEffect(() => {
     if (!operacionesCargadas) return
@@ -1544,27 +1803,33 @@ export default function ActividadesVulnerablesPage() {
 
     try {
       const stored = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
+      const mapa = new Map<string, ExpedienteDetalle>()
       if (stored) {
         const parsed = JSON.parse(stored) as unknown
         if (Array.isArray(parsed)) {
-          const sane = parsed
+          parsed
             .map((item) => sanitizeExpediente(item))
             .filter((item): item is ExpedienteDetalle => Boolean(item))
-          if (sane.length > 0) {
-            const mapa = new Map<string, ExpedienteDetalle>()
-            sane.forEach((expediente) => {
+            .forEach((expediente) => {
               mapa.set(expediente.rfc, expediente)
             })
-            setExpedientesDetalle(Object.fromEntries(mapa))
-          }
         }
       }
+
+      if (mapa.size === 0 && demoExpediente) {
+        mapa.set(demoExpediente.rfc, demoExpediente)
+      }
+
+      setExpedientesDetalle(Object.fromEntries(mapa))
     } catch (error) {
       console.error("No fue posible leer el detalle de expedientes", error)
+      if (demoExpediente) {
+        setExpedientesDetalle({ [demoExpediente.rfc]: demoExpediente })
+      }
     } finally {
       setExpedientesListo(true)
     }
-  }, [])
+  }, [demoExpediente])
 
   useEffect(() => {
     if (availableYears.length === 0) return
@@ -1740,6 +2005,16 @@ export default function ActividadesVulnerablesPage() {
     [expedientesDetalle],
   )
 
+  const expedientesFiltrados = useMemo(() => {
+    const criterio = normalizarTexto(expedienteSearch)
+    if (!criterio) return expedientesDisponibles
+    return expedientesDisponibles.filter((item) => {
+      const nombre = normalizarTexto(item.nombre ?? "")
+      const rfcNormalizado = normalizarTexto(item.rfc)
+      return nombre.includes(criterio) || rfcNormalizado.includes(criterio)
+    })
+  }, [expedientesDisponibles, expedienteSearch])
+
   const personasExpediente = expedienteActual?.personas ?? []
 
   const personasExpedienteOpciones = useMemo(
@@ -1761,6 +2036,12 @@ export default function ActividadesVulnerablesPage() {
       }),
     [personasExpediente],
   )
+
+  const personasExpedienteFiltradas = useMemo(() => {
+    const criterio = normalizarTexto(personaExpedienteSearch)
+    if (!criterio) return personasExpedienteOpciones
+    return personasExpedienteOpciones.filter((option) => normalizarTexto(option.label).includes(criterio))
+  }, [personaExpedienteSearch, personasExpedienteOpciones])
 
   const personaExpedienteSeleccionadaInfo = useMemo(
     () =>
@@ -1788,6 +2069,21 @@ export default function ActividadesVulnerablesPage() {
       setPersonaExpedienteSeleccionada(personasExpedienteOpciones[0].id)
     }
   }, [personasExpedienteOpciones, personaExpedienteSeleccionada])
+
+  useEffect(() => {
+    if (personaExpedienteSearch.trim().length === 0) return
+
+    if (personasExpedienteFiltradas.length === 0) {
+      if (personaExpedienteSeleccionada !== "") {
+        setPersonaExpedienteSeleccionada("")
+      }
+      return
+    }
+
+    if (!personasExpedienteFiltradas.some((option) => option.id === personaExpedienteSeleccionada)) {
+      setPersonaExpedienteSeleccionada(personasExpedienteFiltradas[0].id)
+    }
+  }, [personaExpedienteSearch, personasExpedienteFiltradas, personaExpedienteSeleccionada])
 
   useEffect(() => {
     if (!personaExpediente) {
@@ -3563,7 +3859,13 @@ const cambiarMesCalendario = (delta: number) => {
               <CardContent className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Actividad vulnerable</Label>
+                    <Label htmlFor="actividad-search">Actividad vulnerable</Label>
+                    <Input
+                      id="actividad-search"
+                      placeholder="Buscar por fracción o nombre"
+                      value={actividadSearch}
+                      onChange={(event) => setActividadSearch(event.target.value)}
+                    />
                     <Select
                       value={actividadKey}
                       onValueChange={(value) => {
@@ -3575,11 +3877,17 @@ const cambiarMesCalendario = (delta: number) => {
                         <SelectValue placeholder="Selecciona una actividad" />
                       </SelectTrigger>
                       <SelectContent>
-                        {actividadesVulnerables.map((actividad) => (
-                          <SelectItem key={actividad.key} value={actividad.key}>
-                            {actividad.fraccion} – {actividad.nombre}
+                        {actividadesFiltradas.length > 0 ? (
+                          actividadesFiltradas.map((actividad) => (
+                            <SelectItem key={actividad.key} value={actividad.key}>
+                              {actividad.fraccion} – {actividad.nombre}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="sin-actividad" disabled>
+                            Sin coincidencias
                           </SelectItem>
-                        ))}
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -3755,7 +4063,13 @@ const cambiarMesCalendario = (delta: number) => {
                   {expedientesDisponibles.length > 0 ? (
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
-                        <Label>Expediente relacionado</Label>
+                        <Label htmlFor="expediente-search">Expediente relacionado</Label>
+                        <Input
+                          id="expediente-search"
+                          placeholder="Buscar por nombre o RFC"
+                          value={expedienteSearch}
+                          onChange={(event) => setExpedienteSearch(event.target.value)}
+                        />
                         <Select
                           value={expedienteSeleccionado ?? undefined}
                           onValueChange={(value) => {
@@ -3774,18 +4088,30 @@ const cambiarMesCalendario = (delta: number) => {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value={MANUAL_EXPEDIENTE_VALUE}>Capturar manualmente</SelectItem>
-                            {expedientesDisponibles.map((expediente) => (
-                              <SelectItem key={expediente.rfc} value={expediente.rfc}>
-                                {expediente.nombre ?? expediente.rfc}
+                            {expedientesFiltrados.length > 0 ? (
+                              expedientesFiltrados.map((expediente) => (
+                                <SelectItem key={expediente.rfc} value={expediente.rfc}>
+                                  {expediente.nombre ?? expediente.rfc}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="sin-expediente" disabled>
+                                Sin coincidencias
                               </SelectItem>
-                            ))}
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
 
                       {expedienteSeleccionado && personasExpedienteOpciones.length > 0 && (
                         <div className="space-y-2">
-                          <Label>Persona reportada del expediente</Label>
+                          <Label htmlFor="persona-expediente-search">Persona reportada del expediente</Label>
+                          <Input
+                            id="persona-expediente-search"
+                            placeholder="Buscar por nombre o identificador"
+                            value={personaExpedienteSearch}
+                            onChange={(event) => setPersonaExpedienteSearch(event.target.value)}
+                          />
                           <Select
                             value={personaExpedienteSeleccionada || undefined}
                             onValueChange={(value) => setPersonaExpedienteSeleccionada(value)}
@@ -3794,14 +4120,26 @@ const cambiarMesCalendario = (delta: number) => {
                               <SelectValue placeholder="Selecciona persona" />
                             </SelectTrigger>
                             <SelectContent>
-                              {personasExpedienteOpciones.map((option) => (
-                                <SelectItem key={option.id} value={option.id}>
-                                  {option.label}
+                              {personasExpedienteFiltradas.length > 0 ? (
+                                personasExpedienteFiltradas.map((option) => (
+                                  <SelectItem key={option.id} value={option.id}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <SelectItem value="sin-persona" disabled>
+                                  Sin coincidencias
                                 </SelectItem>
-                              ))}
+                              )}
                             </SelectContent>
                           </Select>
                         </div>
+                      )}
+
+                      {expedientesFiltrados.length === 0 && expedienteSearch.trim().length > 0 && (
+                        <p className="text-xs text-muted-foreground md:col-span-2">
+                          No se encontraron expedientes con el criterio ingresado.
+                        </p>
                       )}
                     </div>
                   ) : (
@@ -3925,25 +4263,38 @@ const cambiarMesCalendario = (delta: number) => {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>Nombre o razón social</Label>
+                    <Label htmlFor="cliente-guardado-search">Nombre o razón social</Label>
                     {clientesGuardados.length > 0 && (
-                      <Select
-                        value={clienteSeleccionado ?? NUEVO_CLIENTE_VALUE}
-                        onValueChange={manejarSeleccionClienteGuardado}
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Selecciona un cliente guardado" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {clientesGuardados.map((cliente) => (
-                            <SelectItem key={cliente.rfc} value={cliente.rfc}>
-                              {cliente.nombre} ({cliente.rfc}
-                              {cliente.detalleTipoCliente ? ` – ${cliente.detalleTipoCliente}` : ""})
-                            </SelectItem>
-                          ))}
-                          <SelectItem value={NUEVO_CLIENTE_VALUE}>Añadir cliente nuevo…</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <>
+                        <Input
+                          id="cliente-guardado-search"
+                          placeholder="Buscar en clientes guardados"
+                          value={clienteGuardadoSearch}
+                          onChange={(event) => setClienteGuardadoSearch(event.target.value)}
+                        />
+                        <Select
+                          value={clienteSeleccionado ?? NUEVO_CLIENTE_VALUE}
+                          onValueChange={manejarSeleccionClienteGuardado}
+                        >
+                          <SelectTrigger className="bg-white">
+                            <SelectValue placeholder="Selecciona un cliente guardado" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {clientesGuardadosFiltrados.map((cliente) => (
+                              <SelectItem key={cliente.rfc} value={cliente.rfc}>
+                                {cliente.nombre} ({cliente.rfc}
+                                {cliente.detalleTipoCliente ? ` – ${cliente.detalleTipoCliente}` : ""})
+                              </SelectItem>
+                            ))}
+                            {clientesGuardadosFiltrados.length === 0 && (
+                              <SelectItem value="sin-cliente" disabled>
+                                Sin coincidencias
+                              </SelectItem>
+                            )}
+                            <SelectItem value={NUEVO_CLIENTE_VALUE}>Añadir cliente nuevo…</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </>
                     )}
                     <Input
                       list="clientes-guardados"
@@ -3959,7 +4310,7 @@ const cambiarMesCalendario = (delta: number) => {
                     {clientesGuardados.length > 0 && (
                       <>
                         <datalist id="clientes-guardados">
-                          {clientesGuardados.map((cliente) => (
+                          {clientesGuardadosDatalist.map((cliente) => (
                             <option key={cliente.rfc} value={cliente.nombre} />
                           ))}
                         </datalist>
