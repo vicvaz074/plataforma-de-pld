@@ -488,10 +488,7 @@ function sanitizePersonaGuardada(raw: any): PersonaReportada | null {
     },
     contacto: {
       ...base.contacto,
-      conoceTelefono:
-        contactoRaw.conoceTelefono === "no" || contactoRaw.conoceTelefono === "si"
-          ? contactoRaw.conoceTelefono
-          : base.contacto.conoceTelefono,
+      conoceTelefono: "si",
       conocePaisTelefono:
         contactoRaw.conocePaisTelefono === "no" || contactoRaw.conocePaisTelefono === "si"
           ? contactoRaw.conocePaisTelefono
@@ -1098,7 +1095,7 @@ function KycExpedienteContent() {
         },
         contacto: {
           ...base.contacto,
-          conoceTelefono: personaDemo.contacto?.conoceTelefono === "no" ? "no" : "si",
+          conoceTelefono: "si",
           conocePaisTelefono: personaDemo.contacto?.conocePaisTelefono === "no" ? "no" : "si",
           clavePais: personaDemo.contacto?.clavePais ?? base.contacto.clavePais,
           telefono: personaDemo.contacto?.telefono ?? base.contacto.telefono,
@@ -2412,26 +2409,6 @@ function KycExpedienteContent() {
                   <Phone className="h-4 w-4" /> Medios de contacto
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>¿Se conoce el teléfono?</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {[{ value: "si", label: "Sí" }, { value: "no", label: "No" }].map((option) => (
-                        <Button
-                          key={option.value}
-                          type="button"
-                          variant={persona.contacto.conoceTelefono === option.value ? "default" : "outline"}
-                          onClick={() =>
-                            actualizarPersonaReportada(persona.id, (prev) => ({
-                              ...prev,
-                              contacto: { ...prev.contacto, conoceTelefono: option.value as RespuestaBinaria },
-                            }))
-                          }
-                        >
-                          {option.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
                   <div className="space-y-2">
                     <Label>¿Se conoce la clave de país?</Label>
                     <div className="flex flex-wrap gap-2">
