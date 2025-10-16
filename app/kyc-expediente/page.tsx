@@ -1,6 +1,5 @@
 "use client"
-
-import { Suspense, useEffect, useMemo, useState, type ChangeEvent } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import { useSearchParams } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -16,8 +15,10 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Building2,
+  FolderOpen,
   FileText,
   Globe2,
   Mail,
@@ -29,6 +30,8 @@ import {
   Users,
 } from "lucide-react"
 import { CLIENTE_TIPOS, findClienteTipoLabel, findClienteTipoOption } from "@/lib/data/tipos-cliente"
+import { PAISES, findPaisByCodigo, findPaisByNombre } from "@/lib/data/paises"
+import { findCodigoPostalInfo } from "@/lib/data/codigos-postales"
 
 interface CampoExpediente {
   id: string
@@ -292,7 +295,7 @@ function crearPersonaBase(): PersonaReportada {
     fechaConstitucion: "",
     rfc: "",
     curp: "",
-    pais: "México",
+    pais: "MX",
     giro: "",
     rolRelacion: "Cliente",
     representante: {
@@ -305,7 +308,7 @@ function crearPersonaBase(): PersonaReportada {
     },
     domicilio: {
       ambito: "nacional",
-      pais: "México",
+      pais: "MX",
       entidad: "",
       municipio: "",
       colonia: "",
@@ -324,7 +327,7 @@ function crearPersonaBase(): PersonaReportada {
     identificacion: {
       tipo: "",
       numero: "",
-      pais: "México",
+      pais: "MX",
       fechaVencimiento: "",
     },
     participacion: {
@@ -334,6 +337,275 @@ function crearPersonaBase(): PersonaReportada {
       detallePep: "",
     },
   }
+}
+
+interface ExpedienteResumen {
+  rfc: string
+  nombre: string
+  tipoCliente: string
+  detalleTipoCliente?: string
+}
+
+interface ExpedienteDetalle extends ExpedienteResumen {
+  responsable?: string
+  claveSujetoObligado?: string
+  claveActividadVulnerable?: string
+  identificacion?: Record<string, string>
+  datosFiscales?: Record<string, string>
+  perfilOperaciones?: Record<string, string>
+  documentacion?: Record<string, DocumentStatus>
+  personas: PersonaReportada[]
+  actualizadoEn?: string
+}
+
+interface ExpedienteListadoItem extends ExpedienteResumen {
+  actualizadoEn?: string
+  detalle?: ExpedienteDetalle | null
+}
+
+function normalizarTexto(value: string | undefined | null) {
+  if (!value) return ""
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase()
+}
+
+function sanitizeTipoCliente(value: string | undefined | null) {
+  if (!value) return CLIENTE_TIPOS[0]?.value ?? ""
+  const encontrado = findClienteTipoOption(value)
+  return encontrado ? encontrado.value : CLIENTE_TIPOS[0]?.value ?? ""
+}
+
+function sanitizeStringMap(raw: any): Record<string, string> {
+  if (!raw || typeof raw !== "object") return {}
+  const resultado: Record<string, string> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "string") {
+      resultado[key] = value
+    }
+  }
+  return resultado
+}
+
+function sanitizeDocumentacionMap(raw: any): Record<string, DocumentStatus> {
+  if (!raw || typeof raw !== "object") return {}
+  const resultado: Record<string, DocumentStatus> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (value === "pendiente" || value === "en-proceso" || value === "completo") {
+      resultado[key] = value
+    }
+  }
+  return resultado
+}
+
+function sanitizePersonaGuardada(raw: any): PersonaReportada | null {
+  if (!raw || typeof raw !== "object") return null
+
+  const base = crearPersonaBase()
+  const representanteRaw = typeof raw.representante === "object" && raw.representante ? raw.representante : {}
+  const domicilioRaw = typeof raw.domicilio === "object" && raw.domicilio ? raw.domicilio : {}
+  const contactoRaw = typeof raw.contacto === "object" && raw.contacto ? raw.contacto : {}
+  const identificacionRaw =
+    typeof raw.identificacion === "object" && raw.identificacion ? raw.identificacion : {}
+  const participacionRaw =
+    typeof raw.participacion === "object" && raw.participacion ? raw.participacion : {}
+
+  const persona: PersonaReportada = {
+    ...base,
+    id:
+      typeof raw.id === "string" && raw.id.trim().length > 0 ? raw.id : generarIdTemporal(),
+    tipo: raw.tipo === "persona_fisica" || raw.tipo === "persona_moral" ? raw.tipo : base.tipo,
+    denominacion: typeof raw.denominacion === "string" ? raw.denominacion : base.denominacion,
+    fechaConstitucion:
+      typeof raw.fechaConstitucion === "string" ? raw.fechaConstitucion : base.fechaConstitucion,
+    rfc: typeof raw.rfc === "string" ? raw.rfc : base.rfc,
+    curp: typeof raw.curp === "string" ? raw.curp : base.curp,
+    pais:
+      typeof raw.pais === "string"
+        ? findPaisByNombre(raw.pais)?.code ?? findPaisByCodigo(raw.pais)?.code ?? raw.pais
+        : base.pais,
+    giro: typeof raw.giro === "string" ? raw.giro : base.giro,
+    rolRelacion: typeof raw.rolRelacion === "string" ? raw.rolRelacion : base.rolRelacion,
+    representante: {
+      ...base.representante,
+      nombre: typeof representanteRaw.nombre === "string" ? representanteRaw.nombre : base.representante.nombre,
+      apellidoPaterno:
+        typeof representanteRaw.apellidoPaterno === "string"
+          ? representanteRaw.apellidoPaterno
+          : base.representante.apellidoPaterno,
+      apellidoMaterno:
+        typeof representanteRaw.apellidoMaterno === "string"
+          ? representanteRaw.apellidoMaterno
+          : base.representante.apellidoMaterno,
+      fechaNacimiento:
+        typeof representanteRaw.fechaNacimiento === "string"
+          ? representanteRaw.fechaNacimiento
+          : base.representante.fechaNacimiento,
+      rfc: typeof representanteRaw.rfc === "string" ? representanteRaw.rfc : base.representante.rfc,
+      curp: typeof representanteRaw.curp === "string" ? representanteRaw.curp : base.representante.curp,
+    },
+    domicilio: {
+      ...base.domicilio,
+      ambito: domicilioRaw.ambito === "extranjero" ? "extranjero" : "nacional",
+      pais:
+        domicilioRaw.ambito === "extranjero"
+          ? typeof domicilioRaw.pais === "string"
+            ? findPaisByNombre(domicilioRaw.pais)?.code ??
+              findPaisByCodigo(domicilioRaw.pais)?.code ??
+              domicilioRaw.pais
+            : base.domicilio.pais
+          : "MX",
+      entidad: typeof domicilioRaw.entidad === "string" ? domicilioRaw.entidad : base.domicilio.entidad,
+      municipio: typeof domicilioRaw.municipio === "string" ? domicilioRaw.municipio : base.domicilio.municipio,
+      colonia: typeof domicilioRaw.colonia === "string" ? domicilioRaw.colonia : base.domicilio.colonia,
+      codigoPostal:
+        typeof domicilioRaw.codigoPostal === "string"
+          ? domicilioRaw.codigoPostal.replace(/[^0-9]/g, "").slice(0, 5)
+          : base.domicilio.codigoPostal,
+      calle: typeof domicilioRaw.calle === "string" ? domicilioRaw.calle : base.domicilio.calle,
+      numeroExterior:
+        typeof domicilioRaw.numeroExterior === "string"
+          ? domicilioRaw.numeroExterior
+          : base.domicilio.numeroExterior,
+      numeroInterior:
+        typeof domicilioRaw.numeroInterior === "string"
+          ? domicilioRaw.numeroInterior
+          : base.domicilio.numeroInterior,
+    },
+    contacto: {
+      ...base.contacto,
+      conoceTelefono:
+        contactoRaw.conoceTelefono === "no" || contactoRaw.conoceTelefono === "si"
+          ? contactoRaw.conoceTelefono
+          : base.contacto.conoceTelefono,
+      conocePaisTelefono:
+        contactoRaw.conocePaisTelefono === "no" || contactoRaw.conocePaisTelefono === "si"
+          ? contactoRaw.conocePaisTelefono
+          : base.contacto.conocePaisTelefono,
+      clavePais:
+        typeof contactoRaw.clavePais === "string"
+          ? findPaisByNombre(contactoRaw.clavePais)?.code ??
+            findPaisByCodigo(contactoRaw.clavePais)?.code ??
+            contactoRaw.clavePais
+          : base.contacto.clavePais,
+      telefono: typeof contactoRaw.telefono === "string" ? contactoRaw.telefono : base.contacto.telefono,
+      correo: typeof contactoRaw.correo === "string" ? contactoRaw.correo : base.contacto.correo,
+    },
+    identificacion: {
+      ...base.identificacion,
+      tipo: typeof identificacionRaw.tipo === "string" ? identificacionRaw.tipo : base.identificacion.tipo,
+      numero: typeof identificacionRaw.numero === "string" ? identificacionRaw.numero : base.identificacion.numero,
+      pais:
+        typeof identificacionRaw.pais === "string"
+          ? findPaisByNombre(identificacionRaw.pais)?.code ??
+            findPaisByCodigo(identificacionRaw.pais)?.code ??
+            identificacionRaw.pais
+          : base.identificacion.pais,
+      fechaVencimiento:
+        typeof identificacionRaw.fechaVencimiento === "string"
+          ? identificacionRaw.fechaVencimiento
+          : base.identificacion.fechaVencimiento,
+    },
+    participacion: {
+      ...base.participacion,
+      porcentajeCapital:
+        typeof participacionRaw.porcentajeCapital === "string"
+          ? participacionRaw.porcentajeCapital
+          : base.participacion.porcentajeCapital,
+      origenRecursos:
+        typeof participacionRaw.origenRecursos === "string"
+          ? participacionRaw.origenRecursos
+          : base.participacion.origenRecursos,
+      esPep:
+        participacionRaw.esPep === "si" || participacionRaw.esPep === "no"
+          ? participacionRaw.esPep
+          : base.participacion.esPep,
+      detallePep:
+        typeof participacionRaw.detallePep === "string"
+          ? participacionRaw.detallePep
+          : base.participacion.detallePep,
+    },
+  }
+
+  if (persona.domicilio.ambito === "nacional" && persona.domicilio.codigoPostal.length === 5) {
+    const info = findCodigoPostalInfo(persona.domicilio.codigoPostal)
+    if (info) {
+      persona.domicilio.entidad = info.estado
+      persona.domicilio.municipio = info.municipio
+      if (info.asentamientos.length > 0) {
+        persona.domicilio.colonia = info.asentamientos.includes(persona.domicilio.colonia)
+          ? persona.domicilio.colonia
+          : info.asentamientos[0]
+      }
+    }
+  }
+
+  return persona
+}
+
+function sanitizeClienteResumen(raw: any): ExpedienteResumen | null {
+  if (!raw || typeof raw !== "object") return null
+  const rfc = typeof raw.rfc === "string" ? raw.rfc.trim().toUpperCase() : ""
+  const nombre = typeof raw.nombre === "string" ? raw.nombre.trim() : ""
+  if (!rfc || !nombre) return null
+
+  const tipoCliente = sanitizeTipoCliente(typeof raw.tipoCliente === "string" ? raw.tipoCliente : undefined)
+  const detalle = typeof raw.detalleTipoCliente === "string" ? raw.detalleTipoCliente : undefined
+
+  return { rfc, nombre, tipoCliente, detalleTipoCliente: detalle }
+}
+
+function sanitizeExpedienteGuardado(raw: any): ExpedienteDetalle | null {
+  if (!raw || typeof raw !== "object") return null
+  const rfc = typeof raw.rfc === "string" ? raw.rfc.trim().toUpperCase() : ""
+  if (!rfc) return null
+
+  const nombre =
+    typeof raw.nombre === "string" && raw.nombre.trim().length > 0 ? raw.nombre : raw.identificacion?.nombre ?? rfc
+
+  const personasRaw = Array.isArray(raw.personas) ? raw.personas : []
+  const personas = personasRaw
+    .map((item) => sanitizePersonaGuardada(item))
+    .filter((item): item is PersonaReportada => Boolean(item))
+
+  return {
+    rfc,
+    nombre,
+    tipoCliente: sanitizeTipoCliente(typeof raw.tipoCliente === "string" ? raw.tipoCliente : undefined),
+    detalleTipoCliente:
+      typeof raw.detalleTipoCliente === "string" && raw.detalleTipoCliente.trim().length > 0
+        ? raw.detalleTipoCliente
+        : undefined,
+    responsable: typeof raw.responsable === "string" ? raw.responsable : undefined,
+    claveSujetoObligado:
+      typeof raw.claveSujetoObligado === "string" ? raw.claveSujetoObligado : undefined,
+    claveActividadVulnerable:
+      typeof raw.claveActividadVulnerable === "string" ? raw.claveActividadVulnerable : undefined,
+    identificacion: sanitizeStringMap(raw.identificacion),
+    datosFiscales: sanitizeStringMap(raw.datosFiscales),
+    perfilOperaciones: sanitizeStringMap(raw.perfilOperaciones),
+    documentacion: sanitizeDocumentacionMap(raw.documentacion),
+    personas,
+    actualizadoEn: typeof raw.actualizadoEn === "string" ? raw.actualizadoEn : undefined,
+  }
+}
+
+function buildResumenDesdeDetalle(detalle: ExpedienteDetalle): ExpedienteResumen {
+  return {
+    rfc: detalle.rfc,
+    nombre: detalle.nombre ?? detalle.rfc,
+    tipoCliente: detalle.tipoCliente ?? (CLIENTE_TIPOS[0]?.value ?? ""),
+    detalleTipoCliente: detalle.detalleTipoCliente,
+  }
+}
+
+function formatearFechaActualizacion(fecha?: string) {
+  if (!fecha) return null
+  const parsed = new Date(fecha)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed.toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })
 }
 
 export default function KycExpedientePage() {
@@ -371,6 +643,10 @@ function KycExpedienteContent() {
   const [perfilOperaciones, setPerfilOperaciones] = useState<Record<string, string>>({})
   const [documentacionEstado, setDocumentacionEstado] = useState<Record<string, DocumentStatus>>({})
   const [personasReportadas, setPersonasReportadas] = useState<PersonaReportada[]>(() => [crearPersonaBase()])
+  const [expedientesResumen, setExpedientesResumen] = useState<ExpedienteResumen[]>([])
+  const [expedientesDetalle, setExpedientesDetalle] = useState<Record<string, ExpedienteDetalle>>({})
+  const [expedienteSeleccionado, setExpedienteSeleccionado] = useState<string | null>(null)
+  const [expedientesCargados, setExpedientesCargados] = useState(false)
 
   const tipoClienteSeleccionado = useMemo(() => findClienteTipoOption(tipoCliente), [tipoCliente])
   const tipoClienteLabel = useMemo(() => findClienteTipoLabel(tipoCliente), [tipoCliente])
@@ -425,10 +701,248 @@ function KycExpedienteContent() {
     documentosCompletos,
   ])
 
-  useEffect(() => {
-    if (!tipoClienteSeleccionado?.requiresDetalle) {
+  const expedientesDisponibles = useMemo(() => {
+    const mapa = new Map<string, ExpedienteListadoItem>()
+    expedientesResumen.forEach((resumen) => {
+      const detalle = expedientesDetalle[resumen.rfc]
+      mapa.set(resumen.rfc, {
+        ...resumen,
+        detalle: detalle ?? null,
+        actualizadoEn: detalle?.actualizadoEn,
+      })
+    })
+
+    Object.values(expedientesDetalle).forEach((detalle) => {
+      mapa.set(detalle.rfc, {
+        ...buildResumenDesdeDetalle(detalle),
+        detalle,
+        actualizadoEn: detalle.actualizadoEn,
+      })
+    })
+
+    return Array.from(mapa.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
+  }, [expedientesDetalle, expedientesResumen])
+
+  const expedienteSeleccionadoInfo = useMemo(
+    () =>
+      expedienteSeleccionado
+        ? expedientesDisponibles.find((item) => item.rfc === expedienteSeleccionado) ?? null
+        : null,
+    [expedienteSeleccionado, expedientesDisponibles],
+  )
+
+  const aplicarDetalleEnFormulario = useCallback(
+    (detalle: ExpedienteDetalle) => {
+      setNombreExpediente(detalle.nombre ?? detalle.identificacion?.nombre ?? detalle.rfc)
+      setTipoCliente(detalle.tipoCliente ?? (CLIENTE_TIPOS[0]?.value ?? ""))
+      setDetalleTipoCliente(detalle.detalleTipoCliente ?? "")
+      setResponsable(detalle.responsable ?? "")
+      setClaveSujetoObligado(detalle.claveSujetoObligado ?? "")
+      setClaveActividadVulnerable(detalle.claveActividadVulnerable ?? "")
+      const identificacion = {
+        ...detalle.identificacion,
+        nombre: detalle.identificacion?.nombre ?? detalle.nombre ?? "",
+        rfc: detalle.identificacion?.rfc ?? detalle.rfc ?? "",
+      }
+      setDatosIdentificacion(identificacion)
+      setDatosFiscales({ ...(detalle.datosFiscales ?? {}) })
+      setPerfilOperaciones({ ...(detalle.perfilOperaciones ?? {}) })
+      setDocumentacionEstado({ ...(detalle.documentacion ?? {}) })
+      const personas =
+        detalle.personas.length > 0
+          ? detalle.personas.map((persona) => ({
+              ...persona,
+              id: persona.id && persona.id.trim().length > 0 ? persona.id : generarIdTemporal(),
+            }))
+          : [crearPersonaBase()]
+      setPersonasReportadas(personas)
+    },
+    [setClaveActividadVulnerable, setClaveSujetoObligado, setDatosFiscales, setDatosIdentificacion, setDetalleTipoCliente, setDocumentacionEstado, setNombreExpediente, setPerfilOperaciones, setPersonasReportadas, setResponsable, setTipoCliente],
+  )
+
+  const aplicarResumenEnFormulario = useCallback(
+    (resumen: ExpedienteResumen) => {
+      setNombreExpediente(resumen.nombre)
+      setTipoCliente(resumen.tipoCliente)
+      setDetalleTipoCliente(resumen.detalleTipoCliente ?? "")
+      setResponsable("")
+      setClaveSujetoObligado("")
+      setClaveActividadVulnerable("")
+      setDatosIdentificacion({ nombre: resumen.nombre, rfc: resumen.rfc })
+      setDatosFiscales({})
+      setPerfilOperaciones({})
+      setDocumentacionEstado({})
+      const base = crearPersonaBase()
+      setPersonasReportadas([{ ...base, denominacion: resumen.nombre, rfc: resumen.rfc }])
+    },
+    [setClaveActividadVulnerable, setClaveSujetoObligado, setDatosFiscales, setDatosIdentificacion, setDetalleTipoCliente, setDocumentacionEstado, setNombreExpediente, setPerfilOperaciones, setPersonasReportadas, setResponsable, setTipoCliente],
+  )
+
+    const cargarExpediente = useCallback(
+      (rfc: string) => {
+        const detalle = expedientesDetalle[rfc]
+        if (detalle) {
+          setExpedienteSeleccionado(rfc)
+          aplicarDetalleEnFormulario(detalle)
+          return
+        }
+        const resumen = expedientesResumen.find((item) => item.rfc === rfc)
+        if (resumen) {
+          setExpedienteSeleccionado(rfc)
+          aplicarResumenEnFormulario(resumen)
+        }
+      },
+      [aplicarDetalleEnFormulario, aplicarResumenEnFormulario, expedientesDetalle, expedientesResumen],
+    )
+
+    const sincronizarExpedientes = useCallback(() => {
+      if (typeof window === "undefined") return
+
+      try {
+        const stored = window.localStorage.getItem(CLIENTES_STORAGE_KEY)
+        const parsed = stored ? JSON.parse(stored) : []
+        const resumen = Array.isArray(parsed)
+          ? parsed
+              .map((item) => sanitizeClienteResumen(item))
+              .filter((item): item is ExpedienteResumen => Boolean(item))
+          : []
+        setExpedientesResumen(resumen)
+      } catch (error) {
+        console.error("No fue posible leer el catálogo de clientes guardados", error)
+        setExpedientesResumen([])
+      }
+
+      try {
+        const storedDetalle = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
+        const parsedDetalle = storedDetalle ? JSON.parse(storedDetalle) : []
+        const mapa = new Map<string, ExpedienteDetalle>()
+        if (Array.isArray(parsedDetalle)) {
+          parsedDetalle.forEach((item) => {
+            const sane = sanitizeExpedienteGuardado(item)
+            if (sane) {
+              mapa.set(sane.rfc, sane)
+            }
+          })
+        }
+        setExpedientesDetalle(Object.fromEntries(mapa) as Record<string, ExpedienteDetalle>)
+      } catch (error) {
+        console.error("No fue posible leer el detalle de expedientes guardados", error)
+        setExpedientesDetalle({})
+      }
+
+      setExpedientesCargados(true)
+    }, [])
+
+    useEffect(() => {
+      if (typeof window === "undefined") return
+      sincronizarExpedientes()
+      const handler = () => sincronizarExpedientes()
+      window.addEventListener("storage", handler)
+      return () => window.removeEventListener("storage", handler)
+    }, [sincronizarExpedientes])
+
+    useEffect(() => {
+      if (!expedienteSeleccionado) return
+      const existe = expedientesDisponibles.some((item) => item.rfc === expedienteSeleccionado)
+      if (!existe) {
+        setExpedienteSeleccionado(null)
+      }
+    }, [expedienteSeleccionado, expedientesDisponibles])
+
+    const busquedaInicialProcesada = useRef(false)
+
+    useEffect(() => {
+      if (busquedaInicialProcesada.current) return
+      if (!expedientesCargados) return
+
+      const parametro = searchParams?.get("buscar")?.trim()
+      if (!parametro) {
+        busquedaInicialProcesada.current = true
+        return
+      }
+
+      const criterio = normalizarTexto(parametro)
+      const coincidencia = expedientesDisponibles.find((item) => {
+        const rfcNormalizado = normalizarTexto(item.rfc)
+        const nombreNormalizado = normalizarTexto(item.nombre)
+        return rfcNormalizado === criterio || (nombreNormalizado && nombreNormalizado === criterio)
+      })
+
+      busquedaInicialProcesada.current = true
+
+      if (!coincidencia) {
+        toast({
+          title: "Cliente no encontrado",
+          description: "No se localizó el cliente en los expedientes guardados.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      cargarExpediente(coincidencia.rfc)
+      toast({
+        title: "Expediente recuperado",
+        description: "Se cargó la información guardada para " + coincidencia.nombre + ".",
+      })
+    }, [searchParams, expedientesDisponibles, cargarExpediente, expedientesCargados, toast])
+
+    const handleCodigoPostalChange = useCallback(
+      (personaId: string, value: string) => {
+        setPersonasReportadas((prev) =>
+          prev.map((persona) => {
+            if (persona.id !== personaId) return persona
+            const limpio = value.replace(/[^0-9]/g, "").slice(0, 5)
+            if (persona.domicilio.ambito !== "nacional") {
+              return {
+                ...persona,
+                domicilio: { ...persona.domicilio, codigoPostal: limpio },
+              }
+            }
+
+            const info = limpio.length === 5 ? findCodigoPostalInfo(limpio) : undefined
+            const colonias = info?.asentamientos ?? []
+
+            return {
+              ...persona,
+              domicilio: {
+                ...persona.domicilio,
+                codigoPostal: limpio,
+                pais: "MX",
+                entidad: info?.estado ?? persona.domicilio.entidad,
+                municipio: info?.municipio ?? persona.domicilio.municipio,
+                colonia:
+                  colonias.length > 0
+                    ? colonias.includes(persona.domicilio.colonia)
+                      ? persona.domicilio.colonia
+                      : colonias[0]
+                    : persona.domicilio.colonia,
+              },
+            }
+          }),
+        )
+      },
+      [],
+    )
+
+    const crearNuevoExpediente = useCallback(() => {
+      setExpedienteSeleccionado(null)
+      setNombreExpediente("")
+      setTipoCliente(CLIENTE_TIPOS[0]?.value ?? "")
       setDetalleTipoCliente("")
-      return
+      setResponsable("")
+      setClaveSujetoObligado("")
+      setClaveActividadVulnerable("")
+      setDatosIdentificacion({})
+      setDatosFiscales({})
+      setPerfilOperaciones({})
+      setDocumentacionEstado({})
+      setPersonasReportadas([crearPersonaBase()])
+    }, [])
+
+    useEffect(() => {
+      if (!tipoClienteSeleccionado?.requiresDetalle) {
+        setDetalleTipoCliente("")
+        return
     }
 
     if (tipoClienteSeleccionado.detalleOpciones) {
@@ -441,161 +955,7 @@ function KycExpedienteContent() {
     }
   }, [tipoClienteSeleccionado])
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-
-    const parametro = searchParams?.get("buscar")?.trim()
-    if (!parametro) return
-
-    try {
-      const stored = window.localStorage.getItem(CLIENTES_STORAGE_KEY)
-      const detalleStored = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
-      const parsedDetalle = detalleStored ? JSON.parse(detalleStored) : []
-
-      const parsed = stored ? (JSON.parse(stored) as Array<Record<string, unknown>>) : []
-      const criterio = parametro.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase()
-      const coincidencia = Array.isArray(parsed)
-        ? parsed.find((item) => {
-            if (!item) return false
-            const rfc = typeof item.rfc === "string" ? item.rfc : ""
-            const nombre = typeof item.nombre === "string" ? item.nombre : ""
-            const normalizadoRfc = rfc.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase()
-            const normalizadoNombre = nombre.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase()
-            return normalizadoRfc === criterio || (normalizadoNombre !== "" && normalizadoNombre === criterio)
-          })
-        : undefined
-
-      if (!coincidencia) {
-        toast({
-          title: "Cliente no encontrado",
-          description: "No se localizó el cliente en las actividades vulnerables recientes.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      const tipoGuardado = typeof coincidencia.tipoCliente === "string" ? coincidencia.tipoCliente : ""
-      const detalleGuardado =
-        typeof coincidencia.detalleTipoCliente === "string" ? coincidencia.detalleTipoCliente : ""
-      const tipoDetectado = findClienteTipoOption(tipoGuardado)
-      if (tipoDetectado) {
-        setTipoCliente(tipoDetectado.value)
-        if (tipoDetectado.requiresDetalle) {
-          if (tipoDetectado.detalleOpciones) {
-            setDetalleTipoCliente(
-              tipoDetectado.detalleOpciones.some((detalle) => detalle.value === detalleGuardado)
-                ? detalleGuardado
-                : "",
-            )
-          } else {
-            setDetalleTipoCliente(detalleGuardado)
-          }
-        }
-      }
-
-      setDatosIdentificacion((prev) => ({
-        ...prev,
-        nombre: typeof coincidencia.nombre === "string" ? coincidencia.nombre : prev.nombre ?? "",
-        rfc: typeof coincidencia.rfc === "string" ? coincidencia.rfc : prev.rfc ?? "",
-      }))
-      if (typeof coincidencia.nombre === "string") {
-        setNombreExpediente(coincidencia.nombre)
-      }
-
-      if (Array.isArray(parsedDetalle)) {
-        const detalleCoincidente = parsedDetalle.find((item: any) => {
-          if (!item || typeof item !== "object") return false
-          const rfc = typeof item.rfc === "string" ? item.rfc : ""
-          const nombre = typeof item.nombre === "string" ? item.nombre : ""
-          const normalizadoRfc = rfc.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase()
-          const normalizadoNombre = nombre.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase()
-          return normalizadoRfc === criterio || (normalizadoNombre !== "" && normalizadoNombre === criterio)
-        })
-
-        if (detalleCoincidente && typeof detalleCoincidente === "object") {
-          const detalleObj = detalleCoincidente as Record<string, unknown>
-          if (typeof detalleObj.responsable === "string") setResponsable(detalleObj.responsable)
-          if (typeof detalleObj.claveSujetoObligado === "string") setClaveSujetoObligado(detalleObj.claveSujetoObligado)
-          if (typeof detalleObj.claveActividadVulnerable === "string")
-            setClaveActividadVulnerable(detalleObj.claveActividadVulnerable)
-          if (detalleObj.identificacion && typeof detalleObj.identificacion === "object") {
-            setDatosIdentificacion((prev) => ({
-              ...prev,
-              ...(detalleObj.identificacion as Record<string, string>),
-            }))
-          }
-          if (detalleObj.datosFiscales && typeof detalleObj.datosFiscales === "object") {
-            setDatosFiscales(detalleObj.datosFiscales as Record<string, string>)
-          }
-          if (detalleObj.perfilOperaciones && typeof detalleObj.perfilOperaciones === "object") {
-            setPerfilOperaciones(detalleObj.perfilOperaciones as Record<string, string>)
-          }
-          if (detalleObj.documentacion && typeof detalleObj.documentacion === "object") {
-            setDocumentacionEstado(detalleObj.documentacion as Record<string, DocumentStatus>)
-          }
-          if (Array.isArray(detalleObj.personas)) {
-            setPersonasReportadas(
-              detalleObj.personas.map((item: any) => {
-                const base = crearPersonaBase()
-                if (!item || typeof item !== "object") return base
-                return {
-                  ...base,
-                  id: typeof item.id === "string" ? item.id : generarIdTemporal(),
-                  tipo:
-                    PERSONA_TIPO_OPCIONES.some((option) => option.value === item.tipo) && typeof item.tipo === "string"
-                      ? item.tipo
-                      : base.tipo,
-                  denominacion:
-                    typeof item.denominacion === "string" ? item.denominacion : base.denominacion,
-                  fechaConstitucion:
-                    typeof item.fechaConstitucion === "string" ? item.fechaConstitucion : base.fechaConstitucion,
-                  rfc: typeof item.rfc === "string" ? item.rfc : base.rfc,
-                  curp: typeof item.curp === "string" ? item.curp : base.curp,
-                  pais: typeof item.pais === "string" ? item.pais : base.pais,
-                  giro: typeof item.giro === "string" ? item.giro : base.giro,
-                  rolRelacion:
-                    typeof item.rolRelacion === "string" ? item.rolRelacion : base.rolRelacion,
-                  representante: {
-                    ...base.representante,
-                    ...(typeof item.representante === "object" && item.representante
-                      ? item.representante
-                      : {}),
-                  },
-                  domicilio: {
-                    ...base.domicilio,
-                    ...(typeof item.domicilio === "object" && item.domicilio ? item.domicilio : {}),
-                  },
-                  contacto: {
-                    ...base.contacto,
-                    ...(typeof item.contacto === "object" && item.contacto ? item.contacto : {}),
-                  },
-                  identificacion: {
-                    ...base.identificacion,
-                    ...(typeof item.identificacion === "object" && item.identificacion
-                      ? item.identificacion
-                      : {}),
-                  },
-                  participacion: {
-                    ...base.participacion,
-                    ...(typeof item.participacion === "object" && item.participacion
-                      ? item.participacion
-                      : {}),
-                  },
-                }
-              }),
-            )
-          }
-        }
-      }
-
-      toast({
-        title: "Cliente sincronizado",
-        description: "Se importó la información capturada previamente en actividades vulnerables.",
-      })
-    } catch (error) {
-      console.error("No fue posible sincronizar el cliente desde actividades vulnerables", error)
-    }
-  }, [searchParams, toast])
+  
 
   const actualizarPersonaReportada = (id: string, updater: (persona: PersonaReportada) => PersonaReportada) => {
     setPersonasReportadas((prev) => prev.map((persona) => (persona.id === id ? updater(persona) : persona)))
@@ -646,10 +1006,11 @@ function KycExpedienteContent() {
     }
 
     try {
+      const tipoNormalizado = sanitizeTipoCliente(tipoCliente)
       const resumenCliente = {
         rfc,
         nombre,
-        tipoCliente,
+        tipoCliente: tipoNormalizado,
         detalleTipoCliente,
       }
 
@@ -675,16 +1036,20 @@ function KycExpedienteContent() {
       mapa.set(rfc, { ...(mapa.get(rfc) ?? {}), ...resumenCliente })
       window.localStorage.setItem(CLIENTES_STORAGE_KEY, JSON.stringify(Array.from(mapa.values())))
 
+      const personasSanitizadas = personasReportadas
+        .map((persona) => sanitizePersonaGuardada(persona))
+        .filter((persona): persona is PersonaReportada => Boolean(persona))
+
       const detalleExpediente = {
         ...resumenCliente,
         responsable,
         claveSujetoObligado,
         claveActividadVulnerable,
-        identificacion: datosIdentificacion,
-        datosFiscales,
-        perfilOperaciones,
-        documentacion: documentacionEstado,
-        personas: personasReportadas,
+        identificacion: { ...datosIdentificacion, nombre, rfc },
+        datosFiscales: { ...datosFiscales },
+        perfilOperaciones: { ...perfilOperaciones },
+        documentacion: { ...documentacionEstado },
+        personas: personasSanitizadas,
         actualizadoEn: new Date().toISOString(),
       }
 
@@ -710,6 +1075,19 @@ function KycExpedienteContent() {
 
       window.localStorage.setItem(EXPEDIENTE_DETALLE_STORAGE_KEY, JSON.stringify(expedientes))
 
+      const detalleSanitizado = sanitizeExpedienteGuardado(detalleExpediente)
+      if (detalleSanitizado) {
+        setExpedientesDetalle((prev) => ({ ...prev, [detalleSanitizado.rfc]: detalleSanitizado }))
+        setExpedientesResumen((prev) => {
+          const sinActual = prev.filter((item) => item.rfc !== detalleSanitizado.rfc)
+          const actualizado = buildResumenDesdeDetalle(detalleSanitizado)
+          return [...sinActual, actualizado].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
+        })
+        setExpedientesCargados(true)
+        setExpedienteSeleccionado(detalleSanitizado.rfc)
+        aplicarDetalleEnFormulario(detalleSanitizado)
+      }
+
       toast({
         title: "Expediente guardado",
         description: "La información quedó disponible para prellenar avisos en actividades vulnerables.",
@@ -726,6 +1104,120 @@ function KycExpedienteContent() {
 
   return (
     <div className="space-y-6 pb-10">
+      <Card className="border-slate-200 bg-emerald-50/40">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FolderOpen className="h-5 w-5 text-emerald-700" /> Expedientes guardados
+          </CardTitle>
+          <CardDescription>
+            Consulta, sincroniza y reutiliza expedientes ya capturados para acelerar los avisos de actividades vulnerables.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_auto] md:items-end">
+            <div className="space-y-2">
+              <Label>Consultar expediente almacenado</Label>
+              <Select
+                value={expedienteSeleccionado ?? undefined}
+                onValueChange={(value) => cargarExpediente(value)}
+                disabled={expedientesDisponibles.length === 0}
+              >
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder="Selecciona un expediente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {expedientesDisponibles.map((item) => (
+                    <SelectItem key={item.rfc} value={item.rfc}>
+                      {item.nombre} – {item.rfc}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <Button type="button" variant="outline" onClick={crearNuevoExpediente}>
+                Crear nuevo expediente
+              </Button>
+              <Button type="button" variant="ghost" onClick={sincronizarExpedientes}>
+                Actualizar lista
+              </Button>
+            </div>
+          </div>
+
+          {expedienteSeleccionadoInfo && (
+            <div className="rounded border border-emerald-200 bg-white/70 p-4 text-sm">
+              <p className="font-semibold text-emerald-900">{expedienteSeleccionadoInfo.nombre}</p>
+              <p className="text-xs text-emerald-700">{expedienteSeleccionadoInfo.rfc}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {expedienteSeleccionadoInfo.tipoCliente && (
+                  <Badge variant="outline" className="border-emerald-200 text-emerald-700">
+                    {findClienteTipoLabel(expedienteSeleccionadoInfo.tipoCliente)}
+                  </Badge>
+                )}
+                {expedienteSeleccionadoInfo.detalleTipoCliente && (
+                  <Badge variant="outline" className="border-emerald-200 text-emerald-700">
+                    {expedienteSeleccionadoInfo.detalleTipoCliente}
+                  </Badge>
+                )}
+                {formatearFechaActualizacion(expedienteSeleccionadoInfo.actualizadoEn) && (
+                  <Badge variant="outline" className="border-emerald-200 text-emerald-700">
+                    Actualizado {formatearFechaActualizacion(expedienteSeleccionadoInfo.actualizadoEn)}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+
+          {expedientesDisponibles.length > 0 ? (
+            <ScrollArea className="h-52 rounded border border-slate-200 bg-white">
+              <div className="divide-y divide-slate-200">
+                {expedientesDisponibles.map((item) => {
+                  const seleccionado = item.rfc === expedienteSeleccionado
+                  const actualizado = formatearFechaActualizacion(item.actualizadoEn)
+                  return (
+                    <button
+                      key={item.rfc}
+                      type="button"
+                      onClick={() => cargarExpediente(item.rfc)}
+                      className={`flex w-full flex-col gap-1 p-3 text-left transition ${
+                        seleccionado ? "bg-emerald-100/60" : "hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-700">{item.nombre}</p>
+                          <p className="text-xs text-slate-500">{item.rfc}</p>
+                        </div>
+                        {actualizado && (
+                          <span className="text-[11px] text-slate-500">{actualizado}</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {item.tipoCliente && (
+                          <Badge variant="outline" className="border-slate-200">
+                            {findClienteTipoLabel(item.tipoCliente)}
+                          </Badge>
+                        )}
+                        {item.detalleTipoCliente && (
+                          <Badge variant="outline" className="border-slate-200">
+                            {item.detalleTipoCliente}
+                          </Badge>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </ScrollArea>
+          ) : (
+            <p className="text-sm text-slate-500">
+              Aún no se han guardado expedientes desde este módulo. Captura los datos y utiliza el botón "Guardar" para
+              sincronizarlos con actividades vulnerables.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card className="border-slate-200">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -891,7 +1383,25 @@ function KycExpedienteContent() {
                           {campo.label}
                           {campo.requerido && <span className="text-rose-500">*</span>}
                         </Label>
-                        {campo.multiline ? (
+                        {campo.id === "nacionalidad" ? (
+                          <Select
+                            value={value}
+                            onValueChange={(nuevoValor) =>
+                              setDatosIdentificacion((prev) => ({ ...prev, [campo.id]: nuevoValor }))
+                            }
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Selecciona país" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PAISES.map((pais) => (
+                                <SelectItem key={pais.code} value={pais.label}>
+                                  {pais.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : campo.multiline ? (
                           <Textarea
                             value={value}
                             onChange={onChange}
@@ -1055,8 +1565,22 @@ function KycExpedienteContent() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {personasReportadas.map((persona, index) => (
-            <div key={persona.id} className="space-y-6 rounded border border-slate-200 bg-white p-4">
+          {personasReportadas.map((persona, index) => {
+            const paisPersonaOption = findPaisByCodigo(persona.pais) ?? findPaisByNombre(persona.pais)
+            const paisDomicilioOption =
+              findPaisByCodigo(persona.domicilio.pais) ?? findPaisByNombre(persona.domicilio.pais)
+            const paisIdentificacionOption =
+              findPaisByCodigo(persona.identificacion.pais) ?? findPaisByNombre(persona.identificacion.pais)
+            const paisContactoOption =
+              findPaisByCodigo(persona.contacto.clavePais) ?? findPaisByNombre(persona.contacto.clavePais)
+            const infoCodigoPostal =
+              persona.domicilio.ambito === "nacional" && persona.domicilio.codigoPostal.length === 5
+                ? findCodigoPostalInfo(persona.domicilio.codigoPostal)
+                : undefined
+            const coloniasDisponibles = infoCodigoPostal?.asentamientos ?? []
+
+            return (
+              <div key={persona.id} className="space-y-6 rounded border border-slate-200 bg-white p-4">
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
                   <span className="text-sm font-semibold text-slate-700">Persona {index + 1}</span>
@@ -1149,15 +1673,26 @@ function KycExpedienteContent() {
                 </div>
                 <div className="space-y-2">
                   <Label>País de constitución / nacionalidad</Label>
-                  <Input
-                    value={persona.pais}
-                    onChange={(event) =>
+                  <Select
+                    value={paisPersonaOption?.code ?? persona.pais}
+                    onValueChange={(nuevoPais) =>
                       actualizarPersonaReportada(persona.id, (prev) => ({
                         ...prev,
-                        pais: event.target.value,
+                        pais: nuevoPais,
                       }))
                     }
-                  />
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Selecciona país" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAISES.map((pais) => (
+                        <SelectItem key={pais.code} value={pais.code}>
+                          {pais.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Fecha de constitución / nacimiento</Label>
@@ -1285,7 +1820,7 @@ function KycExpedienteContent() {
                           domicilio: {
                             ...prev.domicilio,
                             ambito: opcion.value,
-                            pais: opcion.value === "nacional" ? "México" : prev.domicilio.pais,
+                            pais: opcion.value === "nacional" ? "MX" : prev.domicilio.pais,
                           },
                         }))
                       }
@@ -1297,16 +1832,27 @@ function KycExpedienteContent() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>País</Label>
-                    <Input
-                      value={persona.domicilio.pais}
-                      onChange={(event) =>
+                    <Select
+                      value={paisDomicilioOption?.code ?? persona.domicilio.pais}
+                      onValueChange={(nuevoPais) =>
                         actualizarPersonaReportada(persona.id, (prev) => ({
                           ...prev,
-                          domicilio: { ...prev.domicilio, pais: event.target.value },
+                          domicilio: { ...prev.domicilio, pais: nuevoPais },
                         }))
                       }
                       disabled={persona.domicilio.ambito === "nacional"}
-                    />
+                    >
+                      <SelectTrigger className="bg-white" disabled={persona.domicilio.ambito === "nacional"}>
+                        <SelectValue placeholder="Selecciona país" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAISES.map((pais) => (
+                          <SelectItem key={pais.code} value={pais.code}>
+                            {pais.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Entidad federativa / Estado</Label>
@@ -1334,32 +1880,55 @@ function KycExpedienteContent() {
                   </div>
                   <div className="space-y-2">
                     <Label>Colonia o localidad</Label>
-                    <Input
-                      value={persona.domicilio.colonia}
-                      onChange={(event) =>
-                        actualizarPersonaReportada(persona.id, (prev) => ({
-                          ...prev,
-                          domicilio: { ...prev.domicilio, colonia: event.target.value },
-                        }))
-                      }
-                    />
+                    {coloniasDisponibles.length > 0 ? (
+                      <Select
+                        value={
+                          coloniasDisponibles.includes(persona.domicilio.colonia)
+                            ? persona.domicilio.colonia
+                            : coloniasDisponibles[0] ?? ""
+                        }
+                        onValueChange={(nuevaColonia) =>
+                          actualizarPersonaReportada(persona.id, (prev) => ({
+                            ...prev,
+                            domicilio: { ...prev.domicilio, colonia: nuevaColonia },
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Selecciona colonia" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {coloniasDisponibles.map((colonia) => (
+                            <SelectItem key={colonia} value={colonia}>
+                              {colonia}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={persona.domicilio.colonia}
+                        onChange={(event) =>
+                          actualizarPersonaReportada(persona.id, (prev) => ({
+                            ...prev,
+                            domicilio: { ...prev.domicilio, colonia: event.target.value },
+                          }))
+                        }
+                      />
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Código postal</Label>
                     <Input
                       value={persona.domicilio.codigoPostal}
-                      onChange={(event) =>
-                        actualizarPersonaReportada(persona.id, (prev) => ({
-                          ...prev,
-                          domicilio: {
-                            ...prev.domicilio,
-                            codigoPostal: event.target.value.replace(/[^0-9]/g, ""),
-                          },
-                        }))
-                      }
+                      onChange={(event) => handleCodigoPostalChange(persona.id, event.target.value)}
                       inputMode="numeric"
-                      maxLength={10}
+                      maxLength={5}
                     />
+                    <p className="text-xs text-slate-500">
+                      Al capturar un código postal nacional se completan automáticamente la entidad, municipio y colonias
+                      disponibles.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label>Calle</Label>
@@ -1448,16 +2017,30 @@ function KycExpedienteContent() {
                   </div>
                   <div className="space-y-2">
                     <Label>Clave de país</Label>
-                    <Input
-                      value={persona.contacto.clavePais}
-                      onChange={(event) =>
+                    <Select
+                      value={paisContactoOption?.code ?? persona.contacto.clavePais}
+                      onValueChange={(nuevoPais) =>
                         actualizarPersonaReportada(persona.id, (prev) => ({
                           ...prev,
-                          contacto: { ...prev.contacto, clavePais: event.target.value.toUpperCase() },
+                          contacto: { ...prev.contacto, clavePais: nuevoPais },
                         }))
                       }
-                      placeholder="Ej. MX, US, CA"
-                    />
+                      disabled={persona.contacto.conocePaisTelefono === "no"}
+                    >
+                      <SelectTrigger
+                        className="bg-white"
+                        disabled={persona.contacto.conocePaisTelefono === "no"}
+                      >
+                        <SelectValue placeholder="Selecciona código" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAISES.map((pais) => (
+                          <SelectItem key={pais.code} value={pais.code}>
+                            {pais.code} – {pais.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Teléfono</Label>
@@ -1523,15 +2106,26 @@ function KycExpedienteContent() {
                   </div>
                   <div className="space-y-2">
                     <Label>País de expedición</Label>
-                    <Input
-                      value={persona.identificacion.pais}
-                      onChange={(event) =>
+                    <Select
+                      value={paisIdentificacionOption?.code ?? persona.identificacion.pais}
+                      onValueChange={(nuevoPais) =>
                         actualizarPersonaReportada(persona.id, (prev) => ({
                           ...prev,
-                          identificacion: { ...prev.identificacion, pais: event.target.value },
+                          identificacion: { ...prev.identificacion, pais: nuevoPais },
                         }))
                       }
-                    />
+                    >
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Selecciona país" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAISES.map((pais) => (
+                          <SelectItem key={pais.code} value={pais.code}>
+                            {pais.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Vigencia</Label>
@@ -1618,7 +2212,7 @@ function KycExpedienteContent() {
                 </div>
               </div>
             </div>
-          ))}
+          )})}
 
           <div className="flex justify-end">
             <Button type="button" variant="outline" onClick={agregarPersonaReportada} className="flex items-center gap-2">
