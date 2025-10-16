@@ -58,6 +58,7 @@ import {
 import type { ActividadVulnerable } from "@/lib/data/actividades"
 import { actividadesVulnerables } from "@/lib/data/actividades"
 import { UMA_MONTHS, findUmaByMonthYear } from "@/lib/data/uma"
+import { CLIENTE_TIPOS, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
 
 const MONTHS = [
   "Enero",
@@ -75,70 +76,6 @@ const MONTHS = [
 ]
 
 const WEEK_DAYS = ["L", "M", "M", "J", "V", "S", "D"]
-
-type ClienteTipoOption = {
-  value: string
-  label: string
-  descripcion: string
-  requiresDetalle?: boolean
-  detalleLabel?: string
-  detallePlaceholder?: string
-}
-
-const CLIENTE_TIPOS: ClienteTipoOption[] = [
-  {
-    value: "pf_residente",
-    label: "Persona física residente (mexicana o extranjera)",
-    descripcion:
-      "Aplica a personas físicas con nacionalidad mexicana o extranjeras con condición de residencia temporal o permanente en México.",
-  },
-  {
-    value: "pf_visitante",
-    label: "Persona física extranjera visitante",
-    descripcion:
-      "Personas físicas extranjeras con condición de estancia de visitante sin residencia en territorio mexicano.",
-  },
-  {
-    value: "pm_mexicana",
-    label: "Persona moral mexicana",
-    descripcion: "Sociedades mercantiles o civiles constituidas conforme a las leyes mexicanas.",
-  },
-  {
-    value: "pm_extranjera",
-    label: "Persona moral extranjera",
-    descripcion: "Entidades jurídicas constituidas en el extranjero que operan o contratan en México.",
-  },
-  {
-    value: "entidad_financiera",
-    label: "Entidad financiera, sociedad o dependencia (seguros, fianzas y bursátil)",
-    descripcion:
-      "Sujetos obligados del sector asegurador, afianzador o bursátil, incluyendo sociedades y dependencias con operaciones financieras especializadas.",
-    requiresDetalle: true,
-    detalleLabel: "Tipo de entidad financiera",
-    detallePlaceholder: "Ej. Aseguradora, Casa de bolsa, Afianzadora",
-  },
-  {
-    value: "fideicomiso",
-    label: "Fideicomiso",
-    descripcion: "Estructuras fiduciarias constituidas ante una institución fiduciaria autorizada.",
-  },
-  {
-    value: "organismo_internacional",
-    label: "Embajada, consulado u organismo internacional",
-    descripcion: "Representaciones diplomáticas, consulares u organismos internacionales con operaciones en México.",
-  },
-  {
-    value: "pm_derecho_publico",
-    label: "Persona moral mexicana de derecho público",
-    descripcion: "Dependencias, entidades u organismos públicos con régimen de derecho público general.",
-  },
-  {
-    value: "pm_derecho_publico_simplificado",
-    label: "Persona moral mexicana de derecho público (régimen simplificado)",
-    descripcion:
-      "Entidades de derecho público incorporadas al régimen simplificado de confianza u homólogo permitido por ley.",
-  },
-]
 
 const LEGACY_CLIENTE_TIPO_MAP: Record<string, ClienteTipoOption["value"]> = {
   pfn: "pf_residente",
@@ -2240,13 +2177,36 @@ const cambiarMesCalendario = (delta: number) => {
                         <Label>
                           {tipoClienteSeleccionado.detalleLabel ?? "Detalle del tipo de cliente"}
                         </Label>
-                        <Input
-                          placeholder={
-                            tipoClienteSeleccionado.detallePlaceholder ?? "Describe la entidad o sociedad"
-                          }
-                          value={detalleTipoCliente}
-                          onChange={(event) => setDetalleTipoCliente(event.target.value)}
-                        />
+                        {tipoClienteSeleccionado.detalleOpciones ? (
+                          <Select
+                            value={detalleTipoCliente || undefined}
+                            onValueChange={(value) => setDetalleTipoCliente(value)}
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue
+                                placeholder={
+                                  tipoClienteSeleccionado.detallePlaceholder ??
+                                  "Selecciona la opción que corresponda"
+                                }
+                              />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {tipoClienteSeleccionado.detalleOpciones.map((detalle) => (
+                                <SelectItem key={detalle.value} value={detalle.value}>
+                                  {detalle.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            placeholder={
+                              tipoClienteSeleccionado.detallePlaceholder ?? "Describe la entidad o sociedad"
+                            }
+                            value={detalleTipoCliente}
+                            onChange={(event) => setDetalleTipoCliente(event.target.value)}
+                          />
+                        )}
                         <p className="text-xs text-muted-foreground">
                           Especifica el giro o naturaleza de la entidad seleccionada para personalizar los
                           requisitos.
@@ -3603,19 +3563,47 @@ const cambiarMesCalendario = (delta: number) => {
                       <Label>
                         {tipoClienteEdicionSeleccionado.detalleLabel ?? "Detalle del tipo de cliente"}
                       </Label>
-                      <Input
-                        value={datosEdicion.detalleTipoCliente}
-                        onChange={(event) =>
-                          setDatosEdicion((prev) => ({
-                            ...prev,
-                            detalleTipoCliente: event.target.value,
-                          }))
-                        }
-                        placeholder={
-                          tipoClienteEdicionSeleccionado.detallePlaceholder ??
-                          "Ej. Afianzadora estatal"
-                        }
-                      />
+                      {tipoClienteEdicionSeleccionado.detalleOpciones ? (
+                        <Select
+                          value={datosEdicion.detalleTipoCliente || undefined}
+                          onValueChange={(value) =>
+                            setDatosEdicion((prev) => ({
+                              ...prev,
+                              detalleTipoCliente: value,
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="bg-white">
+                            <SelectValue
+                              placeholder={
+                                tipoClienteEdicionSeleccionado.detallePlaceholder ??
+                                "Selecciona la opción que corresponda"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {tipoClienteEdicionSeleccionado.detalleOpciones.map((detalle) => (
+                              <SelectItem key={detalle.value} value={detalle.value}>
+                                {detalle.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          value={datosEdicion.detalleTipoCliente}
+                          onChange={(event) =>
+                            setDatosEdicion((prev) => ({
+                              ...prev,
+                              detalleTipoCliente: event.target.value,
+                            }))
+                          }
+                          placeholder={
+                            tipoClienteEdicionSeleccionado.detallePlaceholder ??
+                            "Ej. Afianzadora estatal"
+                          }
+                        />
+                      )}
                       <p className="text-xs text-muted-foreground">
                         Detalla el giro o naturaleza exacta del cliente para conservar el contexto de la
                         operación.
