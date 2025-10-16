@@ -167,6 +167,11 @@ const INSTRUMENTO_MONETARIO_OPTIONS = [
   { value: "3", label: "Medio no bancarizado" },
 ]
 
+// Demo-only scaffolding so stakeholders can recorrer la fracción XV sin capturar datos reales.
+// Al retirar el mock basta con eliminar estas constantes y la función `crearMockOperacionInmuebles`.
+const MOCK_OPERACION_ID = "mock-operacion-inmuebles"
+const MOCK_OPERACION_RFC = "MOCK910101IMB"
+
 const ALERTA_DEFAULT = ALERTA_TIPOS[0]?.value ?? "0"
 const PRIORIDAD_DEFAULT = PRIORIDAD_AVISO_OPCIONES[0]?.value ?? "1"
 
@@ -747,6 +752,15 @@ function formatCurrency(value: number, currency = "MXN") {
   }
 }
 
+function normalizeText(value: string | undefined | null) {
+  if (!value) return ""
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase()
+}
+
 function monthLabel(month: number) {
   return MONTHS[month - 1] ?? ""
 }
@@ -884,6 +898,137 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
     figuraSujetoObligado:
       typeof raw.figuraSujetoObligado === "string" ? raw.figuraSujetoObligado : undefined,
   }
+}
+
+function crearMockOperacionInmuebles(): OperacionCliente | null {
+  const actividad = actividadesVulnerables.find((item) => item.key === ACTIVIDAD_INMUEBLES_KEY)
+  if (!actividad) return null
+
+  const mes = currentMonth
+  const anio = currentYear
+  const periodo = buildPeriodo(anio, mes)
+  const uma = findUmaByMonthYear(mes, anio) ?? UMA_MONTHS[UMA_MONTHS.length - 1]
+  const fechaOperacion = new Date(anio, mes - 1, 10).toISOString().substring(0, 10)
+  const fechaFin = new Date(anio, mes, 9).toISOString().substring(0, 10)
+  const monto = Number((actividad.avisoUmbralUma * uma.daily * 1.1).toFixed(2))
+
+  const raw = {
+    id: MOCK_OPERACION_ID,
+    actividadKey: actividad.key,
+    actividadNombre: `${actividad.fraccion} – ${actividad.nombre}`,
+    tipoCliente: "pm_mexicana",
+    detalleTipoCliente: "Administración de oficinas premium",
+    cliente: "Mock Inmuebles Corporativos, S.A. de C.V.",
+    rfc: MOCK_OPERACION_RFC,
+    mismoGrupo: false,
+    periodo,
+    mes,
+    anio,
+    monto,
+    moneda: "MXN",
+    monedaDescripcion: "Peso mexicano (MXN)",
+    fechaOperacion,
+    tipoOperacion: INMUEBLE_OPERACIONES[0]?.label ?? "501 – Contrato de arrendamiento",
+    evidencia: "Pagos anticipados de renta corporativa (demo).",
+    umaDiaria: uma.daily,
+    identificacionUmbralPesos: actividad.identificacionUmbralUma * uma.daily,
+    avisoUmbralPesos: actividad.avisoUmbralUma * uma.daily,
+    umbralStatus: "aviso" as UmbralStatus,
+    acumuladoCliente: monto,
+    alerta: obtenerAlertaPorStatus("aviso"),
+    avisoPresentado: false,
+    alertaResuelta: false,
+    documentosSoporte: [
+      {
+        id: "mock-doc-inmuebles",
+        requisito: "Contrato de arrendamiento firmado",
+        notas: "Ejemplo demostrativo para recorridos de la plataforma.",
+        fechaRegistro: fechaOperacion,
+      },
+    ],
+    requisitosChecklist: {},
+    kycIntegrado: true,
+    referenciaAviso: "AVISO-DEMO-001",
+    alertaCodigo: ALERTA_TIPOS[1]?.value ?? "521",
+    alertaDescripcion: "Caso demostrativo para la fracción XV (uso y goce de inmuebles).",
+    prioridadAviso: PRIORIDAD_AVISO_OPCIONES[0]?.value ?? "1",
+    claveSujetoObligado: "MOCKSUJETO01",
+    claveActividadVulnerable: "XV501",
+    personaAviso: {
+      tipo: "persona_moral",
+      denominacion: "Mock Inmuebles Corporativos, S.A. de C.V.",
+      fechaConstitucion: "2012-05-15",
+      pais: "MX",
+      rfc: MOCK_OPERACION_RFC,
+      domicilio: {
+        ambito: "nacional",
+        pais: "MX",
+        entidad: "Ciudad de México",
+        municipio: "Álvaro Obregón",
+        colonia: "Guadalupe Inn",
+        codigoPostal: "01020",
+        calle: "Av. Revolución",
+        numeroExterior: "123",
+        numeroInterior: "12",
+      },
+      contacto: {
+        clavePais: "MX",
+        telefono: "5555555555",
+        correo: "contacto@mockinmuebles.mx",
+      },
+    },
+    inmueble: {
+      codigoOperacion: INMUEBLE_OPERACIONES[0]?.value ?? "501",
+      fechaInicio: fechaOperacion,
+      fechaFin,
+      tipoInmueble: "oficina",
+      valorAvaluo: (actividad.avisoUmbralUma * uma.daily * 3).toFixed(2),
+      folioReal: "CDMX-VAL-2024-001",
+      pais: "MX",
+      entidad: "Ciudad de México",
+      municipio: "Álvaro Obregón",
+      colonia: "Guadalupe Inn",
+      codigoPostal: "01020",
+      calle: "Av. Revolución",
+      numeroExterior: "123",
+      numeroInterior: "12",
+    },
+    liquidacion: {
+      fechaPago: fechaOperacion,
+      formaPago: FORMA_PAGO_OPTIONS[0]?.value ?? "1",
+      instrumento: INSTRUMENTO_MONETARIO_OPTIONS[0]?.value ?? "1",
+      moneda: "MXN",
+      monedaDescripcion: "Peso mexicano (MXN)",
+      monto,
+    },
+    beneficiario: {
+      tipo: "persona_fisica",
+      nombre: "Laura",
+      apellidoPaterno: "Campos",
+      apellidoMaterno: "Reyes",
+      fechaNacimiento: "1985-09-18",
+      rfc: "CARE850918AB3",
+      curp: "CARE850918MDFMRS09",
+      pais: "MX",
+    },
+    contraparte: {
+      tipo: "persona_moral",
+      nombre: "Arrendadora Demo, S.A. de C.V.",
+      rfc: "ADE920101H23",
+      pais: "MX",
+    },
+    instrumento: {
+      numero: "45123",
+      fecha: "2024-01-20",
+      notario: "Lic. María López",
+      entidad: "Ciudad de México",
+      valorAvaluo: (actividad.avisoUmbralUma * uma.daily * 3).toFixed(2),
+    },
+    figuraCliente: FIGURA_CLIENTE_OPTIONS[0]?.value ?? "1",
+    figuraSujetoObligado: FIGURA_SUJETO_OBLIGADO_OPTIONS[0]?.value ?? "1",
+  }
+
+  return sanitizeOperacion(raw)
 }
 
 function sanitizeClienteGuardado(raw: any): ClienteGuardado | null {
@@ -1339,6 +1484,9 @@ export default function ActividadesVulnerablesPage() {
   )
   const [operaciones, setOperaciones] = useState<OperacionCliente[]>([])
   const [operacionesCargadas, setOperacionesCargadas] = useState(false)
+  const [busquedaOperaciones, setBusquedaOperaciones] = useState("")
+  const [busquedaAlertas, setBusquedaAlertas] = useState("")
+  const [busquedaActividades, setBusquedaActividades] = useState("")
   const [resumenMonitoreo, setResumenMonitoreo] = useState<{ total: number; actividades: string[] }>(
     () => ({ total: 0, actividades: [] }),
   )
@@ -1454,6 +1602,26 @@ export default function ActividadesVulnerablesPage() {
       new Map<string, ActividadVulnerable[]>(),
     )
   }, [])
+
+  const actividadesPorFraccionFiltradas = useMemo(() => {
+    const criterio = normalizeText(busquedaActividades)
+    const entries = Array.from(actividadesPorFraccion.entries())
+    if (!criterio) {
+      return entries.sort((a, b) => a[0].localeCompare(b[0]))
+    }
+
+    return entries
+      .map((entry) => {
+        const [fraccion, actividades] = entry
+        const filtradas = actividades.filter((actividad) => {
+          const campos = [actividad.nombre, actividad.descripcion, actividad.fraccion]
+          return campos.some((campo) => normalizeText(campo).includes(criterio))
+        })
+        return [fraccion, filtradas] as const
+      })
+      .filter(([, actividades]) => actividades.length > 0)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+  }, [actividadesPorFraccion, busquedaActividades])
   const actividadesMonitoreoMapa = useMemo(
     () => new Map(actividadesVulnerables.map((actividad) => [actividad.key, actividad.nombre])),
     [],
@@ -1512,6 +1680,7 @@ export default function ActividadesVulnerablesPage() {
   useEffect(() => {
     if (typeof window === "undefined") return
 
+    let inicial: OperacionCliente[] | null = null
     try {
       const stored = window.localStorage.getItem(OPERACIONES_STORAGE_KEY)
       if (stored) {
@@ -1521,13 +1690,18 @@ export default function ActividadesVulnerablesPage() {
             .map((item) => sanitizeOperacion(item))
             .filter((item): item is OperacionCliente => Boolean(item))
           if (sane.length > 0) {
-            setOperaciones(recalcularOperaciones(sane))
+            inicial = recalcularOperaciones(sane)
           }
         }
       }
     } catch (_error) {
-      // ignorar errores de parseo y continuar con estado vacío
+      // ignorar errores de parseo y continuar con estado demostrativo
     } finally {
+      if (!inicial) {
+        const mock = crearMockOperacionInmuebles()
+        inicial = mock ? recalcularOperaciones([mock]) : []
+      }
+      setOperaciones(inicial)
       setOperacionesCargadas(true)
     }
   }, [])
@@ -2050,6 +2224,21 @@ export default function ActividadesVulnerablesPage() {
     0,
   )
 
+  const operacionesFiltradas = useMemo(() => {
+    const criterio = normalizeText(busquedaOperaciones)
+    if (!criterio) return operaciones
+    return operaciones.filter((operacion) => {
+      const campos = [
+        operacion.cliente,
+        operacion.rfc,
+        operacion.actividadNombre,
+        operacion.tipoOperacion,
+        operacion.referenciaAviso ?? "",
+      ]
+      return campos.some((campo) => normalizeText(campo).includes(criterio))
+    })
+  }, [operaciones, busquedaOperaciones])
+
   const resumenUmbrales = useMemo(() => {
     const acumulados = operaciones.reduce(
       (acc, operacion) => {
@@ -2068,13 +2257,13 @@ export default function ActividadesVulnerablesPage() {
 
   const operacionesAgrupadas = useMemo(() => {
     const mapa = new Map<UmbralStatus, OperacionCliente[]>()
-    operaciones.forEach((operacion) => {
+    operacionesFiltradas.forEach((operacion) => {
       const lista = mapa.get(operacion.umbralStatus) ?? []
       lista.push(operacion)
       mapa.set(operacion.umbralStatus, lista)
     })
     return mapa
-  }, [operaciones])
+  }, [operacionesFiltradas])
 
   const operacionesRecientes = useMemo(() => {
     return [...operaciones]
@@ -2140,7 +2329,7 @@ export default function ActividadesVulnerablesPage() {
     )
   }, [diaSeleccionado, operacionesClienteSeleccionado])
 
-  const alertasActivas = useMemo(
+  const alertasActivasBase = useMemo(
     () =>
       operaciones
         .filter((operacion) => operacion.alerta && !operacion.alertaResuelta)
@@ -2148,13 +2337,31 @@ export default function ActividadesVulnerablesPage() {
     [operaciones],
   )
 
-  const alertasResueltas = useMemo(
+  const alertasResueltasBase = useMemo(
     () =>
       operaciones
         .filter((operacion) => operacion.alerta && operacion.alertaResuelta)
         .sort((a, b) => toDate(b.fechaOperacion).getTime() - toDate(a.fechaOperacion).getTime()),
     [operaciones],
   )
+
+  const alertasActivas = useMemo(() => {
+    const criterio = normalizeText(busquedaAlertas)
+    if (!criterio) return alertasActivasBase
+    return alertasActivasBase.filter((operacion) => {
+      const campos = [operacion.cliente, operacion.rfc, operacion.actividadNombre, operacion.referenciaAviso ?? ""]
+      return campos.some((campo) => normalizeText(campo).includes(criterio))
+    })
+  }, [alertasActivasBase, busquedaAlertas])
+
+  const alertasResueltas = useMemo(() => {
+    const criterio = normalizeText(busquedaAlertas)
+    if (!criterio) return alertasResueltasBase
+    return alertasResueltasBase.filter((operacion) => {
+      const campos = [operacion.cliente, operacion.rfc, operacion.actividadNombre, operacion.referenciaAviso ?? ""]
+      return campos.some((campo) => normalizeText(campo).includes(criterio))
+    })
+  }, [alertasResueltasBase, busquedaAlertas])
 
   useEffect(() => {
     if (!clienteCalendario) {
@@ -5064,7 +5271,21 @@ const cambiarMesCalendario = (delta: number) => {
                 Clasifica a los clientes según los umbrales alcanzados y gestiona la generación de avisos o informes.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Input
+                  value={busquedaOperaciones}
+                  onChange={(event) => setBusquedaOperaciones(event.target.value)}
+                  placeholder="Buscar por cliente, RFC o actividad"
+                  className="max-w-md"
+                  aria-label="Buscar operaciones"
+                />
+                {busquedaOperaciones && (
+                  <Button type="button" variant="ghost" onClick={() => setBusquedaOperaciones("")}>
+                    Limpiar filtro
+                  </Button>
+                )}
+              </div>
               <div className="grid gap-4 lg:grid-cols-3">
                 {["sin-obligacion", "identificacion", "aviso"].map((status) => (
                   <Card key={status} className="border-slate-200">
@@ -5080,59 +5301,65 @@ const cambiarMesCalendario = (delta: number) => {
                     <CardContent>
                       <ScrollArea className="h-64 pr-3">
                         <div className="space-y-3 text-xs">
-                          {(operacionesAgrupadas.get(status as UmbralStatus) ?? []).map((operacion) => (
-                            <div key={operacion.id} className="rounded border border-slate-200/80 bg-white p-3">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="font-semibold text-slate-700">{operacion.cliente}</p>
-                                <Badge variant="outline">{operacion.periodo}</Badge>
-                              </div>
-                              <p className="mt-1 text-slate-600">RFC: {operacion.rfc}</p>
-                              <p className="text-slate-600">
-                                Tipo de cliente: {formatTipoClienteLabel(
-                                  operacion.tipoCliente,
-                                  operacion.detalleTipoCliente,
-                                )}
-                              </p>
-                              <p className="text-slate-600">Actividad: {operacion.actividadNombre}</p>
-                              <p className="text-slate-600">Monto acumulado: {formatCurrency(operacion.acumuladoCliente)}</p>
-                              <p className="text-slate-600">Operación: {operacion.tipoOperacion}</p>
-                              {operacion.alerta && (
-                                <div className="mt-2 flex items-center gap-2 rounded bg-amber-50 p-2 text-amber-800">
-                                  <AlertCircle className="h-4 w-4" />
-                                  <span>{operacion.alerta}</span>
+                          {(operacionesAgrupadas.get(status as UmbralStatus) ?? []).length === 0 ? (
+                            <p className="text-muted-foreground">
+                              Sin operaciones que coincidan con la búsqueda actual.
+                            </p>
+                          ) : (
+                            (operacionesAgrupadas.get(status as UmbralStatus) ?? []).map((operacion) => (
+                              <div key={operacion.id} className="rounded border border-slate-200/80 bg-white p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="font-semibold text-slate-700">{operacion.cliente}</p>
+                                  <Badge variant="outline">{operacion.periodo}</Badge>
                                 </div>
-                              )}
-                              <div className="mt-3 flex flex-wrap items-center gap-2">
-                                <Button size="sm" onClick={() => reutilizarDatosCliente(operacion)}>
-                                  Reutilizar datos
-                                </Button>
-                                {status === "aviso" && !operacion.avisoPresentado && (
-                                  <Button size="sm" variant="outline" onClick={() => marcarAvisoPresentado(operacion.id)}>
-                                    Marcar aviso presentado
-                                  </Button>
+                                <p className="mt-1 text-slate-600">RFC: {operacion.rfc}</p>
+                                <p className="text-slate-600">
+                                  Tipo de cliente: {formatTipoClienteLabel(
+                                    operacion.tipoCliente,
+                                    operacion.detalleTipoCliente,
+                                  )}
+                                </p>
+                                <p className="text-slate-600">Actividad: {operacion.actividadNombre}</p>
+                                <p className="text-slate-600">Monto acumulado: {formatCurrency(operacion.acumuladoCliente)}</p>
+                                <p className="text-slate-600">Operación: {operacion.tipoOperacion}</p>
+                                {operacion.alerta && (
+                                  <div className="mt-2 flex items-center gap-2 rounded bg-amber-50 p-2 text-amber-800">
+                                    <AlertCircle className="h-4 w-4" />
+                                    <span>{operacion.alerta}</span>
+                                  </div>
                                 )}
-                                <Button size="sm" variant="outline" onClick={() => generarAvisoPreliminar(operacion)}>
-                                  Generar aviso preliminar
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => exportarXml(operacion)}>
-                                  <Download className="mr-1 h-4 w-4" /> XML
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => abrirDocumentosOperacion(operacion)}>
-                                  <Paperclip className="mr-1 h-4 w-4" /> Evidencias
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => abrirEdicionOperacion(operacion)}>
-                                  Editar
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => solicitarEliminacionOperacion(operacion)}
-                                >
-                                  Eliminar
-                                </Button>
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                  <Button size="sm" onClick={() => reutilizarDatosCliente(operacion)}>
+                                    Reutilizar datos
+                                  </Button>
+                                  {status === "aviso" && !operacion.avisoPresentado && (
+                                    <Button size="sm" variant="outline" onClick={() => marcarAvisoPresentado(operacion.id)}>
+                                      Marcar aviso presentado
+                                    </Button>
+                                  )}
+                                  <Button size="sm" variant="outline" onClick={() => generarAvisoPreliminar(operacion)}>
+                                    Generar aviso preliminar
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={() => exportarXml(operacion)}>
+                                    <Download className="mr-1 h-4 w-4" /> XML
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={() => abrirDocumentosOperacion(operacion)}>
+                                    <Paperclip className="mr-1 h-4 w-4" /> Evidencias
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={() => abrirEdicionOperacion(operacion)}>
+                                    Editar
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => solicitarEliminacionOperacion(operacion)}
+                                  >
+                                    Eliminar
+                                  </Button>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            ))
+                          )}
                         </div>
                       </ScrollArea>
                     </CardContent>
@@ -5149,10 +5376,26 @@ const cambiarMesCalendario = (delta: number) => {
               </CardTitle>
               <CardDescription>Gestiona los recordatorios generados por cruces con los umbrales.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Input
+                  value={busquedaAlertas}
+                  onChange={(event) => setBusquedaAlertas(event.target.value)}
+                  placeholder="Buscar alertas por cliente, RFC o referencia"
+                  className="max-w-md"
+                  aria-label="Buscar alertas"
+                />
+                {busquedaAlertas && (
+                  <Button type="button" variant="ghost" onClick={() => setBusquedaAlertas("")}>
+                    Limpiar filtro
+                  </Button>
+                )}
+              </div>
               {alertasActivas.length === 0 && alertasResueltas.length === 0 ? (
                 <div className="rounded border bg-slate-50 p-4 text-sm text-slate-600">
-                  No se han generado alertas todavía. Registra operaciones para activar el monitoreo.
+                  {busquedaAlertas
+                    ? "No se encontraron alertas que coincidan con la búsqueda aplicada."
+                    : "No se han generado alertas todavía. Registra operaciones para activar el monitoreo."}
                 </div>
               ) : (
                 <div className="grid gap-4 lg:grid-cols-2">
@@ -5433,12 +5676,25 @@ const cambiarMesCalendario = (delta: number) => {
                   Consulta cada subsección de la ley y sus actividades vulnerables correspondientes para orientar nuevos registros.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-72 pr-4">
-                  <div className="space-y-4 text-sm">
-                    {Array.from(actividadesPorFraccion.entries())
-                      .sort((a, b) => a[0].localeCompare(b[0]))
-                      .map(([fraccion, actividades]) => (
+              <CardContent className="space-y-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <Input
+                    value={busquedaActividades}
+                    onChange={(event) => setBusquedaActividades(event.target.value)}
+                    placeholder="Buscar por fracción, actividad o descripción"
+                    className="max-w-md"
+                    aria-label="Buscar actividades vulnerables"
+                  />
+                  {busquedaActividades && (
+                    <Button type="button" variant="ghost" onClick={() => setBusquedaActividades("")}>
+                      Limpiar filtro
+                    </Button>
+                  )}
+                </div>
+                {actividadesPorFraccionFiltradas.length > 0 ? (
+                  <ScrollArea className="h-72 pr-4">
+                    <div className="space-y-4 text-sm">
+                      {actividadesPorFraccionFiltradas.map(([fraccion, actividades]) => (
                         <div key={fraccion} className="rounded border bg-white p-3">
                           <h4 className="font-semibold text-slate-700">{fraccion}</h4>
                           <ul className="mt-2 space-y-1 text-slate-600">
@@ -5464,8 +5720,13 @@ const cambiarMesCalendario = (delta: number) => {
                           </ul>
                         </div>
                       ))}
-                  </div>
-                </ScrollArea>
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No se encontraron actividades con el criterio de búsqueda ingresado.
+                  </p>
+                )}
               </CardContent>
             </Card>
             <Card className="border-slate-200">

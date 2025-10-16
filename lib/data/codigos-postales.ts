@@ -22,6 +22,13 @@ export const CODIGOS_POSTALES: CodigoPostalInfo[] = [
     asentamientos: ["Guadalupe Inn", "Florida", "Axotla"],
   },
   {
+    codigo: "11550",
+    estado: "Ciudad de México",
+    municipio: "Miguel Hidalgo",
+    ciudad: "Ciudad de México",
+    asentamientos: ["Polanco V Sección", "Granada", "Ampliación Granada"],
+  },
+  {
     codigo: "44100",
     estado: "Jalisco",
     municipio: "Guadalajara",
@@ -34,6 +41,13 @@ export const CODIGOS_POSTALES: CodigoPostalInfo[] = [
     municipio: "Benito Juárez",
     ciudad: "Cancún",
     asentamientos: ["Cancún Centro", "Supermanzana 2", "Supermanzana 4"],
+  },
+  {
+    codigo: "97203",
+    estado: "Yucatán",
+    municipio: "Mérida",
+    ciudad: "Mérida",
+    asentamientos: ["Francisco de Montejo", "Chuburná", "Campestre"],
   },
 ]
 
