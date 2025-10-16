@@ -1215,7 +1215,7 @@ export default function RegistroSATPage() {
         <div className="flex items-center space-x-2">
           <Building2 className="h-8 w-8 text-primary" />
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Registro y Alta ante el SAT</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Alta y Registro ante el SAT</h1>
             <p className="text-muted-foreground">
               Módulo para asegurar el registro formal en el padrón de Actividades Vulnerables y designación del REC
             </p>
