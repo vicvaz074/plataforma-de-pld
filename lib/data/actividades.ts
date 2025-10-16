@@ -5,6 +5,7 @@ export const actividadSchema = z.object({
   fraccion: z.string(),
   nombre: z.string(),
   descripcion: z.string(),
+  xmlClaveActividad: z.string().optional(),
   identificacionUmbralUma: z.number().nonnegative(),
   avisoUmbralUma: z.number().nonnegative(),
   obligaciones: z.object({
@@ -293,6 +294,7 @@ export const actividadesVulnerables: ActividadVulnerable[] = [
     nombre: "Comercialización de bienes inmuebles",
     descripcion:
       "Actividades de construcción, desarrollo, intermediación y compraventa de bienes inmuebles realizadas por particulares.",
+    xmlClaveActividad: "INM",
     identificacionUmbralUma: 0,
     avisoUmbralUma: 8025,
     obligaciones: {

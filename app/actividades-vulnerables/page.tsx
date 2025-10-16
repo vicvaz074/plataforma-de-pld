@@ -59,6 +59,15 @@ import type { ActividadVulnerable } from "@/lib/data/actividades"
 import { actividadesVulnerables } from "@/lib/data/actividades"
 import { UMA_MONTHS, findUmaByMonthYear } from "@/lib/data/uma"
 import { CLIENTE_TIPOS, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
+import { getPaisOptions } from "@/lib/data/paises"
+import { InmueblesCuestionario } from "@/components/actividades-vulnerables/inmuebles-cuestionario"
+import {
+  createInmuebleAvisoFormDefaults,
+  type CodigoPostalInfo,
+  type InmuebleAvisoForm,
+  normalizeCodigoPostal,
+} from "@/lib/utils/inmuebles-form"
+import { sanitizeExpedienteDetalle, type ExpedienteDetalle } from "@/lib/utils/expedientes"
 
 const MONTHS = [
   "Enero",
@@ -99,6 +108,8 @@ const MONEDAS = [
   { value: "BRL", label: "Real brasileño (BRL)" },
   { value: "OTRA", label: "Otra divisa (especificar)" },
 ]
+
+const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
 
 const STEPS = [
   {
@@ -573,6 +584,15 @@ export default function ActividadesVulnerablesPage() {
   const [detalleTipoCliente, setDetalleTipoCliente] = useState<string>("")
   const [clienteNombre, setClienteNombre] = useState<string>("")
   const [rfc, setRfc] = useState<string>("")
+  const [expedientesDetalle, setExpedientesDetalle] = useState<ExpedienteDetalle[]>([])
+  const [inmuebleForm, setInmuebleForm] = useState<InmuebleAvisoForm>(createInmuebleAvisoFormDefaults)
+  const actualizarInmuebleForm = (mutator: (draft: InmuebleAvisoForm) => void) => {
+    setInmuebleForm((prev) => {
+      const draft = structuredClone(prev)
+      mutator(draft)
+      return draft
+    })
+  }
   const [mismoGrupo, setMismoGrupo] = useState<string>("no")
   const [tipoOperacion, setTipoOperacion] = useState<string>("")
   const [moneda, setMoneda] = useState<string>("MXN")
@@ -829,6 +849,100 @@ export default function ActividadesVulnerablesPage() {
   }, [operacionEnEdicion])
 
   useEffect(() => {
+    if (typeof window === "undefined") return
+
+    try {
+      const stored = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
+      if (!stored) {
+        setExpedientesDetalle([])
+        return
+      }
+
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed)) {
+        const sane = parsed
+          .map((item) => sanitizeExpedienteDetalle(item))
+          .filter((item): item is ExpedienteDetalle => Boolean(item))
+        setExpedientesDetalle(sane)
+      }
+    } catch (error) {
+      console.warn("No fue posible leer el detalle de expedientes guardados", error)
+      setExpedientesDetalle([])
+    }
+  }, [])
+
+  useEffect(() => {
+    if (actividadSeleccionada?.key !== "fraccion-v-inmuebles") {
+      setInmuebleForm(createInmuebleAvisoFormDefaults())
+    }
+  }, [actividadSeleccionada?.key])
+
+  useEffect(() => {
+    if (actividadSeleccionada?.key !== "fraccion-v-inmuebles") return
+
+    const periodo = buildPeriodo(anioSeleccionado, mesSeleccionado)
+    const fechaOperacionPlano = fechaOperacion.replace(/-/g, "")
+    const monedaBase =
+      moneda === "OTRA"
+        ? monedaPersonalizadaCodigo.trim().toUpperCase() || ""
+        : moneda
+
+    setInmuebleForm((prev) => {
+      const draft = structuredClone(prev)
+      let changed = false
+
+      if (!draft.mesReportado) {
+        draft.mesReportado = periodo
+        changed = true
+      }
+
+      if (!draft.claveActividad) {
+        const clave = expedienteActivo?.claveActividadVulnerable ?? actividadSeleccionada.xmlClaveActividad
+        if (clave) {
+          draft.claveActividad = clave
+          changed = true
+        }
+      }
+
+      if (!draft.claveSujetoObligado && expedienteActivo?.claveSujetoObligado) {
+        draft.claveSujetoObligado = expedienteActivo.claveSujetoObligado
+        changed = true
+      }
+
+      if (draft.detalleOperacion.fechaOperacion !== fechaOperacionPlano) {
+        draft.detalleOperacion.fechaOperacion = fechaOperacionPlano
+        changed = true
+      }
+
+      if (monedaBase && draft.detalleOperacion.liquidacionNumerario.moneda !== monedaBase) {
+        draft.detalleOperacion.liquidacionNumerario.moneda = monedaBase
+        changed = true
+      }
+
+      if (!draft.detalleOperacion.liquidacionNumerario.monto && montoOperacion) {
+        draft.detalleOperacion.liquidacionNumerario.monto = montoOperacion
+        changed = true
+      }
+
+      if (!draft.detalleOperacion.liquidacionNumerario.fechaPago) {
+        draft.detalleOperacion.liquidacionNumerario.fechaPago = fechaOperacionPlano
+        changed = true
+      }
+
+      return changed ? draft : prev
+    })
+  }, [
+    actividadSeleccionada,
+    anioSeleccionado,
+    mesSeleccionado,
+    expedienteActivo,
+    fechaOperacion,
+    moneda,
+    monedaPersonalizadaCodigo,
+    montoOperacion,
+  ])
+
+  useEffect(() => {
     if (!operacionDocumentos) return
 
     const actualizada = operaciones.find((operacion) => operacion.id === operacionDocumentos.id)
@@ -846,9 +960,46 @@ export default function ActividadesVulnerablesPage() {
     [anioSeleccionado, umaVentana],
   )
 
+  const paisesOpciones = useMemo(() => getPaisOptions(), [])
+
   const actividadSeleccionada = useMemo(
     () => actividadesVulnerables.find((actividad) => actividad.key === actividadKey),
     [actividadKey],
+  )
+
+  const expedientesMap = useMemo(() => {
+    return new Map(expedientesDetalle.map((expediente) => [expediente.rfc, expediente]))
+  }, [expedientesDetalle])
+
+  const catalogoCodigosPostales = useMemo(() => {
+    const mapa = new Map<string, CodigoPostalInfo>()
+
+    expedientesDetalle.forEach((expediente) => {
+      expediente.personas.forEach((persona) => {
+        const codigo = normalizeCodigoPostal(persona.domicilio.codigoPostal ?? "")
+        if (!codigo) return
+
+        const existente = mapa.get(codigo)
+        const colonias = new Set<string>(existente?.colonias ?? [])
+        if (persona.domicilio.colonia) {
+          colonias.add(persona.domicilio.colonia)
+        }
+
+        mapa.set(codigo, {
+          estado: existente?.estado || persona.domicilio.entidad || "",
+          municipio: existente?.municipio || persona.domicilio.municipio || "",
+          colonias: Array.from(colonias).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" })),
+        })
+      })
+    })
+
+    return mapa
+  }, [expedientesDetalle])
+
+  const rfcNormalizado = rfc.trim().toUpperCase()
+  const expedienteActivo = useMemo(
+    () => expedientesMap.get(rfcNormalizado) ?? null,
+    [expedientesMap, rfcNormalizado],
   )
 
   const umaSeleccionada = useMemo(() => {
@@ -2538,6 +2689,20 @@ const cambiarMesCalendario = (delta: number) => {
                     </ul>
                   </div>
                 </div>
+
+                {actividadSeleccionada?.key === "fraccion-v-inmuebles" && (
+                  <InmueblesCuestionario
+                    value={inmuebleForm}
+                    onChange={setInmuebleForm}
+                    paises={paisesOpciones}
+                    monedaOptions={MONEDAS}
+                    catalogoCodigosPostales={catalogoCodigosPostales}
+                    expedientePersonas={expedienteActivo?.personas ?? []}
+                    expedienteActualizadoEn={expedienteActivo?.actualizadoEn}
+                    expedienteNombre={expedienteActivo?.nombre}
+                    tituloActividad={actividadSeleccionada?.nombre}
+                  />
+                )}
               </CardContent>
             </Card>
           )}
