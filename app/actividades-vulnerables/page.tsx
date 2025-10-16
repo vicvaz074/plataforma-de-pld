@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { type ChangeEvent, useEffect, useMemo, useState } from "react"
+import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,6 +59,8 @@ import type { ActividadVulnerable } from "@/lib/data/actividades"
 import { actividadesVulnerables } from "@/lib/data/actividades"
 import { UMA_MONTHS, findUmaByMonthYear } from "@/lib/data/uma"
 import { CLIENTE_TIPOS, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
+import { CODIGOS_POSTALES, findCodigoPostalInfo } from "@/lib/data/codigos-postales"
+import { PAISES, findPaisByCodigo, findPaisByNombre } from "@/lib/data/paises"
 
 const MONTHS = [
   "Enero",
@@ -99,6 +101,122 @@ const MONEDAS = [
   { value: "BRL", label: "Real brasileño (BRL)" },
   { value: "OTRA", label: "Otra divisa (especificar)" },
 ]
+
+const ACTIVIDAD_INMUEBLES_KEY = "fraccion-xv-uso-goce"
+
+const ALERTA_TIPOS = [
+  { value: "0", label: "Sin alerta" },
+  { value: "521", label: "Operación inusual (521)" },
+  { value: "522", label: "Operación interna preocupante (522)" },
+]
+
+const PRIORIDAD_AVISO_OPCIONES = [
+  { value: "1", label: "Prioridad normal" },
+  { value: "2", label: "Prioridad alta" },
+]
+
+const INMUEBLE_OPERACIONES = [
+  { value: "501", label: "501 – Contrato de arrendamiento" },
+  { value: "502", label: "502 – Cesión de derechos de uso o goce" },
+  { value: "503", label: "503 – Renovación o prórroga de contrato" },
+]
+
+const FIGURA_CLIENTE_OPTIONS = [
+  { value: "1", label: "Arrendatario" },
+  { value: "2", label: "Comodatorio" },
+  { value: "3", label: "Cesionario" },
+]
+
+const FIGURA_SUJETO_OBLIGADO_OPTIONS = [
+  { value: "1", label: "Arrendador" },
+  { value: "2", label: "Administrador" },
+  { value: "3", label: "Fideicomitente" },
+]
+
+const TIPO_INMUEBLE_OPTIONS = [
+  { value: "casa", label: "Casa habitación" },
+  { value: "departamento", label: "Departamento" },
+  { value: "oficina", label: "Oficina" },
+  { value: "local", label: "Local comercial" },
+  { value: "terreno", label: "Terreno" },
+  { value: "industrial", label: "Nave industrial" },
+]
+
+const TIPO_INMUEBLE_CODIGOS: Record<string, string> = {
+  casa: "1",
+  departamento: "2",
+  oficina: "3",
+  local: "4",
+  terreno: "5",
+  industrial: "6",
+}
+
+const FORMA_PAGO_OPTIONS = [
+  { value: "1", label: "Transferencia bancaria" },
+  { value: "2", label: "Cheque" },
+  { value: "3", label: "Efectivo" },
+  { value: "4", label: "Otro instrumento" },
+]
+
+const INSTRUMENTO_MONETARIO_OPTIONS = [
+  { value: "1", label: "Cuenta propia" },
+  { value: "2", label: "Cuenta de tercero" },
+  { value: "3", label: "Medio no bancarizado" },
+]
+
+const ALERTA_DEFAULT = ALERTA_TIPOS[0]?.value ?? "0"
+const PRIORIDAD_DEFAULT = PRIORIDAD_AVISO_OPCIONES[0]?.value ?? "1"
+
+const INMUEBLE_FORM_DEFAULT: DatosInmuebleFormState = {
+  fechaInicio: "",
+  fechaFin: "",
+  tipoInmueble: "",
+  valorAvaluo: "",
+  folioReal: "",
+  pais: "MX",
+  entidad: "",
+  municipio: "",
+  colonia: "",
+  codigoPostal: "",
+  calle: "",
+  numeroExterior: "",
+  numeroInterior: "",
+}
+
+const LIQUIDACION_FORM_DEFAULT: DatosLiquidacionFormState = {
+  fechaPago: "",
+  formaPago: "",
+  instrumento: "",
+}
+
+const BENEFICIARIO_FORM_DEFAULT: BeneficiarioFormState = {
+  tipo: "persona_fisica",
+  nombre: "",
+  apellidoPaterno: "",
+  apellidoMaterno: "",
+  fechaNacimiento: "",
+  rfc: "",
+  curp: "",
+  pais: "MX",
+}
+
+const CONTRAPARTE_FORM_DEFAULT: ContraparteFormState = {
+  tipo: "persona_fisica",
+  nombre: "",
+  apellidoPaterno: "",
+  apellidoMaterno: "",
+  fechaNacimiento: "",
+  rfc: "",
+  pais: "MX",
+}
+
+const INSTRUMENTO_FORM_DEFAULT: InstrumentoPublicoFormState = {
+  numero: "",
+  fecha: "",
+  notario: "",
+  entidad: "",
+  valorAvaluo: "",
+}
 
 const STEPS = [
   {
@@ -166,6 +284,192 @@ const INFO_MODAL_CONTENT: Record<InfoModalKey, { title: string; body: string[] }
   },
 }
 
+interface RepresentanteAviso {
+  nombre?: string
+  apellidoPaterno?: string
+  apellidoMaterno?: string
+  fechaNacimiento?: string
+  rfc?: string
+  curp?: string
+  pais?: string
+}
+
+interface DomicilioAviso {
+  ambito?: "nacional" | "extranjero"
+  pais?: string
+  entidad?: string
+  municipio?: string
+  colonia?: string
+  codigoPostal?: string
+  calle?: string
+  numeroExterior?: string
+  numeroInterior?: string
+}
+
+interface PersonaAvisoOperacion {
+  tipo: "persona_fisica" | "persona_moral"
+  denominacion?: string
+  fechaConstitucion?: string
+  pais?: string
+  giro?: string
+  nombre?: string
+  apellidoPaterno?: string
+  apellidoMaterno?: string
+  fechaNacimiento?: string
+  rfc?: string
+  curp?: string
+  representante?: RepresentanteAviso | null
+  domicilio?: DomicilioAviso | null
+  contacto?: {
+    clavePais?: string
+    telefono?: string
+    correo?: string
+  } | null
+}
+
+interface DatosInmuebleOperacion {
+  codigoOperacion: string
+  fechaInicio: string
+  fechaFin: string
+  tipoInmueble: string
+  valorAvaluo: string
+  folioReal: string
+  pais: string
+  entidad: string
+  municipio: string
+  colonia: string
+  codigoPostal: string
+  calle: string
+  numeroExterior: string
+  numeroInterior?: string
+}
+
+interface DatosLiquidacionOperacion {
+  fechaPago: string
+  formaPago: string
+  instrumento: string
+  moneda: string
+  monedaDescripcion: string
+  monto: number
+}
+
+interface BeneficiarioControladorOperacion {
+  tipo: "persona_fisica" | "persona_moral"
+  nombre?: string
+  apellidoPaterno?: string
+  apellidoMaterno?: string
+  fechaNacimiento?: string
+  rfc?: string
+  curp?: string
+  pais?: string
+}
+
+interface ContraparteOperacion {
+  tipo: "persona_fisica" | "persona_moral"
+  nombre?: string
+  apellidoPaterno?: string
+  apellidoMaterno?: string
+  fechaNacimiento?: string
+  rfc?: string
+  pais?: string
+}
+
+interface InstrumentoPublicoOperacion {
+  numero: string
+  fecha: string
+  notario: string
+  entidad: string
+  valorAvaluo: string
+}
+
+interface DatosInmuebleFormState {
+  fechaInicio: string
+  fechaFin: string
+  tipoInmueble: string
+  valorAvaluo: string
+  folioReal: string
+  pais: string
+  entidad: string
+  municipio: string
+  colonia: string
+  codigoPostal: string
+  calle: string
+  numeroExterior: string
+  numeroInterior: string
+}
+
+interface DatosLiquidacionFormState {
+  fechaPago: string
+  formaPago: string
+  instrumento: string
+}
+
+interface BeneficiarioFormState {
+  tipo: "persona_fisica" | "persona_moral"
+  nombre: string
+  apellidoPaterno: string
+  apellidoMaterno: string
+  fechaNacimiento: string
+  rfc: string
+  curp: string
+  pais: string
+}
+
+interface ContraparteFormState {
+  tipo: "persona_fisica" | "persona_moral"
+  nombre: string
+  apellidoPaterno: string
+  apellidoMaterno: string
+  fechaNacimiento: string
+  rfc: string
+  pais: string
+}
+
+interface InstrumentoPublicoFormState {
+  numero: string
+  fecha: string
+  notario: string
+  entidad: string
+  valorAvaluo: string
+}
+
+interface ExpedientePersona {
+  id?: string
+  tipo?: "persona_moral" | "persona_fisica"
+  denominacion?: string
+  fechaConstitucion?: string
+  rfc?: string
+  curp?: string
+  pais?: string
+  giro?: string
+  rolRelacion?: string
+  representante?: RepresentanteAviso | null
+  domicilio?: DomicilioAviso | null
+  contacto?: {
+    conoceTelefono?: string
+    conocePaisTelefono?: string
+    clavePais?: string
+    telefono?: string
+    correo?: string
+  } | null
+}
+
+interface ExpedienteDetalle {
+  rfc: string
+  nombre?: string
+  tipoCliente?: string
+  detalleTipoCliente?: string
+  responsable?: string
+  claveSujetoObligado?: string
+  claveActividadVulnerable?: string
+  identificacion?: Record<string, string>
+  datosFiscales?: Record<string, string>
+  perfilOperaciones?: Record<string, string>
+  documentacion?: Record<string, string>
+  personas?: ExpedientePersona[]
+  actualizadoEn?: string
+}
+
 interface OperacionCliente {
   id: string
   actividadKey: string
@@ -195,6 +499,22 @@ interface OperacionCliente {
   documentosSoporte: DocumentoSoporte[]
   requisitosChecklist: Record<string, boolean>
   kycIntegrado: boolean
+  referenciaAviso?: string
+  alertaCodigo?: string
+  alertaDescripcion?: string
+  prioridadAviso?: string
+  claveSujetoObligado?: string
+  claveActividadVulnerable?: string
+  expedienteReferenciado?: string
+  personaExpedienteId?: string
+  personaAviso?: PersonaAvisoOperacion | null
+  inmueble?: DatosInmuebleOperacion | null
+  liquidacion?: DatosLiquidacionOperacion | null
+  beneficiario?: BeneficiarioControladorOperacion | null
+  contraparte?: ContraparteOperacion | null
+  instrumento?: InstrumentoPublicoOperacion | null
+  figuraCliente?: string
+  figuraSujetoObligado?: string
 }
 
 interface ClienteGuardado {
@@ -235,6 +555,7 @@ const currentMonth = now.getMonth() + 1
 const START_WINDOW = new Date(2020, 8, 1) // septiembre 2020
 
 const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
+const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
 const NUEVO_CLIENTE_VALUE = "__nuevo__"
 
 function normalizarTipoCliente(value: string) {
@@ -276,6 +597,31 @@ function ordenarClientesGuardados(clientes: ClienteGuardado[]) {
 function getMonedaLabel(value: string) {
   const found = MONEDAS.find((moneda) => moneda.value === value)
   return found ? found.label : value
+}
+
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
+}
+
+function formatFechaXml(value: string | undefined) {
+  if (!value) return ""
+  return value.replace(/-/g, "")
+}
+
+function formatNumberXml(value: number | string | undefined) {
+  if (typeof value === "number" && !Number.isNaN(value)) {
+    return value.toFixed(2)
+  }
+  const parsed = Number(value)
+  if (Number.isNaN(parsed)) {
+    return "0.00"
+  }
+  return parsed.toFixed(2)
 }
 
 function formatTipoClienteLabel(value: string, detalle?: string) {
@@ -457,6 +803,15 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
   const monedaDescripcion =
     typeof raw.monedaDescripcion === "string" ? raw.monedaDescripcion : getMonedaLabel(moneda)
 
+  const monto = Number(raw.monto) || 0
+
+  const personaAviso = sanitizePersonaAviso(raw.personaAviso)
+  const inmueble = sanitizeInmueble(raw.inmueble)
+  const liquidacion = sanitizeLiquidacion(raw.liquidacion, moneda, monedaDescripcion, monto)
+  const beneficiario = sanitizeBeneficiario(raw.beneficiario)
+  const contraparte = sanitizeContraparte(raw.contraparte)
+  const instrumento = sanitizeInstrumento(raw.instrumento)
+
   const documentosRaw = Array.isArray(raw.documentosSoporte) ? raw.documentosSoporte : []
   const documentosSoporte = documentosRaw
     .map((doc) => sanitizeDocumento(doc))
@@ -482,7 +837,7 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
     periodo: typeof raw.periodo === "string" ? raw.periodo : "",
     mes: Number(raw.mes) || currentMonth,
     anio: Number(raw.anio) || currentYear,
-    monto: Number(raw.monto) || 0,
+    monto,
     moneda,
     monedaDescripcion,
     fechaOperacion:
@@ -502,6 +857,28 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
     documentosSoporte,
     requisitosChecklist,
     kycIntegrado: Boolean(raw.kycIntegrado),
+    referenciaAviso: typeof raw.referenciaAviso === "string" ? raw.referenciaAviso : undefined,
+    alertaCodigo: typeof raw.alertaCodigo === "string" ? raw.alertaCodigo : undefined,
+    alertaDescripcion:
+      typeof raw.alertaDescripcion === "string" ? raw.alertaDescripcion : undefined,
+    prioridadAviso: typeof raw.prioridadAviso === "string" ? raw.prioridadAviso : undefined,
+    claveSujetoObligado:
+      typeof raw.claveSujetoObligado === "string" ? raw.claveSujetoObligado : undefined,
+    claveActividadVulnerable:
+      typeof raw.claveActividadVulnerable === "string" ? raw.claveActividadVulnerable : undefined,
+    expedienteReferenciado:
+      typeof raw.expedienteReferenciado === "string" ? raw.expedienteReferenciado : undefined,
+    personaExpedienteId:
+      typeof raw.personaExpedienteId === "string" ? raw.personaExpedienteId : undefined,
+    personaAviso: personaAviso ?? null,
+    inmueble: inmueble ?? null,
+    liquidacion: liquidacion ?? null,
+    beneficiario: beneficiario ?? null,
+    contraparte: contraparte ?? null,
+    instrumento: instrumento ?? null,
+    figuraCliente: typeof raw.figuraCliente === "string" ? raw.figuraCliente : undefined,
+    figuraSujetoObligado:
+      typeof raw.figuraSujetoObligado === "string" ? raw.figuraSujetoObligado : undefined,
   }
 }
 
@@ -529,6 +906,354 @@ function sanitizeClienteGuardado(raw: any): ClienteGuardado | null {
     mismoGrupo: Boolean(raw.mismoGrupo),
     detalleTipoCliente: detalle || undefined,
   }
+}
+
+function sanitizeExpedientePersona(raw: any): ExpedientePersona | null {
+  if (!raw || typeof raw !== "object") return null
+
+  const tipo = raw.tipo === "persona_fisica" || raw.tipo === "persona_moral" ? raw.tipo : undefined
+  const representanteRaw = raw.representante
+  const representante: RepresentanteAviso | null =
+    representanteRaw && typeof representanteRaw === "object"
+      ? {
+          nombre: typeof representanteRaw.nombre === "string" ? representanteRaw.nombre : undefined,
+          apellidoPaterno:
+            typeof representanteRaw.apellidoPaterno === "string" ? representanteRaw.apellidoPaterno : undefined,
+          apellidoMaterno:
+            typeof representanteRaw.apellidoMaterno === "string" ? representanteRaw.apellidoMaterno : undefined,
+          fechaNacimiento:
+            typeof representanteRaw.fechaNacimiento === "string" ? representanteRaw.fechaNacimiento : undefined,
+          rfc: typeof representanteRaw.rfc === "string" ? representanteRaw.rfc : undefined,
+          curp: typeof representanteRaw.curp === "string" ? representanteRaw.curp : undefined,
+        }
+      : null
+
+  const domicilioRaw = raw.domicilio
+  const domicilio: DomicilioAviso | null =
+    domicilioRaw && typeof domicilioRaw === "object"
+      ? {
+          ambito: domicilioRaw.ambito === "extranjero" ? "extranjero" : "nacional",
+          pais:
+            typeof domicilioRaw.pais === "string"
+              ? findPaisByNombre(domicilioRaw.pais)?.code ??
+                findPaisByCodigo(domicilioRaw.pais)?.code ??
+                domicilioRaw.pais
+              : undefined,
+          entidad: typeof domicilioRaw.entidad === "string" ? domicilioRaw.entidad : undefined,
+          municipio: typeof domicilioRaw.municipio === "string" ? domicilioRaw.municipio : undefined,
+          colonia: typeof domicilioRaw.colonia === "string" ? domicilioRaw.colonia : undefined,
+          codigoPostal: typeof domicilioRaw.codigoPostal === "string" ? domicilioRaw.codigoPostal : undefined,
+          calle: typeof domicilioRaw.calle === "string" ? domicilioRaw.calle : undefined,
+          numeroExterior:
+            typeof domicilioRaw.numeroExterior === "string" ? domicilioRaw.numeroExterior : undefined,
+          numeroInterior:
+            typeof domicilioRaw.numeroInterior === "string" ? domicilioRaw.numeroInterior : undefined,
+        }
+      : null
+
+  const contactoRaw = raw.contacto
+  const contacto =
+    contactoRaw && typeof contactoRaw === "object"
+      ? {
+          conoceTelefono:
+            typeof contactoRaw.conoceTelefono === "string" ? contactoRaw.conoceTelefono : undefined,
+          conocePaisTelefono:
+            typeof contactoRaw.conocePaisTelefono === "string" ? contactoRaw.conocePaisTelefono : undefined,
+          clavePais:
+            typeof contactoRaw.clavePais === "string"
+              ? findPaisByNombre(contactoRaw.clavePais)?.code ??
+                findPaisByCodigo(contactoRaw.clavePais)?.code ??
+                contactoRaw.clavePais
+              : undefined,
+          telefono: typeof contactoRaw.telefono === "string" ? contactoRaw.telefono : undefined,
+          correo: typeof contactoRaw.correo === "string" ? contactoRaw.correo : undefined,
+        }
+      : null
+
+  return {
+    id: typeof raw.id === "string" ? raw.id : undefined,
+    tipo,
+    denominacion: typeof raw.denominacion === "string" ? raw.denominacion : undefined,
+    fechaConstitucion:
+      typeof raw.fechaConstitucion === "string" ? raw.fechaConstitucion : undefined,
+    rfc: typeof raw.rfc === "string" ? raw.rfc : undefined,
+    curp: typeof raw.curp === "string" ? raw.curp : undefined,
+    pais:
+      typeof raw.pais === "string"
+        ? findPaisByNombre(raw.pais)?.code ?? findPaisByCodigo(raw.pais)?.code ?? raw.pais
+        : undefined,
+    giro: typeof raw.giro === "string" ? raw.giro : undefined,
+    rolRelacion: typeof raw.rolRelacion === "string" ? raw.rolRelacion : undefined,
+    representante,
+    domicilio,
+    contacto,
+  }
+}
+
+function sanitizeExpediente(raw: any): ExpedienteDetalle | null {
+  if (!raw || typeof raw !== "object") return null
+
+  const rfc = typeof raw.rfc === "string" ? raw.rfc : ""
+  if (!rfc) return null
+
+  const personasRaw = Array.isArray(raw.personas) ? raw.personas : []
+  const personas = personasRaw
+    .map((item) => sanitizeExpedientePersona(item))
+    .filter((item): item is ExpedientePersona => Boolean(item))
+
+  return {
+    rfc,
+    nombre: typeof raw.nombre === "string" ? raw.nombre : undefined,
+    tipoCliente: typeof raw.tipoCliente === "string" ? normalizarTipoCliente(raw.tipoCliente) : undefined,
+    detalleTipoCliente:
+      typeof raw.detalleTipoCliente === "string" ? raw.detalleTipoCliente : undefined,
+    responsable: typeof raw.responsable === "string" ? raw.responsable : undefined,
+    claveSujetoObligado:
+      typeof raw.claveSujetoObligado === "string" ? raw.claveSujetoObligado : undefined,
+    claveActividadVulnerable:
+      typeof raw.claveActividadVulnerable === "string" ? raw.claveActividadVulnerable : undefined,
+    identificacion: typeof raw.identificacion === "object" ? raw.identificacion ?? undefined : undefined,
+    datosFiscales: typeof raw.datosFiscales === "object" ? raw.datosFiscales ?? undefined : undefined,
+    perfilOperaciones:
+      typeof raw.perfilOperaciones === "object" ? raw.perfilOperaciones ?? undefined : undefined,
+    documentacion:
+      typeof raw.documentacion === "object" ? raw.documentacion ?? undefined : undefined,
+    personas,
+    actualizadoEn: typeof raw.actualizadoEn === "string" ? raw.actualizadoEn : undefined,
+  }
+}
+
+function buildPersonaAvisoFromExpediente(persona: ExpedientePersona | null | undefined): PersonaAvisoOperacion | null {
+  if (!persona) return null
+  const tipo = persona.tipo === "persona_fisica" ? "persona_fisica" : "persona_moral"
+
+  if (tipo === "persona_moral") {
+    return {
+      tipo,
+      denominacion: persona.denominacion ?? persona.rfc ?? "Persona moral",
+      fechaConstitucion: persona.fechaConstitucion,
+      pais: persona.pais,
+      giro: persona.giro,
+      rfc: persona.rfc,
+      curp: persona.curp,
+      representante: persona.representante ?? null,
+      domicilio: persona.domicilio ?? null,
+      contacto:
+        persona.contacto
+          ? {
+              clavePais: persona.contacto.clavePais,
+              telefono: persona.contacto.telefono,
+              correo: persona.contacto.correo,
+            }
+          : null,
+    }
+  }
+
+  const nombreCompleto = persona.denominacion?.split(" ") ?? []
+  const nombre = persona.representante?.nombre ?? nombreCompleto[0] ?? ""
+  const apellidoPaterno =
+    persona.representante?.apellidoPaterno ?? nombreCompleto.slice(1).join(" ") ?? ""
+
+  return {
+    tipo,
+    nombre,
+    apellidoPaterno,
+    apellidoMaterno: persona.representante?.apellidoMaterno,
+    fechaNacimiento: persona.representante?.fechaNacimiento,
+    rfc: persona.rfc,
+    curp: persona.curp,
+    pais: persona.pais,
+    domicilio: persona.domicilio ?? null,
+    contacto:
+      persona.contacto
+        ? {
+            clavePais: persona.contacto.clavePais,
+            telefono: persona.contacto.telefono,
+            correo: persona.contacto.correo,
+          }
+        : null,
+  }
+}
+
+function sanitizePersonaAviso(raw: any): PersonaAvisoOperacion | null {
+  if (!raw || typeof raw !== "object") return null
+
+  const tipo = raw.tipo === "persona_fisica" || raw.tipo === "persona_moral" ? raw.tipo : null
+  if (!tipo) return null
+
+  const representanteRaw = raw.representante
+  const representante: RepresentanteAviso | null =
+    representanteRaw && typeof representanteRaw === "object"
+      ? {
+          nombre: typeof representanteRaw.nombre === "string" ? representanteRaw.nombre : undefined,
+          apellidoPaterno:
+            typeof representanteRaw.apellidoPaterno === "string" ? representanteRaw.apellidoPaterno : undefined,
+          apellidoMaterno:
+            typeof representanteRaw.apellidoMaterno === "string" ? representanteRaw.apellidoMaterno : undefined,
+          fechaNacimiento:
+            typeof representanteRaw.fechaNacimiento === "string" ? representanteRaw.fechaNacimiento : undefined,
+          rfc: typeof representanteRaw.rfc === "string" ? representanteRaw.rfc : undefined,
+          curp: typeof representanteRaw.curp === "string" ? representanteRaw.curp : undefined,
+          pais:
+            typeof representanteRaw.pais === "string"
+              ? findPaisByNombre(representanteRaw.pais)?.code ??
+                findPaisByCodigo(representanteRaw.pais)?.code ??
+                representanteRaw.pais
+              : undefined,
+        }
+      : null
+
+  const domicilioRaw = raw.domicilio
+  const domicilio: DomicilioAviso | null =
+    domicilioRaw && typeof domicilioRaw === "object"
+      ? {
+          ambito: domicilioRaw.ambito === "extranjero" ? "extranjero" : "nacional",
+          pais:
+            typeof domicilioRaw.pais === "string"
+              ? findPaisByNombre(domicilioRaw.pais)?.code ??
+                findPaisByCodigo(domicilioRaw.pais)?.code ??
+                domicilioRaw.pais
+              : undefined,
+          entidad: typeof domicilioRaw.entidad === "string" ? domicilioRaw.entidad : undefined,
+          municipio: typeof domicilioRaw.municipio === "string" ? domicilioRaw.municipio : undefined,
+          colonia: typeof domicilioRaw.colonia === "string" ? domicilioRaw.colonia : undefined,
+          codigoPostal: typeof domicilioRaw.codigoPostal === "string" ? domicilioRaw.codigoPostal : undefined,
+          calle: typeof domicilioRaw.calle === "string" ? domicilioRaw.calle : undefined,
+          numeroExterior:
+            typeof domicilioRaw.numeroExterior === "string" ? domicilioRaw.numeroExterior : undefined,
+          numeroInterior:
+            typeof domicilioRaw.numeroInterior === "string" ? domicilioRaw.numeroInterior : undefined,
+        }
+      : null
+
+  const contactoRaw = raw.contacto
+  const contacto =
+    contactoRaw && typeof contactoRaw === "object"
+      ? {
+          clavePais:
+            typeof contactoRaw.clavePais === "string"
+              ? findPaisByNombre(contactoRaw.clavePais)?.code ??
+                findPaisByCodigo(contactoRaw.clavePais)?.code ??
+                contactoRaw.clavePais
+              : undefined,
+          telefono: typeof contactoRaw.telefono === "string" ? contactoRaw.telefono : undefined,
+          correo: typeof contactoRaw.correo === "string" ? contactoRaw.correo : undefined,
+        }
+      : null
+
+  return {
+    tipo,
+    denominacion: typeof raw.denominacion === "string" ? raw.denominacion : undefined,
+    fechaConstitucion:
+      typeof raw.fechaConstitucion === "string" ? raw.fechaConstitucion : undefined,
+    pais:
+      typeof raw.pais === "string"
+        ? findPaisByNombre(raw.pais)?.code ?? findPaisByCodigo(raw.pais)?.code ?? raw.pais
+        : undefined,
+    giro: typeof raw.giro === "string" ? raw.giro : undefined,
+    nombre: typeof raw.nombre === "string" ? raw.nombre : undefined,
+    apellidoPaterno: typeof raw.apellidoPaterno === "string" ? raw.apellidoPaterno : undefined,
+    apellidoMaterno: typeof raw.apellidoMaterno === "string" ? raw.apellidoMaterno : undefined,
+    fechaNacimiento:
+      typeof raw.fechaNacimiento === "string" ? raw.fechaNacimiento : undefined,
+    rfc: typeof raw.rfc === "string" ? raw.rfc : undefined,
+    curp: typeof raw.curp === "string" ? raw.curp : undefined,
+    representante,
+    domicilio,
+    contacto,
+  }
+}
+
+function sanitizeInmueble(raw: any): DatosInmuebleOperacion | null {
+  if (!raw || typeof raw !== "object") return null
+
+  const codigoOperacion = typeof raw.codigoOperacion === "string" ? raw.codigoOperacion : ""
+  const tipoInmueble = typeof raw.tipoInmueble === "string" ? raw.tipoInmueble : ""
+  const codigoPostal = typeof raw.codigoPostal === "string" ? raw.codigoPostal : ""
+  if (!codigoOperacion || !tipoInmueble || !codigoPostal) return null
+
+  return {
+    codigoOperacion,
+    fechaInicio: typeof raw.fechaInicio === "string" ? raw.fechaInicio : "",
+    fechaFin: typeof raw.fechaFin === "string" ? raw.fechaFin : "",
+    tipoInmueble,
+    valorAvaluo: typeof raw.valorAvaluo === "string" ? raw.valorAvaluo : "",
+    folioReal: typeof raw.folioReal === "string" ? raw.folioReal : "",
+    pais: typeof raw.pais === "string" ? raw.pais : "MX",
+    entidad: typeof raw.entidad === "string" ? raw.entidad : "",
+    municipio: typeof raw.municipio === "string" ? raw.municipio : "",
+    colonia: typeof raw.colonia === "string" ? raw.colonia : "",
+    codigoPostal,
+    calle: typeof raw.calle === "string" ? raw.calle : "",
+    numeroExterior: typeof raw.numeroExterior === "string" ? raw.numeroExterior : "",
+    numeroInterior: typeof raw.numeroInterior === "string" ? raw.numeroInterior : undefined,
+  }
+}
+
+function sanitizeLiquidacion(
+  raw: any,
+  fallbackMoneda: string,
+  fallbackDescripcion: string,
+  monto: number,
+): DatosLiquidacionOperacion | null {
+  if (!raw || typeof raw !== "object") return null
+
+  const fechaPago = typeof raw.fechaPago === "string" ? raw.fechaPago : ""
+  const formaPago = typeof raw.formaPago === "string" ? raw.formaPago : ""
+  const instrumento = typeof raw.instrumento === "string" ? raw.instrumento : ""
+  if (!fechaPago || !formaPago || !instrumento) return null
+
+  return {
+    fechaPago,
+    formaPago,
+    instrumento,
+    moneda: typeof raw.moneda === "string" ? raw.moneda : fallbackMoneda,
+    monedaDescripcion:
+      typeof raw.monedaDescripcion === "string" ? raw.monedaDescripcion : fallbackDescripcion,
+    monto: typeof raw.monto === "number" && !Number.isNaN(raw.monto) ? raw.monto : monto,
+  }
+}
+
+function sanitizeBeneficiario(raw: any): BeneficiarioControladorOperacion | null {
+  if (!raw || typeof raw !== "object") return null
+  const tipo = raw.tipo === "persona_fisica" || raw.tipo === "persona_moral" ? raw.tipo : null
+  if (!tipo) return null
+  return {
+    tipo,
+    nombre: typeof raw.nombre === "string" ? raw.nombre : undefined,
+    apellidoPaterno: typeof raw.apellidoPaterno === "string" ? raw.apellidoPaterno : undefined,
+    apellidoMaterno: typeof raw.apellidoMaterno === "string" ? raw.apellidoMaterno : undefined,
+    fechaNacimiento: typeof raw.fechaNacimiento === "string" ? raw.fechaNacimiento : undefined,
+    rfc: typeof raw.rfc === "string" ? raw.rfc : undefined,
+    curp: typeof raw.curp === "string" ? raw.curp : undefined,
+    pais: typeof raw.pais === "string" ? raw.pais : undefined,
+  }
+}
+
+function sanitizeContraparte(raw: any): ContraparteOperacion | null {
+  if (!raw || typeof raw !== "object") return null
+  const tipo = raw.tipo === "persona_fisica" || raw.tipo === "persona_moral" ? raw.tipo : null
+  if (!tipo) return null
+  return {
+    tipo,
+    nombre: typeof raw.nombre === "string" ? raw.nombre : undefined,
+    apellidoPaterno: typeof raw.apellidoPaterno === "string" ? raw.apellidoPaterno : undefined,
+    apellidoMaterno: typeof raw.apellidoMaterno === "string" ? raw.apellidoMaterno : undefined,
+    fechaNacimiento: typeof raw.fechaNacimiento === "string" ? raw.fechaNacimiento : undefined,
+    rfc: typeof raw.rfc === "string" ? raw.rfc : undefined,
+    pais: typeof raw.pais === "string" ? raw.pais : undefined,
+  }
+}
+
+function sanitizeInstrumento(raw: any): InstrumentoPublicoOperacion | null {
+  if (!raw || typeof raw !== "object") return null
+  const numero = typeof raw.numero === "string" ? raw.numero : ""
+  const fecha = typeof raw.fecha === "string" ? raw.fecha : ""
+  const notario = typeof raw.notario === "string" ? raw.notario : ""
+  const entidad = typeof raw.entidad === "string" ? raw.entidad : ""
+  const valorAvaluo = typeof raw.valorAvaluo === "string" ? raw.valorAvaluo : ""
+  if (!numero && !fecha && !notario && !entidad && !valorAvaluo) return null
+  return { numero, fecha, notario, entidad, valorAvaluo }
 }
 
 function toDate(value: string | Date) {
@@ -580,6 +1305,34 @@ export default function ActividadesVulnerablesPage() {
   const [monedaPersonalizadaDescripcion, setMonedaPersonalizadaDescripcion] = useState<string>("")
   const [fechaOperacion, setFechaOperacion] = useState<string>(new Date().toISOString().substring(0, 10))
   const [evidencia, setEvidencia] = useState<string>("")
+  const [expedientesDetalle, setExpedientesDetalle] = useState<Record<string, ExpedienteDetalle>>({})
+  const [expedientesListo, setExpedientesListo] = useState(false)
+  const [expedienteSeleccionado, setExpedienteSeleccionado] = useState<string>("")
+  const [personaExpedienteSeleccionada, setPersonaExpedienteSeleccionada] = useState<string>("")
+  const [personaAvisoActual, setPersonaAvisoActual] = useState<PersonaAvisoOperacion | null>(null)
+  const [codigoOperacionInmueble, setCodigoOperacionInmueble] = useState<string>("")
+  const [figuraClienteInmueble, setFiguraClienteInmueble] = useState<string>("")
+  const [figuraSujetoObligadoInmueble, setFiguraSujetoObligadoInmueble] = useState<string>("")
+  const [referenciaAviso, setReferenciaAviso] = useState<string>("")
+  const [alertaCodigo, setAlertaCodigo] = useState<string>(ALERTA_DEFAULT)
+  const [alertaDescripcion, setAlertaDescripcion] = useState<string>("")
+  const [prioridadAviso, setPrioridadAviso] = useState<string>(PRIORIDAD_DEFAULT)
+  const [claveSujetoObligado, setClaveSujetoObligado] = useState<string>("")
+  const [claveActividad, setClaveActividad] = useState<string>("")
+  const [coloniasDisponibles, setColoniasDisponibles] = useState<string[]>([])
+  const [inmuebleForm, setInmuebleForm] = useState<DatosInmuebleFormState>(() => ({ ...INMUEBLE_FORM_DEFAULT }))
+  const [liquidacionForm, setLiquidacionForm] = useState<DatosLiquidacionFormState>(
+    () => ({ ...LIQUIDACION_FORM_DEFAULT }),
+  )
+  const [beneficiarioForm, setBeneficiarioForm] = useState<BeneficiarioFormState>(
+    () => ({ ...BENEFICIARIO_FORM_DEFAULT }),
+  )
+  const [contraparteForm, setContraparteForm] = useState<ContraparteFormState>(
+    () => ({ ...CONTRAPARTE_FORM_DEFAULT }),
+  )
+  const [instrumentoForm, setInstrumentoForm] = useState<InstrumentoPublicoFormState>(
+    () => ({ ...INSTRUMENTO_FORM_DEFAULT }),
+  )
   const [operaciones, setOperaciones] = useState<OperacionCliente[]>([])
   const [operacionesCargadas, setOperacionesCargadas] = useState(false)
   const [clientesGuardados, setClientesGuardados] = useState<ClienteGuardado[]>([])
@@ -619,6 +1372,41 @@ export default function ActividadesVulnerablesPage() {
     archivoContenido: "",
     fechaRegistro: new Date().toISOString().substring(0, 10),
   })
+
+  const actualizarInmuebleForm = useCallback(
+    (campo: keyof DatosInmuebleFormState, valor: string) => {
+      setInmuebleForm((prev) => ({ ...prev, [campo]: valor }))
+    },
+    [],
+  )
+
+  const actualizarLiquidacionForm = useCallback(
+    (campo: keyof DatosLiquidacionFormState, valor: string) => {
+      setLiquidacionForm((prev) => ({ ...prev, [campo]: valor }))
+    },
+    [],
+  )
+
+  const actualizarBeneficiarioForm = useCallback(
+    (campo: keyof BeneficiarioFormState, valor: string) => {
+      setBeneficiarioForm((prev) => ({ ...prev, [campo]: valor }))
+    },
+    [],
+  )
+
+  const actualizarContraparteForm = useCallback(
+    (campo: keyof ContraparteFormState, valor: string) => {
+      setContraparteForm((prev) => ({ ...prev, [campo]: valor }))
+    },
+    [],
+  )
+
+  const actualizarInstrumentoForm = useCallback(
+    (campo: keyof InstrumentoPublicoFormState, valor: string) => {
+      setInstrumentoForm((prev) => ({ ...prev, [campo]: valor }))
+    },
+    [],
+  )
 
   const tipoClienteSeleccionado = useMemo(
     () => obtenerOpcionTipoCliente(tipoCliente),
@@ -694,6 +1482,33 @@ export default function ActividadesVulnerablesPage() {
 
     window.localStorage.setItem(OPERACIONES_STORAGE_KEY, JSON.stringify(operaciones))
   }, [operaciones, operacionesCargadas])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    try {
+      const stored = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored) as unknown
+        if (Array.isArray(parsed)) {
+          const sane = parsed
+            .map((item) => sanitizeExpediente(item))
+            .filter((item): item is ExpedienteDetalle => Boolean(item))
+          if (sane.length > 0) {
+            const mapa = new Map<string, ExpedienteDetalle>()
+            sane.forEach((expediente) => {
+              mapa.set(expediente.rfc, expediente)
+            })
+            setExpedientesDetalle(Object.fromEntries(mapa))
+          }
+        }
+      }
+    } catch (error) {
+      console.error("No fue posible leer el detalle de expedientes", error)
+    } finally {
+      setExpedientesListo(true)
+    }
+  }, [])
 
   useEffect(() => {
     if (availableYears.length === 0) return
@@ -850,6 +1665,175 @@ export default function ActividadesVulnerablesPage() {
     () => actividadesVulnerables.find((actividad) => actividad.key === actividadKey),
     [actividadKey],
   )
+
+  const esActividadInmuebles = useMemo(
+    () => actividadSeleccionada?.key === ACTIVIDAD_INMUEBLES_KEY,
+    [actividadSeleccionada],
+  )
+
+  const expedienteActual = useMemo(
+    () => (expedienteSeleccionado ? expedientesDetalle[expedienteSeleccionado] ?? null : null),
+    [expedienteSeleccionado, expedientesDetalle],
+  )
+
+  const expedientesDisponibles = useMemo(
+    () =>
+      Object.values(expedientesDetalle).sort((a, b) =>
+        (a.nombre ?? a.rfc).localeCompare(b.nombre ?? b.rfc, "es"),
+      ),
+    [expedientesDetalle],
+  )
+
+  const personasExpediente = expedienteActual?.personas ?? []
+
+  const personasExpedienteOpciones = useMemo(
+    () =>
+      personasExpediente.map((persona, index) => {
+        const baseId =
+          persona.id && persona.id.trim().length > 0
+            ? persona.id
+            : `${persona.rfc ?? persona.denominacion ?? index}`
+        const id = baseId || `persona-${index}`
+        const nombreRepresentante = persona.representante?.nombre
+          ? `${persona.representante.nombre} ${persona.representante.apellidoPaterno ?? ""}`.trim()
+          : ""
+        const labelBase =
+          persona.denominacion && persona.denominacion.trim().length > 0
+            ? persona.denominacion
+            : nombreRepresentante || persona.rfc || `Persona ${index + 1}`
+        return { id, label: labelBase, persona }
+      }),
+    [personasExpediente],
+  )
+
+  const personaExpedienteSeleccionadaInfo = useMemo(
+    () =>
+      personasExpedienteOpciones.find((option) => option.id === personaExpedienteSeleccionada) ??
+      personasExpedienteOpciones[0],
+    [personasExpedienteOpciones, personaExpedienteSeleccionada],
+  )
+
+  const personaExpediente = personaExpedienteSeleccionadaInfo?.persona ?? null
+
+  useEffect(() => {
+    if (personasExpedienteOpciones.length === 0) {
+      if (personaExpedienteSeleccionada !== "") {
+        setPersonaExpedienteSeleccionada("")
+      }
+      return
+    }
+
+    if (!personaExpedienteSeleccionada) {
+      setPersonaExpedienteSeleccionada(personasExpedienteOpciones[0].id)
+      return
+    }
+
+    if (!personasExpedienteOpciones.some((option) => option.id === personaExpedienteSeleccionada)) {
+      setPersonaExpedienteSeleccionada(personasExpedienteOpciones[0].id)
+    }
+  }, [personasExpedienteOpciones, personaExpedienteSeleccionada])
+
+  useEffect(() => {
+    if (!personaExpediente) {
+      setPersonaAvisoActual(null)
+      return
+    }
+
+    const personaAviso = buildPersonaAvisoFromExpediente(personaExpediente)
+    setPersonaAvisoActual(personaAviso)
+
+    if (personaAviso) {
+      const nombreCliente =
+        personaAviso.tipo === "persona_moral"
+          ? personaAviso.denominacion ?? ""
+          : [personaAviso.nombre, personaAviso.apellidoPaterno, personaAviso.apellidoMaterno]
+              .filter((parte) => typeof parte === "string" && parte.trim().length > 0)
+              .join(" ")
+
+      if (nombreCliente) {
+        setClienteNombre(nombreCliente)
+      }
+
+      const rfcPersona = personaAviso.rfc ?? expedienteActual?.rfc ?? ""
+      if (rfcPersona) {
+        setRfc(rfcPersona.toUpperCase())
+      }
+
+      const domicilio = personaAviso.domicilio
+      if (domicilio) {
+        setInmuebleForm((prev) => ({
+          ...prev,
+          pais: domicilio.pais ?? prev.pais ?? "MX",
+          entidad: domicilio.entidad ?? prev.entidad,
+          municipio: domicilio.municipio ?? prev.municipio,
+          colonia: domicilio.colonia ?? prev.colonia,
+          codigoPostal: domicilio.codigoPostal ?? prev.codigoPostal,
+          calle: domicilio.calle ?? prev.calle,
+          numeroExterior: domicilio.numeroExterior ?? prev.numeroExterior,
+          numeroInterior: domicilio.numeroInterior ?? prev.numeroInterior,
+        }))
+
+        if (domicilio.codigoPostal) {
+          const info = findCodigoPostalInfo(domicilio.codigoPostal)
+          setColoniasDisponibles(info?.asentamientos ?? [])
+        }
+      }
+
+      if (personaAviso.representante) {
+        setBeneficiarioForm((prev) => ({
+          ...prev,
+          tipo: "persona_fisica",
+          nombre: personaAviso.representante?.nombre ?? prev.nombre,
+          apellidoPaterno: personaAviso.representante?.apellidoPaterno ?? prev.apellidoPaterno,
+          apellidoMaterno: personaAviso.representante?.apellidoMaterno ?? prev.apellidoMaterno,
+          fechaNacimiento: personaAviso.representante?.fechaNacimiento ?? prev.fechaNacimiento,
+          rfc: personaAviso.representante?.rfc ?? prev.rfc,
+          curp: personaAviso.representante?.curp ?? prev.curp,
+          pais: personaAviso.representante?.pais ?? prev.pais,
+        }))
+      }
+    }
+
+    if (expedienteActual?.tipoCliente) {
+      setTipoCliente(expedienteActual.tipoCliente)
+    }
+    if (expedienteActual?.detalleTipoCliente) {
+      setDetalleTipoCliente(expedienteActual.detalleTipoCliente)
+    }
+    if (expedienteActual?.claveSujetoObligado) {
+      setClaveSujetoObligado(expedienteActual.claveSujetoObligado)
+    }
+    if (expedienteActual?.claveActividadVulnerable) {
+      setClaveActividad(expedienteActual.claveActividadVulnerable)
+    }
+  }, [personaExpediente, expedienteActual])
+
+  useEffect(() => {
+    if (!inmuebleForm.codigoPostal) {
+      if (coloniasDisponibles.length > 0) {
+        setColoniasDisponibles([])
+      }
+      return
+    }
+
+    const info = findCodigoPostalInfo(inmuebleForm.codigoPostal)
+    if (!info) {
+      if (coloniasDisponibles.length > 0) {
+        setColoniasDisponibles([])
+      }
+      return
+    }
+
+    setColoniasDisponibles(info.asentamientos)
+    setInmuebleForm((prev) => ({
+      ...prev,
+      entidad: prev.entidad || info.estado,
+      municipio: prev.municipio || info.municipio,
+      colonia: info.asentamientos.includes(prev.colonia)
+        ? prev.colonia
+        : info.asentamientos[0] ?? prev.colonia,
+    }))
+  }, [inmuebleForm.codigoPostal, coloniasDisponibles.length])
 
   const umaSeleccionada = useMemo(() => {
     const encontrada = umaVentana.find(
@@ -1105,13 +2089,42 @@ const pasoValido = useMemo(() => {
     return Boolean(actividadKey && umaSeleccionada)
   }
   if (pasoActual === 1) {
-    return (
+    const baseCompleto =
       Boolean(clienteNombre.trim()) &&
       Boolean(rfc.trim()) &&
       Boolean(tipoOperacion.trim()) &&
       Boolean(montoOperacion.trim()) &&
       (!tipoClienteSeleccionado?.requiresDetalle || Boolean(detalleTipoCliente.trim()))
-    )
+
+    if (!baseCompleto) return false
+
+    if (esActividadInmuebles) {
+      const camposInmuebleCompletos =
+        Boolean(codigoOperacionInmueble) &&
+        Boolean(figuraClienteInmueble) &&
+        Boolean(figuraSujetoObligadoInmueble) &&
+        Boolean(referenciaAviso.trim()) &&
+        Boolean(claveSujetoObligado.trim()) &&
+        Boolean(claveActividad.trim()) &&
+        Boolean(inmuebleForm.tipoInmueble.trim()) &&
+        Boolean(inmuebleForm.codigoPostal.trim()) &&
+        Boolean(inmuebleForm.pais.trim()) &&
+        Boolean(inmuebleForm.entidad.trim()) &&
+        Boolean(inmuebleForm.municipio.trim()) &&
+        Boolean(inmuebleForm.colonia.trim()) &&
+        Boolean(inmuebleForm.calle.trim()) &&
+        Boolean(inmuebleForm.numeroExterior.trim()) &&
+        Boolean(liquidacionForm.fechaPago.trim()) &&
+        Boolean(liquidacionForm.formaPago.trim()) &&
+        Boolean(liquidacionForm.instrumento.trim()) &&
+        Boolean(beneficiarioForm.nombre.trim()) &&
+        Boolean(beneficiarioForm.apellidoPaterno.trim()) &&
+        Boolean(beneficiarioForm.pais.trim())
+
+      return camposInmuebleCompletos
+    }
+
+    return true
   }
   if (pasoActual === 2) {
     return Boolean(evaluacionActual)
@@ -1128,6 +2141,16 @@ const pasoValido = useMemo(() => {
   evaluacionActual,
   tipoClienteSeleccionado,
   detalleTipoCliente,
+  esActividadInmuebles,
+  codigoOperacionInmueble,
+  figuraClienteInmueble,
+  figuraSujetoObligadoInmueble,
+  referenciaAviso,
+  inmuebleForm,
+  liquidacionForm,
+  beneficiarioForm,
+  claveSujetoObligado,
+  claveActividad,
 ])
 
 const limpiarClienteSeleccionado = () => {
@@ -1148,6 +2171,23 @@ const limpiarFormulario = () => {
   setMonedaPersonalizadaDescripcion("")
   setFechaOperacion(new Date().toISOString().substring(0, 10))
   setDetalleTipoCliente("")
+  setCodigoOperacionInmueble("")
+  setFiguraClienteInmueble("")
+  setFiguraSujetoObligadoInmueble("")
+  setReferenciaAviso("")
+  setAlertaCodigo(ALERTA_DEFAULT)
+  setAlertaDescripcion("")
+  setPrioridadAviso(PRIORIDAD_DEFAULT)
+  setInmuebleForm({ ...INMUEBLE_FORM_DEFAULT })
+  setLiquidacionForm({ ...LIQUIDACION_FORM_DEFAULT })
+  setBeneficiarioForm({ ...BENEFICIARIO_FORM_DEFAULT })
+  setContraparteForm({ ...CONTRAPARTE_FORM_DEFAULT })
+  setInstrumentoForm({ ...INSTRUMENTO_FORM_DEFAULT })
+  setColoniasDisponibles([])
+  if (!expedienteSeleccionado) {
+    setClaveSujetoObligado("")
+    setClaveActividad("")
+  }
 }
 
 const registrarClienteGuardado = (cliente: ClienteGuardado) => {
@@ -1262,6 +2302,81 @@ const agregarOperacion = () => {
       ? detalleTipoCliente.trim()
       : undefined
 
+  const personaAvisoSnapshot = personaAvisoActual
+    ? { ...personaAvisoActual }
+    : buildPersonaAvisoFromExpediente(personaExpediente)
+
+  let inmuebleOperacion: DatosInmuebleOperacion | null = null
+  let liquidacionOperacion: DatosLiquidacionOperacion | null = null
+  let beneficiarioOperacion: BeneficiarioControladorOperacion | null = null
+  let contraparteOperacion: ContraparteOperacion | null = null
+  let instrumentoOperacion: InstrumentoPublicoOperacion | null = null
+
+  if (esActividadInmuebles) {
+    inmuebleOperacion = {
+      codigoOperacion: codigoOperacionInmueble,
+      fechaInicio: inmuebleForm.fechaInicio,
+      fechaFin: inmuebleForm.fechaFin,
+      tipoInmueble: inmuebleForm.tipoInmueble,
+      valorAvaluo: inmuebleForm.valorAvaluo,
+      folioReal: inmuebleForm.folioReal,
+      pais: inmuebleForm.pais,
+      entidad: inmuebleForm.entidad,
+      municipio: inmuebleForm.municipio,
+      colonia: inmuebleForm.colonia,
+      codigoPostal: inmuebleForm.codigoPostal,
+      calle: inmuebleForm.calle,
+      numeroExterior: inmuebleForm.numeroExterior,
+      numeroInterior: inmuebleForm.numeroInterior.trim() ? inmuebleForm.numeroInterior : undefined,
+    }
+
+    liquidacionOperacion = {
+      fechaPago: liquidacionForm.fechaPago,
+      formaPago: liquidacionForm.formaPago,
+      instrumento: liquidacionForm.instrumento,
+      moneda: monedaCodigoFinal,
+      monedaDescripcion: monedaDescripcionFinal,
+      monto,
+    }
+
+    beneficiarioOperacion = {
+      tipo: beneficiarioForm.tipo,
+      nombre: beneficiarioForm.nombre,
+      apellidoPaterno: beneficiarioForm.apellidoPaterno,
+      apellidoMaterno: beneficiarioForm.apellidoMaterno,
+      fechaNacimiento: beneficiarioForm.fechaNacimiento,
+      rfc: beneficiarioForm.rfc,
+      curp: beneficiarioForm.curp,
+      pais: beneficiarioForm.pais,
+    }
+
+    contraparteOperacion = {
+      tipo: contraparteForm.tipo,
+      nombre: contraparteForm.nombre,
+      apellidoPaterno: contraparteForm.apellidoPaterno,
+      apellidoMaterno: contraparteForm.apellidoMaterno,
+      fechaNacimiento: contraparteForm.fechaNacimiento,
+      rfc: contraparteForm.rfc,
+      pais: contraparteForm.pais,
+    }
+
+    if (
+      instrumentoForm.numero.trim() ||
+      instrumentoForm.fecha.trim() ||
+      instrumentoForm.notario.trim() ||
+      instrumentoForm.entidad.trim() ||
+      instrumentoForm.valorAvaluo.trim()
+    ) {
+      instrumentoOperacion = {
+        numero: instrumentoForm.numero,
+        fecha: instrumentoForm.fecha,
+        notario: instrumentoForm.notario,
+        entidad: instrumentoForm.entidad,
+        valorAvaluo: instrumentoForm.valorAvaluo,
+      }
+    }
+  }
+
   const operacionesPrevias = operaciones.filter(
     (operacion) =>
       operacion.actividadKey === actividadSeleccionada.key &&
@@ -1312,6 +2427,25 @@ const agregarOperacion = () => {
     documentosSoporte: [],
     requisitosChecklist: buildChecklist(actividadSeleccionada, tipoCliente),
     kycIntegrado: false,
+    referenciaAviso: esActividadInmuebles ? referenciaAviso.trim() : undefined,
+    alertaCodigo: esActividadInmuebles ? alertaCodigo : undefined,
+    alertaDescripcion:
+      esActividadInmuebles && alertaDescripcion.trim().length > 0
+        ? alertaDescripcion.trim()
+        : undefined,
+    prioridadAviso: esActividadInmuebles ? prioridadAviso : undefined,
+    claveSujetoObligado: claveSujetoObligado.trim() || undefined,
+    claveActividadVulnerable: claveActividad.trim() || undefined,
+    expedienteReferenciado: expedienteSeleccionado || undefined,
+    personaExpedienteId: personaExpedienteSeleccionada || undefined,
+    personaAviso: personaAvisoSnapshot ?? null,
+    inmueble: inmuebleOperacion,
+    liquidacion: liquidacionOperacion,
+    beneficiario: beneficiarioOperacion,
+    contraparte: contraparteOperacion,
+    instrumento: instrumentoOperacion,
+    figuraCliente: esActividadInmuebles ? figuraClienteInmueble : undefined,
+    figuraSujetoObligado: esActividadInmuebles ? figuraSujetoObligadoInmueble : undefined,
   }
 
   actualizarOperaciones((prev) => [...prev, nuevaOperacion])
@@ -1523,18 +2657,205 @@ const generarAvisoPreliminar = (operacion: OperacionCliente) => {
   setAvisoPreliminar(operacion)
 }
 
-const exportarXml = (operacion: OperacionCliente) => {
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<avisoPLD>\n  <periodo>${operacion.periodo}</periodo>\n  <actividad>${operacion.actividadKey}</actividad>\n  <claveActividad>${operacion.actividadKey.toUpperCase()}</claveActividad>\n  <sujetoObligado>${operacion.rfc}</sujetoObligado>\n  <cliente>\n    <nombre>${operacion.cliente}</nombre>\n    <tipoCliente>${operacion.tipoCliente}</tipoCliente>\n    <mismoGrupo>${operacion.mismoGrupo ? "SI" : "NO"}</mismoGrupo>\n  </cliente>\n  <operacion>\n    <fecha>${operacion.fechaOperacion}</fecha>\n    <monto moneda="${operacion.moneda}">${operacion.monto.toFixed(2)}</monto>\n    <tipo>${operacion.tipoOperacion}</tipo>\n    <evidencia>${operacion.evidencia.replace(/&/g, "&amp;")}</evidencia>\n  </operacion>\n</avisoPLD>`
-
-  const blob = new Blob([xml], { type: "application/xml" })
+function descargarXml(contenido: string, nombre: string) {
+  const blob = new Blob([contenido], { type: "application/xml" })
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
   link.href = url
-  link.download = `aviso-${operacion.periodo}-${operacion.rfc}.xml`
+  link.download = nombre
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+function generarXmlInmueble(operacion: OperacionCliente): string | null {
+  const persona = operacion.personaAviso
+  const inmueble = operacion.inmueble
+  const liquidacion = operacion.liquidacion
+  if (!persona || !inmueble || !liquidacion) {
+    return null
+  }
+
+  const periodo = operacion.periodo || buildPeriodo(operacion.anio, operacion.mes)
+  const claveSujeto = operacion.claveSujetoObligado?.trim() || operacion.rfc
+  const claveActividad = operacion.claveActividadVulnerable?.trim() || "INM"
+  const referencia = operacion.referenciaAviso?.trim() || operacion.id
+  const prioridad = operacion.prioridadAviso ?? PRIORIDAD_DEFAULT
+  const alertaTipo = operacion.alertaCodigo ?? ALERTA_DEFAULT
+  const alertaDescripcion = operacion.alertaDescripcion?.trim()
+  const domicilio = persona.domicilio
+  const telefono = persona.contacto?.telefono
+  const claveTelefono = persona.contacto?.clavePais ?? persona.pais ?? "MX"
+  const beneficiario = operacion.beneficiario
+  const contraparte = operacion.contraparte
+  const instrumento = operacion.instrumento
+  const tipoDomicilio = domicilio?.ambito === "extranjero" ? "extranjero" : "nacional"
+  const tipoInmuebleCodigo = TIPO_INMUEBLE_CODIGOS[inmueble.tipoInmueble] ?? inmueble.tipoInmueble
+
+  const personaXml = persona.tipo === "persona_moral"
+    ? `      <tipo_persona>
+        <persona_moral>
+          <denominacion_razon>${escapeXml(persona.denominacion ?? persona.rfc ?? "")}</denominacion_razon>
+          ${persona.fechaConstitucion ? `<fecha_constitucion>${formatFechaXml(persona.fechaConstitucion)}</fecha_constitucion>` : ""}
+          <pais_nacionalidad>${escapeXml((persona.pais ?? "MX").toUpperCase())}</pais_nacionalidad>
+          ${persona.giro ? `<giro_mercantil>${escapeXml(persona.giro)}</giro_mercantil>` : ""}
+          ${persona.representante ? `          <representante_apoderado>
+            <nombre>${escapeXml(persona.representante.nombre ?? "")}</nombre>
+            <apellido_paterno>${escapeXml(persona.representante.apellidoPaterno ?? "")}</apellido_paterno>
+            <apellido_materno>${escapeXml(persona.representante.apellidoMaterno ?? "")}</apellido_materno>
+            ${persona.representante.fechaNacimiento ? `<fecha_nacimiento>${formatFechaXml(persona.representante.fechaNacimiento)}</fecha_nacimiento>` : ""}
+            ${persona.representante.rfc ? `<rfc>${escapeXml(persona.representante.rfc)}</rfc>` : ""}
+          </representante_apoderado>` : ""}
+        </persona_moral>
+      </tipo_persona>`
+    : `      <tipo_persona>
+        <persona_fisica>
+          <nombre>${escapeXml(persona.nombre ?? "")}</nombre>
+          <apellido_paterno>${escapeXml(persona.apellidoPaterno ?? "")}</apellido_paterno>
+          <apellido_materno>${escapeXml(persona.apellidoMaterno ?? "")}</apellido_materno>
+          ${persona.fechaNacimiento ? `<fecha_nacimiento>${formatFechaXml(persona.fechaNacimiento)}</fecha_nacimiento>` : ""}
+          <pais_nacionalidad>${escapeXml((persona.pais ?? "MX").toUpperCase())}</pais_nacionalidad>
+          ${persona.rfc ? `<rfc>${escapeXml(persona.rfc)}</rfc>` : ""}
+          ${persona.curp ? `<curp>${escapeXml(persona.curp)}</curp>` : ""}
+        </persona_fisica>
+      </tipo_persona>`
+
+  const domicilioXml = domicilio
+    ? `      <tipo_domicilio>
+        <${tipoDomicilio}>
+          ${domicilio.colonia ? `<colonia>${escapeXml(domicilio.colonia)}</colonia>` : ""}
+          ${domicilio.calle ? `<calle>${escapeXml(domicilio.calle)}</calle>` : ""}
+          ${domicilio.numeroExterior ? `<numero_exterior>${escapeXml(domicilio.numeroExterior)}</numero_exterior>` : ""}
+          ${domicilio.numeroInterior ? `<numero_interior>${escapeXml(domicilio.numeroInterior)}</numero_interior>` : ""}
+          ${domicilio.codigoPostal ? `<codigo_postal>${escapeXml(domicilio.codigoPostal)}</codigo_postal>` : ""}
+          ${domicilio.entidad ? `<entidad_federativa>${escapeXml(domicilio.entidad)}</entidad_federativa>` : ""}
+          ${domicilio.municipio ? `<municipio>${escapeXml(domicilio.municipio)}</municipio>` : ""}
+          ${domicilio.pais ? `<pais>${escapeXml(domicilio.pais.toUpperCase())}</pais>` : ""}
+        </${tipoDomicilio}>
+      </tipo_domicilio>`
+    : ""
+
+  const telefonoXml = telefono
+    ? `      <telefono>
+        ${claveTelefono ? `<clave_pais>${escapeXml(claveTelefono.toUpperCase())}</clave_pais>` : ""}
+        <numero_telefono>${escapeXml(telefono)}</numero_telefono>
+      </telefono>`
+    : ""
+
+  const beneficiarioXml = beneficiario
+    ? `      <dueno_beneficiario>
+        <tipo_persona>
+          <persona_${beneficiario.tipo === "persona_moral" ? "moral" : "fisica"}>
+            <nombre>${escapeXml(beneficiario.nombre ?? "")}</nombre>
+            <apellido_paterno>${escapeXml(beneficiario.apellidoPaterno ?? "")}</apellido_paterno>
+            <apellido_materno>${escapeXml(beneficiario.apellidoMaterno ?? "")}</apellido_materno>
+            ${beneficiario.fechaNacimiento ? `<fecha_nacimiento>${formatFechaXml(beneficiario.fechaNacimiento)}</fecha_nacimiento>` : ""}
+            ${beneficiario.rfc ? `<rfc>${escapeXml(beneficiario.rfc)}</rfc>` : ""}
+            ${beneficiario.curp ? `<curp>${escapeXml(beneficiario.curp)}</curp>` : ""}
+            ${beneficiario.pais ? `<pais_nacionalidad>${escapeXml(beneficiario.pais.toUpperCase())}</pais_nacionalidad>` : ""}
+          </persona_${beneficiario.tipo === "persona_moral" ? "moral" : "fisica"}>
+        </tipo_persona>
+      </dueno_beneficiario>`
+    : ""
+
+  const contraparteXml = contraparte
+    ? `      <datos_contraparte>
+        <tipo_persona>
+          <persona_${contraparte.tipo === "persona_moral" ? "moral" : "fisica"}>
+            <nombre>${escapeXml(contraparte.nombre ?? "")}</nombre>
+            <apellido_paterno>${escapeXml(contraparte.apellidoPaterno ?? "")}</apellido_paterno>
+            <apellido_materno>${escapeXml(contraparte.apellidoMaterno ?? "")}</apellido_materno>
+            ${contraparte.fechaNacimiento ? `<fecha_nacimiento>${formatFechaXml(contraparte.fechaNacimiento)}</fecha_nacimiento>` : ""}
+            ${contraparte.rfc ? `<rfc>${escapeXml(contraparte.rfc)}</rfc>` : ""}
+            ${contraparte.pais ? `<pais_nacionalidad>${escapeXml(contraparte.pais.toUpperCase())}</pais_nacionalidad>` : ""}
+          </persona_${contraparte.tipo === "persona_moral" ? "moral" : "fisica"}>
+        </tipo_persona>
+      </datos_contraparte>`
+    : ""
+
+  const instrumentoXml = instrumento
+    ? `      <contrato_instrumento_publico>
+        <datos_instrumento_publico>
+          ${instrumento.numero ? `<numero_instrumento_publico>${escapeXml(instrumento.numero)}</numero_instrumento_publico>` : ""}
+          ${instrumento.fecha ? `<fecha_instrumento_publico>${formatFechaXml(instrumento.fecha)}</fecha_instrumento_publico>` : ""}
+          ${instrumento.notario ? `<notario_instrumento_publico>${escapeXml(instrumento.notario)}</notario_instrumento_publico>` : ""}
+          ${instrumento.entidad ? `<entidad_instrumento_publico>${escapeXml(instrumento.entidad)}</entidad_instrumento_publico>` : ""}
+          ${instrumento.valorAvaluo ? `<valor_avaluo_catastral>${formatNumberXml(instrumento.valorAvaluo)}</valor_avaluo_catastral>` : ""}
+        </datos_instrumento_publico>
+      </contrato_instrumento_publico>`
+    : ""
+
+  const alertaDescripcionXml = alertaDescripcion
+    ? `      <descripcion>${escapeXml(alertaDescripcion)}</descripcion>`
+    : ""
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<archivo xmlns="http://www.uif.shcp.gob.mx/recepcion/inm" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.uif.shcp.gob.mx/recepcion/inm inm.xsd">
+  <informe>
+    <mes_reportado>${escapeXml(periodo)}</mes_reportado>
+    <sujeto_obligado>
+      <clave_sujeto_obligado>${escapeXml(claveSujeto)}</clave_sujeto_obligado>
+      <clave_actividad>${escapeXml(claveActividad)}</clave_actividad>
+    </sujeto_obligado>
+    <aviso>
+      <referencia_aviso>${escapeXml(referencia)}</referencia_aviso>
+      <prioridad>${escapeXml(prioridad)}</prioridad>
+      <alerta>
+        <tipo_alerta>${escapeXml(alertaTipo)}</tipo_alerta>
+${alertaDescripcionXml ? `        ${alertaDescripcionXml}\n` : ""}      </alerta>
+      <persona_aviso>
+${personaXml}\n${domicilioXml ? `${domicilioXml}\n` : ""}${telefonoXml ? `${telefonoXml}\n` : ""}      </persona_aviso>
+${beneficiarioXml ? `${beneficiarioXml}\n` : ""}      <detalle_operaciones>
+        <datos_operacion>
+          <fecha_operacion>${formatFechaXml(operacion.fechaOperacion)}</fecha_operacion>
+          <tipo_operacion>${escapeXml(inmueble.codigoOperacion)}</tipo_operacion>
+          <figura_cliente>${escapeXml(operacion.figuraCliente ?? "")}</figura_cliente>
+          <figura_so>${escapeXml(operacion.figuraSujetoObligado ?? "")}</figura_so>
+${contraparteXml ? `${contraparteXml}\n` : ""}          <caracteristicas_inmueble>
+            <tipo_inmueble>${escapeXml(tipoInmuebleCodigo)}</tipo_inmueble>
+            <valor_pactado>${formatNumberXml(operacion.monto)}</valor_pactado>
+            ${inmueble.colonia ? `<colonia>${escapeXml(inmueble.colonia)}</colonia>` : ""}
+            ${inmueble.calle ? `<calle>${escapeXml(inmueble.calle)}</calle>` : ""}
+            ${inmueble.numeroExterior ? `<numero_exterior>${escapeXml(inmueble.numeroExterior)}</numero_exterior>` : ""}
+            ${inmueble.numeroInterior ? `<numero_interior>${escapeXml(inmueble.numeroInterior)}</numero_interior>` : ""}
+            ${inmueble.codigoPostal ? `<codigo_postal>${escapeXml(inmueble.codigoPostal)}</codigo_postal>` : ""}
+            ${inmueble.valorAvaluo ? `<valor_avaluo>${formatNumberXml(inmueble.valorAvaluo)}</valor_avaluo>` : ""}
+            ${inmueble.folioReal ? `<folio_real>${escapeXml(inmueble.folioReal)}</folio_real>` : ""}
+          </caracteristicas_inmueble>
+${instrumentoXml ? `${instrumentoXml}\n` : ""}          <datos_liquidacion>
+            <fecha_pago>${formatFechaXml(liquidacion.fechaPago)}</fecha_pago>
+            <forma_pago>${escapeXml(liquidacion.formaPago)}</forma_pago>
+            <instrumento_monetario>${escapeXml(liquidacion.instrumento)}</instrumento_monetario>
+            <moneda>${escapeXml(liquidacion.moneda)}</moneda>
+            <monto_operacion>${formatNumberXml(liquidacion.monto)}</monto_operacion>
+          </datos_liquidacion>
+        </datos_operacion>
+      </detalle_operaciones>
+    </aviso>
+  </informe>
+</archivo>`
+
+  return xml
+}
+
+const exportarXml = (operacion: OperacionCliente) => {
+  if (operacion.actividadKey === ACTIVIDAD_INMUEBLES_KEY) {
+    const xmlInmueble = generarXmlInmueble(operacion)
+    if (xmlInmueble) {
+      descargarXml(xmlInmueble, `aviso-inmuebles-${operacion.periodo}-${operacion.rfc}.xml`)
+      toast({
+        title: "XML de inmuebles generado",
+        description: "Se descargó el archivo con la estructura del portal del SAT.",
+      })
+      return
+    }
+  }
+
+  const xmlBasico = `<?xml version="1.0" encoding="UTF-8"?>\n<avisoPLD>\n  <periodo>${escapeXml(operacion.periodo)}</periodo>\n  <actividad>${escapeXml(operacion.actividadKey)}</actividad>\n  <claveActividad>${escapeXml(operacion.actividadKey.toUpperCase())}</claveActividad>\n  <sujetoObligado>${escapeXml(operacion.rfc)}</sujetoObligado>\n  <cliente>\n    <nombre>${escapeXml(operacion.cliente)}</nombre>\n    <tipoCliente>${escapeXml(operacion.tipoCliente)}</tipoCliente>\n    <mismoGrupo>${operacion.mismoGrupo ? "SI" : "NO"}</mismoGrupo>\n  </cliente>\n  <operacion>\n    <fecha>${escapeXml(operacion.fechaOperacion)}</fecha>\n    <monto moneda=\"${escapeXml(operacion.moneda)}\">${formatNumberXml(operacion.monto)}</monto>\n    <tipo>${escapeXml(operacion.tipoOperacion)}</tipo>\n    <evidencia>${escapeXml(operacion.evidencia)}</evidencia>\n  </operacion>\n</avisoPLD>`
+
+  descargarXml(xmlBasico, `aviso-${operacion.periodo}-${operacion.rfc}.xml`)
+
   toast({
     title: "XML generado",
     description: "Se descargó el archivo XML preliminar para revisión.",
@@ -1566,6 +2887,96 @@ const reutilizarDatosCliente = (operacion: OperacionCliente) => {
   setFechaOperacion(new Date().toISOString().substring(0, 10))
   setEvidencia(operacion.evidencia)
   setMontoOperacion("")
+  setReferenciaAviso(operacion.referenciaAviso ?? "")
+  setAlertaCodigo(operacion.alertaCodigo ?? ALERTA_DEFAULT)
+  setAlertaDescripcion(operacion.alertaDescripcion ?? "")
+  setPrioridadAviso(operacion.prioridadAviso ?? PRIORIDAD_DEFAULT)
+  setClaveSujetoObligado(operacion.claveSujetoObligado ?? "")
+  setClaveActividad(operacion.claveActividadVulnerable ?? "")
+  setCodigoOperacionInmueble(operacion.inmueble?.codigoOperacion ?? "")
+  setFiguraClienteInmueble(operacion.figuraCliente ?? "")
+  setFiguraSujetoObligadoInmueble(operacion.figuraSujetoObligado ?? "")
+  setInmuebleForm(
+    operacion.inmueble
+      ? {
+          fechaInicio: operacion.inmueble.fechaInicio,
+          fechaFin: operacion.inmueble.fechaFin,
+          tipoInmueble: operacion.inmueble.tipoInmueble,
+          valorAvaluo: operacion.inmueble.valorAvaluo,
+          folioReal: operacion.inmueble.folioReal,
+          pais: operacion.inmueble.pais,
+          entidad: operacion.inmueble.entidad,
+          municipio: operacion.inmueble.municipio,
+          colonia: operacion.inmueble.colonia,
+          codigoPostal: operacion.inmueble.codigoPostal,
+          calle: operacion.inmueble.calle,
+          numeroExterior: operacion.inmueble.numeroExterior,
+          numeroInterior: operacion.inmueble.numeroInterior ?? "",
+        }
+      : { ...INMUEBLE_FORM_DEFAULT },
+  )
+  setLiquidacionForm(
+    operacion.liquidacion
+      ? {
+          fechaPago: operacion.liquidacion.fechaPago,
+          formaPago: operacion.liquidacion.formaPago,
+          instrumento: operacion.liquidacion.instrumento,
+        }
+      : { ...LIQUIDACION_FORM_DEFAULT },
+  )
+  setBeneficiarioForm(
+    operacion.beneficiario
+      ? {
+          tipo: operacion.beneficiario.tipo,
+          nombre: operacion.beneficiario.nombre ?? "",
+          apellidoPaterno: operacion.beneficiario.apellidoPaterno ?? "",
+          apellidoMaterno: operacion.beneficiario.apellidoMaterno ?? "",
+          fechaNacimiento: operacion.beneficiario.fechaNacimiento ?? "",
+          rfc: operacion.beneficiario.rfc ?? "",
+          curp: operacion.beneficiario.curp ?? "",
+          pais: operacion.beneficiario.pais ?? "MX",
+        }
+      : { ...BENEFICIARIO_FORM_DEFAULT },
+  )
+  setContraparteForm(
+    operacion.contraparte
+      ? {
+          tipo: operacion.contraparte.tipo,
+          nombre: operacion.contraparte.nombre ?? "",
+          apellidoPaterno: operacion.contraparte.apellidoPaterno ?? "",
+          apellidoMaterno: operacion.contraparte.apellidoMaterno ?? "",
+          fechaNacimiento: operacion.contraparte.fechaNacimiento ?? "",
+          rfc: operacion.contraparte.rfc ?? "",
+          pais: operacion.contraparte.pais ?? "MX",
+        }
+      : { ...CONTRAPARTE_FORM_DEFAULT },
+  )
+  setInstrumentoForm(
+    operacion.instrumento
+      ? {
+          numero: operacion.instrumento.numero,
+          fecha: operacion.instrumento.fecha,
+          notario: operacion.instrumento.notario,
+          entidad: operacion.instrumento.entidad,
+          valorAvaluo: operacion.instrumento.valorAvaluo,
+        }
+      : { ...INSTRUMENTO_FORM_DEFAULT },
+  )
+  if (operacion.inmueble?.codigoPostal) {
+    const info = findCodigoPostalInfo(operacion.inmueble.codigoPostal)
+    setColoniasDisponibles(info?.asentamientos ?? [])
+  } else {
+    setColoniasDisponibles([])
+  }
+  if (operacion.expedienteReferenciado) {
+    setExpedienteSeleccionado(operacion.expedienteReferenciado)
+  }
+  if (operacion.personaExpedienteId) {
+    setPersonaExpedienteSeleccionada(operacion.personaExpedienteId)
+  }
+  if (operacion.personaAviso) {
+    setPersonaAvisoActual(operacion.personaAviso)
+  }
   setPasoActual(1)
   toast({
     title: "Datos precargados",
@@ -2136,6 +3547,117 @@ const cambiarMesCalendario = (delta: number) => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                <div className="rounded border border-emerald-200 bg-emerald-50/40 p-4 space-y-4">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-800">Vincula expediente único</p>
+                      <p className="text-xs text-emerald-700">
+                        Reutiliza los datos capturados en el expediente para agilizar el cuestionario del aviso.
+                      </p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="w-fit border-emerald-200 bg-white text-[11px] uppercase tracking-wide text-emerald-700"
+                    >
+                      {expedientesDisponibles.length > 0
+                        ? `${expedientesDisponibles.length} expediente${
+                            expedientesDisponibles.length === 1 ? "" : "s"
+                          } disponibles`
+                        : "Sin expedientes sincronizados"}
+                    </Badge>
+                  </div>
+
+                  {expedientesDisponibles.length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Expediente relacionado</Label>
+                        <Select
+                          value={expedienteSeleccionado || undefined}
+                          onValueChange={(value) => {
+                            setExpedienteSeleccionado(value)
+                            if (!value) {
+                              setPersonaExpedienteSeleccionada("")
+                              setPersonaAvisoActual(null)
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="bg-white">
+                            <SelectValue placeholder="Selecciona expediente" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">Capturar manualmente</SelectItem>
+                            {expedientesDisponibles.map((expediente) => (
+                              <SelectItem key={expediente.rfc} value={expediente.rfc}>
+                                {expediente.nombre ?? expediente.rfc}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {expedienteSeleccionado && personasExpedienteOpciones.length > 0 && (
+                        <div className="space-y-2">
+                          <Label>Persona reportada del expediente</Label>
+                          <Select
+                            value={personaExpedienteSeleccionada || undefined}
+                            onValueChange={(value) => setPersonaExpedienteSeleccionada(value)}
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Selecciona persona" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {personasExpedienteOpciones.map((option) => (
+                                <SelectItem key={option.id} value={option.id}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded border border-dashed border-emerald-200 bg-white p-4 text-xs text-emerald-700">
+                      {expedientesListo
+                        ? "Aún no se han guardado expedientes en el módulo correspondiente. Captura manualmente los datos del cliente."
+                        : "Sincronizando expedientes guardados…"}
+                    </div>
+                  )}
+
+                  {personaAvisoActual && (
+                    <div className="rounded border border-emerald-100 bg-white p-3 text-xs text-slate-700">
+                      <p className="font-semibold text-emerald-700">Datos recuperados del expediente</p>
+                      <div className="mt-2 grid gap-2 md:grid-cols-2">
+                        <p>
+                          <span className="font-semibold">Nombre o razón social:</span>{" "}
+                          {personaAvisoActual.tipo === "persona_moral"
+                            ? personaAvisoActual.denominacion ?? "Sin denominación"
+                            : [
+                                personaAvisoActual.nombre,
+                                personaAvisoActual.apellidoPaterno,
+                                personaAvisoActual.apellidoMaterno,
+                              ]
+                                .filter((parte) => typeof parte === "string" && parte.trim().length > 0)
+                                .join(" ") || "Sin nombre registrado"}
+                        </p>
+                        <p>
+                          <span className="font-semibold">RFC:</span> {personaAvisoActual.rfc ?? expedienteActual?.rfc ?? "Sin RFC"}
+                        </p>
+                        <p>
+                          <span className="font-semibold">País de nacionalidad:</span>{" "}
+                          {personaAvisoActual.pais
+                            ? findPaisByCodigo(personaAvisoActual.pais)?.label ?? personaAvisoActual.pais
+                            : "No especificado"}
+                        </p>
+                        <p>
+                          <span className="font-semibold">Código postal:</span>{" "}
+                          {personaAvisoActual.domicilio?.codigoPostal ?? "Sin domicilio"}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
@@ -2311,11 +3833,54 @@ const cambiarMesCalendario = (delta: number) => {
                   </div>
                   <div className="space-y-2">
                     <Label>Tipo de operación</Label>
-                    <Input
-                      placeholder="Ejemplo: Compra de inmueble"
-                      value={tipoOperacion}
-                      onChange={(event) => setTipoOperacion(event.target.value)}
-                    />
+                    {esActividadInmuebles ? (
+                      <div className="space-y-2">
+                        <Select
+                          value={codigoOperacionInmueble || undefined}
+                          onValueChange={(value) => {
+                            setCodigoOperacionInmueble(value)
+                            if (value === "otro") {
+                              setTipoOperacion("")
+                              return
+                            }
+                            const operacionSeleccionada = INMUEBLE_OPERACIONES.find(
+                              (operacion) => operacion.value === value,
+                            )
+                            setTipoOperacion(operacionSeleccionada?.label ?? "")
+                          }}
+                        >
+                          <SelectTrigger className="bg-white">
+                            <SelectValue placeholder="Selecciona código UIF" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {INMUEBLE_OPERACIONES.map((operacion) => (
+                              <SelectItem key={operacion.value} value={operacion.value}>
+                                {operacion.label}
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="otro">Otra operación (especificar)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {codigoOperacionInmueble === "otro" && (
+                          <Input
+                            placeholder="Describe la operación"
+                            value={tipoOperacion}
+                            onChange={(event) => setTipoOperacion(event.target.value)}
+                          />
+                        )}
+                        {codigoOperacionInmueble && codigoOperacionInmueble !== "otro" && (
+                          <p className="text-[11px] text-muted-foreground">
+                            Se utilizará el código {codigoOperacionInmueble} al generar el archivo XML para la UIF.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <Input
+                        placeholder="Ejemplo: Compra de inmueble"
+                        value={tipoOperacion}
+                        onChange={(event) => setTipoOperacion(event.target.value)}
+                      />
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Monto</Label>
@@ -2394,6 +3959,641 @@ const cambiarMesCalendario = (delta: number) => {
                     />
                   </div>
                 </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>Clave del sujeto obligado</Label>
+                    <Input
+                      placeholder="Ejemplo: OGA751212G56"
+                      value={claveSujetoObligado}
+                      onChange={(event) => setClaveSujetoObligado(event.target.value.toUpperCase())}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Refiere a la clave asignada por la UIF en el padrón de actividades vulnerables.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Clave de actividad vulnerable</Label>
+                    <Input
+                      placeholder="Ejemplo: INM"
+                      value={claveActividad}
+                      onChange={(event) => setClaveActividad(event.target.value.toUpperCase())}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Referencia interna del aviso</Label>
+                    <Input
+                      placeholder="Folio o referencia del aviso"
+                      value={referenciaAviso}
+                      onChange={(event) => setReferenciaAviso(event.target.value.toUpperCase())}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>Prioridad del aviso</Label>
+                    <Select value={prioridadAviso} onValueChange={(value) => setPrioridadAviso(value)}>
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Selecciona prioridad" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PRIORIDAD_AVISO_OPCIONES.map((opcion) => (
+                          <SelectItem key={opcion.value} value={opcion.value}>
+                            {opcion.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tipo de alerta</Label>
+                    <Select
+                      value={alertaCodigo}
+                      onValueChange={(value) => {
+                        setAlertaCodigo(value)
+                        if (value === ALERTA_DEFAULT) {
+                          setAlertaDescripcion("")
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Selecciona tipo de alerta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ALERTA_TIPOS.map((alerta) => (
+                          <SelectItem key={alerta.value} value={alerta.value}>
+                            {alerta.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2 md:col-span-3">
+                    <Label>Descripción de la alerta (opcional)</Label>
+                    <Textarea
+                      placeholder="Describe el motivo de la alerta o contexto adicional"
+                      value={alertaDescripcion}
+                      onChange={(event) => setAlertaDescripcion(event.target.value)}
+                      disabled={alertaCodigo === ALERTA_DEFAULT}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Se incorporará al XML cuando selecciones un tipo de alerta distinto de "Sin alerta".
+                    </p>
+                  </div>
+                </div>
+
+                {esActividadInmuebles && (
+                  <div className="space-y-6">
+                    <div className="rounded border bg-white p-4 shadow-sm">
+                      <div className="flex items-center gap-2 text-slate-700">
+                        <Building2 className="h-5 w-5 text-emerald-600" />
+                        <h4 className="text-sm font-semibold">Datos del inmueble reportado</h4>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Registra la ubicación y características del inmueble objeto del contrato de uso o goce.
+                      </p>
+
+                      <div className="mt-4 grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>Figura del cliente</Label>
+                          <Select
+                            value={figuraClienteInmueble || undefined}
+                            onValueChange={(value) => setFiguraClienteInmueble(value)}
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Selecciona figura" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {FIGURA_CLIENTE_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Figura del sujeto obligado</Label>
+                          <Select
+                            value={figuraSujetoObligadoInmueble || undefined}
+                            onValueChange={(value) => setFiguraSujetoObligadoInmueble(value)}
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Selecciona figura" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {FIGURA_SUJETO_OBLIGADO_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Tipo de inmueble</Label>
+                          <Select
+                            value={inmuebleForm.tipoInmueble || undefined}
+                            onValueChange={(value) => actualizarInmuebleForm("tipoInmueble", value)}
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Selecciona tipo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TIPO_INMUEBLE_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>Fecha de inicio del arrendamiento</Label>
+                          <Input
+                            type="date"
+                            value={inmuebleForm.fechaInicio}
+                            onChange={(event) => actualizarInmuebleForm("fechaInicio", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Fecha de término del arrendamiento</Label>
+                          <Input
+                            type="date"
+                            value={inmuebleForm.fechaFin}
+                            onChange={(event) => actualizarInmuebleForm("fechaFin", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Valor avalúo o catastral</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={inmuebleForm.valorAvaluo}
+                            onChange={(event) => actualizarInmuebleForm("valorAvaluo", event.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>Folio real o antecedentes registrales</Label>
+                          <Input
+                            placeholder="Número de folio real"
+                            value={inmuebleForm.folioReal}
+                            onChange={(event) => actualizarInmuebleForm("folioReal", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>País</Label>
+                          <Select
+                            value={inmuebleForm.pais || undefined}
+                            onValueChange={(value) => actualizarInmuebleForm("pais", value)}
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Selecciona país" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PAISES.map((pais) => (
+                                <SelectItem key={pais.code} value={pais.code}>
+                                  {pais.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Entidad federativa</Label>
+                          <Input
+                            placeholder="Estado o provincia"
+                            value={inmuebleForm.entidad}
+                            onChange={(event) => actualizarInmuebleForm("entidad", event.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>Municipio o delegación</Label>
+                          <Input
+                            placeholder="Municipio"
+                            value={inmuebleForm.municipio}
+                            onChange={(event) => actualizarInmuebleForm("municipio", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Código postal</Label>
+                          <Input
+                            placeholder="Ejemplo: 66260"
+                            inputMode="numeric"
+                            maxLength={5}
+                            value={inmuebleForm.codigoPostal}
+                            onChange={(event) => {
+                              const value = event.target.value.replace(/\D/g, "")
+                              actualizarInmuebleForm("codigoPostal", value)
+                            }}
+                          />
+                          <p className="text-[11px] text-muted-foreground">
+                            Completa los 5 dígitos para autocompletar entidad, municipio y colonias registradas.
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Colonia o asentamiento</Label>
+                          {coloniasDisponibles.length > 0 ? (
+                            <Select
+                              value={inmuebleForm.colonia || undefined}
+                              onValueChange={(value) => actualizarInmuebleForm("colonia", value)}
+                            >
+                              <SelectTrigger className="bg-white">
+                                <SelectValue placeholder="Selecciona colonia" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {coloniasDisponibles.map((colonia) => (
+                                  <SelectItem key={colonia} value={colonia}>
+                                    {colonia}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              placeholder="Colonia o asentamiento"
+                              value={inmuebleForm.colonia}
+                              onChange={(event) => actualizarInmuebleForm("colonia", event.target.value)}
+                            />
+                          )}
+                          <p className="text-[11px] text-muted-foreground">
+                            {inmuebleForm.codigoPostal.length === 5
+                              ? coloniasDisponibles.length > 0
+                                ? "Selecciona una colonia del catálogo del SEPOMEX."
+                                : "No encontramos colonias para este código postal, captura manualmente."
+                              : "Ingresa el código postal para mostrar el catálogo de colonias."}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>Calle, avenida o vía</Label>
+                          <Input
+                            placeholder="Nombre de la calle"
+                            value={inmuebleForm.calle}
+                            onChange={(event) => actualizarInmuebleForm("calle", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Número exterior</Label>
+                          <Input
+                            placeholder="Número exterior"
+                            value={inmuebleForm.numeroExterior}
+                            onChange={(event) => actualizarInmuebleForm("numeroExterior", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Número interior</Label>
+                          <Input
+                            placeholder="Número interior (opcional)"
+                            value={inmuebleForm.numeroInterior}
+                            onChange={(event) => actualizarInmuebleForm("numeroInterior", event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded border bg-white p-4 shadow-sm">
+                      <div className="flex items-center gap-2 text-slate-700">
+                        <Layers className="h-5 w-5 text-emerald-600" />
+                        <h4 className="text-sm font-semibold">Datos de la liquidación</h4>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Define la fecha y forma en que se liquidó la contraprestación del contrato.
+                      </p>
+                      <div className="mt-4 grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>Fecha de pago</Label>
+                          <Input
+                            type="date"
+                            value={liquidacionForm.fechaPago}
+                            onChange={(event) => actualizarLiquidacionForm("fechaPago", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Forma de pago</Label>
+                          <Select
+                            value={liquidacionForm.formaPago || undefined}
+                            onValueChange={(value) => actualizarLiquidacionForm("formaPago", value)}
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Selecciona forma" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {FORMA_PAGO_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Instrumento monetario utilizado</Label>
+                          <Select
+                            value={liquidacionForm.instrumento || undefined}
+                            onValueChange={(value) => actualizarLiquidacionForm("instrumento", value)}
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Selecciona instrumento" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {INSTRUMENTO_MONETARIO_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        El monto y la moneda se tomarán de los campos generales capturados arriba.
+                      </p>
+                    </div>
+
+                    <div className="rounded border bg-white p-4 shadow-sm">
+                      <div className="flex items-center gap-2 text-slate-700">
+                        <Users className="h-5 w-5 text-emerald-600" />
+                        <h4 className="text-sm font-semibold">Beneficiario controlador o dueño beneficiario</h4>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Identifica a la persona que obtiene el beneficio o ejerce control sobre la persona reportada.
+                      </p>
+                      <div className="mt-4 grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>Tipo de persona</Label>
+                          <Select
+                            value={beneficiarioForm.tipo}
+                            onValueChange={(value) =>
+                              actualizarBeneficiarioForm(
+                                "tipo",
+                                value as BeneficiarioFormState["tipo"],
+                              )
+                            }
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Selecciona tipo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="persona_fisica">Persona física</SelectItem>
+                              <SelectItem value="persona_moral">Persona moral</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>
+                            {beneficiarioForm.tipo === "persona_moral"
+                              ? "Denominación o razón social"
+                              : "Nombre(s)"}
+                          </Label>
+                          <Input
+                            placeholder={
+                              beneficiarioForm.tipo === "persona_moral"
+                                ? "Nombre completo de la persona moral"
+                                : "Nombre(s)"
+                            }
+                            value={beneficiarioForm.nombre}
+                            onChange={(event) => actualizarBeneficiarioForm("nombre", event.target.value)}
+                          />
+                        </div>
+                        {beneficiarioForm.tipo === "persona_fisica" && (
+                          <>
+                            <div className="space-y-2">
+                              <Label>Apellido paterno</Label>
+                              <Input
+                                value={beneficiarioForm.apellidoPaterno}
+                                onChange={(event) =>
+                                  actualizarBeneficiarioForm("apellidoPaterno", event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Apellido materno</Label>
+                              <Input
+                                value={beneficiarioForm.apellidoMaterno}
+                                onChange={(event) =>
+                                  actualizarBeneficiarioForm("apellidoMaterno", event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Fecha de nacimiento</Label>
+                              <Input
+                                type="date"
+                                value={beneficiarioForm.fechaNacimiento}
+                                onChange={(event) =>
+                                  actualizarBeneficiarioForm("fechaNacimiento", event.target.value)
+                                }
+                              />
+                            </div>
+                          </>
+                        )}
+                        <div className="space-y-2">
+                          <Label>RFC</Label>
+                          <Input
+                            value={beneficiarioForm.rfc}
+                            onChange={(event) =>
+                              actualizarBeneficiarioForm("rfc", event.target.value.toUpperCase())
+                            }
+                          />
+                        </div>
+                        {beneficiarioForm.tipo === "persona_fisica" && (
+                          <div className="space-y-2">
+                            <Label>CURP</Label>
+                            <Input
+                              value={beneficiarioForm.curp}
+                              onChange={(event) =>
+                                actualizarBeneficiarioForm("curp", event.target.value.toUpperCase())
+                              }
+                            />
+                          </div>
+                        )}
+                        <div className="space-y-2">
+                          <Label>País de nacionalidad</Label>
+                          <Select
+                            value={beneficiarioForm.pais || undefined}
+                            onValueChange={(value) => actualizarBeneficiarioForm("pais", value)}
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Selecciona país" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PAISES.map((pais) => (
+                                <SelectItem key={pais.code} value={pais.code}>
+                                  {pais.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded border bg-white p-4 shadow-sm">
+                      <div className="flex items-center gap-2 text-slate-700">
+                        <ShieldAlert className="h-5 w-5 text-emerald-600" />
+                        <h4 className="text-sm font-semibold">Datos de la contraparte</h4>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Captura la información de la persona que actúa como contraparte en la operación de arrendamiento.
+                      </p>
+                      <div className="mt-4 grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>Tipo de persona</Label>
+                          <Select
+                            value={contraparteForm.tipo}
+                            onValueChange={(value) =>
+                              actualizarContraparteForm("tipo", value as ContraparteFormState["tipo"])
+                            }
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Selecciona tipo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="persona_fisica">Persona física</SelectItem>
+                              <SelectItem value="persona_moral">Persona moral</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>
+                            {contraparteForm.tipo === "persona_moral"
+                              ? "Denominación o razón social"
+                              : "Nombre(s)"}
+                          </Label>
+                          <Input
+                            value={contraparteForm.nombre}
+                            onChange={(event) => actualizarContraparteForm("nombre", event.target.value)}
+                          />
+                        </div>
+                        {contraparteForm.tipo === "persona_fisica" && (
+                          <>
+                            <div className="space-y-2">
+                              <Label>Apellido paterno</Label>
+                              <Input
+                                value={contraparteForm.apellidoPaterno}
+                                onChange={(event) =>
+                                  actualizarContraparteForm("apellidoPaterno", event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Apellido materno</Label>
+                              <Input
+                                value={contraparteForm.apellidoMaterno}
+                                onChange={(event) =>
+                                  actualizarContraparteForm("apellidoMaterno", event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Fecha de nacimiento</Label>
+                              <Input
+                                type="date"
+                                value={contraparteForm.fechaNacimiento}
+                                onChange={(event) =>
+                                  actualizarContraparteForm("fechaNacimiento", event.target.value)
+                                }
+                              />
+                            </div>
+                          </>
+                        )}
+                        <div className="space-y-2">
+                          <Label>RFC</Label>
+                          <Input
+                            value={contraparteForm.rfc}
+                            onChange={(event) =>
+                              actualizarContraparteForm("rfc", event.target.value.toUpperCase())
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>País de nacionalidad</Label>
+                          <Select
+                            value={contraparteForm.pais || undefined}
+                            onValueChange={(value) => actualizarContraparteForm("pais", value)}
+                          >
+                            <SelectTrigger className="bg-white">
+                              <SelectValue placeholder="Selecciona país" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PAISES.map((pais) => (
+                                <SelectItem key={pais.code} value={pais.code}>
+                                  {pais.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded border bg-white p-4 shadow-sm">
+                      <div className="flex items-center gap-2 text-slate-700">
+                        <FileText className="h-5 w-5 text-emerald-600" />
+                        <h4 className="text-sm font-semibold">Instrumento público</h4>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Completa estos datos si la operación se formalizó mediante escritura o instrumento ante fedatario.
+                      </p>
+                      <div className="mt-4 grid gap-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>Número de instrumento</Label>
+                          <Input
+                            value={instrumentoForm.numero}
+                            onChange={(event) => actualizarInstrumentoForm("numero", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Fecha del instrumento</Label>
+                          <Input
+                            type="date"
+                            value={instrumentoForm.fecha}
+                            onChange={(event) => actualizarInstrumentoForm("fecha", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Número de notario o corredor</Label>
+                          <Input
+                            value={instrumentoForm.notario}
+                            onChange={(event) => actualizarInstrumentoForm("notario", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Entidad federativa del fedatario</Label>
+                          <Input
+                            value={instrumentoForm.entidad}
+                            onChange={(event) => actualizarInstrumentoForm("entidad", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Valor del avalúo en el instrumento</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={instrumentoForm.valorAvaluo}
+                            onChange={(event) => actualizarInstrumentoForm("valorAvaluo", event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="rounded border bg-slate-50 p-4">
                   <h4 className="text-sm font-semibold text-slate-700">Resultado preliminar</h4>
