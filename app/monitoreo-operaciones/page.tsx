@@ -1,7 +1,8 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useMemo, useState, type ChangeEvent } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/components/ui/use-toast"
@@ -42,9 +43,17 @@ import {
   ListChecks,
   FileSpreadsheet,
   UserCheck,
+  BookOpenCheck,
+  Globe,
+  Filter,
+  ExternalLink,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { readFileAsDataUrl } from "@/lib/storage/read-file"
+import jsPDF from "jspdf"
+import * as XLSX from "xlsx"
+import { actividadesVulnerables } from "@/lib/data/actividades"
+import { normativasMonitoreo } from "@/lib/data/normativas"
 
 // Tipos de datos para el módulo
 interface ChecklistItem {
@@ -87,6 +96,9 @@ interface OperationRecord {
   profileAligned: boolean
   registeredBy: string
   createdAt: Date
+  activityKey: string
+  activityName: string
+  operationDate: Date
 }
 
 interface MonitoreoStorageData {
@@ -94,6 +106,18 @@ interface MonitoreoStorageData {
   documentos: DocumentUpload[]
   trazabilidad: TraceabilityEntry[]
   operaciones: OperationRecord[]
+}
+
+interface OperationFormState {
+  clientName: string
+  clientType: OperationRecord["clientType"]
+  semester: string
+  amount: string
+  classification: OperationRecord["classification"]
+  evidences: string[]
+  profileAligned: boolean
+  activityKey: string
+  operationDate: string
 }
 
 // Preguntas generales del módulo
@@ -184,15 +208,34 @@ const evidenciasFraccionamiento = [
 
 export default function MonitoreoOperacionesPage() {
   const { toast } = useToast()
-  const initialFormState = {
+  const currentYear = new Date().getFullYear()
+  const actividadesMapa = useMemo(() => {
+    const mapa = new Map(actividadesVulnerables.map((actividad) => [actividad.key, actividad]))
+    return mapa
+  }, [])
+  const semestresDisponibles = useMemo(() => {
+    const semestres: string[] = []
+    for (let year = currentYear; year >= currentYear - 4; year -= 1) {
+      semestres.push(`1er semestre ${year}`)
+      semestres.push(`2º semestre ${year}`)
+    }
+    return semestres
+  }, [currentYear])
+  const aniosDisponibles = useMemo(
+    () => Array.from({ length: 5 }, (_, index) => (currentYear - index).toString()),
+    [currentYear],
+  )
+  const createInitialFormState = (): OperationFormState => ({
     clientName: "",
-    clientType: "persona-fisica" as OperationRecord["clientType"],
-    semester: "",
+    clientType: "persona-fisica",
+    semester: semestresDisponibles[0] ?? "",
     amount: "",
-    classification: "relevante" as OperationRecord["classification"],
+    classification: "relevante",
     profileAligned: true,
-    evidences: [] as string[],
-  }
+    evidences: [],
+    activityKey: actividadesVulnerables[0]?.key ?? "",
+    operationDate: new Date().toISOString().substring(0, 10),
+  })
   const [preguntasState, setPreguntasState] = useState<ChecklistItem[]>(preguntasGenerales)
   const [documentos, setDocumentos] = useState<DocumentUpload[]>([])
   const [trazabilidad, setTrazabilidad] = useState<TraceabilityEntry[]>([])
@@ -202,7 +245,13 @@ export default function MonitoreoOperacionesPage() {
   const [ultimoScreening, setUltimoScreening] = useState<Date | null>(null)
   const [ultimaSincronizacionKyc, setUltimaSincronizacionKyc] = useState<Date | null>(null)
   const [ultimoEnvioUif, setUltimoEnvioUif] = useState<Date | null>(null)
-  const [formOperacion, setFormOperacion] = useState(initialFormState)
+  const [formOperacion, setFormOperacion] = useState<OperationFormState>(() => createInitialFormState())
+  const [filtros, setFiltros] = useState({
+    search: "",
+    actividad: "todas",
+    tipoCliente: "todos",
+    anio: "todos",
+  })
 
   // Cargar datos del localStorage
   useEffect(() => {
@@ -239,7 +288,11 @@ export default function MonitoreoOperacionesPage() {
           setOperaciones(
             data.operaciones.map((op) => ({
               ...op,
-              createdAt: new Date(op.createdAt),
+              activityKey: op.activityKey ?? "",
+              activityName:
+                op.activityName ?? actividadesMapa.get(op.activityKey ?? "")?.nombre ?? "Sin clasificar",
+              createdAt: op.createdAt ? new Date(op.createdAt) : new Date(),
+              operationDate: op.operationDate ? new Date(op.operationDate) : new Date(op.createdAt ?? Date.now()),
             })),
           )
         }
@@ -403,7 +456,17 @@ export default function MonitoreoOperacionesPage() {
 
   const registrarOperacion = () => {
     const monto = Number(formOperacion.amount)
-    if (!formOperacion.clientName || !formOperacion.semester || Number.isNaN(monto) || monto <= 0) {
+    const actividadSeleccionada = actividadesMapa.get(formOperacion.activityKey)
+    const fechaOperacion = formOperacion.operationDate ? new Date(formOperacion.operationDate) : null
+    if (
+      !formOperacion.clientName ||
+      !formOperacion.semester ||
+      Number.isNaN(monto) ||
+      monto <= 0 ||
+      !actividadSeleccionada ||
+      !fechaOperacion ||
+      Number.isNaN(fechaOperacion.getTime())
+    ) {
       toast({
         title: "Datos incompletos",
         description: "Completa la información de la operación antes de registrarla.",
@@ -423,6 +486,9 @@ export default function MonitoreoOperacionesPage() {
       profileAligned: formOperacion.profileAligned,
       registeredBy: "Usuario actual",
       createdAt: new Date(),
+      activityKey: actividadSeleccionada.key,
+      activityName: actividadSeleccionada.nombre,
+      operationDate: fechaOperacion,
     }
 
     const updatedOperaciones = [nuevaOperacion, ...operaciones]
@@ -432,7 +498,7 @@ export default function MonitoreoOperacionesPage() {
     registrarAccion(
       "Operación registrada",
       "Automatización Semestral",
-      `Cliente: ${nuevaOperacion.clientName} • ${formatCurrency(nuevaOperacion.amount)} • ${nuevaOperacion.semester}`,
+      `Cliente: ${nuevaOperacion.clientName} • ${formatCurrency(nuevaOperacion.amount)} • ${nuevaOperacion.semester} • ${nuevaOperacion.activityName}`,
     )
 
     toast({
@@ -440,8 +506,32 @@ export default function MonitoreoOperacionesPage() {
       description: "La operación se integró al cálculo semestral y a la bitácora.",
     })
 
-    setFormOperacion({ ...initialFormState, clientType: formOperacion.clientType, classification: formOperacion.classification })
+    setFormOperacion({
+      ...createInitialFormState(),
+      clientType: formOperacion.clientType,
+      classification: formOperacion.classification,
+      semester: formOperacion.semester,
+      activityKey: formOperacion.activityKey,
+      operationDate: formOperacion.operationDate,
+    })
   }
+
+  const operacionesFiltradas = useMemo(() => {
+    return operaciones.filter((operacion) => {
+      const coincideBusqueda = filtros.search
+        ? `${operacion.clientName} ${operacion.activityName}`
+            .toLowerCase()
+            .includes(filtros.search.toLowerCase())
+        : true
+      const coincideActividad =
+        filtros.actividad === "todas" || operacion.activityKey === filtros.actividad
+      const coincideTipo =
+        filtros.tipoCliente === "todos" || operacion.clientType === filtros.tipoCliente
+      const coincideAnio =
+        filtros.anio === "todos" || operacion.operationDate.getFullYear().toString() === filtros.anio
+      return coincideBusqueda && coincideActividad && coincideTipo && coincideAnio
+    })
+  }, [filtros, operaciones])
 
   const operacionesAgrupadas = useMemo(() => {
     const mapa = new Map<
@@ -455,7 +545,7 @@ export default function MonitoreoOperacionesPage() {
       }
     >()
 
-    operaciones.forEach((operacion) => {
+    operacionesFiltradas.forEach((operacion) => {
       const key = `${operacion.clientName}-${operacion.clientType}-${operacion.semester}`
       if (!mapa.has(key)) {
         mapa.set(key, {
@@ -481,21 +571,21 @@ export default function MonitoreoOperacionesPage() {
         alerta80: registro.total >= umbral * 0.8,
       }
     })
-  }, [operaciones])
+  }, [operacionesFiltradas])
 
   const operacionesInusuales = useMemo(
-    () => operaciones.filter((operacion) => operacion.classification === "inusual"),
-    [operaciones],
+    () => operacionesFiltradas.filter((operacion) => operacion.classification === "inusual"),
+    [operacionesFiltradas],
   )
 
   const operacionesInternas = useMemo(
-    () => operaciones.filter((operacion) => operacion.classification === "interna-preocupante"),
-    [operaciones],
+    () => operacionesFiltradas.filter((operacion) => operacion.classification === "interna-preocupante"),
+    [operacionesFiltradas],
   )
 
   const operacionesPerfilDesalineado = useMemo(
-    () => operaciones.filter((operacion) => !operacion.profileAligned),
-    [operaciones],
+    () => operacionesFiltradas.filter((operacion) => !operacion.profileAligned),
+    [operacionesFiltradas],
   )
 
   const posiblesFraccionamientos = useMemo(() => {
@@ -559,28 +649,77 @@ export default function MonitoreoOperacionesPage() {
   }
 
   const exportarReporte = (tipo: "PDF" | "Excel") => {
-    const tipoEnMayusculas = tipo.toUpperCase()
+    if (operacionesFiltradas.length === 0) {
+      toast({
+        title: "Sin operaciones a exportar",
+        description: "Aplica diferentes filtros o registra nuevas operaciones antes de exportar.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (tipo === "Excel") {
+      const hoja = XLSX.utils.json_to_sheet(
+        operacionesFiltradas.map((operacion) => ({
+          Cliente: operacion.clientName,
+          Actividad: operacion.activityName,
+          "Tipo de cliente": operacion.clientType === "persona-fisica" ? "Persona física" : "Persona moral",
+          Semestre: operacion.semester,
+          "Fecha de operación": operacion.operationDate.toISOString().substring(0, 10),
+          Clasificación: operacion.classification,
+          Monto: operacion.amount,
+          "Perfil alineado": operacion.profileAligned ? "Sí" : "No",
+        })),
+      )
+      const libro = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(libro, hoja, "Operaciones")
+      XLSX.writeFile(libro, "monitoreo-operaciones.xlsx")
+    } else {
+      const doc = new jsPDF()
+      doc.setFontSize(14)
+      doc.text("Reporte de monitoreo de operaciones", 14, 20)
+      doc.setFontSize(10)
+      doc.text(`Generado el ${new Date().toLocaleString("es-MX")}`, 14, 28)
+
+      let posicionY = 36
+      operacionesFiltradas.forEach((operacion, index) => {
+        const lineas = [
+          `${index + 1}. ${operacion.clientName} • ${operacion.activityName}`,
+          `Monto: ${formatCurrency(operacion.amount)} | Semestre: ${operacion.semester} | Fecha: ${operacion.operationDate.toLocaleDateString("es-MX")}`,
+          `Clasificación: ${operacion.classification.replace("-", " ")} | Tipo cliente: ${
+            operacion.clientType === "persona-fisica" ? "Persona física" : "Persona moral"
+          } | Perfil alineado: ${operacion.profileAligned ? "Sí" : "No"}`,
+        ]
+
+        lineas.forEach((linea) => {
+          doc.text(linea, 14, posicionY)
+          posicionY += 6
+          if (posicionY > 270) {
+            doc.addPage()
+            posicionY = 20
+          }
+        })
+
+        posicionY += 2
+      })
+
+      doc.save("monitoreo-operaciones.pdf")
+    }
+
     registrarAccion(
       `Exportación ${tipo}`,
       "Auditoría",
-      `Se generó un reporte ${tipoEnMayusculas} con las operaciones monitoreadas.`,
+      `Se generó un reporte ${tipo.toUpperCase()} con las operaciones monitoreadas (${operacionesFiltradas.length} registros).`,
     )
     toast({
       title: `Reporte ${tipo} generado`,
-      description: "Disponible para descarga y conservación digital.",
+      description: "Descarga completa. Conservar durante el mismo periodo de cinco años.",
     })
   }
 
-  const semestresDisponibles = [
-    "1er semestre 2024",
-    "2º semestre 2024",
-    "1er semestre 2025",
-    "2º semestre 2025",
-  ]
-
   const evidenciasClasificacionActuales = evidenciasClasificacion[formOperacion.classification]
 
-  const totalOperaciones = operaciones.length
+  const totalOperaciones = operacionesFiltradas.length
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -654,6 +793,175 @@ export default function MonitoreoOperacionesPage() {
                   Los registros alimentan al módulo de Reportes UIF y a la gobernanza de cumplimiento para garantizar la
                   conservación digital mínima de 5 años.
                 </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              Filtros transversales y ventana de cinco años
+            </CardTitle>
+            <CardDescription>
+              Aplica criterios que impactan todas las vistas del módulo. Los resultados y exportaciones respetan la misma
+              ventana de conservación de cinco años.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-2">
+                <Label htmlFor="filtro-busqueda">Buscar cliente o actividad</Label>
+                <Input
+                  id="filtro-busqueda"
+                  placeholder="Ej. nombre del cliente o fracción"
+                  value={filtros.search}
+                  onChange={(event) => setFiltros((prev) => ({ ...prev, search: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Actividad vulnerable</Label>
+                <Select
+                  value={filtros.actividad}
+                  onValueChange={(value) => setFiltros((prev) => ({ ...prev, actividad: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todas las actividades" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas las actividades</SelectItem>
+                    {actividadesVulnerables.map((actividad) => (
+                      <SelectItem key={actividad.key} value={actividad.key}>
+                        {actividad.fraccion} – {actividad.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Tipo de cliente</Label>
+                <Select
+                  value={filtros.tipoCliente}
+                  onValueChange={(value) => setFiltros((prev) => ({ ...prev, tipoCliente: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los tipos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos los tipos</SelectItem>
+                    <SelectItem value="persona-fisica">Persona física</SelectItem>
+                    <SelectItem value="persona-moral">Persona moral</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Año natural</Label>
+                <Select value={filtros.anio} onValueChange={(value) => setFiltros((prev) => ({ ...prev, anio: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Últimos cinco años" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Últimos cinco años</SelectItem>
+                    {aniosDisponibles.map((anio) => (
+                      <SelectItem key={anio} value={anio}>
+                        {anio}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+              <Badge variant="secondary">{totalOperaciones} operaciones visibles</Badge>
+              <Badge variant="outline">Filtro de {filtros.anio === "todos" ? "5 años" : `año ${filtros.anio}`}</Badge>
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setFiltros({ search: "", actividad: "todas", tipoCliente: "todos", anio: "todos" })}
+            >
+              Limpiar filtros
+            </Button>
+            <Button type="button" variant="outline" onClick={() => exportarReporte("PDF")}>
+              Exportar PDF
+            </Button>
+            <Button type="button" variant="outline" onClick={() => exportarReporte("Excel")}>
+              Exportar Excel
+            </Button>
+          </CardFooter>
+        </Card>
+
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpenCheck className="h-5 w-5 text-primary" />
+              Normativa conectada con actividades vulnerables
+            </CardTitle>
+            <CardDescription>
+              Consulta rápidamente la autoridad aplicable, criterios y repositorios para alinear monitoreo y actividades
+              vulnerables.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Este módulo comparte criterios con el tablero de actividades vulnerables para garantizar que la
+                  clasificación de operaciones, la documentación y la exportación digital se mantengan sincronizadas.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">Operaciones filtradas: {totalOperaciones}</Badge>
+                  <Badge variant="outline">Ventana mínima: 5 años</Badge>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild>
+                    <Link href="/actividades-vulnerables">Abrir módulo de actividades</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href="/marco-normativo-aplicable">Repositorio normativo interno</Link>
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {normativasMonitoreo.map((norma) => (
+                  <div key={norma.id} className="space-y-2 rounded-lg border border-primary/20 bg-white p-4 text-sm">
+                    <div>
+                      <p className="font-semibold text-primary">{norma.autoridad}</p>
+                      <p className="text-xs text-muted-foreground">{norma.descripcion}</p>
+                    </div>
+                    <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                      {norma.criteriosClave.map((criterio) => (
+                        <li key={criterio}>{criterio}</li>
+                      ))}
+                    </ul>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <Link
+                        href={norma.repositorio.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-full border border-primary/30 px-3 py-1 text-primary hover:bg-primary/10"
+                      >
+                        <ExternalLink className="h-3 w-3" /> {norma.repositorio.nombre}
+                      </Link>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-wide text-primary">
+                      {norma.referenciasInternacionales.map((referencia) => (
+                        <Link
+                          key={`${norma.id}-${referencia.nombre}`}
+                          href={referencia.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-1 hover:bg-primary/20"
+                        >
+                          <Globe className="h-3 w-3" /> {referencia.nombre}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </CardContent>
@@ -793,6 +1101,24 @@ export default function MonitoreoOperacionesPage() {
                       />
                     </div>
                     <div className="space-y-2">
+                      <Label>Actividad vulnerable vinculada</Label>
+                      <Select
+                        value={formOperacion.activityKey}
+                        onValueChange={(value) => actualizarFormulario("activityKey", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona actividad" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {actividadesVulnerables.map((actividad) => (
+                            <SelectItem key={actividad.key} value={actividad.key}>
+                              {actividad.fraccion} – {actividad.nombre}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
                       <Label>Tipo de cliente</Label>
                       <Select
                         value={formOperacion.clientType}
@@ -826,6 +1152,17 @@ export default function MonitoreoOperacionesPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="fecha-operacion">Fecha de operación</Label>
+                      <Input
+                        id="fecha-operacion"
+                        type="date"
+                        value={formOperacion.operationDate}
+                        max={new Date().toISOString().substring(0, 10)}
+                        onChange={(event) => actualizarFormulario("operationDate", event.target.value)}
+                        required
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="monto">Monto de la operación</Label>
@@ -925,46 +1262,64 @@ export default function MonitoreoOperacionesPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {operacionesAgrupadas.map((grupo) => (
-                      <div key={`${grupo.clientName}-${grupo.semester}`} className="space-y-3 rounded-lg border p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <h3 className="font-semibold">
-                              {grupo.clientName} · {grupo.semester}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              Tipo: {grupo.clientType === "persona-fisica" ? "Persona física" : "Persona moral"}
-                            </p>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline">Total {formatCurrency(grupo.total)}</Badge>
-                            <Badge variant="outline">Umbral {formatCurrency(grupo.umbral)}</Badge>
-                            {grupo.excede ? (
-                              <Badge className="bg-red-500 text-white hover:bg-red-500">Aviso requerido</Badge>
-                            ) : grupo.alerta80 ? (
-                              <Badge className="bg-amber-500 text-white hover:bg-amber-500">80% del umbral</Badge>
-                            ) : (
-                              <Badge variant="secondary">Dentro de umbral</Badge>
-                            )}
-                          </div>
-                        </div>
-                        <div className="grid gap-2 text-sm">
-                          {grupo.operaciones.map((operacion) => (
-                            <div
-                              key={operacion.id}
-                              className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 p-2"
-                            >
-                              <span>
-                                {formatCurrency(operacion.amount)} · {operacion.classification.replace("-", " ")}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                Registrada el {operacion.createdAt.toLocaleDateString()} por {operacion.registeredBy}
-                              </span>
+                    {operacionesAgrupadas.map((grupo) => {
+                      const actividadesGrupo = Array.from(
+                        new Set(grupo.operaciones.map((operacion) => operacion.activityName)),
+                      )
+                      return (
+                        <div key={`${grupo.clientName}-${grupo.semester}`} className="space-y-3 rounded-lg border p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <h3 className="font-semibold">
+                                {grupo.clientName} · {grupo.semester}
+                              </h3>
+                              <p className="text-sm text-muted-foreground">
+                                Tipo: {grupo.clientType === "persona-fisica" ? "Persona física" : "Persona moral"}
+                              </p>
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                                {actividadesGrupo.map((actividad) => (
+                                  <Badge key={actividad} variant="outline">
+                                    {actividad}
+                                  </Badge>
+                                ))}
+                              </div>
                             </div>
-                          ))}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="outline">Total {formatCurrency(grupo.total)}</Badge>
+                              <Badge variant="outline">Umbral {formatCurrency(grupo.umbral)}</Badge>
+                              {grupo.excede ? (
+                                <Badge className="bg-red-500 text-white hover:bg-red-500">Aviso requerido</Badge>
+                              ) : grupo.alerta80 ? (
+                                <Badge className="bg-amber-500 text-white hover:bg-amber-500">80% del umbral</Badge>
+                              ) : (
+                                <Badge variant="secondary">Dentro de umbral</Badge>
+                              )}
+                            </div>
+                          </div>
+                          <div className="grid gap-2 text-sm">
+                            {grupo.operaciones.map((operacion) => (
+                              <div
+                                key={operacion.id}
+                                className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 p-2"
+                              >
+                                <div>
+                                  <div className="font-medium">
+                                    {formatCurrency(operacion.amount)} · {operacion.classification.replace("-", " ")}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                    <Badge variant="secondary">{operacion.activityName}</Badge>
+                                    <span>Fecha: {operacion.operationDate.toLocaleDateString("es-MX")}</span>
+                                  </div>
+                                </div>
+                                <span className="text-xs text-muted-foreground">
+                                  Registrada el {operacion.createdAt.toLocaleDateString("es-MX")} por {operacion.registeredBy}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -977,7 +1332,9 @@ export default function MonitoreoOperacionesPage() {
                 <BellRing className="h-5 w-5" />
                 Alertas inteligentes
               </CardTitle>
-              <CardDescription>Resumen de banderas por inusualidad, fraccionamiento e incidencias internas.</CardDescription>
+              <CardDescription>
+                Resumen de banderas por inusualidad, fraccionamiento e incidencias internas considerando los filtros activos.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -1339,7 +1696,9 @@ export default function MonitoreoOperacionesPage() {
                 <Archive className="h-5 w-5" />
                 Auditoría y conservación
               </CardTitle>
-              <CardDescription>Reportes exportables y registro cronológico de al menos 5 años.</CardDescription>
+              <CardDescription>
+                Reportes exportables con filtros aplicados y registro cronológico de al menos 5 años.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-lg border bg-muted/30 p-4 text-sm">
@@ -1350,10 +1709,6 @@ export default function MonitoreoOperacionesPage() {
                 <p className="mt-2 text-xs text-muted-foreground">
                   Cada registro conserva usuario, fecha y clasificación para auditorías internas y visitas de verificación.
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => exportarReporte("PDF")}>Exportar PDF</Button>
-                <Button variant="outline" onClick={() => exportarReporte("Excel")}>Exportar Excel</Button>
               </div>
             </CardContent>
           </Card>
