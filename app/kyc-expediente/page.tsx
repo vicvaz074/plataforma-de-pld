@@ -339,6 +339,55 @@ function crearPersonaBase(): PersonaReportada {
   }
 }
 
+function crearPersonaDemostracion(): PersonaReportada {
+  const base = crearPersonaBase()
+  return {
+    ...base,
+    denominacion: "Cliente Demostrativo, S.A. de C.V.",
+    fechaConstitucion: "2022-01-15",
+    rfc: "DEM220115AB1",
+    pais: "MX",
+    giro: "Servicios de consultoría de cumplimiento",
+    representante: {
+      ...base.representante,
+      nombre: "Laura",
+      apellidoPaterno: "Ejemplo",
+      apellidoMaterno: "Control",
+      fechaNacimiento: "1989-09-03",
+      rfc: "EJCL890903AB1",
+      curp: "EJCL890903MDFJRL08",
+    },
+    domicilio: {
+      ...base.domicilio,
+      codigoPostal: "06100",
+      entidad: "Ciudad de México",
+      municipio: "Cuauhtémoc",
+      colonia: "Condesa",
+      calle: "Av. Ejemplo",
+      numeroExterior: "123",
+      numeroInterior: "",
+    },
+    contacto: {
+      ...base.contacto,
+      telefono: "5555555555",
+      correo: "demo@plataforma.mx",
+    },
+    identificacion: {
+      ...base.identificacion,
+      tipo: "INE",
+      numero: "DEM1234567",
+      fechaVencimiento: "2027-12-31",
+    },
+    participacion: {
+      ...base.participacion,
+      porcentajeCapital: "100",
+      origenRecursos: "Capital social declarado para escenario de prueba.",
+      esPep: "no",
+      detallePep: "",
+    },
+  }
+}
+
 interface ExpedienteResumen {
   rfc: string
   nombre: string
@@ -361,6 +410,43 @@ interface ExpedienteDetalle extends ExpedienteResumen {
 interface ExpedienteListadoItem extends ExpedienteResumen {
   actualizadoEn?: string
   detalle?: ExpedienteDetalle | null
+}
+
+const DEMO_EXPEDIENTE_DETALLE: ExpedienteDetalle = {
+  rfc: "DEM991231AA1",
+  nombre: "Cliente Demostrativo, S.A. de C.V.",
+  tipoCliente: "pm_mexicana",
+  detalleTipoCliente: "Sociedad demostrativa",
+  responsable: "Área de Cumplimiento Demo",
+  claveSujetoObligado: "DEMO12345678",
+  claveActividadVulnerable: "demo-servicio-cumplimiento",
+  identificacion: {
+    nombre: "Cliente Demostrativo, S.A. de C.V.",
+    rfc: "DEM991231AA1",
+    domicilio: "Av. Ejemplo 123, Col. Condesa, Cuauhtémoc, CDMX",
+  },
+  datosFiscales: {
+    "regimen-fiscal": "General de Ley Personas Morales",
+    "actividad-sat": "Servicios de consultoría en gestión",
+  },
+  perfilOperaciones: {
+    "origen-fondos": "Recursos provenientes del capital social demostrativo.",
+    "destino-fondos": "Pago de servicios de consultoría ficticios para capacitación.",
+  },
+  documentacion: {
+    "identificacion-oficial": "completo",
+    "acta-constitutiva": "completo",
+    "comprobante-domicilio": "en-proceso",
+  },
+  personas: [crearPersonaDemostracion()],
+  actualizadoEn: "2024-05-10T16:00:00.000Z",
+}
+
+const DEMO_EXPEDIENTE_RESUMEN: ExpedienteResumen = {
+  rfc: DEMO_EXPEDIENTE_DETALLE.rfc,
+  nombre: DEMO_EXPEDIENTE_DETALLE.nombre,
+  tipoCliente: DEMO_EXPEDIENTE_DETALLE.tipoCliente,
+  detalleTipoCliente: DEMO_EXPEDIENTE_DETALLE.detalleTipoCliente,
 }
 
 function normalizarTexto(value: string | undefined | null) {
@@ -647,6 +733,7 @@ function KycExpedienteContent() {
   const [expedientesDetalle, setExpedientesDetalle] = useState<Record<string, ExpedienteDetalle>>({})
   const [expedienteSeleccionado, setExpedienteSeleccionado] = useState<string | null>(null)
   const [expedientesCargados, setExpedientesCargados] = useState(false)
+  const [busquedaExpedientes, setBusquedaExpedientes] = useState<string>("")
 
   const tipoClienteSeleccionado = useMemo(() => findClienteTipoOption(tipoCliente), [tipoCliente])
   const tipoClienteLabel = useMemo(() => findClienteTipoLabel(tipoCliente), [tipoCliente])
@@ -723,6 +810,23 @@ function KycExpedienteContent() {
     return Array.from(mapa.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
   }, [expedientesDetalle, expedientesResumen])
 
+  const expedientesFiltrados = useMemo(() => {
+    const criterio = normalizarTexto(busquedaExpedientes)
+    if (!criterio) return expedientesDisponibles
+    return expedientesDisponibles.filter((item) => {
+      const nombre = normalizarTexto(item.nombre)
+      const rfcNormalizado = normalizarTexto(item.rfc)
+      const detalle = normalizarTexto(item.detalleTipoCliente)
+      return (
+        (nombre && nombre.includes(criterio)) ||
+        (rfcNormalizado && rfcNormalizado.includes(criterio)) ||
+        (detalle && detalle.includes(criterio))
+      )
+    })
+  }, [busquedaExpedientes, expedientesDisponibles])
+
+  const sinResultadosExpedientes = busquedaExpedientes.trim().length > 0 && expedientesFiltrados.length === 0
+
   const expedienteSeleccionadoInfo = useMemo(
     () =>
       expedienteSeleccionado
@@ -798,38 +902,46 @@ function KycExpedienteContent() {
     const sincronizarExpedientes = useCallback(() => {
       if (typeof window === "undefined") return
 
+      let resumen: ExpedienteResumen[] = []
+      let mapaDetalle = new Map<string, ExpedienteDetalle>()
+
       try {
         const stored = window.localStorage.getItem(CLIENTES_STORAGE_KEY)
         const parsed = stored ? JSON.parse(stored) : []
-        const resumen = Array.isArray(parsed)
+        resumen = Array.isArray(parsed)
           ? parsed
               .map((item) => sanitizeClienteResumen(item))
               .filter((item): item is ExpedienteResumen => Boolean(item))
           : []
-        setExpedientesResumen(resumen)
       } catch (error) {
         console.error("No fue posible leer el catálogo de clientes guardados", error)
-        setExpedientesResumen([])
+        resumen = []
       }
 
       try {
         const storedDetalle = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
         const parsedDetalle = storedDetalle ? JSON.parse(storedDetalle) : []
-        const mapa = new Map<string, ExpedienteDetalle>()
+        mapaDetalle = new Map<string, ExpedienteDetalle>()
         if (Array.isArray(parsedDetalle)) {
           parsedDetalle.forEach((item) => {
             const sane = sanitizeExpedienteGuardado(item)
             if (sane) {
-              mapa.set(sane.rfc, sane)
+              mapaDetalle.set(sane.rfc, sane)
             }
           })
         }
-        setExpedientesDetalle(Object.fromEntries(mapa) as Record<string, ExpedienteDetalle>)
       } catch (error) {
         console.error("No fue posible leer el detalle de expedientes guardados", error)
-        setExpedientesDetalle({})
+        mapaDetalle = new Map<string, ExpedienteDetalle>()
       }
 
+      if (resumen.length === 0 && mapaDetalle.size === 0) {
+        resumen = [DEMO_EXPEDIENTE_RESUMEN]
+        mapaDetalle.set(DEMO_EXPEDIENTE_DETALLE.rfc, DEMO_EXPEDIENTE_DETALLE)
+      }
+
+      setExpedientesResumen(resumen)
+      setExpedientesDetalle(Object.fromEntries(mapaDetalle) as Record<string, ExpedienteDetalle>)
       setExpedientesCargados(true)
     }, [])
 
@@ -1115,7 +1227,7 @@ function KycExpedienteContent() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-[minmax(0,2fr)_auto] md:items-end">
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label>Consultar expediente almacenado</Label>
               <Select
                 value={expedienteSeleccionado ?? undefined}
@@ -1126,13 +1238,24 @@ function KycExpedienteContent() {
                   <SelectValue placeholder="Selecciona un expediente" />
                 </SelectTrigger>
                 <SelectContent>
-                  {expedientesDisponibles.map((item) => (
+                  {expedientesFiltrados.map((item) => (
                     <SelectItem key={item.rfc} value={item.rfc}>
                       {item.nombre} – {item.rfc}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <div className="space-y-1">
+                <Label htmlFor="busqueda-expedientes" className="text-xs font-medium text-slate-600">
+                  Filtrar expedientes guardados
+                </Label>
+                <Input
+                  id="busqueda-expedientes"
+                  value={busquedaExpedientes}
+                  onChange={(event) => setBusquedaExpedientes(event.target.value)}
+                  placeholder="Escribe nombre o RFC"
+                />
+              </div>
             </div>
             <div className="flex flex-wrap items-end gap-2">
               <Button type="button" variant="outline" onClick={crearNuevoExpediente}>
@@ -1169,46 +1292,52 @@ function KycExpedienteContent() {
           )}
 
           {expedientesDisponibles.length > 0 ? (
-            <ScrollArea className="h-52 rounded border border-slate-200 bg-white">
-              <div className="divide-y divide-slate-200">
-                {expedientesDisponibles.map((item) => {
-                  const seleccionado = item.rfc === expedienteSeleccionado
-                  const actualizado = formatearFechaActualizacion(item.actualizadoEn)
-                  return (
-                    <button
-                      key={item.rfc}
-                      type="button"
-                      onClick={() => cargarExpediente(item.rfc)}
-                      className={`flex w-full flex-col gap-1 p-3 text-left transition ${
-                        seleccionado ? "bg-emerald-100/60" : "hover:bg-slate-100"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-700">{item.nombre}</p>
-                          <p className="text-xs text-slate-500">{item.rfc}</p>
+            sinResultadosExpedientes ? (
+              <p className="rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                No se encontraron expedientes que coincidan con "{busquedaExpedientes}".
+              </p>
+            ) : (
+              <ScrollArea className="h-52 rounded border border-slate-200 bg-white">
+                <div className="divide-y divide-slate-200">
+                  {expedientesFiltrados.map((item) => {
+                    const seleccionado = item.rfc === expedienteSeleccionado
+                    const actualizado = formatearFechaActualizacion(item.actualizadoEn)
+                    return (
+                      <button
+                        key={item.rfc}
+                        type="button"
+                        onClick={() => cargarExpediente(item.rfc)}
+                        className={`flex w-full flex-col gap-1 p-3 text-left transition ${
+                          seleccionado ? "bg-emerald-100/60" : "hover:bg-slate-100"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-700">{item.nombre}</p>
+                            <p className="text-xs text-slate-500">{item.rfc}</p>
+                          </div>
+                          {actualizado && (
+                            <span className="text-[11px] text-slate-500">{actualizado}</span>
+                          )}
                         </div>
-                        {actualizado && (
-                          <span className="text-[11px] text-slate-500">{actualizado}</span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {item.tipoCliente && (
-                          <Badge variant="outline" className="border-slate-200">
-                            {findClienteTipoLabel(item.tipoCliente)}
-                          </Badge>
-                        )}
-                        {item.detalleTipoCliente && (
-                          <Badge variant="outline" className="border-slate-200">
-                            {item.detalleTipoCliente}
-                          </Badge>
-                        )}
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </ScrollArea>
+                        <div className="flex flex-wrap gap-2">
+                          {item.tipoCliente && (
+                            <Badge variant="outline" className="border-slate-200">
+                              {findClienteTipoLabel(item.tipoCliente)}
+                            </Badge>
+                          )}
+                          {item.detalleTipoCliente && (
+                            <Badge variant="outline" className="border-slate-200">
+                              {item.detalleTipoCliente}
+                            </Badge>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </ScrollArea>
+            )
           ) : (
             <p className="text-sm text-slate-500">
               Aún no se han guardado expedientes desde este módulo. Captura los datos y utiliza el botón "Guardar" para

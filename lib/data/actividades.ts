@@ -79,6 +79,39 @@ function buildClienteObligaciones(overrides: Partial<Record<ClienteKey, string[]
 
 export const actividadesVulnerables: ActividadVulnerable[] = [
   {
+    key: "demo-servicio-cumplimiento",
+    fraccion: "Fracción Demo",
+    nombre: "Servicio demostrativo de cumplimiento",
+    descripcion: "Ejemplo temporal para mostrar el flujo completo de captura en la plataforma.",
+    identificacionUmbralUma: 10,
+    avisoUmbralUma: 25,
+    obligaciones: {
+      sinUmbral: "Registra notas internas del escenario de demostración para practicar el flujo completo.",
+      identificacion:
+        "Identifica al cliente ficticio cuando el acumulado alcance 10 UMA para mostrar los controles.",
+      aviso:
+        "Simula el envío de un aviso cuando el escenario supera 25 UMA y documenta los pasos realizados.",
+    },
+    criteriosUif: [
+      "Permite explicar la clasificación de operaciones sin afectar catálogos reales.",
+      "Sirve para capacitar a nuevos usuarios antes de trabajar con expedientes productivos.",
+    ],
+    ejemplosOperaciones: [
+      {
+        titulo: "Contrato piloto con cliente demostrativo",
+        descripcion: "Escenario abreviado para practicar la integración de expedientes y avisos.",
+      },
+    ],
+    clienteObligaciones: buildClienteObligaciones({
+      personaFisica: [
+        "Identificación oficial genérica del ejemplo y comprobante de domicilio controlado.",
+      ],
+      personaMoral: [
+        "Acta constitutiva resumida y evidencia de facultades preparada para la demo.",
+      ],
+    }),
+  },
+  {
     key: "fraccion-i-juegos",
     fraccion: "Fracción I",
     nombre: "Juegos con apuesta, concursos y sorteos",

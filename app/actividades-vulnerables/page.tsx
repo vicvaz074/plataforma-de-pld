@@ -598,6 +598,15 @@ function ordenarClientesGuardados(clientes: ClienteGuardado[]) {
   return [...clientes].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
 }
 
+function normalizarBusquedaTexto(value: string | undefined | null) {
+  if (!value) return ""
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase()
+}
+
 function getMonedaLabel(value: string) {
   const found = MONEDAS.find((moneda) => moneda.value === value)
   return found ? found.label : value
@@ -1351,6 +1360,7 @@ export default function ActividadesVulnerablesPage() {
   const [actividadInfoKey, setActividadInfoKey] = useState<string | null>(null)
   const [infoModal, setInfoModal] = useState<InfoModalKey | null>(null)
   const [tabActiva, setTabActiva] = useState<"resumen" | "captura" | "seguimiento" | "explorar">("resumen")
+  const [busquedaActividades, setBusquedaActividades] = useState<string>("")
   const [clienteCalendario, setClienteCalendario] = useState<string | null>(null)
   const [mesCalendario, setMesCalendario] = useState<number>(currentMonth)
   const [anioCalendario, setAnioCalendario] = useState<number>(currentYear)
@@ -1454,6 +1464,38 @@ export default function ActividadesVulnerablesPage() {
       new Map<string, ActividadVulnerable[]>(),
     )
   }, [])
+  const actividadesFiltradasPorFraccion = useMemo(() => {
+    const criterio = normalizarBusquedaTexto(busquedaActividades)
+    const resultado = new Map<string, ActividadVulnerable[]>()
+    actividadesPorFraccion.forEach((lista, fraccion) => {
+      const coincidencias =
+        criterio.length === 0
+          ? lista
+          : lista.filter((actividad) => {
+              const nombre = normalizarBusquedaTexto(actividad.nombre)
+              const descripcion = normalizarBusquedaTexto(actividad.descripcion)
+              const fraccionNormalizada = normalizarBusquedaTexto(fraccion)
+              return (
+                (nombre && nombre.includes(criterio)) ||
+                (descripcion && descripcion.includes(criterio)) ||
+                (fraccionNormalizada && fraccionNormalizada.includes(criterio))
+              )
+            })
+      if (coincidencias.length > 0) {
+        resultado.set(fraccion, coincidencias)
+      }
+    })
+    return resultado
+  }, [actividadesPorFraccion, busquedaActividades])
+  const totalActividadesFiltradas = useMemo(() => {
+    let total = 0
+    actividadesFiltradasPorFraccion.forEach((lista) => {
+      total += lista.length
+    })
+    return total
+  }, [actividadesFiltradasPorFraccion])
+  const sinResultadosActividades =
+    busquedaActividades.trim().length > 0 && totalActividadesFiltradas === 0
   const actividadesMonitoreoMapa = useMemo(
     () => new Map(actividadesVulnerables.map((actividad) => [actividad.key, actividad.nombre])),
     [],
@@ -5434,38 +5476,55 @@ const cambiarMesCalendario = (delta: number) => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-72 pr-4">
-                  <div className="space-y-4 text-sm">
-                    {Array.from(actividadesPorFraccion.entries())
-                      .sort((a, b) => a[0].localeCompare(b[0]))
-                      .map(([fraccion, actividades]) => (
-                        <div key={fraccion} className="rounded border bg-white p-3">
-                          <h4 className="font-semibold text-slate-700">{fraccion}</h4>
-                          <ul className="mt-2 space-y-1 text-slate-600">
-                            {actividades.map((actividad) => (
-                              <li key={actividad.key} className="flex items-start justify-between gap-2">
-                                <div>
-                                  <p className="font-medium text-slate-700">{actividad.nombre}</p>
-                                  <p className="text-xs text-muted-foreground">{actividad.descripcion}</p>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    setActividadKey(actividad.key)
-                                    setActividadInfoKey(actividad.key)
-                                    setTabActiva("captura")
-                                  }}
-                                >
-                                  <ArrowRight className="h-4 w-4" />
-                                </Button>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                  </div>
-                </ScrollArea>
+                <div className="mb-4 space-y-1">
+                  <Label htmlFor="busqueda-actividades" className="text-xs font-medium text-slate-600">
+                    Buscar actividad vulnerable
+                  </Label>
+                  <Input
+                    id="busqueda-actividades"
+                    value={busquedaActividades}
+                    onChange={(event) => setBusquedaActividades(event.target.value)}
+                    placeholder="Escribe fracción, nombre o palabra clave"
+                  />
+                </div>
+                {sinResultadosActividades ? (
+                  <p className="rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    No se encontraron actividades que coincidan con "{busquedaActividades}".
+                  </p>
+                ) : (
+                  <ScrollArea className="h-72 pr-4">
+                    <div className="space-y-4 text-sm">
+                      {Array.from(actividadesFiltradasPorFraccion.entries())
+                        .sort((a, b) => a[0].localeCompare(b[0]))
+                        .map(([fraccion, actividades]) => (
+                          <div key={fraccion} className="rounded border bg-white p-3">
+                            <h4 className="font-semibold text-slate-700">{fraccion}</h4>
+                            <ul className="mt-2 space-y-1 text-slate-600">
+                              {actividades.map((actividad) => (
+                                <li key={actividad.key} className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <p className="font-medium text-slate-700">{actividad.nombre}</p>
+                                    <p className="text-xs text-muted-foreground">{actividad.descripcion}</p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setActividadKey(actividad.key)
+                                      setActividadInfoKey(actividad.key)
+                                      setTabActiva("captura")
+                                    }}
+                                  >
+                                    <ArrowRight className="h-4 w-4" />
+                                  </Button>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                    </div>
+                  </ScrollArea>
+                )}
               </CardContent>
             </Card>
             <Card className="border-slate-200">
