@@ -1737,62 +1737,106 @@ export default function ActividadesVulnerablesPage() {
   useEffect(() => {
     if (!personaExpediente) {
       setPersonaAvisoActual(null)
+      setClienteNombre("")
+      setRfc("")
+      setColoniasDisponibles([])
+      setInmuebleForm((prev) => ({
+        ...prev,
+        pais: INMUEBLE_FORM_DEFAULT.pais,
+        entidad: "",
+        municipio: "",
+        colonia: "",
+        codigoPostal: "",
+        calle: "",
+        numeroExterior: "",
+        numeroInterior: "",
+      }))
+      setBeneficiarioForm((prev) => ({
+        ...prev,
+        nombre: "",
+        apellidoPaterno: "",
+        apellidoMaterno: "",
+        fechaNacimiento: "",
+        rfc: "",
+        curp: "",
+        pais: BENEFICIARIO_FORM_DEFAULT.pais,
+      }))
       return
     }
 
     const personaAviso = buildPersonaAvisoFromExpediente(personaExpediente)
     setPersonaAvisoActual(personaAviso)
 
-    if (personaAviso) {
-      const nombreCliente =
-        personaAviso.tipo === "persona_moral"
-          ? personaAviso.denominacion ?? ""
-          : [personaAviso.nombre, personaAviso.apellidoPaterno, personaAviso.apellidoMaterno]
-              .filter((parte) => typeof parte === "string" && parte.trim().length > 0)
-              .join(" ")
+    const nombreCliente = personaAviso
+      ? personaAviso.tipo === "persona_moral"
+        ? personaAviso.denominacion ?? ""
+        : [personaAviso.nombre, personaAviso.apellidoPaterno, personaAviso.apellidoMaterno]
+            .filter((parte) => typeof parte === "string" && parte.trim().length > 0)
+            .join(" ")
+      : ""
+    setClienteNombre(nombreCliente)
 
-      if (nombreCliente) {
-        setClienteNombre(nombreCliente)
+    const rfcPersona = personaAviso?.rfc ?? expedienteActual?.rfc ?? ""
+    setRfc(rfcPersona ? rfcPersona.toUpperCase() : "")
+
+    const domicilio = personaAviso?.domicilio ?? null
+    if (domicilio) {
+      setInmuebleForm((prev) => ({
+        ...prev,
+        pais: domicilio.pais ?? prev.pais ?? INMUEBLE_FORM_DEFAULT.pais,
+        entidad: domicilio.entidad ?? "",
+        municipio: domicilio.municipio ?? "",
+        colonia: domicilio.colonia ?? "",
+        codigoPostal: domicilio.codigoPostal ?? "",
+        calle: domicilio.calle ?? "",
+        numeroExterior: domicilio.numeroExterior ?? "",
+        numeroInterior: domicilio.numeroInterior ?? "",
+      }))
+
+      if (domicilio.codigoPostal) {
+        const info = findCodigoPostalInfo(domicilio.codigoPostal)
+        setColoniasDisponibles(info?.asentamientos ?? [])
+      } else {
+        setColoniasDisponibles([])
       }
+    } else {
+      setInmuebleForm((prev) => ({
+        ...prev,
+        pais: INMUEBLE_FORM_DEFAULT.pais,
+        entidad: "",
+        municipio: "",
+        colonia: "",
+        codigoPostal: "",
+        calle: "",
+        numeroExterior: "",
+        numeroInterior: "",
+      }))
+      setColoniasDisponibles([])
+    }
 
-      const rfcPersona = personaAviso.rfc ?? expedienteActual?.rfc ?? ""
-      if (rfcPersona) {
-        setRfc(rfcPersona.toUpperCase())
-      }
-
-      const domicilio = personaAviso.domicilio
-      if (domicilio) {
-        setInmuebleForm((prev) => ({
-          ...prev,
-          pais: domicilio.pais ?? prev.pais ?? "MX",
-          entidad: domicilio.entidad ?? prev.entidad,
-          municipio: domicilio.municipio ?? prev.municipio,
-          colonia: domicilio.colonia ?? prev.colonia,
-          codigoPostal: domicilio.codigoPostal ?? prev.codigoPostal,
-          calle: domicilio.calle ?? prev.calle,
-          numeroExterior: domicilio.numeroExterior ?? prev.numeroExterior,
-          numeroInterior: domicilio.numeroInterior ?? prev.numeroInterior,
-        }))
-
-        if (domicilio.codigoPostal) {
-          const info = findCodigoPostalInfo(domicilio.codigoPostal)
-          setColoniasDisponibles(info?.asentamientos ?? [])
-        }
-      }
-
-      if (personaAviso.representante) {
-        setBeneficiarioForm((prev) => ({
-          ...prev,
-          tipo: "persona_fisica",
-          nombre: personaAviso.representante?.nombre ?? prev.nombre,
-          apellidoPaterno: personaAviso.representante?.apellidoPaterno ?? prev.apellidoPaterno,
-          apellidoMaterno: personaAviso.representante?.apellidoMaterno ?? prev.apellidoMaterno,
-          fechaNacimiento: personaAviso.representante?.fechaNacimiento ?? prev.fechaNacimiento,
-          rfc: personaAviso.representante?.rfc ?? prev.rfc,
-          curp: personaAviso.representante?.curp ?? prev.curp,
-          pais: personaAviso.representante?.pais ?? prev.pais,
-        }))
-      }
+    if (personaAviso?.representante) {
+      setBeneficiarioForm((prev) => ({
+        ...prev,
+        tipo: "persona_fisica",
+        nombre: personaAviso.representante?.nombre ?? "",
+        apellidoPaterno: personaAviso.representante?.apellidoPaterno ?? "",
+        apellidoMaterno: personaAviso.representante?.apellidoMaterno ?? "",
+        fechaNacimiento: personaAviso.representante?.fechaNacimiento ?? "",
+        rfc: personaAviso.representante?.rfc ?? "",
+        curp: personaAviso.representante?.curp ?? "",
+        pais: personaAviso.representante?.pais ?? BENEFICIARIO_FORM_DEFAULT.pais,
+      }))
+    } else {
+      setBeneficiarioForm((prev) => ({
+        ...prev,
+        nombre: "",
+        apellidoPaterno: "",
+        apellidoMaterno: "",
+        fechaNacimiento: "",
+        rfc: "",
+        curp: "",
+        pais: BENEFICIARIO_FORM_DEFAULT.pais,
+      }))
     }
 
     if (expedienteActual?.tipoCliente) {
