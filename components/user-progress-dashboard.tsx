@@ -167,7 +167,7 @@ const initialSections: Section[] = [
   },
   {
     id: "sistema-seguridad",
-    title: "Programa de Prevención en Lavado de Dinero y FT",
+    title: "Programa de Prevención en Lavado de Dinero",
     description: "Identifica medidas de seguridad aplicables a los datos y revisa su implementación.",
     path: "/security-system",
     progress: 0,

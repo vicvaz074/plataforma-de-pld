@@ -2,7 +2,7 @@ export const translations = {
   es: {
     // Navigation and general
     dashboard: "Panel de control",
-    welcomeMessage: "Bienvenido al Programa de Prevención en Lavado de Dinero y FT",
+    welcomeMessage: "Bienvenido al Programa de Prevención en Lavado de Dinero",
 
     // Main navigation items (sidebar)
     aiSystemRegistry: "Registro de sistemas de IA",
@@ -48,7 +48,7 @@ export const translations = {
     auditDescription: "Muestra indicadores de cumplimiento de los sistemas de IA",
     securityMeasuresDrawerDescription: "Gestiona las medidas de seguridad del entorno",
     lfpdpppDescription:
-      "Programa de Prevención en Lavado de Dinero y FT - Cumplimiento normativo obligatorio en México",
+      "Programa de Prevención en Lavado de Dinero - Cumplimiento normativo obligatorio en México",
     iso27001Description:
       "Gestión integral de la seguridad de la información - Certificación de procesos de seguridad y gestión de riesgos",
     iso27701Description:
