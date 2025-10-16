@@ -45,7 +45,7 @@ export function Header() {
         <div className="flex items-center gap-2">
           <div className="flex items-center">
             <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Programa de Prevención en Lavado de Dinero y FT
+              Programa de Prevención en Lavado de Dinero
             </h1>
           </div>
         </div>
