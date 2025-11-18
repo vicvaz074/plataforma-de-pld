@@ -28,4 +28,11 @@ export const DEFAULT_USERS: DefaultUser[] = [
     role: "user",
     approved: true,
   },
+  {
+    name: "David Casero",
+    email: "info@haikulabs.es",
+    password: "$2b$10$aJXnwJTq1I70Jcj2LLm0.O/oEsNV3IVryBBmqMrD8jx0zdsDH24Eu",
+    role: "user",
+    approved: true,
+  },
 ]
