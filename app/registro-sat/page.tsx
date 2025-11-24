@@ -247,7 +247,7 @@ const tiposSujetos: { value: SubjectType; label: string }[] = [
 
 export default function RegistroSATPage() {
   const { toast } = useToast()
-  const [activeTab, setActiveTab] = useState("registrados")
+  const [activeTab, setActiveTab] = useState("nuevo")
   const [tipoSujeto, setTipoSujeto] = useState<SubjectType>("moral")
   const [nombreSujeto, setNombreSujeto] = useState("")
   const [actividadVulnerable, setActividadVulnerable] = useState("")
@@ -432,6 +432,43 @@ export default function RegistroSATPage() {
     }))
   }
 
+  const camposObligatoriosCapturados = Boolean(nombreSujeto.trim() && actividadVulnerable.trim())
+  const documentosRequeridosCompletos =
+    !!documentosRegistro.detalle && !!documentosRegistro.acuse && !!documentosRegistro.aceptacion
+
+  const limpiarFormulario = () => {
+    setNombreSujeto("")
+    setActividadVulnerable("")
+    setDocumentosRegistro({ detalle: null, acuse: null, aceptacion: null })
+    setDatosChecklistState(createDefaultDatosChecklistState())
+  }
+
+  const registrarSujetoManual = () => {
+    if (!camposObligatoriosCapturados) {
+      toast({
+        title: "Faltan datos clave",
+        description: "Captura el nombre del sujeto obligado y la actividad vulnerable.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!documentosRequeridosCompletos) {
+      toast({
+        title: "Carga los tres documentos",
+        description: "El detalle, acuse y aceptación son necesarios para concluir el registro.",
+        variant: "destructive",
+      })
+    }
+
+    registrarSujetoSiListo(documentosRegistro)
+
+    if (documentosRequeridosCompletos) {
+      limpiarFormulario()
+      setActiveTab("registrados")
+    }
+  }
+
   const registrarSujetoSiListo = (docs: Record<RegistroDocumentKey, DocumentUpload | null>) => {
     if (!nombreSujeto.trim() || !actividadVulnerable.trim()) return
     if (!docs.detalle || !docs.acuse || !docs.aceptacion) return
@@ -533,31 +570,43 @@ export default function RegistroSATPage() {
   const documentosCompletados = (Object.values(documentosRegistro).filter(Boolean) as DocumentUpload[]).length
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <div className="container mx-auto space-y-6 py-6">
       <div className="space-y-4">
-        <div className="flex items-center space-x-2">
-          <Building2 className="h-8 w-8 text-primary" />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Alta y Registro ante el SAT</h1>
-            <p className="text-muted-foreground">
-              Gestiona sujetos obligados, carga automática de detalle, acuse y aceptación, y checklist guiado por anexos.
-            </p>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+              <Building2 className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Alta y Registro ante el SAT</h1>
+              <p className="text-muted-foreground">
+                Gestiona sujetos obligados, carga automática de detalle, acuse y aceptación, y checklist guiado por anexos.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline" className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Sesión guardada en este navegador
+            </Badge>
+            <Badge variant="secondary">Registro ágil y responsivo</Badge>
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="sm:col-span-2 xl:col-span-1">
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground">Sujetos obligados registrados</p>
               <p className="text-3xl font-bold">{sujetosRegistrados.length}</p>
+              <p className="text-xs text-muted-foreground">Cada carga con detalle, acuse y aceptación crea un registro.</p>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="space-y-2 pt-6">
               <p className="text-sm text-muted-foreground">Avance del checklist</p>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <p className="text-3xl font-bold">{datosChecklistResumen.progreso}%</p>
-                <Progress value={datosChecklistResumen.progreso} className="h-2 w-32" />
+                <Progress value={datosChecklistResumen.progreso} className="h-2 flex-1" />
               </div>
               <p className="text-xs text-muted-foreground">
                 {datosChecklistResumen.completados} de {datosChecklistResumen.total} datos listos
@@ -565,10 +614,20 @@ export default function RegistroSATPage() {
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="space-y-2 pt-6">
               <p className="text-sm text-muted-foreground">Documentos del alta cargados</p>
               <p className="text-3xl font-bold">{documentosCompletados} / 3</p>
               <p className="text-xs text-muted-foreground">Detalle, acuse y aceptación de designación.</p>
+            </CardContent>
+          </Card>
+          <Card className="sm:col-span-2 xl:col-span-1">
+            <CardContent className="space-y-2 pt-6">
+              <p className="text-sm font-semibold">Guía rápida</p>
+              <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+                <li>Captura el tipo de sujeto y actividad vulnerable.</li>
+                <li>Adjunta detalle, acuse y aceptación (botones abajo).</li>
+                <li>Usa el botón Registrar sujeto para confirmar.</li>
+              </ul>
             </CardContent>
           </Card>
         </div>
@@ -588,7 +647,7 @@ export default function RegistroSATPage() {
 
         <TabsContent value="registrados" className="space-y-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="space-y-1">
               <CardTitle className="flex items-center gap-2">
                 <ClipboardList className="h-5 w-5" />
                 Sujetos obligados registrados
@@ -596,6 +655,14 @@ export default function RegistroSATPage() {
               <CardDescription>
                 Selecciona un registro para ver la información extraída de los documentos de detalle, acuse y aceptación.
               </CardDescription>
+              {sujetosRegistrados.length === 0 && (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+                  <span>No hay registros aún.</span>
+                  <Button size="sm" onClick={() => setActiveTab("nuevo")}>
+                    Comenzar un registro
+                  </Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="grid gap-4 lg:grid-cols-3">
               <div className="lg:col-span-1">
@@ -737,11 +804,25 @@ export default function RegistroSATPage() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Documentos obligatorios del alta</CardTitle>
-              <CardDescription>
-                Carga detalle, acuse y aceptación de designación de encargado. Al tener los tres, se registrará automáticamente.
-              </CardDescription>
+            <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-1">
+                <CardTitle>Documentos obligatorios del alta</CardTitle>
+                <CardDescription>
+                  Carga detalle, acuse y aceptación de designación de encargado. Al tener los tres, se registrará automáticamente.
+                </CardDescription>
+              </div>
+              <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
+                <Button
+                  className="w-full md:w-auto"
+                  onClick={registrarSujetoManual}
+                  disabled={!camposObligatoriosCapturados || !documentosRequeridosCompletos}
+                >
+                  Registrar sujeto obligado
+                </Button>
+                <p className="text-xs text-muted-foreground text-left md:text-right">
+                  Se confirmará el registro y el formulario quedará listo para el siguiente sujeto.
+                </p>
+              </div>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-3">
               {(
@@ -788,6 +869,23 @@ export default function RegistroSATPage() {
                   </div>
                 )
               })}
+              <div className="md:col-span-3 grid gap-3 rounded-lg border bg-muted/40 p-4">
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                    <ClipboardList className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-semibold">Checklist listo para múltiples registros</p>
+                    <p className="text-sm text-muted-foreground">
+                      Reutiliza el checklist para cada sujeto. Al registrar, el formulario se limpia para iniciar el siguiente.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <Badge variant={camposObligatoriosCapturados ? "default" : "outline"}>Datos capturados</Badge>
+                  <Badge variant={documentosRequeridosCompletos ? "default" : "outline"}>Documentos listos</Badge>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
