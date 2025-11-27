@@ -262,6 +262,7 @@ export default function RegistroSATPage() {
   const [documentos, setDocumentos] = useState<DocumentUpload[]>([])
   const [sujetosRegistrados, setSujetosRegistrados] = useState<SujetoRegistrado[]>([])
   const [sujetoSeleccionadoId, setSujetoSeleccionadoId] = useState<string | null>(null)
+  const [sujetoEnEdicionId, setSujetoEnEdicionId] = useState<string | null>(null)
   const [datosChecklistState, setDatosChecklistState] = useState<DatosChecklistState>(() =>
     createDefaultDatosChecklistState(),
   )
@@ -445,6 +446,27 @@ export default function RegistroSATPage() {
     }))
   }
 
+  const obtenerChecklistDesdeCamposConfirmados = (
+    camposConfirmados: string[],
+    tipo: SubjectType,
+  ): DatosChecklistState => {
+    const checklist = createDefaultDatosChecklistState()
+
+    datosAltaRegistro
+      .filter((section) => section.appliesTo.includes(tipo))
+      .flatMap((section) => section.fields)
+      .forEach((field) => {
+        if (camposConfirmados.includes(field.label)) {
+          checklist[field.id] = {
+            completed: true,
+            notes: checklist[field.id]?.notes ?? "",
+          }
+        }
+      })
+
+    return checklist
+  }
+
   const camposObligatoriosCapturados = Boolean(nombreSujeto.trim() && actividadVulnerable.trim())
   const documentosRequeridosCompletos =
     !!documentosRegistro.detalle && !!documentosRegistro.acuse && !!documentosRegistro.aceptacion
@@ -454,6 +476,7 @@ export default function RegistroSATPage() {
     setActividadVulnerable("")
     setDocumentosRegistro({ detalle: null, acuse: null, aceptacion: null })
     setDatosChecklistState(createDefaultDatosChecklistState())
+    setSujetoEnEdicionId(null)
   }
 
   const registrarSujeto = (
@@ -471,12 +494,13 @@ export default function RegistroSATPage() {
       .filter((field) => datosChecklistState[field.id]?.completed)
       .map((field) => field.label)
 
+    const sujetoExistente = sujetosRegistrados.find((item) => item.id === sujetoEnEdicionId)
     const nuevoSujeto: SujetoRegistrado = {
-      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+      id: sujetoExistente?.id ?? (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString()),
       nombre: nombreSujeto.trim(),
       tipo: tipoSujeto,
       actividad: actividadVulnerable.trim(),
-      creadoEn: new Date(),
+      creadoEn: sujetoExistente?.creadoEn ?? new Date(),
       checklistCampos: camposChecklist,
       documentos: {
         detalle: docs.detalle,
@@ -487,7 +511,9 @@ export default function RegistroSATPage() {
     }
 
     setSujetosRegistrados((prev) => {
-      const existenteIndex = prev.findIndex((item) => item.nombre === nuevoSujeto.nombre && item.tipo === tipoSujeto)
+      const existenteIndex = sujetoExistente
+        ? prev.findIndex((item) => item.id === sujetoExistente.id)
+        : prev.findIndex((item) => item.nombre === nuevoSujeto.nombre && item.tipo === tipoSujeto)
       if (existenteIndex >= 0) {
         const copia = [...prev]
         copia[existenteIndex] = nuevoSujeto
@@ -497,12 +523,19 @@ export default function RegistroSATPage() {
     })
     setSujetoSeleccionadoId(nuevoSujeto.id)
     setDocumentosRegistro({ detalle: null, acuse: null, aceptacion: null })
+    setSujetoEnEdicionId(null)
 
     toast({
-      title: registroCompleto ? "Sujeto obligado registrado" : "Registro guardado incompleto",
-      description: registroCompleto
-        ? "Los documentos de detalle, acuse y aceptación registraron al sujeto automáticamente."
-        : "Los documentos obligatorios están pendientes. Completa el expediente para finalizar el alta.",
+      title: sujetoExistente
+        ? "Sujeto obligado actualizado"
+        : registroCompleto
+          ? "Sujeto obligado registrado"
+          : "Registro guardado incompleto",
+      description: sujetoExistente
+        ? "Los datos y documentos del sujeto se guardaron con los cambios realizados."
+        : registroCompleto
+          ? "Los documentos de detalle, acuse y aceptación registraron al sujeto automáticamente."
+          : "Los documentos obligatorios están pendientes. Completa el expediente para finalizar el alta.",
     })
     return registroCompleto
   }
@@ -557,6 +590,60 @@ export default function RegistroSATPage() {
     }
   }
 
+  const iniciarEdicionSujeto = () => {
+    if (!sujetoSeleccionado) return
+
+    setTipoSujeto(sujetoSeleccionado.tipo)
+    setNombreSujeto(sujetoSeleccionado.nombre)
+    setActividadVulnerable(sujetoSeleccionado.actividad)
+    setDocumentosRegistro(sujetoSeleccionado.documentos)
+    setDatosChecklistState(
+      obtenerChecklistDesdeCamposConfirmados(sujetoSeleccionado.checklistCampos, sujetoSeleccionado.tipo),
+    )
+    setSujetoEnEdicionId(sujetoSeleccionado.id)
+    setActiveTab("nuevo")
+
+    toast({
+      title: "Edición en curso",
+      description: "Actualiza los datos y vuelve a guardar para mantener los cambios.",
+    })
+  }
+
+  const cancelarEdicion = () => {
+    setSujetoEnEdicionId(null)
+    limpiarFormulario()
+  }
+
+  const eliminarSujetoSeleccionado = () => {
+    if (!sujetoSeleccionado) return
+
+    const confirmar = window.confirm(
+      "¿Deseas eliminar este sujeto obligado? Esta acción no se puede deshacer.",
+    )
+    if (!confirmar) return
+
+    const idEliminar = sujetoSeleccionado.id
+
+    setSujetosRegistrados((prev) => {
+      const actualizados = prev.filter((item) => item.id !== idEliminar)
+      const siguienteSeleccion = actualizados[0]?.id ?? null
+      setSujetoSeleccionadoId((seleccionActual) => {
+        if (seleccionActual && seleccionActual !== idEliminar) return seleccionActual
+        return siguienteSeleccion
+      })
+      return actualizados
+    })
+
+    if (sujetoEnEdicionId === idEliminar) {
+      cancelarEdicion()
+    }
+
+    toast({
+      title: "Sujeto eliminado",
+      description: "El registro se eliminó de la lista de sujetos obligados.",
+    })
+  }
+
   const manejarCargaDocumento = async (event: ChangeEvent<HTMLInputElement>, tipo: string) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -582,6 +669,7 @@ export default function RegistroSATPage() {
 
   const sujetoSeleccionado = sujetosRegistrados.find((item) => item.id === sujetoSeleccionadoId)
   const documentosCompletados = (Object.values(documentosRegistro).filter(Boolean) as DocumentUpload[]).length
+  const enEdicion = Boolean(sujetoEnEdicionId)
 
   return (
     <div className="container mx-auto space-y-6 py-6">
@@ -718,13 +806,13 @@ export default function RegistroSATPage() {
 
               <div className="lg:col-span-2">
                 {sujetoSeleccionado ? (
-                  <div className="space-y-4 rounded-lg border p-4">
-                    <div className="flex flex-wrap items-center gap-3 justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Sujeto obligado</p>
-                        <p className="text-2xl font-semibold">{sujetoSeleccionado.nombre}</p>
-                        <p className="text-sm text-muted-foreground capitalize">{sujetoSeleccionado.tipo}</p>
-                      </div>
+                    <div className="space-y-4 rounded-lg border p-4">
+                      <div className="flex flex-wrap items-center gap-3 justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Sujeto obligado</p>
+                          <p className="text-2xl font-semibold">{sujetoSeleccionado.nombre}</p>
+                          <p className="text-sm text-muted-foreground capitalize">{sujetoSeleccionado.tipo}</p>
+                        </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant={sujetoSeleccionado.registroCompleto ? "secondary" : "destructive"}>
                           {sujetoSeleccionado.registroCompleto ? "Completo" : "Incompleto"}
@@ -732,6 +820,12 @@ export default function RegistroSATPage() {
                         <Badge variant="secondary">
                           Registrado {sujetoSeleccionado.creadoEn.toLocaleDateString()}
                         </Badge>
+                        <Button variant="outline" size="sm" onClick={iniciarEdicionSujeto}>
+                          Editar
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={eliminarSujetoSeleccionado}>
+                          Eliminar
+                        </Button>
                       </div>
                     </div>
 
@@ -788,11 +882,14 @@ export default function RegistroSATPage() {
 
         <TabsContent value="nuevo" className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Datos iniciales</CardTitle>
-              <CardDescription>
-                Define si el sujeto obligado es persona física, moral o fideicomiso y responde qué actividad vulnerable realizará.
-              </CardDescription>
+            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle>Datos iniciales</CardTitle>
+                <CardDescription>
+                  Define si el sujeto obligado es persona física, moral o fideicomiso y responde qué actividad vulnerable realizará.
+                </CardDescription>
+              </div>
+              {enEdicion && <Badge variant="outline">Editando sujeto</Badge>}
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-3">
@@ -836,9 +933,9 @@ export default function RegistroSATPage() {
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div className="space-y-1">
-                <CardTitle>Documentos obligatorios del alta</CardTitle>
+              <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="space-y-1">
+                  <CardTitle>Documentos obligatorios del alta</CardTitle>
                 <CardDescription>
                   Carga detalle, acuse y aceptación de designación de encargado. Si faltan, podrás guardar el registro y quedará
                   marcado como incompleto.
@@ -846,8 +943,13 @@ export default function RegistroSATPage() {
               </div>
               <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
                 <Button className="w-full md:w-auto" onClick={registrarSujetoManual} disabled={!camposObligatoriosCapturados}>
-                  Registrar sujeto obligado
+                  {enEdicion ? "Actualizar sujeto obligado" : "Registrar sujeto obligado"}
                 </Button>
+                {enEdicion && (
+                  <Button variant="ghost" className="w-full md:w-auto" onClick={cancelarEdicion}>
+                    Cancelar edición
+                  </Button>
+                )}
                 <p className="text-xs text-muted-foreground text-left md:text-right">
                   Se confirmará el registro y el formulario quedará listo para el siguiente sujeto.
                 </p>
