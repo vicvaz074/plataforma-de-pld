@@ -53,8 +53,9 @@ interface SujetoRegistrado {
   tipo: SubjectType
   actividad: string
   creadoEn: Date
-  documentos: Record<RegistroDocumentKey, DocumentUpload>
+  documentos: Record<RegistroDocumentKey, DocumentUpload | null>
   checklistCampos: string[]
+  registroCompleto: boolean
 }
 
 type DatosChecklistState = Record<string, { completed: boolean; notes: string }>
@@ -313,36 +314,48 @@ export default function RegistroSATPage() {
       }
 
       const sujetosCargados = Array.isArray(data.sujetosRegistrados)
-        ? data.sujetosRegistrados.map((item: Partial<SujetoRegistrado>) => ({
-            id: item.id ?? crypto.randomUUID(),
-            nombre: item.nombre ?? "",
-            tipo: (item.tipo as SubjectType) ?? "moral",
-            actividad: item.actividad ?? "",
-            creadoEn: item.creadoEn ? new Date(item.creadoEn as unknown as string) : new Date(),
-            checklistCampos: Array.isArray(item.checklistCampos)
-              ? item.checklistCampos.map((campo) => String(campo))
-              : [],
-            documentos: {
-              detalle: item.documentos?.detalle
-                ? {
-                    ...item.documentos.detalle,
-                    uploadDate: new Date(item.documentos.detalle.uploadDate as unknown as string),
-                  }
-                : (null as unknown as DocumentUpload),
-              acuse: item.documentos?.acuse
-                ? {
-                    ...item.documentos.acuse,
-                    uploadDate: new Date(item.documentos.acuse.uploadDate as unknown as string),
-                  }
-                : (null as unknown as DocumentUpload),
-              aceptacion: item.documentos?.aceptacion
-                ? {
-                    ...item.documentos.aceptacion,
-                    uploadDate: new Date(item.documentos.aceptacion.uploadDate as unknown as string),
-                  }
-                : (null as unknown as DocumentUpload),
-            },
-          }))
+        ? data.sujetosRegistrados.map((item: Partial<SujetoRegistrado>) => {
+            const detalle = item.documentos?.detalle
+              ? {
+                  ...item.documentos.detalle,
+                  uploadDate: new Date(item.documentos.detalle.uploadDate as unknown as string),
+                }
+              : null
+
+            const acuse = item.documentos?.acuse
+              ? {
+                  ...item.documentos.acuse,
+                  uploadDate: new Date(item.documentos.acuse.uploadDate as unknown as string),
+                }
+              : null
+
+            const aceptacion = item.documentos?.aceptacion
+              ? {
+                  ...item.documentos.aceptacion,
+                  uploadDate: new Date(item.documentos.aceptacion.uploadDate as unknown as string),
+                }
+              : null
+
+            const registroCompleto =
+              item.registroCompleto === true || (detalle !== null && acuse !== null && aceptacion !== null)
+
+            return {
+              id: item.id ?? crypto.randomUUID(),
+              nombre: item.nombre ?? "",
+              tipo: (item.tipo as SubjectType) ?? "moral",
+              actividad: item.actividad ?? "",
+              creadoEn: item.creadoEn ? new Date(item.creadoEn as unknown as string) : new Date(),
+              checklistCampos: Array.isArray(item.checklistCampos)
+                ? item.checklistCampos.map((campo) => String(campo))
+                : [],
+              documentos: {
+                detalle,
+                acuse,
+                aceptacion,
+              },
+              registroCompleto,
+            }
+          })
         : []
 
       const documentosRegistroGuardados =
@@ -443,35 +456,14 @@ export default function RegistroSATPage() {
     setDatosChecklistState(createDefaultDatosChecklistState())
   }
 
-  const registrarSujetoManual = () => {
-    if (!camposObligatoriosCapturados) {
-      toast({
-        title: "Faltan datos clave",
-        description: "Captura el nombre del sujeto obligado y la actividad vulnerable.",
-        variant: "destructive",
-      })
-      return
-    }
+  const registrarSujeto = (
+    docs: Record<RegistroDocumentKey, DocumentUpload | null>,
+    opciones?: { permitirIncompleto?: boolean },
+  ) => {
+    if (!nombreSujeto.trim() || !actividadVulnerable.trim()) return false
 
-    if (!documentosRequeridosCompletos) {
-      toast({
-        title: "Carga los tres documentos",
-        description: "El detalle, acuse y aceptación son necesarios para concluir el registro.",
-        variant: "destructive",
-      })
-    }
-
-    registrarSujetoSiListo(documentosRegistro)
-
-    if (documentosRequeridosCompletos) {
-      limpiarFormulario()
-      setActiveTab("registrados")
-    }
-  }
-
-  const registrarSujetoSiListo = (docs: Record<RegistroDocumentKey, DocumentUpload | null>) => {
-    if (!nombreSujeto.trim() || !actividadVulnerable.trim()) return
-    if (!docs.detalle || !docs.acuse || !docs.aceptacion) return
+    const registroCompleto = !!(docs.detalle && docs.acuse && docs.aceptacion)
+    if (!registroCompleto && !opciones?.permitirIncompleto) return false
 
     const camposChecklist = datosAltaRegistro
       .filter((section) => section.appliesTo.includes(tipoSujeto))
@@ -491,6 +483,7 @@ export default function RegistroSATPage() {
         acuse: docs.acuse,
         aceptacion: docs.aceptacion,
       },
+      registroCompleto,
     }
 
     setSujetosRegistrados((prev) => {
@@ -506,9 +499,30 @@ export default function RegistroSATPage() {
     setDocumentosRegistro({ detalle: null, acuse: null, aceptacion: null })
 
     toast({
-      title: "Sujeto obligado registrado",
-      description: "Los documentos de detalle, acuse y aceptación registraron al sujeto automáticamente.",
+      title: registroCompleto ? "Sujeto obligado registrado" : "Registro guardado incompleto",
+      description: registroCompleto
+        ? "Los documentos de detalle, acuse y aceptación registraron al sujeto automáticamente."
+        : "Los documentos obligatorios están pendientes. Completa el expediente para finalizar el alta.",
     })
+    return registroCompleto
+  }
+
+  const registrarSujetoManual = () => {
+    if (!camposObligatoriosCapturados) {
+      toast({
+        title: "Faltan datos clave",
+        description: "Captura el nombre del sujeto obligado y la actividad vulnerable.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const registroCompleto = registrarSujeto(documentosRegistro, { permitirIncompleto: true })
+    setActiveTab("registrados")
+
+    if (registroCompleto) {
+      limpiarFormulario()
+    }
   }
 
   const manejarCargaDocumentoRegistro = async (
@@ -523,7 +537,7 @@ export default function RegistroSATPage() {
       setDocumentos((prev) => [documento, ...prev])
       setDocumentosRegistro((prev) => {
         const actualizado = { ...prev, [tipoDoc]: documento }
-        registrarSujetoSiListo(actualizado)
+        registrarSujeto(actualizado)
         return actualizado
       })
 
@@ -647,17 +661,17 @@ export default function RegistroSATPage() {
 
         <TabsContent value="registrados" className="space-y-4">
           <Card>
-            <CardHeader className="space-y-1">
-              <CardTitle className="flex items-center gap-2">
-                <ClipboardList className="h-5 w-5" />
-                Sujetos obligados registrados
-              </CardTitle>
-              <CardDescription>
-                Selecciona un registro para ver la información extraída de los documentos de detalle, acuse y aceptación.
-              </CardDescription>
-              {sujetosRegistrados.length === 0 && (
-                <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
-                  <span>No hay registros aún.</span>
+              <CardHeader className="space-y-1">
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5" />
+                  Sujetos obligados registrados
+                </CardTitle>
+                <CardDescription>
+                  Selecciona un registro para ver la información cargada y confirmar si el expediente está completo.
+                </CardDescription>
+                {sujetosRegistrados.length === 0 && (
+                  <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+                    <span>No hay registros aún.</span>
                   <Button size="sm" onClick={() => setActiveTab("nuevo")}>
                     Comenzar un registro
                   </Button>
@@ -668,7 +682,7 @@ export default function RegistroSATPage() {
               <div className="lg:col-span-1">
                 {sujetosRegistrados.length === 0 ? (
                   <p className="text-muted-foreground text-sm">
-                    Aún no hay sujetos obligados registrados. Carga los tres documentos para crear el primero.
+                    Aún no hay sujetos obligados registrados. Ingresa los datos iniciales y agrega documentos cuando los tengas.
                   </p>
                 ) : (
                   <ScrollArea className="h-[320px] pr-4">
@@ -685,7 +699,12 @@ export default function RegistroSATPage() {
                           <div className="flex items-center justify-between">
                             <div className="space-y-1">
                               <p className="font-semibold">{sujeto.nombre}</p>
-                              <p className="text-xs text-muted-foreground capitalize">{sujeto.tipo}</p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-xs text-muted-foreground capitalize">{sujeto.tipo}</p>
+                                <Badge variant={sujeto.registroCompleto ? "secondary" : "destructive"}>
+                                  {sujeto.registroCompleto ? "Completo" : "Incompleto"}
+                                </Badge>
+                              </div>
                             </div>
                             <Badge variant="outline">{sujeto.creadoEn.toLocaleDateString()}</Badge>
                           </div>
@@ -700,13 +719,20 @@ export default function RegistroSATPage() {
               <div className="lg:col-span-2">
                 {sujetoSeleccionado ? (
                   <div className="space-y-4 rounded-lg border p-4">
-                    <div className="flex flex-wrap items-center gap-2 justify-between">
+                    <div className="flex flex-wrap items-center gap-3 justify-between">
                       <div>
                         <p className="text-sm text-muted-foreground">Sujeto obligado</p>
                         <p className="text-2xl font-semibold">{sujetoSeleccionado.nombre}</p>
                         <p className="text-sm text-muted-foreground capitalize">{sujetoSeleccionado.tipo}</p>
                       </div>
-                      <Badge variant="secondary">Registrado {sujetoSeleccionado.creadoEn.toLocaleDateString()}</Badge>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={sujetoSeleccionado.registroCompleto ? "secondary" : "destructive"}>
+                          {sujetoSeleccionado.registroCompleto ? "Completo" : "Incompleto"}
+                        </Badge>
+                        <Badge variant="secondary">
+                          Registrado {sujetoSeleccionado.creadoEn.toLocaleDateString()}
+                        </Badge>
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -717,14 +743,20 @@ export default function RegistroSATPage() {
                     <div className="space-y-3">
                       <p className="text-sm font-semibold">Documentos cargados</p>
                       <div className="grid gap-3 md:grid-cols-3">
-                        {(Object.entries(sujetoSeleccionado.documentos) as [RegistroDocumentKey, DocumentUpload][]).map(
+                        {(Object.entries(sujetoSeleccionado.documentos) as [RegistroDocumentKey, DocumentUpload | null][]).map(
                           ([key, doc]) => (
-                            <div key={key} className="rounded-lg border p-3">
+                            <div key={key} className="rounded-lg border p-3 space-y-1">
                               <p className="text-xs text-muted-foreground uppercase">{key}</p>
-                              <p className="font-medium break-words">{doc.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {doc.uploadDate.toLocaleDateString()} · {(doc.size / 1024).toFixed(1)} KB
-                              </p>
+                              {doc ? (
+                                <>
+                                  <p className="font-medium break-words">{doc.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {doc.uploadDate.toLocaleDateString()} · {(doc.size / 1024).toFixed(1)} KB
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">Pendiente de carga</p>
+                              )}
                             </div>
                           ),
                         )}
@@ -768,7 +800,7 @@ export default function RegistroSATPage() {
                   <Button
                     key={tipo.value}
                     variant={tipoSujeto === tipo.value ? "default" : "outline"}
-                    className="justify-start"
+                    className="h-full w-full justify-start text-left whitespace-normal break-words max-w-full"
                     onClick={() => setTipoSujeto(tipo.value)}
                   >
                     <div className="flex flex-col text-left">
@@ -808,15 +840,12 @@ export default function RegistroSATPage() {
               <div className="space-y-1">
                 <CardTitle>Documentos obligatorios del alta</CardTitle>
                 <CardDescription>
-                  Carga detalle, acuse y aceptación de designación de encargado. Al tener los tres, se registrará automáticamente.
+                  Carga detalle, acuse y aceptación de designación de encargado. Si faltan, podrás guardar el registro y quedará
+                  marcado como incompleto.
                 </CardDescription>
               </div>
               <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
-                <Button
-                  className="w-full md:w-auto"
-                  onClick={registrarSujetoManual}
-                  disabled={!camposObligatoriosCapturados || !documentosRequeridosCompletos}
-                >
+                <Button className="w-full md:w-auto" onClick={registrarSujetoManual} disabled={!camposObligatoriosCapturados}>
                   Registrar sujeto obligado
                 </Button>
                 <p className="text-xs text-muted-foreground text-left md:text-right">
