@@ -28,7 +28,6 @@ export const translations = {
     expedienteUnico: "Expediente único de identificación",
     avisosInformes: "Avisos e informes",
     beneficiarioControlador: "Beneficiario Controlador",
-    monitoreoOperaciones: "Monitoreo y acumulación de operaciones",
     capacitacionControl: "Capacitación y Control Interno",
     auditoriaVerificacion: "Auditoría y Verificación Interna",
     evidenciasTrazabilidad: "Evidencias y Trazabilidad",
@@ -73,8 +72,6 @@ export const translations = {
       "Gestión integral de avisos regulatorios e informes internos, incluyendo la generación y envío electrónico dentro de los plazos legales.",
     beneficiarioControladorDescription:
       "Identificación y actualización periódica de las personas físicas con control directo o indirecto.",
-    monitoreoOperacionesDescription:
-      "Vigilancia en tiempo real de operaciones relevantes, inusuales e internas preocupantes con detalle por operación y acumulación semestral.",
     capacitacionControlDescription: "Planificación, ejecución y registro de la capacitación anual obligatoria.",
     auditoriaVerificacionDescription:
       "Revisiones documentales y atención a observaciones de SAT/UIF con planes de acción.",
@@ -186,36 +183,6 @@ export const translations = {
     beneficiarioControladorTitle: "Beneficiario Controlador",
     beneficiarioControladorSubtitle:
       "Módulo para identificar a la(s) persona(s) física(s) que obtienen el beneficio o ejercen control efectivo sobre el cliente",
-    monitoreoOperacionesTitle: "Monitoreo y Acumulación de Operaciones",
-    monitoreoOperacionesSubtitle:
-      "Módulo para vigilar en tiempo real y de manera acumulada las operaciones de los clientes",
-
-    // Monitoreo Operaciones sections
-    acumulacionSemestral: "Acumulación semestral (art. 19 RCG)",
-    operacionesInusuales: "Operaciones inusuales",
-    fraccionamiento: "Fraccionamiento",
-    operacionesInternasPreocupantes: "Operaciones internas preocupantes",
-    validacionContraListas: "Validación contra listas",
-
-    // Monitoreo Operaciones document categories
-    evidenciasGenerales: "A. Generales",
-    evidenciasGeneralesDescription: "Documentos generales del sistema",
-    evidenciasOperacionesInusuales: "B. Operaciones inusuales",
-    evidenciasOperacionesInusualesDescription: "Detección y análisis",
-    evidenciasFraccionamiento: "C. Fraccionamiento",
-    evidenciasFraccionamientoDescription: "Detección de operaciones fraccionadas",
-    evidenciasOperacionesInternas: "D. Operaciones internas preocupantes",
-    evidenciasOperacionesInternasDescription: "Monitoreo interno",
-    evidenciasValidacionListas: "E. Validación en listas",
-    evidenciasValidacionListasDescription: "Consultas a listas restrictivas",
-
-    // Monitoreo Operaciones recommendations
-    automatizacionAcumulacion: "Automatización de acumulación semestral",
-    alertasInteligentes: "Alertas inteligentes",
-    formularioDinamicoClasificacion: "Formulario dinámico de clasificación",
-    cargaDocumentalTrazabilidad: "Carga documental y trazabilidad",
-    integracionModulos: "Integración con otros módulos",
-    auditoriaConservacion: "Auditoría y conservación",
 
     // Beneficiario Controlador sections
     existenciaDeclaracion: "Existencia y declaración",
@@ -272,7 +239,6 @@ export const translations = {
     expedienteUnico: "Unique identification file",
     avisosInformes: "Notices and reports",
     beneficiarioControlador: "Controlling Beneficiary",
-    monitoreoOperaciones: "Operations monitoring and accumulation",
     capacitacionControl: "Training and Internal Control",
     auditoriaVerificacion: "Audit and Internal Verification",
     evidenciasTrazabilidad: "Evidence and Traceability",
@@ -314,8 +280,6 @@ export const translations = {
       "Comprehensive management of regulatory notices and internal reports, including generating and submitting electronic notices within legal deadlines.",
     beneficiarioControladorDescription:
       "Identification and periodic updating of natural persons with direct or indirect control.",
-    monitoreoOperacionesDescription:
-      "Real-time surveillance of relevant, unusual and concerning internal operations with per-transaction detail and semi-annual accumulation.",
     capacitacionControlDescription: "Planning, execution and recording of mandatory annual training.",
     auditoriaVerificacionDescription: "Documentary reviews and attention to SAT/UIF observations with action plans.",
     evidenciasTrazabilidadDescription:
@@ -424,35 +388,6 @@ export const translations = {
     beneficiarioControladorTitle: "Controlling Beneficiary",
     beneficiarioControladorSubtitle:
       "Module to identify the natural person(s) who obtain the benefit or exercise effective control over the client",
-    monitoreoOperacionesTitle: "Operations Monitoring and Accumulation",
-    monitoreoOperacionesSubtitle: "Module to monitor client operations in real-time and cumulatively",
-
-    // Monitoreo Operaciones sections
-    acumulacionSemestral: "Semi-annual accumulation (art. 19 RCG)",
-    operacionesInusuales: "Unusual operations",
-    fraccionamiento: "Structuring",
-    operacionesInternasPreocupantes: "Concerning internal operations",
-    validacionContraListas: "List validation",
-
-    // Monitoreo Operaciones document categories
-    evidenciasGenerales: "A. General",
-    evidenciasGeneralesDescription: "General system documents",
-    evidenciasOperacionesInusuales: "B. Unusual operations",
-    evidenciasOperacionesInusualesDescription: "Detection and analysis",
-    evidenciasFraccionamiento: "C. Structuring",
-    evidenciasFraccionamientoDescription: "Structured operations detection",
-    evidenciasOperacionesInternas: "D. Concerning internal operations",
-    evidenciasOperacionesInternasDescription: "Internal monitoring",
-    evidenciasValidacionListas: "E. List validation",
-    evidenciasValidacionListasDescription: "Restrictive list queries",
-
-    // Monitoreo Operaciones recommendations
-    automatizacionAcumulacion: "Semi-annual accumulation automation",
-    alertasInteligentes: "Intelligent alerts",
-    formularioDinamicoClasificacion: "Dynamic classification form",
-    cargaDocumentalTrazabilidad: "Document upload and traceability",
-    integracionModulos: "Integration with other modules",
-    auditoriaConservacion: "Audit and conservation",
 
     // Beneficiario Controlador sections
     existenciaDeclaracion: "Existence and declaration",
