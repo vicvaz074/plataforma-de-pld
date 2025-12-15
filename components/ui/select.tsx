@@ -74,7 +74,27 @@ const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
 >(({ className, children, value, ...props }, ref) => {
-  if (value === undefined || value === null || (typeof value === "string" && value.trim() === "")) {
+  const normalizedValue = React.useMemo(() => {
+    if (value !== undefined && value !== null) {
+      if (typeof value === "string" && value.trim() === "" && typeof children === "string") {
+        return children.trim()
+      }
+
+      return value
+    }
+
+    if (typeof children === "string" && children.trim() !== "") {
+      return children.trim()
+    }
+
+    return undefined
+  }, [value, children])
+
+  if (
+    normalizedValue === undefined ||
+    normalizedValue === null ||
+    (typeof normalizedValue === "string" && normalizedValue.trim() === "")
+  ) {
     console.warn("SelectItem must have a non-empty value. Item skipped.")
     return null
   }
@@ -86,7 +106,7 @@ const SelectItem = React.forwardRef<
         "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
-      value={value}
+      value={normalizedValue}
       {...props}
     >
       <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
