@@ -1360,6 +1360,16 @@ export default function ActividadesVulnerablesPage() {
   const [actividadInfoKey, setActividadInfoKey] = useState<string | null>(null)
   const [infoModal, setInfoModal] = useState<InfoModalKey | null>(null)
   const [tabActiva, setTabActiva] = useState<"resumen" | "captura" | "seguimiento" | "explorar">("resumen")
+  const [registroModo, setRegistroModo] = useState<"consulta" | "nuevo">("consulta")
+  const [expedienteConsultaId, setExpedienteConsultaId] = useState<string | null>(null)
+  const [sujetoConsulta, setSujetoConsulta] = useState<string>("")
+  const [relacionNegocios, setRelacionNegocios] = useState(false)
+  const [relacionNegociosOpen, setRelacionNegociosOpen] = useState(false)
+  const [sujetoObligadoOperacion, setSujetoObligadoOperacion] = useState<string>("")
+  const [clienteOperacionSeleccionado, setClienteOperacionSeleccionado] = useState<string>("")
+  const [actividadOperacionSeleccionada, setActividadOperacionSeleccionada] = useState<string>("")
+  const [anioOperacionCaptura, setAnioOperacionCaptura] = useState<number>(currentYear)
+  const [mesOperacionCaptura, setMesOperacionCaptura] = useState<number>(currentMonth)
   const [clienteCalendario, setClienteCalendario] = useState<string | null>(null)
   const [mesCalendario, setMesCalendario] = useState<number>(currentMonth)
   const [anioCalendario, setAnioCalendario] = useState<number>(currentYear)
@@ -1697,12 +1707,75 @@ export default function ActividadesVulnerablesPage() {
     [expedienteSeleccionado, expedientesDetalle],
   )
 
+  const expedienteConsultaActual = useMemo(
+    () => (expedienteConsultaId ? expedientesDetalle[expedienteConsultaId] ?? null : null),
+    [expedienteConsultaId, expedientesDetalle],
+  )
+
   const expedientesDisponibles = useMemo(
     () =>
       Object.values(expedientesDetalle).sort((a, b) =>
         (a.nombre ?? a.rfc).localeCompare(b.nombre ?? b.rfc, "es"),
       ),
     [expedientesDetalle],
+  )
+
+  const fechaBaseExpediente = expedienteActual?.actualizadoEn
+  const fechaBaseConsulta = expedienteConsultaActual?.actualizadoEn
+
+  const siguienteRevisionAnual = useMemo(() => {
+    if (!relacionNegocios) return null
+    const fechaBase = fechaBaseConsulta ?? fechaBaseExpediente
+    if (!fechaBase) return null
+    const fecha = new Date(fechaBase)
+    fecha.setFullYear(fecha.getFullYear() + 1)
+    return fecha.toISOString().substring(0, 10)
+  }, [fechaBaseConsulta, fechaBaseExpediente, relacionNegocios])
+
+  const sujetosObligadosDisponibles = useMemo(() => {
+    const mapa = new Map<string, string>()
+    expedientesDisponibles.forEach((expediente) => {
+      const clave = expediente.claveSujetoObligado ?? expediente.rfc
+      const etiquetaBase = expediente.nombre ?? expediente.rfc
+      if (!mapa.has(clave)) {
+        mapa.set(clave, expediente.claveSujetoObligado ? `${expediente.claveSujetoObligado} – ${etiquetaBase}` : etiquetaBase)
+      }
+    })
+    return Array.from(mapa.entries()).map(([value, label]) => ({ value, label }))
+  }, [expedientesDisponibles])
+
+  const clientesPorSujetoObligado = useMemo(
+    () =>
+      expedientesDisponibles
+        .filter((expediente) => {
+          if (!sujetoObligadoOperacion) return true
+          return (expediente.claveSujetoObligado ?? expediente.rfc) === sujetoObligadoOperacion
+        })
+        .map((expediente) => ({
+          value: expediente.rfc,
+          label: expediente.nombre ?? expediente.rfc,
+          actividad: expediente.claveActividadVulnerable,
+        })),
+    [expedientesDisponibles, sujetoObligadoOperacion],
+  )
+
+  const actividadesRegistradasCliente = useMemo(() => {
+    const expedienteCliente = expedientesDisponibles.find(
+      (expediente) => expediente.rfc === clienteOperacionSeleccionado,
+    )
+    if (!expedienteCliente?.claveActividadVulnerable) return []
+    const actividad = actividadesVulnerables.find(
+      (item) => item.key === expedienteCliente.claveActividadVulnerable,
+    )
+    return actividad ? [actividad] : []
+  }, [clienteOperacionSeleccionado, expedientesDisponibles])
+
+  const actividadOperacionDetalle = useMemo(
+    () =>
+      actividadesRegistradasCliente.find(
+        (actividad) => actividad.key === actividadOperacionSeleccionada,
+      ) ?? actividadesRegistradasCliente[0],
+    [actividadOperacionSeleccionada, actividadesRegistradasCliente],
   )
 
   const personasExpediente = expedienteActual?.personas ?? []
@@ -1880,6 +1953,35 @@ export default function ActividadesVulnerablesPage() {
       setClaveActividad(expedienteActual.claveActividadVulnerable)
     }
   }, [personaExpediente, expedienteActual])
+
+  useEffect(() => {
+    if (clientesPorSujetoObligado.length === 0) {
+      setClienteOperacionSeleccionado("")
+      return
+    }
+
+    if (!clientesPorSujetoObligado.some((cliente) => cliente.value === clienteOperacionSeleccionado)) {
+      setClienteOperacionSeleccionado(clientesPorSujetoObligado[0].value)
+    }
+  }, [clientesPorSujetoObligado, clienteOperacionSeleccionado])
+
+  useEffect(() => {
+    if (actividadesRegistradasCliente.length === 0) {
+      if (actividadOperacionSeleccionada !== "") {
+        setActividadOperacionSeleccionada("")
+      }
+      return
+    }
+
+    if (!actividadOperacionSeleccionada) {
+      setActividadOperacionSeleccionada(actividadesRegistradasCliente[0].key)
+      return
+    }
+
+    if (!actividadesRegistradasCliente.some((actividad) => actividad.key === actividadOperacionSeleccionada)) {
+      setActividadOperacionSeleccionada(actividadesRegistradasCliente[0].key)
+    }
+  }, [actividadOperacionSeleccionada, actividadesRegistradasCliente])
 
   useEffect(() => {
     if (!inmuebleForm.codigoPostal) {
@@ -3410,11 +3512,11 @@ const cambiarMesCalendario = (delta: number) => {
           <div className="max-w-2xl space-y-3">
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
               <ShieldAlert className="h-4 w-4" />
-              Monitor de actividades vulnerables
+              Registro de actos y operaciones
             </div>
-            <h1 className="text-2xl font-semibold text-slate-900">Tablero operativo de Actividades Vulnerables</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">Tablero operativo de Registro de actos y operaciones</h1>
             <p className="text-sm text-slate-600">
-              Organiza la captura guiada, el seguimiento de obligaciones y la exploración normativa en un solo espacio dividido por áreas.
+              Organiza la consulta de expedientes de identificación, la creación de nuevos expedientes y la captura mensual de actos u operaciones con los sujetos obligados y clientes registrados.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -3568,6 +3670,322 @@ const cambiarMesCalendario = (delta: number) => {
         </TabsContent>
 
         <TabsContent value="captura" className="space-y-4">
+          <Card className="border-emerald-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-emerald-600" /> Registro de actos y operaciones
+              </CardTitle>
+              <CardDescription>
+                Reestructura el módulo en dos opciones: consulta de expedientes de identificación existentes o creación de un
+                nuevo expediente antes de capturar operaciones.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Tabs value={registroModo} onValueChange={(value) => setRegistroModo(value as "consulta" | "nuevo")}
+                className="space-y-4"
+              >
+                <TabsList className="grid w-full gap-2 rounded-xl bg-emerald-50 p-1 sm:grid-cols-2">
+                  <TabsTrigger value="consulta" className="text-sm">Opción 1: Consulta expediente de identificación</TabsTrigger>
+                  <TabsTrigger value="nuevo" className="text-sm">Opción 2: Crear nuevo expediente</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="consulta" className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>¿Quién es el sujeto obligado?</Label>
+                      <Select value={sujetoConsulta} onValueChange={setSujetoConsulta}>
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Selecciona un sujeto obligado" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {sujetosObligadosDisponibles.length > 0 ? (
+                            sujetosObligadosDisponibles.map((opcion) => (
+                              <SelectItem key={opcion.value} value={opcion.value}>
+                                {opcion.label}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-sm text-muted-foreground">Sin expedientes cargados</div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Confirma si ya existe un expediente dado de alta antes de continuar con la captura.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Expediente de identificación</Label>
+                      <Select
+                        value={expedienteConsultaId ?? undefined}
+                        onValueChange={(valor) => setExpedienteConsultaId(valor)}
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Selecciona un expediente" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {expedientesDisponibles.length > 0 ? (
+                            expedientesDisponibles.map((expediente) => (
+                              <SelectItem key={expediente.rfc} value={expediente.rfc}>
+                                {expediente.nombre ?? expediente.rfc}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-sm text-muted-foreground">No hay expedientes en memoria</div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">Consulta el expediente antes de registrar actos u operaciones.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Documentos y datos a requerir (Anexo 3)</Label>
+                      <ScrollArea className="h-24 rounded border bg-slate-50 p-3 text-xs text-slate-700">
+                        <ul className="space-y-1 list-disc pl-4">
+                          <li>Identificación oficial vigente del cliente y del representante.</li>
+                          <li>Comprobantes de domicilio y datos de contacto.</li>
+                          <li>Información fiscal y perfil transaccional declarado.</li>
+                          <li>Documentos que acrediten la actividad vulnerable registrada.</li>
+                        </ul>
+                      </ScrollArea>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Cargar identificación del sujeto obligado</Label>
+                      <Input type="file" className="bg-white" />
+                      <p className="text-xs text-muted-foreground">Carga rápida de la identificación para mantener el expediente completo.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                    <Checkbox
+                      id="relacion-negocios"
+                      checked={relacionNegocios}
+                      onCheckedChange={(valor) => setRelacionNegocios(Boolean(valor))}
+                    />
+                    <div className="space-y-1">
+                      <Label htmlFor="relacion-negocios">¿La actividad vulnerable constituye una relación de negocios?</Label>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span>Si es afirmativa, se debe actualizar el expediente al menos una vez al año.</span>
+                        <Button variant="link" className="h-auto p-0 text-emerald-700" onClick={() => setRelacionNegociosOpen(true)}>
+                          ¿Qué es relación de negocios?
+                        </Button>
+                      </div>
+                      {relacionNegocios && (
+                        <p className="text-xs text-emerald-700">
+                          Fecha de alta conocida: {fechaBaseConsulta ?? fechaBaseExpediente ?? "Sin registrar"}. Próxima revisión:
+                          {" "}
+                          {siguienteRevisionAnual ?? "programar actualización anual"}.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="nuevo" className="space-y-4">
+                  <p className="text-sm text-slate-700">
+                    Crea un nuevo expediente de identificación antes de capturar operaciones. Este módulo te guía para reunir los
+                    documentos del anexo 3 y vincular la actividad vulnerable correspondiente.
+                  </p>
+                  <div className="rounded-lg border bg-slate-50 p-4 text-sm text-slate-700">
+                    <p className="font-semibold">Pasos sugeridos</p>
+                    <ol className="mt-2 list-decimal space-y-1 pl-4">
+                      <li>Define el sujeto obligado responsable y selecciona la fracción aplicable.</li>
+                      <li>Integra la documentación de identificación y datos fiscales del cliente.</li>
+                      <li>Confirma si existe relación de negocios y establece la vigencia anual.</li>
+                    </ol>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <Button asChild>
+                      <Link href="/kyc-expediente">Crear expediente de identificación</Link>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setTabActiva("captura")
+                        setPasoActual(0)
+                      }}
+                    >
+                      Continuar a la captura guiada
+                    </Button>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="h-5 w-5 text-emerald-600" /> Capturar operaciones del mes
+              </CardTitle>
+              <CardDescription>
+                Define el sujeto obligado que reportará, el cliente relacionado y limita las actividades vulnerables a las que ya
+                están vinculados en el expediente.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>¿Qué sujeto obligado va a capturar la operación?</Label>
+                  <Select
+                    value={sujetoObligadoOperacion}
+                    onValueChange={(value) => {
+                      setSujetoObligadoOperacion(value)
+                      setClienteOperacionSeleccionado("")
+                    }}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Selecciona un sujeto obligado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sujetosObligadosDisponibles.length > 0 ? (
+                        sujetosObligadosDisponibles.map((opcion) => (
+                          <SelectItem key={opcion.value} value={opcion.value}>
+                            {opcion.label}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">Carga un expediente primero</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Selecciona al cliente del sujeto obligado</Label>
+                  <Select value={clienteOperacionSeleccionado} onValueChange={setClienteOperacionSeleccionado}>
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Elige un cliente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clientesPorSujetoObligado.length > 0 ? (
+                        clientesPorSujetoObligado.map((cliente) => (
+                          <SelectItem key={cliente.value} value={cliente.value}>
+                            {cliente.label}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">Sin clientes vinculados</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>¿Respecto de qué actividad vulnerable vas a registrar la operación?</Label>
+                  <Select
+                    value={actividadOperacionSeleccionada}
+                    onValueChange={setActividadOperacionSeleccionada}
+                    disabled={actividadesRegistradasCliente.length === 0}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Actividad vinculada en expediente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {actividadesRegistradasCliente.length > 0 ? (
+                        actividadesRegistradasCliente.map((actividad) => (
+                          <SelectItem key={actividad.key} value={actividad.key}>
+                            {actividad.fraccion} – {actividad.nombre}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          Solo aparecen actividades registradas en el expediente del cliente.
+                        </div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>¿Con qué cliente realizaste la operación?</Label>
+                  <Input
+                    value={
+                      clienteOperacionSeleccionado
+                        ? clientesPorSujetoObligado.find((cliente) => cliente.value === clienteOperacionSeleccionado)?.label ?? ""
+                        : ""
+                    }
+                    readOnly
+                    placeholder="Cliente seleccionado"
+                  />
+                  <p className="text-xs text-muted-foreground">La selección proviene del expediente activo del sujeto obligado.</p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Año de la operación</Label>
+                  <Select value={anioOperacionCaptura.toString()} onValueChange={(value) => setAnioOperacionCaptura(Number(value))}>
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Selecciona año" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(availableYears.length > 0 ? availableYears : [anioOperacionCaptura]).map((year) => (
+                        <SelectItem key={year} value={year.toString()}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Mes al que corresponde la operación</Label>
+                  <Select value={mesOperacionCaptura.toString()} onValueChange={(value) => setMesOperacionCaptura(Number(value))}>
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Selecciona mes" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map((mes, index) => (
+                        <SelectItem key={mes} value={(index + 1).toString()}>
+                          {mes}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-lg border bg-slate-50 p-4 text-sm text-slate-700">
+                <p className="font-semibold">Vista previa antes de enviar</p>
+                <p>
+                  Cliente: {clienteOperacionSeleccionado
+                    ? clientesPorSujetoObligado.find((cliente) => cliente.value === clienteOperacionSeleccionado)?.label ?? "Pendiente"
+                    : "Pendiente"}
+                </p>
+                <p>
+                  Actividad vulnerable: {actividadOperacionDetalle
+                    ? `${actividadOperacionDetalle.fraccion} – ${actividadOperacionDetalle.nombre}`
+                    : "Selecciona una actividad registrada"}
+                </p>
+                <p>
+                  Periodo: {MONTHS[mesOperacionCaptura - 1]} {anioOperacionCaptura}. Sujeto obligado: {" "}
+                  {sujetoObligadoOperacion || "sin definir"}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  onClick={() => {
+                    if (actividadOperacionDetalle) {
+                      setActividadKey(actividadOperacionDetalle.key)
+                      setActividadInfoKey(actividadOperacionDetalle.key)
+                    }
+                    setAnioSeleccionado(anioOperacionCaptura)
+                    setMesSeleccionado(mesOperacionCaptura)
+                    setTabActiva("captura")
+                    setPasoActual(0)
+                  }}
+                  disabled={!clienteOperacionSeleccionado || !actividadOperacionDetalle}
+                >
+                  Sincronizar con la captura guiada
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Solo se muestran actividades vulnerables registradas en el expediente del cliente.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="border-emerald-200">
             <CardContent className="pt-6">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -5656,6 +6074,34 @@ const cambiarMesCalendario = (delta: number) => {
           </section>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={relacionNegociosOpen} onOpenChange={setRelacionNegociosOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Qué es una relación de negocios?</DialogTitle>
+            <DialogDescription>
+              Es el vínculo continuo entre el sujeto obligado y su cliente, en el que se realizan actos u operaciones de forma
+              recurrente. Cuando la actividad vulnerable deriva de una relación de negocios, el expediente debe revisarse al
+              menos una vez al año.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm text-slate-700">
+            <p>
+              Usa esta marca para identificar expedientes con seguimiento anual y documenta cada actualización de información y
+              documentos soporte.
+            </p>
+            <p>
+              La plataforma calculará la fecha de la próxima revisión con base en la última actualización registrada del
+              expediente.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRelacionNegociosOpen(false)}>
+              Entendido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={infoModal !== null}
