@@ -25,7 +25,6 @@ const navigationItems = [
   { key: "registroSat", icon: FileCheck, href: "/registro-sat" },
   { key: "expedienteUnico", icon: Users, href: "/kyc-expediente" },
   { key: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },
-  { key: "monitoreoOperaciones", icon: FileText, href: "/monitoreo-operaciones" },
   { key: "avisosInformes", icon: FileText, href: "/avisos-informes" },
   { key: "capacitacionControl", icon: GraduationCap, href: "/capacitacion-control" },
   { key: "auditoriaVerificacion", icon: Search, href: "/auditoria-verificacion" },

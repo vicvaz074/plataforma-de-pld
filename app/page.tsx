@@ -25,7 +25,6 @@ const options = [
   { name: "registroSat", icon: FileCheck, href: "/registro-sat" },
   { name: "expedienteUnico", icon: Users, href: "/kyc-expediente" },
   { name: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },
-  { name: "monitoreoOperaciones", icon: FileText, href: "/monitoreo-operaciones" },
   { name: "avisosInformes", icon: FileText, href: "/avisos-informes" },
   { name: "evidenciasTrazabilidad", icon: Database, href: "/evidencias-trazabilidad" },
   { name: "capacitacionControl", icon: GraduationCap, href: "/capacitacion-control" },

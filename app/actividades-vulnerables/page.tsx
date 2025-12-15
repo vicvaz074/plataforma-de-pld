@@ -45,7 +45,6 @@ import {
   FileText,
   Info,
   Layers,
-  Link2,
   ListChecks,
   Paperclip,
   PlayCircle,
@@ -55,11 +54,9 @@ import {
   TrendingUp,
   Upload,
   Users,
-  Globe,
 } from "lucide-react"
 import type { ActividadVulnerable } from "@/lib/data/actividades"
 import { actividadesVulnerables } from "@/lib/data/actividades"
-import { normativasMonitoreo } from "@/lib/data/normativas"
 import { UMA_MONTHS, findUmaByMonthYear } from "@/lib/data/uma"
 import { CLIENTE_TIPOS, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
 import { CIUDADES_MEXICO, findCodigoPostalInfo } from "@/lib/data/codigos-postales"
@@ -1354,9 +1351,6 @@ export default function ActividadesVulnerablesPage() {
   )
   const [operaciones, setOperaciones] = useState<OperacionCliente[]>([])
   const [operacionesCargadas, setOperacionesCargadas] = useState(false)
-  const [resumenMonitoreo, setResumenMonitoreo] = useState<{ total: number; actividades: string[] }>(
-    () => ({ total: 0, actividades: [] }),
-  )
   const [clientesGuardados, setClientesGuardados] = useState<ClienteGuardado[]>([])
   const [clientesGuardadosListo, setClientesGuardadosListo] = useState(false)
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string | null>(null)
@@ -1474,60 +1468,11 @@ export default function ActividadesVulnerablesPage() {
       new Map<string, ActividadVulnerable[]>(),
     )
   }, [])
-  const actividadesMonitoreoMapa = useMemo(
-    () => new Map(actividadesVulnerables.map((actividad) => [actividad.key, actividad.nombre])),
-    [],
-  )
 
   const availableYears = useMemo(
     () => Array.from(new Set(umaVentana.map((entry) => entry.year))).sort((a, b) => a - b),
     [umaVentana],
   )
-
-  const actualizarResumenMonitoreo = useCallback(() => {
-    if (typeof window === "undefined") return
-
-    try {
-      const raw = window.localStorage.getItem("monitoreo-operaciones-data")
-      if (!raw) {
-        setResumenMonitoreo({ total: 0, actividades: [] })
-        return
-      }
-
-      const parsed = JSON.parse(raw) as Partial<{ operaciones?: { activityKey?: string }[] }>
-      const operacionesMonitoreo = Array.isArray(parsed.operaciones) ? parsed.operaciones : []
-      const claves = new Set<string>()
-      operacionesMonitoreo.forEach((operacion) => {
-        if (operacion && typeof operacion.activityKey === "string" && operacion.activityKey.trim() !== "") {
-          claves.add(operacion.activityKey)
-        }
-      })
-
-      const actividades = Array.from(claves).map(
-        (key) => actividadesMonitoreoMapa.get(key) ?? "Sin clasificar",
-      )
-
-      setResumenMonitoreo({ total: operacionesMonitoreo.length, actividades })
-    } catch (error) {
-      console.error("Error al leer resumen de monitoreo", error)
-    }
-  }, [actividadesMonitoreoMapa])
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    actualizarResumenMonitoreo()
-  }, [actualizarResumenMonitoreo])
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    const handler = (event: StorageEvent) => {
-      if (event.key === "monitoreo-operaciones-data") {
-        actualizarResumenMonitoreo()
-      }
-    }
-    window.addEventListener("storage", handler)
-    return () => window.removeEventListener("storage", handler)
-  }, [actualizarResumenMonitoreo])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -3577,91 +3522,6 @@ const cambiarMesCalendario = (delta: number) => {
               </CardContent>
             </Card>
           </section>
-
-          <Card className="border-emerald-200 bg-emerald-50/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-emerald-700">
-                <Link2 className="h-5 w-5" /> Conexión con monitoreo de operaciones
-              </CardTitle>
-              <CardDescription>
-                Sincroniza las actividades evaluadas con el módulo de monitoreo para compartir criterios, filtros y
-                exportaciones normativas alineadas a cinco años.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-3 text-sm text-slate-700">
-                  <p>
-                    El tablero de actividades toma los mismos parámetros de monitoreo para mantener la trazabilidad de
-                    avisos, expedientes y umbrales. Las cifras consideran las operaciones filtradas por el módulo de
-                    monitoreo.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">Operaciones monitoreadas: {resumenMonitoreo.total}</Badge>
-                    <Badge variant="secondary">Actividades vinculadas: {resumenMonitoreo.actividades.length}</Badge>
-                  </div>
-                  {resumenMonitoreo.actividades.length > 0 && (
-                    <div className="flex flex-wrap gap-2 text-xs text-emerald-700">
-                      {resumenMonitoreo.actividades.map((nombre) => (
-                        <Badge key={nombre} variant="secondary">
-                          {nombre}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex flex-wrap gap-2">
-                    <Button asChild size="sm">
-                      <Link href="/monitoreo-operaciones">Abrir monitoreo de operaciones</Link>
-                    </Button>
-                    <Button asChild size="sm" variant="outline">
-                      <Link href="/marco-normativo-aplicable">Marco normativo aplicable</Link>
-                    </Button>
-                  </div>
-                </div>
-                <div className="space-y-3 text-xs text-slate-700">
-                  {normativasMonitoreo.map((norma) => (
-                    <div
-                      key={norma.id}
-                      className="space-y-2 rounded-lg border border-emerald-200 bg-white p-3 shadow-sm"
-                    >
-                      <div>
-                        <p className="font-semibold text-emerald-700">{norma.autoridad}</p>
-                        <p className="text-[11px] text-slate-500">{norma.descripcion}</p>
-                      </div>
-                      <ul className="list-disc space-y-1 pl-4 text-[11px] text-slate-600">
-                        {norma.criteriosClave.map((criterio) => (
-                          <li key={criterio}>{criterio}</li>
-                        ))}
-                      </ul>
-                      <div className="flex flex-wrap gap-2 text-[11px]">
-                        <Link
-                          href={norma.repositorio.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 rounded-full border border-emerald-300 px-2 py-1 text-emerald-700 hover:bg-emerald-100"
-                        >
-                          <ExternalLink className="h-3 w-3" /> {norma.repositorio.nombre}
-                        </Link>
-                      </div>
-                      <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-wide text-emerald-700">
-                        {norma.referenciasInternacionales.map((referencia) => (
-                          <Link
-                            key={`${norma.id}-${referencia.nombre}`}
-                            href={referencia.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-1 hover:bg-emerald-200"
-                          >
-                            <Globe className="h-3 w-3" /> {referencia.nombre}
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
           <Card className="border-slate-200">
             <CardHeader>
