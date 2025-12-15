@@ -1578,7 +1578,7 @@ function KycExpedienteContent() {
               <div className="space-y-2">
                 <Label>{tipoClienteSeleccionado.detalleLabel ?? "Detalle del tipo de cliente"}</Label>
                 {tipoClienteSeleccionado.detalleOpciones ? (
-                  <Select value={detalleTipoCliente || undefined} onValueChange={setDetalleTipoCliente}>
+                  <Select value={detalleTipoCliente} onValueChange={setDetalleTipoCliente}>
                     <SelectTrigger className="bg-white">
                       <SelectValue
                         placeholder={

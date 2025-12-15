@@ -3716,7 +3716,7 @@ const cambiarMesCalendario = (delta: number) => {
                     <div className="space-y-2">
                       <Label>Expediente de identificación</Label>
                       <Select
-                        value={expedienteConsultaId ?? undefined}
+                        value={expedienteConsultaId ?? ""}
                         onValueChange={(valor) => setExpedienteConsultaId(valor)}
                       >
                         <SelectTrigger className="bg-white">
@@ -4259,7 +4259,7 @@ const cambiarMesCalendario = (delta: number) => {
                       <div className="space-y-2">
                         <Label>Expediente relacionado</Label>
                         <Select
-                          value={expedienteSeleccionado ?? undefined}
+                          value={expedienteSeleccionado ?? ""}
                           onValueChange={(value) => {
                             if (value === MANUAL_EXPEDIENTE_VALUE) {
                               setExpedienteSeleccionado(null)
@@ -4289,7 +4289,7 @@ const cambiarMesCalendario = (delta: number) => {
                         <div className="space-y-2">
                           <Label>Persona reportada del expediente</Label>
                           <Select
-                            value={personaExpedienteSeleccionada || undefined}
+                            value={personaExpedienteSeleccionada}
                             onValueChange={(value) => setPersonaExpedienteSeleccionada(value)}
                           >
                             <SelectTrigger className="bg-white">
@@ -4391,7 +4391,7 @@ const cambiarMesCalendario = (delta: number) => {
                         </Label>
                         {tipoClienteSeleccionado.detalleOpciones ? (
                           <Select
-                            value={detalleTipoCliente || undefined}
+                            value={detalleTipoCliente}
                             onValueChange={(value) => setDetalleTipoCliente(value)}
                           >
                             <SelectTrigger className="bg-white">
@@ -4545,7 +4545,7 @@ const cambiarMesCalendario = (delta: number) => {
                     {esActividadInmuebles ? (
                       <div className="space-y-2">
                         <Select
-                          value={codigoOperacionInmueble || undefined}
+                          value={codigoOperacionInmueble}
                           onValueChange={(value) => {
                             setCodigoOperacionInmueble(value)
                             if (value === "otro") {
@@ -4767,7 +4767,7 @@ const cambiarMesCalendario = (delta: number) => {
                         <div className="space-y-2">
                           <Label>Figura del cliente</Label>
                           <Select
-                            value={figuraClienteInmueble || undefined}
+                            value={figuraClienteInmueble}
                             onValueChange={(value) => setFiguraClienteInmueble(value)}
                           >
                             <SelectTrigger className="bg-white">
@@ -4785,7 +4785,7 @@ const cambiarMesCalendario = (delta: number) => {
                         <div className="space-y-2">
                           <Label>Figura del sujeto obligado</Label>
                           <Select
-                            value={figuraSujetoObligadoInmueble || undefined}
+                            value={figuraSujetoObligadoInmueble}
                             onValueChange={(value) => setFiguraSujetoObligadoInmueble(value)}
                           >
                             <SelectTrigger className="bg-white">
@@ -4803,7 +4803,7 @@ const cambiarMesCalendario = (delta: number) => {
                         <div className="space-y-2">
                           <Label>Tipo de inmueble</Label>
                           <Select
-                            value={inmuebleForm.tipoInmueble || undefined}
+                            value={inmuebleForm.tipoInmueble}
                             onValueChange={(value) => actualizarInmuebleForm("tipoInmueble", value)}
                           >
                             <SelectTrigger className="bg-white">
@@ -4862,7 +4862,7 @@ const cambiarMesCalendario = (delta: number) => {
                         <div className="space-y-2">
                           <Label>País</Label>
                           <Select
-                            value={inmuebleForm.pais || undefined}
+                            value={inmuebleForm.pais}
                             onValueChange={(value) => actualizarInmuebleForm("pais", value)}
                           >
                             <SelectTrigger className="bg-white">
@@ -4900,7 +4900,7 @@ const cambiarMesCalendario = (delta: number) => {
                           <Label>Ciudad</Label>
                           {inmuebleForm.pais === "MX" ? (
                             <Select
-                              value={inmuebleForm.ciudad || undefined}
+                              value={inmuebleForm.ciudad}
                               onValueChange={(value) => actualizarInmuebleForm("ciudad", value)}
                               onOpenChange={(open) => {
                                 if (open) {
@@ -4961,7 +4961,7 @@ const cambiarMesCalendario = (delta: number) => {
                           <Label>Colonia o asentamiento</Label>
                           {coloniasDisponibles.length > 0 ? (
                             <Select
-                              value={inmuebleForm.colonia || undefined}
+                              value={inmuebleForm.colonia}
                               onValueChange={(value) => actualizarInmuebleForm("colonia", value)}
                               onOpenChange={(open) => {
                                 if (open) {
@@ -5059,7 +5059,7 @@ const cambiarMesCalendario = (delta: number) => {
                         <div className="space-y-2">
                           <Label>Forma de pago</Label>
                           <Select
-                            value={liquidacionForm.formaPago || undefined}
+                            value={liquidacionForm.formaPago}
                             onValueChange={(value) => actualizarLiquidacionForm("formaPago", value)}
                           >
                             <SelectTrigger className="bg-white">
@@ -5077,7 +5077,7 @@ const cambiarMesCalendario = (delta: number) => {
                         <div className="space-y-2">
                           <Label>Instrumento monetario utilizado</Label>
                           <Select
-                            value={liquidacionForm.instrumento || undefined}
+                            value={liquidacionForm.instrumento}
                             onValueChange={(value) => actualizarLiquidacionForm("instrumento", value)}
                           >
                             <SelectTrigger className="bg-white">
@@ -5198,7 +5198,7 @@ const cambiarMesCalendario = (delta: number) => {
                         <div className="space-y-2">
                           <Label>País de nacionalidad</Label>
                           <Select
-                            value={beneficiarioForm.pais || undefined}
+                            value={beneficiarioForm.pais}
                             onValueChange={(value) => actualizarBeneficiarioForm("pais", value)}
                           >
                             <SelectTrigger className="bg-white">
@@ -5297,7 +5297,7 @@ const cambiarMesCalendario = (delta: number) => {
                         <div className="space-y-2">
                           <Label>País de nacionalidad</Label>
                           <Select
-                            value={contraparteForm.pais || undefined}
+                            value={contraparteForm.pais}
                             onValueChange={(value) => actualizarContraparteForm("pais", value)}
                           >
                             <SelectTrigger className="bg-white">
@@ -6566,7 +6566,7 @@ const cambiarMesCalendario = (delta: number) => {
                       </Label>
                       {tipoClienteEdicionSeleccionado.detalleOpciones ? (
                         <Select
-                          value={datosEdicion.detalleTipoCliente || undefined}
+                          value={datosEdicion.detalleTipoCliente || ""}
                           onValueChange={(value) =>
                             setDatosEdicion((prev) => ({
                               ...prev,
