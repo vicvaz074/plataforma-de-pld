@@ -37,10 +37,19 @@ export const CODIGOS_POSTALES: CodigoPostalInfo[] = [
   },
 ]
 
+const CODIGOS_POSTALES_CACHE = new Map(
+  CODIGOS_POSTALES.map((item) => [item.codigo, item] as const),
+)
+
+export function registerCodigoPostalInfo(info: CodigoPostalInfo) {
+  if (!info?.codigo) return
+  CODIGOS_POSTALES_CACHE.set(info.codigo, info)
+}
+
 export function findCodigoPostalInfo(codigo: string): CodigoPostalInfo | undefined {
   const limpio = codigo.trim().replace(/[^0-9]/g, "")
   if (limpio.length < 5) return undefined
-  return CODIGOS_POSTALES.find((item) => item.codigo === limpio)
+  return CODIGOS_POSTALES_CACHE.get(limpio)
 }
 
 export const CIUDADES_MEXICO: string[] = Array.from(

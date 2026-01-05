@@ -31,7 +31,12 @@ import {
 } from "lucide-react"
 import { CLIENTE_TIPOS, findClienteTipoLabel, findClienteTipoOption } from "@/lib/data/tipos-cliente"
 import { PAISES, findPaisByCodigo, findPaisByNombre } from "@/lib/data/paises"
-import { CIUDADES_MEXICO, findCodigoPostalInfo } from "@/lib/data/codigos-postales"
+import {
+  CIUDADES_MEXICO,
+  findCodigoPostalInfo,
+  registerCodigoPostalInfo,
+  type CodigoPostalInfo,
+} from "@/lib/data/codigos-postales"
 import { demoFraccionXV } from "@/lib/demo/fraccion-xv"
 
 interface CampoExpediente {
@@ -292,6 +297,8 @@ interface PersonaReportada {
 
 const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
 const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
+const SEPOMEX_API_BASE = "https://api.zippopotam.us/mx"
+const SEPOMEX_STORAGE_PREFIX = "codigo_postal_cache_"
 
 function generarIdTemporal() {
   return Math.random().toString(36).slice(2, 10)
@@ -347,6 +354,46 @@ function crearPersonaBase(): PersonaReportada {
       esPep: "no",
       detallePep: "",
     },
+  }
+}
+
+async function fetchCodigoPostalInfo(codigo: string): Promise<CodigoPostalInfo | undefined> {
+  try {
+    const response = await fetch(`${SEPOMEX_API_BASE}/${codigo}`)
+    if (!response.ok) return undefined
+    const data = (await response.json()) as {
+      "post code"?: string
+      country?: string
+      "country abbreviation"?: string
+      places?: Array<{
+        "place name"?: string
+        state?: string
+        "state abbreviation"?: string
+        "province"?: string
+        "province abbreviation"?: string
+        "community"?: string
+        "community abbreviation"?: string
+      }>
+    }
+    if (!data || !Array.isArray(data.places) || data.places.length === 0) return undefined
+    const place = data.places[0] ?? {}
+    const asentamientos = Array.from(
+      new Set(
+        data.places
+          .map((item) => item["place name"])
+          .filter((nombre): nombre is string => Boolean(nombre && nombre.trim().length > 0)),
+      ),
+    )
+    return {
+      codigo,
+      estado: place.state ?? "",
+      municipio: place.province ?? place.state ?? "",
+      ciudad: place.community ?? "",
+      asentamientos,
+    }
+  } catch (error) {
+    console.error("No se pudo consultar el código postal:", error)
+    return undefined
   }
 }
 
@@ -952,6 +999,61 @@ function KycExpedienteContent() {
       })
     }, [searchParams, expedientesDisponibles, cargarExpediente, expedientesCargados, toast])
 
+    const hydrateCodigoPostalInfo = useCallback(
+      async (personaId: string, codigo: string) => {
+        if (typeof window === "undefined") return
+        const limpio = codigo.trim().replace(/[^0-9]/g, "")
+        if (limpio.length !== 5) return
+
+        const cacheKey = `${SEPOMEX_STORAGE_PREFIX}${limpio}`
+        let info: CodigoPostalInfo | undefined
+        const cacheRaw = window.localStorage.getItem(cacheKey)
+        if (cacheRaw) {
+          try {
+            info = JSON.parse(cacheRaw) as CodigoPostalInfo
+          } catch {
+            window.localStorage.removeItem(cacheKey)
+          }
+        }
+
+        if (!info) {
+          info = await fetchCodigoPostalInfo(limpio)
+          if (info) {
+            window.localStorage.setItem(cacheKey, JSON.stringify(info))
+          }
+        }
+
+        if (!info) return
+        registerCodigoPostalInfo(info)
+
+        setPersonasReportadas((prev) =>
+          prev.map((persona) => {
+            if (persona.id !== personaId) return persona
+            if (persona.domicilio.ambito !== "nacional") return persona
+            if (persona.domicilio.codigoPostal !== limpio) return persona
+            const colonias = info?.asentamientos ?? []
+            return {
+              ...persona,
+              domicilio: {
+                ...persona.domicilio,
+                pais: "MX",
+                entidad: info?.estado ?? "",
+                municipio: info?.municipio ?? "",
+                ciudad: info?.ciudad ?? "",
+                colonia:
+                  colonias.length > 0
+                    ? colonias.includes(persona.domicilio.colonia)
+                      ? persona.domicilio.colonia
+                      : colonias[0]
+                    : "",
+              },
+            }
+          }),
+        )
+      },
+      [setPersonasReportadas],
+    )
+
     const handleCodigoPostalChange = useCallback(
       (personaId: string, value: string) => {
         const limpio = value.replace(/[^0-9]/g, "").slice(0, 5)
@@ -1004,8 +1106,11 @@ function KycExpedienteContent() {
         )
         setBusquedasColonias((prev) => ({ ...prev, [personaId]: "" }))
         setBusquedasCiudades((prev) => ({ ...prev, [personaId]: "" }))
+        if (limpio.length === 5 && !findCodigoPostalInfo(limpio)) {
+          void hydrateCodigoPostalInfo(personaId, limpio)
+        }
       },
-      [setBusquedasCiudades, setBusquedasColonias],
+      [setBusquedasCiudades, setBusquedasColonias, hydrateCodigoPostalInfo],
     )
 
   const crearNuevoExpediente = useCallback(() => {
