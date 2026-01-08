@@ -1,5 +1,15 @@
 "use client"
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type Dispatch,
+  type SetStateAction,
+} from "react"
 import { useSearchParams } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -20,7 +30,6 @@ import {
   Building2,
   FolderOpen,
   FileText,
-  Globe2,
   Mail,
   MapPin,
   Phone,
@@ -65,43 +74,14 @@ interface DocumentoRequerido {
 const IDENTIFICACION_CAMPOS: GrupoIdentificacion[] = [
   {
     id: "datos-generales",
-    titulo: "Datos generales del cliente",
-    descripcion: "Información básica necesaria para identificar plenamente a la persona física o moral.",
+    titulo: "Datos de identificación del cliente",
+    descripcion: "Información básica necesaria para identificar plenamente a la persona moral.",
     campos: [
-      { id: "nombre", label: "Nombre / Razón social", requerido: true, placeholder: "Ej. Grupo Ejemplar, S.A. de C.V." },
-      { id: "rfc", label: "RFC", requerido: true, placeholder: "Ej. GEX123456789", type: "text" },
-      { id: "curp", label: "CURP", placeholder: "Para personas físicas", type: "text" },
-      {
-        id: "fecha-constitucion",
-        label: "Fecha de constitución / nacimiento",
-        type: "date",
-        requerido: false,
-      },
-      { id: "nacionalidad", label: "Nacionalidad", requerido: true, placeholder: "Ej. Mexicana" },
-    ],
-  },
-  {
-    id: "contacto-actividad",
-    titulo: "Actividad y medios de contacto",
-    descripcion: "Datos que permitirán prellenar avisos y verificar la actividad económica declarada.",
-    campos: [
-      { id: "domicilio", label: "Domicilio completo", requerido: true, multiline: true, placeholder: "Calle, número, colonia, municipio, estado, país" },
-      { id: "telefono", label: "Teléfono de contacto", placeholder: "Incluye lada o clave internacional" },
-      { id: "correo", label: "Correo electrónico", placeholder: "Ej. cumplimiento@empresa.com", type: "email" },
-      { id: "actividad-economica", label: "Actividad económica", requerido: true, placeholder: "Giro comercial o profesional" },
-      { id: "origen-recursos", label: "Origen declarado de los recursos", multiline: true },
-    ],
-  },
-  {
-    id: "documentos",
-    titulo: "Documentos soporte",
-    descripcion: "Actas constitutivas, poderes notariales e identificaciones vigentes.",
-    campos: [
-      { id: "identificacion", label: "Identificación oficial presentada", requerido: true },
-      { id: "numero-identificacion", label: "Número de identificación", requerido: true },
-      { id: "situacion-fiscal", label: "Constancia de situación fiscal", requerido: true },
-      { id: "comprobante", label: "Comprobante de domicilio", requerido: true },
-      { id: "documentos-adicionales", label: "Otros documentos relevantes", multiline: true },
+      { id: "nombre", label: "Denominación o razón social", requerido: true, placeholder: "Ej. Grupo Ejemplar, S.A. de C.V." },
+      { id: "fecha-constitucion", label: "Fecha de constitución", type: "date" },
+      { id: "pais-nacionalidad", label: "País de nacionalidad", requerido: true, placeholder: "Ej. México" },
+      { id: "rfc", label: "Registro Federal de Contribuyentes / NIF", requerido: true, placeholder: "Ej. GEX123456789" },
+      { id: "actividad-giro", label: "Actividad, giro mercantil, actividad u objeto social", multiline: true },
     ],
   },
 ]
@@ -190,72 +170,30 @@ const DOCUMENTO_STATUS: { value: DocumentStatus; label: string; classes: string 
   { value: "completo", label: "Completo", classes: "bg-emerald-100 text-emerald-700" },
 ]
 
-const DATOS_FISCALES_CAMPOS: CampoExpediente[] = [
-  { id: "regimen-fiscal", label: "Régimen fiscal", requerido: true, placeholder: "Ej. General de Ley Personas Morales" },
-  {
-    id: "fecha-inicio-operaciones",
-    label: "Fecha de inicio de operaciones",
-    type: "date",
-    requerido: true,
-  },
-  {
-    id: "actividad-sat",
-    label: "Actividad económica registrada ante el SAT",
-    requerido: true,
-    placeholder: "Descripción según constancia de situación fiscal",
-  },
-  {
-    id: "registro-publico",
-    label: "Folio en el Registro Público de Comercio",
-    placeholder: "Número de folio mercantil o equivalente",
-  },
-  {
-    id: "datos-notario",
-    label: "Datos del notario y escritura",
-    multiline: true,
-    placeholder: "Nombre del notario, número de escritura y fecha",
-  },
-  {
-    id: "obligaciones-fiscales",
-    label: "Obligaciones fiscales registradas",
-    multiline: true,
-    placeholder: "IVA, ISR, DIOT, Contabilidad electrónica, etc.",
-  },
+const TIPO_VIALIDAD_OPCIONES = [
+  { value: "calle", label: "Calle" },
+  { value: "avenida", label: "Avenida" },
+  { value: "boulevard", label: "Boulevard" },
+  { value: "carretera", label: "Carretera" },
+  { value: "cerrada", label: "Cerrada" },
+  { value: "privada", label: "Privada" },
 ]
 
-const PERFIL_OPERACION_CAMPOS: CampoExpediente[] = [
-  {
-    id: "origen-fondos",
-    label: "Origen de los recursos",
-    requerido: true,
-    multiline: true,
-    placeholder: "Describe la procedencia lícita del patrimonio y de los fondos que operará.",
-  },
-  {
-    id: "destino-fondos",
-    label: "Destino habitual de los recursos",
-    requerido: true,
-    multiline: true,
-    placeholder: "Uso previsto de los recursos dentro de la relación comercial.",
-  },
-  {
-    id: "productos-servicios",
-    label: "Productos o servicios contratados",
-    multiline: true,
-    placeholder: "Detalla los servicios que recibirá y su finalidad.",
-  },
-  {
-    id: "montos-frecuencia",
-    label: "Montos y frecuencia estimada",
-    multiline: true,
-    placeholder: "Rango de importes y periodicidad de operaciones.",
-  },
-  {
-    id: "medios-pago",
-    label: "Medios de pago utilizados",
-    multiline: true,
-    placeholder: "Transferencias bancarias, efectivo, cheques, criptomonedas, etc.",
-  },
+const IDENTIFICACION_TIPOS = [
+  { value: "ine", label: "INE" },
+  { value: "pasaporte", label: "Pasaporte" },
+  { value: "cedula", label: "Cédula profesional" },
+  { value: "migratorio", label: "Documento migratorio" },
+  { value: "otro", label: "Otro" },
+]
+
+const TIPO_INMUEBLE_OPCIONES = [
+  { value: "casa", label: "Casa" },
+  { value: "departamento", label: "Departamento" },
+  { value: "terreno", label: "Terreno" },
+  { value: "bodega", label: "Bodega" },
+  { value: "local", label: "Local comercial" },
+  { value: "otro", label: "Otro" },
 ]
 
 type RespuestaBinaria = "si" | "no"
@@ -303,10 +241,13 @@ interface PersonaReportada {
   id: string
   tipo: (typeof PERSONA_TIPO_OPCIONES)[number]["value"]
   denominacion: string
+  apellidoPaterno: string
+  apellidoMaterno: string
   fechaConstitucion: string
   rfc: string
   curp: string
   pais: string
+  paisNacimiento: string
   giro: string
   rolRelacion: string
   representante: {
@@ -362,6 +303,50 @@ interface SujetoObligadoOption {
   rfc: string
 }
 
+interface Domicilio {
+  codigoPostal: string
+  tipoVialidad: string
+  nombreVialidad: string
+  numeroExterior: string
+  numeroInterior: string
+  colonia: string
+  municipio: string
+  ciudad: string
+  entidad: string
+  pais: string
+}
+
+interface ContactoCliente {
+  ladaFijo: string
+  telefonoFijo: string
+  extension: string
+  ladaMovil: string
+  telefonoMovil: string
+  correo: string
+}
+
+interface RepresentanteLegal {
+  nombre: string
+  apellidoPaterno: string
+  apellidoMaterno: string
+  rfc: string
+  puesto: string
+  paisNacionalidad: string
+}
+
+interface IdentificacionRepresentante {
+  tipo: string
+  numero: string
+  autoridad: string
+  vigencia: string
+}
+
+interface InmuebleInfo {
+  tipo: string
+  valorReferencia: string
+  folioReal: string
+}
+
 const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
 const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
 const SEPOMEX_API_BASE = "https://api.zippopotam.us/mx"
@@ -371,17 +356,35 @@ function generarIdTemporal() {
   return Math.random().toString(36).slice(2, 10)
 }
 
+function crearDomicilioBase(): Domicilio {
+  return {
+    codigoPostal: "",
+    tipoVialidad: "",
+    nombreVialidad: "",
+    numeroExterior: "",
+    numeroInterior: "",
+    colonia: "",
+    municipio: "",
+    ciudad: "",
+    entidad: "",
+    pais: "MX",
+  }
+}
+
 function crearPersonaBase(): PersonaReportada {
   return {
     id: generarIdTemporal(),
     tipo: "persona_moral",
     denominacion: "",
+    apellidoPaterno: "",
+    apellidoMaterno: "",
     fechaConstitucion: "",
     rfc: "",
     curp: "",
     pais: "MX",
+    paisNacimiento: "MX",
     giro: "",
-    rolRelacion: "Cliente",
+    rolRelacion: "Beneficiario controlador",
     representante: {
       nombre: "",
       apellidoPaterno: "",
@@ -477,9 +480,13 @@ interface ExpedienteDetalle extends ExpedienteResumen {
   claveSujetoObligado?: string
   claveActividadVulnerable?: string
   actoOperacion?: ActoOperacion
+  domicilioCliente?: Record<string, string>
+  contactoCliente?: Record<string, string>
+  representanteLegal?: Record<string, string>
+  identificacionRepresentante?: Record<string, string>
+  inmueble?: Record<string, string>
+  ubicacionInmueble?: Record<string, string>
   identificacion?: Record<string, string>
-  datosFiscales?: Record<string, string>
-  perfilOperaciones?: Record<string, string>
   documentacion?: Record<string, DocumentStatus>
   personas: PersonaReportada[]
   actualizadoEn?: string
@@ -552,6 +559,10 @@ function sanitizePersonaGuardada(raw: any): PersonaReportada | null {
       typeof raw.id === "string" && raw.id.trim().length > 0 ? raw.id : generarIdTemporal(),
     tipo: raw.tipo === "persona_fisica" || raw.tipo === "persona_moral" ? raw.tipo : base.tipo,
     denominacion: typeof raw.denominacion === "string" ? raw.denominacion : base.denominacion,
+    apellidoPaterno:
+      typeof raw.apellidoPaterno === "string" ? raw.apellidoPaterno : base.apellidoPaterno,
+    apellidoMaterno:
+      typeof raw.apellidoMaterno === "string" ? raw.apellidoMaterno : base.apellidoMaterno,
     fechaConstitucion:
       typeof raw.fechaConstitucion === "string" ? raw.fechaConstitucion : base.fechaConstitucion,
     rfc: typeof raw.rfc === "string" ? raw.rfc : base.rfc,
@@ -560,6 +571,12 @@ function sanitizePersonaGuardada(raw: any): PersonaReportada | null {
       typeof raw.pais === "string"
         ? findPaisByNombre(raw.pais)?.code ?? findPaisByCodigo(raw.pais)?.code ?? raw.pais
         : base.pais,
+    paisNacimiento:
+      typeof raw.paisNacimiento === "string"
+        ? findPaisByNombre(raw.paisNacimiento)?.code ??
+          findPaisByCodigo(raw.paisNacimiento)?.code ??
+          raw.paisNacimiento
+        : base.paisNacimiento,
     giro: typeof raw.giro === "string" ? raw.giro : base.giro,
     rolRelacion: typeof raw.rolRelacion === "string" ? raw.rolRelacion : base.rolRelacion,
     representante: {
@@ -725,9 +742,13 @@ function sanitizeExpedienteGuardado(raw: any): ExpedienteDetalle | null {
     claveActividadVulnerable:
       typeof raw.claveActividadVulnerable === "string" ? raw.claveActividadVulnerable : undefined,
     actoOperacion,
+    domicilioCliente: sanitizeStringMap(raw.domicilioCliente),
+    contactoCliente: sanitizeStringMap(raw.contactoCliente),
+    representanteLegal: sanitizeStringMap(raw.representanteLegal),
+    identificacionRepresentante: sanitizeStringMap(raw.identificacionRepresentante),
+    inmueble: sanitizeStringMap(raw.inmueble),
+    ubicacionInmueble: sanitizeStringMap(raw.ubicacionInmueble),
     identificacion: sanitizeStringMap(raw.identificacion),
-    datosFiscales: sanitizeStringMap(raw.datosFiscales),
-    perfilOperaciones: sanitizeStringMap(raw.perfilOperaciones),
     documentacion: sanitizeDocumentacionMap(raw.documentacion),
     personas,
     actualizadoEn: typeof raw.actualizadoEn === "string" ? raw.actualizadoEn : undefined,
@@ -790,8 +811,35 @@ function KycExpedienteContent() {
     relacionNegocios: "",
   })
   const [datosIdentificacion, setDatosIdentificacion] = useState<Record<string, string>>({})
-  const [datosFiscales, setDatosFiscales] = useState<Record<string, string>>({})
-  const [perfilOperaciones, setPerfilOperaciones] = useState<Record<string, string>>({})
+  const [domicilioCliente, setDomicilioCliente] = useState<Domicilio>(() => crearDomicilioBase())
+  const [contactoCliente, setContactoCliente] = useState<ContactoCliente>({
+    ladaFijo: "",
+    telefonoFijo: "",
+    extension: "",
+    ladaMovil: "",
+    telefonoMovil: "",
+    correo: "",
+  })
+  const [representanteLegal, setRepresentanteLegal] = useState<RepresentanteLegal>({
+    nombre: "",
+    apellidoPaterno: "",
+    apellidoMaterno: "",
+    rfc: "",
+    puesto: "",
+    paisNacionalidad: "MX",
+  })
+  const [identificacionRepresentante, setIdentificacionRepresentante] = useState<IdentificacionRepresentante>({
+    tipo: "",
+    numero: "",
+    autoridad: "",
+    vigencia: "",
+  })
+  const [inmueble, setInmueble] = useState<InmuebleInfo>({
+    tipo: "",
+    valorReferencia: "",
+    folioReal: "",
+  })
+  const [ubicacionInmueble, setUbicacionInmueble] = useState<Domicilio>(() => crearDomicilioBase())
   const [documentacionEstado, setDocumentacionEstado] = useState<Record<string, DocumentStatus>>({})
   const [personasReportadas, setPersonasReportadas] = useState<PersonaReportada[]>(() => [crearPersonaBase()])
   const [expedientesResumen, setExpedientesResumen] = useState<ExpedienteResumen[]>([])
@@ -852,30 +900,45 @@ function KycExpedienteContent() {
     }
   }, [claveSujetoObligado, sujetoObligadoSeleccionado, sujetosObligados])
 
-  const totalCamposIdentificacion = useMemo(
-    () => IDENTIFICACION_CAMPOS.reduce((acc, grupo) => acc + grupo.campos.length, 0),
-    [],
-  )
-  const camposIdentificacionCompletos = useMemo(
-    () =>
-      IDENTIFICACION_CAMPOS.flatMap((grupo) => grupo.campos).filter((campo) => {
-        const valor = datosIdentificacion[campo.id]
-        return typeof valor === "string" && valor.trim().length > 0
-      }).length,
-    [datosIdentificacion],
-  )
-
-  const totalCamposFiscales = DATOS_FISCALES_CAMPOS.length
-  const camposFiscalesCompletos = useMemo(
-    () => DATOS_FISCALES_CAMPOS.filter((campo) => datosFiscales[campo.id]?.trim()).length,
-    [datosFiscales],
-  )
-
-  const totalCamposPerfil = PERFIL_OPERACION_CAMPOS.length
-  const camposPerfilCompletos = useMemo(
-    () => PERFIL_OPERACION_CAMPOS.filter((campo) => perfilOperaciones[campo.id]?.trim()).length,
-    [perfilOperaciones],
-  )
+  const totalCamposIdentificacion = useMemo(() => {
+    const identificacion = IDENTIFICACION_CAMPOS.reduce((acc, grupo) => acc + grupo.campos.length, 0)
+    const domicilio = Object.keys(crearDomicilioBase()).length
+    const contacto = Object.keys(contactoCliente).length
+    const representante = Object.keys(representanteLegal).length
+    const identificacionRep = Object.keys(identificacionRepresentante).length
+    const inmuebleCampos = Object.keys(inmueble).length
+    const ubicacion = Object.keys(crearDomicilioBase()).length
+    return identificacion + domicilio + contacto + representante + identificacionRep + inmuebleCampos + ubicacion
+  }, [contactoCliente, identificacionRepresentante, inmueble, representanteLegal])
+  const camposIdentificacionCompletos = useMemo(() => {
+    const identificacionCompleta = IDENTIFICACION_CAMPOS.flatMap((grupo) => grupo.campos).filter((campo) => {
+      const valor = datosIdentificacion[campo.id]
+      return typeof valor === "string" && valor.trim().length > 0
+    }).length
+    const domicilioCompleto = Object.values(domicilioCliente).filter((value) => value.trim()).length
+    const contactoCompleto = Object.values(contactoCliente).filter((value) => value.trim()).length
+    const representanteCompleto = Object.values(representanteLegal).filter((value) => value.trim()).length
+    const identificacionRepCompleta = Object.values(identificacionRepresentante).filter((value) => value.trim()).length
+    const inmuebleCompleto = Object.values(inmueble).filter((value) => value.trim()).length
+    const ubicacionCompleta = Object.values(ubicacionInmueble).filter((value) => value.trim()).length
+    return (
+      identificacionCompleta +
+      domicilioCompleto +
+      contactoCompleto +
+      representanteCompleto +
+      identificacionRepCompleta +
+      inmuebleCompleto +
+      ubicacionCompleta
+    )
+  }, [
+    contactoCliente,
+    datosIdentificacion,
+    domicilioCliente,
+    identificacionRepresentante,
+    inmueble,
+    representanteLegal,
+    ubicacionInmueble,
+  ])
 
   const documentosCompletos = useMemo(
     () => DOCUMENTACION_REQUERIDA.filter((doc) => documentacionEstado[doc.id] === "completo").length,
@@ -883,20 +946,35 @@ function KycExpedienteContent() {
   )
 
   const progresoGlobal = useMemo(() => {
-    const total = totalCamposIdentificacion + totalCamposFiscales + totalCamposPerfil + DOCUMENTACION_REQUERIDA.length
+    const total = totalCamposIdentificacion + DOCUMENTACION_REQUERIDA.length
     if (total === 0) return 0
-    const completados =
-      camposIdentificacionCompletos + camposFiscalesCompletos + camposPerfilCompletos + documentosCompletos
+    const completados = camposIdentificacionCompletos + documentosCompletos
     return Math.min(100, Math.round((completados / total) * 100))
   }, [
     totalCamposIdentificacion,
-    totalCamposFiscales,
-    totalCamposPerfil,
     camposIdentificacionCompletos,
-    camposFiscalesCompletos,
-    camposPerfilCompletos,
     documentosCompletos,
   ])
+
+  const infoDomicilioCliente = useMemo(() => {
+    if (domicilioCliente.codigoPostal.length !== 5) return undefined
+    return findCodigoPostalInfo(domicilioCliente.codigoPostal)
+  }, [domicilioCliente.codigoPostal])
+
+  const coloniasCliente = infoDomicilioCliente?.asentamientos ?? []
+  const coloniaClienteSeleccionada = coloniasCliente.includes(domicilioCliente.colonia)
+    ? domicilioCliente.colonia
+    : coloniasCliente[0] ?? ""
+
+  const infoUbicacionInmueble = useMemo(() => {
+    if (ubicacionInmueble.codigoPostal.length !== 5) return undefined
+    return findCodigoPostalInfo(ubicacionInmueble.codigoPostal)
+  }, [ubicacionInmueble.codigoPostal])
+
+  const coloniasInmueble = infoUbicacionInmueble?.asentamientos ?? []
+  const coloniaInmuebleSeleccionada = coloniasInmueble.includes(ubicacionInmueble.colonia)
+    ? ubicacionInmueble.colonia
+    : coloniasInmueble[0] ?? ""
 
   const expedientesDisponibles = useMemo(() => {
     const mapa = new Map<string, ExpedienteListadoItem>()
@@ -968,14 +1046,45 @@ function KycExpedienteContent() {
           relacionNegocios: "",
         },
       )
+      setDomicilioCliente({ ...crearDomicilioBase(), ...(detalle.domicilioCliente ?? {}) })
+      setContactoCliente({
+        ladaFijo: "",
+        telefonoFijo: "",
+        extension: "",
+        ladaMovil: "",
+        telefonoMovil: "",
+        correo: "",
+        ...(detalle.contactoCliente ?? {}),
+      })
+      setRepresentanteLegal({
+        nombre: "",
+        apellidoPaterno: "",
+        apellidoMaterno: "",
+        rfc: "",
+        puesto: "",
+        paisNacionalidad: "MX",
+        ...(detalle.representanteLegal ?? {}),
+      })
+      setIdentificacionRepresentante({
+        tipo: "",
+        numero: "",
+        autoridad: "",
+        vigencia: "",
+        ...(detalle.identificacionRepresentante ?? {}),
+      })
+      setInmueble({
+        tipo: "",
+        valorReferencia: "",
+        folioReal: "",
+        ...(detalle.inmueble ?? {}),
+      })
+      setUbicacionInmueble({ ...crearDomicilioBase(), ...(detalle.ubicacionInmueble ?? {}) })
       const identificacion = {
         ...detalle.identificacion,
         nombre: detalle.identificacion?.nombre ?? detalle.nombre ?? "",
         rfc: detalle.identificacion?.rfc ?? detalle.rfc ?? "",
       }
       setDatosIdentificacion(identificacion)
-      setDatosFiscales({ ...(detalle.datosFiscales ?? {}) })
-      setPerfilOperaciones({ ...(detalle.perfilOperaciones ?? {}) })
       setDocumentacionEstado({ ...(detalle.documentacion ?? {}) })
       const personas =
         detalle.personas.length > 0
@@ -993,20 +1102,24 @@ function KycExpedienteContent() {
       setActoOperacion,
       setClaveActividadVulnerable,
       setClaveSujetoObligado,
-      setDatosFiscales,
       setDatosIdentificacion,
       setDetalleTipoCliente,
       setDocumentacionEstado,
+      setDomicilioCliente,
       setFechaRegistro,
+      setIdentificacionRepresentante,
+      setInmueble,
       setNombreExpediente,
-      setPerfilOperaciones,
+      setContactoCliente,
       setPersonasReportadas,
+      setRepresentanteLegal,
       setResponsable,
       setTipoExpediente,
       setTipoCliente,
       setBusquedasColonias,
       setBusquedasCiudades,
       setBusquedaPais,
+      setUbicacionInmueble,
     ],
   )
 
@@ -1268,6 +1381,114 @@ function KycExpedienteContent() {
       [setBusquedasCiudades, setBusquedasColonias, hydrateCodigoPostalInfo],
     )
 
+  const hydrateCodigoPostalCliente = useCallback(
+    async (codigo: string, setter: Dispatch<SetStateAction<Domicilio>>) => {
+    if (typeof window === "undefined") return
+    const limpio = codigo.trim().replace(/[^0-9]/g, "")
+    if (limpio.length !== 5) return
+    const cacheKey = `${SEPOMEX_STORAGE_PREFIX}${limpio}`
+    let info: CodigoPostalInfo | undefined
+    const cacheRaw = window.localStorage.getItem(cacheKey)
+    if (cacheRaw) {
+      try {
+        info = JSON.parse(cacheRaw) as CodigoPostalInfo
+      } catch {
+        window.localStorage.removeItem(cacheKey)
+      }
+    }
+    if (!info) {
+      info = await fetchCodigoPostalInfo(limpio)
+      if (info) {
+        window.localStorage.setItem(cacheKey, JSON.stringify(info))
+      }
+    }
+    if (!info) return
+    registerCodigoPostalInfo(info)
+    setter((prev) => {
+      if (prev.codigoPostal !== limpio) return prev
+      const colonias = info?.asentamientos ?? []
+      return {
+        ...prev,
+        pais: "MX",
+        entidad: info?.estado ?? "",
+        municipio: info?.municipio ?? "",
+        ciudad: info?.ciudad ?? "",
+        colonia:
+          colonias.length > 0 ? (colonias.includes(prev.colonia) ? prev.colonia : colonias[0]) : "",
+      }
+    })
+    },
+    [],
+  )
+
+  const handleCodigoPostalClienteChange = useCallback(
+    (value: string) => {
+      const limpio = value.replace(/[^0-9]/g, "").slice(0, 5)
+      setDomicilioCliente((prev) => {
+        if (limpio.length !== 5) {
+          return {
+            ...prev,
+            codigoPostal: limpio,
+            pais: "MX",
+            entidad: "",
+            municipio: "",
+            ciudad: "",
+            colonia: "",
+          }
+        }
+        const info = findCodigoPostalInfo(limpio)
+        const colonias = info?.asentamientos ?? []
+        return {
+          ...prev,
+          codigoPostal: limpio,
+          pais: "MX",
+          entidad: info?.estado ?? "",
+          municipio: info?.municipio ?? "",
+          ciudad: info?.ciudad ?? "",
+          colonia: colonias.length > 0 ? (colonias.includes(prev.colonia) ? prev.colonia : colonias[0]) : "",
+        }
+      })
+      if (limpio.length === 5 && !findCodigoPostalInfo(limpio)) {
+        void hydrateCodigoPostalCliente(limpio, setDomicilioCliente)
+      }
+    },
+    [hydrateCodigoPostalCliente],
+  )
+
+  const handleCodigoPostalInmuebleChange = useCallback(
+    (value: string) => {
+      const limpio = value.replace(/[^0-9]/g, "").slice(0, 5)
+      setUbicacionInmueble((prev) => {
+        if (limpio.length !== 5) {
+          return {
+            ...prev,
+            codigoPostal: limpio,
+            pais: "MX",
+            entidad: "",
+            municipio: "",
+            ciudad: "",
+            colonia: "",
+          }
+        }
+        const info = findCodigoPostalInfo(limpio)
+        const colonias = info?.asentamientos ?? []
+        return {
+          ...prev,
+          codigoPostal: limpio,
+          pais: "MX",
+          entidad: info?.estado ?? "",
+          municipio: info?.municipio ?? "",
+          ciudad: info?.ciudad ?? "",
+          colonia: colonias.length > 0 ? (colonias.includes(prev.colonia) ? prev.colonia : colonias[0]) : "",
+        }
+      })
+      if (limpio.length === 5 && !findCodigoPostalInfo(limpio)) {
+        void hydrateCodigoPostalCliente(limpio, setUbicacionInmueble)
+      }
+    },
+    [hydrateCodigoPostalCliente],
+  )
+
   const crearNuevoExpediente = useCallback(() => {
     setExpedienteSeleccionado(null)
     setNombreExpediente("")
@@ -1280,8 +1501,35 @@ function KycExpedienteContent() {
     setClaveActividadVulnerable("")
     setActoOperacion({ tipo: "", fechaCelebracion: "", relacionNegocios: "" })
     setDatosIdentificacion({})
-    setDatosFiscales({})
-    setPerfilOperaciones({})
+    setDomicilioCliente(crearDomicilioBase())
+    setContactoCliente({
+      ladaFijo: "",
+      telefonoFijo: "",
+      extension: "",
+      ladaMovil: "",
+      telefonoMovil: "",
+      correo: "",
+    })
+    setRepresentanteLegal({
+      nombre: "",
+      apellidoPaterno: "",
+      apellidoMaterno: "",
+      rfc: "",
+      puesto: "",
+      paisNacionalidad: "MX",
+    })
+    setIdentificacionRepresentante({
+      tipo: "",
+      numero: "",
+      autoridad: "",
+      vigencia: "",
+    })
+    setInmueble({
+      tipo: "",
+      valorReferencia: "",
+      folioReal: "",
+    })
+    setUbicacionInmueble(crearDomicilioBase())
     setDocumentacionEstado({})
     setPersonasReportadas([crearPersonaBase()])
     setBusquedasColonias({})
@@ -1302,8 +1550,35 @@ function KycExpedienteContent() {
     setClaveActividadVulnerable(demo.claveActividadVulnerable ?? "")
     setActoOperacion({ tipo: "", fechaCelebracion: "", relacionNegocios: "" })
     setDatosIdentificacion(demo.identificacion ?? {})
-    setDatosFiscales(demo.datosFiscales ?? {})
-    setPerfilOperaciones(demo.perfilOperaciones ?? {})
+    setDomicilioCliente(crearDomicilioBase())
+    setContactoCliente({
+      ladaFijo: "",
+      telefonoFijo: "",
+      extension: "",
+      ladaMovil: "",
+      telefonoMovil: "",
+      correo: "",
+    })
+    setRepresentanteLegal({
+      nombre: "",
+      apellidoPaterno: "",
+      apellidoMaterno: "",
+      rfc: "",
+      puesto: "",
+      paisNacionalidad: "MX",
+    })
+    setIdentificacionRepresentante({
+      tipo: "",
+      numero: "",
+      autoridad: "",
+      vigencia: "",
+    })
+    setInmueble({
+      tipo: "",
+      valorReferencia: "",
+      folioReal: "",
+    })
+    setUbicacionInmueble(crearDomicilioBase())
     setDocumentacionEstado(demo.documentacion ?? {})
     setBusquedaPais("")
     setBusquedaExpedientes("")
@@ -1528,9 +1803,13 @@ function KycExpedienteContent() {
         claveSujetoObligado,
         claveActividadVulnerable,
         actoOperacion,
+        domicilioCliente: { ...domicilioCliente },
+        contactoCliente: { ...contactoCliente },
+        representanteLegal: { ...representanteLegal },
+        identificacionRepresentante: { ...identificacionRepresentante },
+        inmueble: { ...inmueble },
+        ubicacionInmueble: { ...ubicacionInmueble },
         identificacion: { ...datosIdentificacion, nombre, rfc },
-        datosFiscales: { ...datosFiscales },
-        perfilOperaciones: { ...perfilOperaciones },
         documentacion: { ...documentacionEstado },
         personas: personasSanitizadas,
         actualizadoEn: new Date().toISOString(),
@@ -1734,6 +2013,446 @@ function KycExpedienteContent() {
       </Card>
 
       <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-slate-600" /> Domicilio del cliente
+          </CardTitle>
+          <CardDescription>Captura el domicilio base y permite el autollenado por código postal.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Código Postal</Label>
+              <Input
+                value={domicilioCliente.codigoPostal}
+                onChange={(event) => handleCodigoPostalClienteChange(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo de Vialidad</Label>
+              <Select
+                value={domicilioCliente.tipoVialidad}
+                onValueChange={(value) => setDomicilioCliente((prev) => ({ ...prev, tipoVialidad: value }))}
+              >
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder="Selecciona el tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPO_VIALIDAD_OPCIONES.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Nombre de la Vialidad</Label>
+              <Input
+                value={domicilioCliente.nombreVialidad}
+                onChange={(event) => setDomicilioCliente((prev) => ({ ...prev, nombreVialidad: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Número Exterior</Label>
+              <Input
+                value={domicilioCliente.numeroExterior}
+                onChange={(event) => setDomicilioCliente((prev) => ({ ...prev, numeroExterior: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Número Interior</Label>
+              <Input
+                value={domicilioCliente.numeroInterior}
+                onChange={(event) => setDomicilioCliente((prev) => ({ ...prev, numeroInterior: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Colonia / Urbanización</Label>
+              <Select
+                value={coloniaClienteSeleccionada}
+                onValueChange={(value) => setDomicilioCliente((prev) => ({ ...prev, colonia: value }))}
+                disabled={coloniasCliente.length === 0}
+              >
+                <SelectTrigger className="bg-white" disabled={coloniasCliente.length === 0}>
+                  <SelectValue placeholder="Selecciona la colonia" />
+                </SelectTrigger>
+                <SelectContent>
+                  {coloniasCliente.length > 0 ? (
+                    coloniasCliente.map((colonia) => (
+                      <SelectItem key={colonia} value={colonia}>
+                        {colonia}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">Captura un código postal válido</div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Alcaldía / Municipio / Demarcación</Label>
+              <Input value={domicilioCliente.municipio} readOnly className="bg-slate-50" />
+            </div>
+            <div className="space-y-2">
+              <Label>Ciudad o Población</Label>
+              <Input value={domicilioCliente.ciudad} readOnly className="bg-slate-50" />
+            </div>
+            <div className="space-y-2">
+              <Label>Entidad, Estado, Provincia</Label>
+              <Input value={domicilioCliente.entidad} readOnly className="bg-slate-50" />
+            </div>
+            <div className="space-y-2">
+              <Label>País</Label>
+              <Input value={domicilioCliente.pais} readOnly className="bg-slate-50" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Phone className="h-5 w-5 text-slate-600" /> Datos de contacto del cliente
+          </CardTitle>
+          <CardDescription>Captura los teléfonos y correo electrónico del cliente.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Lada</Label>
+            <Input
+              value={contactoCliente.ladaFijo}
+              onChange={(event) => setContactoCliente((prev) => ({ ...prev, ladaFijo: event.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Número Telefónico (Fijo)</Label>
+            <Input
+              value={contactoCliente.telefonoFijo}
+              onChange={(event) => setContactoCliente((prev) => ({ ...prev, telefonoFijo: event.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Extensión (en su caso)</Label>
+            <Input
+              value={contactoCliente.extension}
+              onChange={(event) => setContactoCliente((prev) => ({ ...prev, extension: event.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Lada (móvil)</Label>
+            <Input
+              value={contactoCliente.ladaMovil}
+              onChange={(event) => setContactoCliente((prev) => ({ ...prev, ladaMovil: event.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Número Telefónico (Móvil)</Label>
+            <Input
+              value={contactoCliente.telefonoMovil}
+              onChange={(event) => setContactoCliente((prev) => ({ ...prev, telefonoMovil: event.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Correo electrónico</Label>
+            <Input
+              type="email"
+              value={contactoCliente.correo}
+              onChange={(event) => setContactoCliente((prev) => ({ ...prev, correo: event.target.value }))}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserCheck className="h-5 w-5 text-slate-600" /> Datos del representante o apoderado legal
+          </CardTitle>
+          <CardDescription>Completa esta sección si el cliente actúa mediante representante.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Nombre(s) (sin abreviaturas)</Label>
+            <Input
+              value={representanteLegal.nombre}
+              onChange={(event) => setRepresentanteLegal((prev) => ({ ...prev, nombre: event.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Apellido paterno</Label>
+            <Input
+              value={representanteLegal.apellidoPaterno}
+              onChange={(event) =>
+                setRepresentanteLegal((prev) => ({ ...prev, apellidoPaterno: event.target.value }))
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Apellido materno</Label>
+            <Input
+              value={representanteLegal.apellidoMaterno}
+              onChange={(event) =>
+                setRepresentanteLegal((prev) => ({ ...prev, apellidoMaterno: event.target.value }))
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Registro Federal de Contribuyentes / NIF</Label>
+            <Input
+              value={representanteLegal.rfc}
+              onChange={(event) =>
+                setRepresentanteLegal((prev) => ({ ...prev, rfc: event.target.value.toUpperCase() }))
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Puesto o Cargo</Label>
+            <Input
+              value={representanteLegal.puesto}
+              onChange={(event) => setRepresentanteLegal((prev) => ({ ...prev, puesto: event.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>País de Nacionalidad</Label>
+            <Select
+              value={findPaisByCodigo(representanteLegal.paisNacionalidad)?.code ?? representanteLegal.paisNacionalidad}
+              onValueChange={(nuevoPais) => setRepresentanteLegal((prev) => ({ ...prev, paisNacionalidad: nuevoPais }))}
+              onOpenChange={(open) => {
+                if (open) setBusquedaPais("")
+              }}
+            >
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Selecciona país" />
+              </SelectTrigger>
+              <SelectContent>
+                <div className="p-2">
+                  <Input
+                    autoFocus
+                    placeholder="Buscar país..."
+                    value={busquedaPais}
+                    onChange={(event) => setBusquedaPais(event.target.value)}
+                  />
+                </div>
+                {paisesFiltrados.length > 0 ? (
+                  paisesFiltrados.map((pais) => (
+                    <SelectItem key={pais.code} value={pais.code}>
+                      {pais.label}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">Sin coincidencias</div>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5 text-slate-600" /> Identificación del representante
+          </CardTitle>
+          <CardDescription>Datos de la identificación presentada por el representante o apoderado legal.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Tipo de identificación</Label>
+            <Select
+              value={identificacionRepresentante.tipo}
+              onValueChange={(value) => setIdentificacionRepresentante((prev) => ({ ...prev, tipo: value }))}
+            >
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Selecciona el tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                {IDENTIFICACION_TIPOS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Número de identificación</Label>
+            <Input
+              value={identificacionRepresentante.numero}
+              onChange={(event) =>
+                setIdentificacionRepresentante((prev) => ({ ...prev, numero: event.target.value }))
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Autoridad que emite la identificación</Label>
+            <Input
+              value={identificacionRepresentante.autoridad}
+              onChange={(event) =>
+                setIdentificacionRepresentante((prev) => ({ ...prev, autoridad: event.target.value }))
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Fecha de vigencia</Label>
+            <Input
+              type="date"
+              value={identificacionRepresentante.vigencia}
+              onChange={(event) =>
+                setIdentificacionRepresentante((prev) => ({ ...prev, vigencia: event.target.value }))
+              }
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-slate-600" /> Características del inmueble
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Tipo de Inmueble</Label>
+            <Select value={inmueble.tipo} onValueChange={(value) => setInmueble((prev) => ({ ...prev, tipo: value }))}>
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Selecciona el tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                {TIPO_INMUEBLE_OPCIONES.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Valor de Referencia</Label>
+            <Input
+              value={inmueble.valorReferencia}
+              onChange={(event) => setInmueble((prev) => ({ ...prev, valorReferencia: event.target.value }))}
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Folio Real o Antecedentes Registrales</Label>
+            <Input
+              value={inmueble.folioReal}
+              onChange={(event) => setInmueble((prev) => ({ ...prev, folioReal: event.target.value }))}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-slate-600" /> Ubicación del inmueble
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Código Postal</Label>
+              <Input
+                value={ubicacionInmueble.codigoPostal}
+                onChange={(event) => handleCodigoPostalInmuebleChange(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo de Vialidad</Label>
+              <Select
+                value={ubicacionInmueble.tipoVialidad}
+                onValueChange={(value) => setUbicacionInmueble((prev) => ({ ...prev, tipoVialidad: value }))}
+              >
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder="Selecciona el tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPO_VIALIDAD_OPCIONES.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Nombre de la Vialidad</Label>
+              <Input
+                value={ubicacionInmueble.nombreVialidad}
+                onChange={(event) =>
+                  setUbicacionInmueble((prev) => ({ ...prev, nombreVialidad: event.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Número Exterior</Label>
+              <Input
+                value={ubicacionInmueble.numeroExterior}
+                onChange={(event) =>
+                  setUbicacionInmueble((prev) => ({ ...prev, numeroExterior: event.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Número Interior</Label>
+              <Input
+                value={ubicacionInmueble.numeroInterior}
+                onChange={(event) =>
+                  setUbicacionInmueble((prev) => ({ ...prev, numeroInterior: event.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Colonia / Urbanización</Label>
+              <Select
+                value={coloniaInmuebleSeleccionada}
+                onValueChange={(value) => setUbicacionInmueble((prev) => ({ ...prev, colonia: value }))}
+                disabled={coloniasInmueble.length === 0}
+              >
+                <SelectTrigger className="bg-white" disabled={coloniasInmueble.length === 0}>
+                  <SelectValue placeholder="Selecciona la colonia" />
+                </SelectTrigger>
+                <SelectContent>
+                  {coloniasInmueble.length > 0 ? (
+                    coloniasInmueble.map((colonia) => (
+                      <SelectItem key={colonia} value={colonia}>
+                        {colonia}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">Captura un código postal válido</div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Alcaldía / Municipio / Demarcación</Label>
+              <Input value={ubicacionInmueble.municipio} readOnly className="bg-slate-50" />
+            </div>
+            <div className="space-y-2">
+              <Label>Ciudad o Población</Label>
+              <Input value={ubicacionInmueble.ciudad} readOnly className="bg-slate-50" />
+            </div>
+            <div className="space-y-2">
+              <Label>Entidad, Estado, Provincia</Label>
+              <Input value={ubicacionInmueble.entidad} readOnly className="bg-slate-50" />
+            </div>
+            <div className="space-y-2">
+              <Label>País</Label>
+              <Input value={ubicacionInmueble.pais} readOnly className="bg-slate-50" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200">
         <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
@@ -1846,12 +2565,6 @@ function KycExpedienteContent() {
                   Identificación {camposIdentificacionCompletos}/{totalCamposIdentificacion}
                 </Badge>
                 <Badge variant="outline" className="bg-white">
-                  Información fiscal {camposFiscalesCompletos}/{totalCamposFiscales}
-                </Badge>
-                <Badge variant="outline" className="bg-white">
-                  Perfil transaccional {camposPerfilCompletos}/{totalCamposPerfil}
-                </Badge>
-                <Badge variant="outline" className="bg-white">
                   Documentación {documentosCompletos}/{DOCUMENTACION_REQUERIDA.length}
                 </Badge>
               </div>
@@ -1866,13 +2579,6 @@ function KycExpedienteContent() {
           </div>
         </CardContent>
       </Card>
-
-      {tipoExpediente !== "persona_moral" && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          El formulario detallado solo está disponible para Persona Moral. Selecciona esa opción o espera la carga del
-          formato correspondiente.
-        </div>
-      )}
 
       <Card className="border-slate-200">
         <CardHeader>
@@ -1945,7 +2651,7 @@ function KycExpedienteContent() {
         <CardContent className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>Tipo de cliente</Label>
+              <Label>Tipo de Cliente con quien se realiza el Acto u Operación</Label>
               <Select value={tipoCliente} onValueChange={(value) => setTipoCliente(value)}>
                 <SelectTrigger className="bg-white">
                   <SelectValue placeholder="Selecciona tipo de cliente" />
@@ -2022,7 +2728,7 @@ function KycExpedienteContent() {
                           {campo.label}
                           {campo.requerido && <span className="text-rose-500">*</span>}
                         </Label>
-                        {campo.id === "nacionalidad" ? (
+                        {campo.id === "pais-nacionalidad" ? (
                           <Select
                             value={value}
                             onValueChange={(nuevoValor) =>
@@ -2083,139 +2789,10 @@ function KycExpedienteContent() {
       <Card className="border-slate-200">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-slate-600" /> Información legal y fiscal
-          </CardTitle>
-          <CardDescription>Datos que deben coincidir con la constancia de situación fiscal y documentos legales.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            {DATOS_FISCALES_CAMPOS.map((campo) => {
-              const value = datosFiscales[campo.id] ?? ""
-              const onChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-                setDatosFiscales((prev) => ({ ...prev, [campo.id]: event.target.value }))
-              }
-
-              return (
-                <div key={campo.id} className="space-y-1 text-sm">
-                  <Label className="flex items-center justify-between text-xs font-semibold uppercase text-slate-600">
-                    {campo.label}
-                    {campo.requerido && <span className="text-rose-500">*</span>}
-                  </Label>
-                  {campo.multiline ? (
-                    <Textarea
-                      value={value}
-                      onChange={onChange}
-                      placeholder={campo.placeholder ?? ""}
-                      rows={3}
-                    />
-                  ) : (
-                    <Input
-                      type={campo.type ?? "text"}
-                      value={value}
-                      onChange={onChange}
-                      placeholder={campo.placeholder ?? ""}
-                    />
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-slate-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Globe2 className="h-5 w-5 text-slate-600" /> Perfil transaccional y uso de servicios
+            <Users className="h-5 w-5 text-slate-600" /> Beneficiarios controladores
           </CardTitle>
           <CardDescription>
-            Define el comportamiento esperado para detectar desviaciones cuando registres operaciones y avisos.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            {PERFIL_OPERACION_CAMPOS.map((campo) => {
-              const value = perfilOperaciones[campo.id] ?? ""
-              return (
-                <div key={campo.id} className="space-y-1 text-sm">
-                  <Label className="flex items-center justify-between text-xs font-semibold uppercase text-slate-600">
-                    {campo.label}
-                    {campo.requerido && <span className="text-rose-500">*</span>}
-                  </Label>
-                  <Textarea
-                    value={value}
-                    onChange={(event) =>
-                      setPerfilOperaciones((prev) => ({
-                        ...prev,
-                        [campo.id]: event.target.value,
-                      }))
-                    }
-                    placeholder={campo.placeholder ?? ""}
-                    rows={3}
-                  />
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-slate-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5 text-slate-600" /> Documentación requerida
-          </CardTitle>
-          <CardDescription>
-            Marca el estatus de cada documento para asegurar que el expediente esté listo ante cualquier revisión.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          {DOCUMENTACION_REQUERIDA.map((documento) => {
-            const estado = obtenerStatusDocumento(documentacionEstado[documento.id])
-            return (
-              <div key={documento.id} className="space-y-3 rounded border bg-white p-4 text-sm shadow-sm">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-slate-700">{documento.titulo}</p>
-                    <p className="text-xs text-slate-500">{documento.descripcion}</p>
-                  </div>
-                  <Badge className={`${estado.classes} text-xs font-semibold capitalize`}>{estado.label}</Badge>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {DOCUMENTO_STATUS.map((opcion) => (
-                    <Button
-                      key={opcion.value}
-                      type="button"
-                      size="sm"
-                      variant={estado.value === opcion.value ? "default" : "outline"}
-                      onClick={() =>
-                        setDocumentacionEstado((prev) => ({
-                          ...prev,
-                          [documento.id]: opcion.value,
-                        }))
-                      }
-                    >
-                      {opcion.label}
-                    </Button>
-                  ))}
-                </div>
-                {documento.obligatorio && (
-                  <p className="text-[11px] text-rose-500">Documento indispensable para la integración del aviso.</p>
-                )}
-              </div>
-            )
-          })}
-        </CardContent>
-      </Card>
-
-      <Card className="border-slate-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-slate-600" /> Personas relacionadas y beneficiarios
-          </CardTitle>
-          <CardDescription>
-            Registra a la persona objeto del aviso, representantes, apoderados y beneficiarios finales para
-            prellenar automáticamente los formularios.
+            Registra la información del beneficiario controlador (1) y agrega un segundo beneficiario si aplica.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -2272,8 +2849,8 @@ function KycExpedienteContent() {
               <div key={persona.id} className="space-y-6 rounded border border-slate-200 bg-white p-4">
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
-                  <span className="text-sm font-semibold text-slate-700">Persona {index + 1}</span>
-                  <span className="text-xs text-slate-500">{persona.rolRelacion}</span>
+                  <span className="text-sm font-semibold text-slate-700">Beneficiario controlador {index + 1}</span>
+                  <span className="text-xs text-slate-500">Datos de identificación</span>
                 </div>
                 <Button
                   type="button"
@@ -2288,43 +2865,7 @@ function KycExpedienteContent() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Tipo de persona</Label>
-                  <Select
-                    value={persona.tipo}
-                    onValueChange={(value) =>
-                      actualizarPersonaReportada(persona.id, (prev) => ({
-                        ...prev,
-                        tipo: value as PersonaReportada["tipo"],
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="bg-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PERSONA_TIPO_OPCIONES.map((opcion) => (
-                        <SelectItem key={opcion.value} value={opcion.value}>
-                          {opcion.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Rol dentro del aviso</Label>
-                  <Input
-                    value={persona.rolRelacion}
-                    onChange={(event) =>
-                      actualizarPersonaReportada(persona.id, (prev) => ({
-                        ...prev,
-                        rolRelacion: event.target.value,
-                      }))
-                    }
-                    placeholder="Cliente, representante, beneficiario, fideicomitente..."
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Nombre o razón social</Label>
+                  <Label>Nombre(s) (sin abreviaturas)</Label>
                   <Input
                     value={persona.denominacion}
                     onChange={(event) =>
@@ -2336,32 +2877,44 @@ function KycExpedienteContent() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>RFC</Label>
+                  <Label>Apellido paterno</Label>
                   <Input
-                    value={persona.rfc}
+                    value={persona.apellidoPaterno}
                     onChange={(event) =>
                       actualizarPersonaReportada(persona.id, (prev) => ({
                         ...prev,
-                        rfc: event.target.value.toUpperCase(),
+                        apellidoPaterno: event.target.value,
                       }))
                     }
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>CURP</Label>
+                  <Label>Apellido materno</Label>
                   <Input
-                    value={persona.curp}
+                    value={persona.apellidoMaterno}
                     onChange={(event) =>
                       actualizarPersonaReportada(persona.id, (prev) => ({
                         ...prev,
-                        curp: event.target.value.toUpperCase(),
+                        apellidoMaterno: event.target.value,
                       }))
                     }
-                    placeholder="Para personas físicas"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>País de constitución / nacionalidad</Label>
+                  <Label>Fecha de nacimiento</Label>
+                  <Input
+                    type="date"
+                    value={persona.fechaConstitucion}
+                    onChange={(event) =>
+                      actualizarPersonaReportada(persona.id, (prev) => ({
+                        ...prev,
+                        fechaConstitucion: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>País de nacionalidad</Label>
                   <Select
                     value={paisPersonaOption?.code ?? persona.pais}
                     onValueChange={(nuevoPais) =>
@@ -2399,112 +2952,79 @@ function KycExpedienteContent() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Fecha de constitución / nacimiento</Label>
+                  <Label>País de nacimiento</Label>
+                  <Select
+                    value={findPaisByCodigo(persona.paisNacimiento)?.code ?? persona.paisNacimiento}
+                    onValueChange={(nuevoPais) =>
+                      actualizarPersonaReportada(persona.id, (prev) => ({
+                        ...prev,
+                        paisNacimiento: nuevoPais,
+                      }))
+                    }
+                    onOpenChange={(open) => {
+                      if (open) setBusquedaPais("")
+                    }}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="Selecciona país" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <div className="p-2">
+                        <Input
+                          autoFocus
+                          placeholder="Buscar país..."
+                          value={busquedaPais}
+                          onChange={(event) => setBusquedaPais(event.target.value)}
+                        />
+                      </div>
+                      {paisesFiltrados.length > 0 ? (
+                        paisesFiltrados.map((pais) => (
+                          <SelectItem key={pais.code} value={pais.code}>
+                            {pais.label}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">Sin coincidencias</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>CURP o equivalente</Label>
                   <Input
-                    type="date"
-                    value={persona.fechaConstitucion}
+                    value={persona.curp}
                     onChange={(event) =>
                       actualizarPersonaReportada(persona.id, (prev) => ({
                         ...prev,
-                        fechaConstitucion: event.target.value,
+                        curp: event.target.value.toUpperCase(),
                       }))
                     }
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Actividad o profesión</Label>
+                  <Label>RFC / NIF</Label>
                   <Input
-                    value={persona.giro}
+                    value={persona.rfc}
                     onChange={(event) =>
                       actualizarPersonaReportada(persona.id, (prev) => ({
                         ...prev,
-                        giro: event.target.value,
+                        rfc: event.target.value.toUpperCase(),
                       }))
                     }
-                    placeholder="Ej. Servicios profesionales, arrendamiento..."
                   />
                 </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <UserCheck className="h-4 w-4" /> Datos del representante o apoderado legal
-                </div>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="space-y-2">
-                    <Label>Nombre(s)</Label>
-                    <Input
-                      value={persona.representante.nombre}
-                      onChange={(event) =>
-                        actualizarPersonaReportada(persona.id, (prev) => ({
-                          ...prev,
-                          representante: { ...prev.representante, nombre: event.target.value },
-                        }))
-                      }
-                      placeholder="Nombre completo"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Apellido paterno</Label>
-                    <Input
-                      value={persona.representante.apellidoPaterno}
-                      onChange={(event) =>
-                        actualizarPersonaReportada(persona.id, (prev) => ({
-                          ...prev,
-                          representante: { ...prev.representante, apellidoPaterno: event.target.value },
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Apellido materno</Label>
-                    <Input
-                      value={persona.representante.apellidoMaterno}
-                      onChange={(event) =>
-                        actualizarPersonaReportada(persona.id, (prev) => ({
-                          ...prev,
-                          representante: { ...prev.representante, apellidoMaterno: event.target.value },
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Fecha de nacimiento</Label>
-                    <Input
-                      type="date"
-                      value={persona.representante.fechaNacimiento}
-                      onChange={(event) =>
-                        actualizarPersonaReportada(persona.id, (prev) => ({
-                          ...prev,
-                          representante: { ...prev.representante, fechaNacimiento: event.target.value },
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>RFC</Label>
-                    <Input
-                      value={persona.representante.rfc}
-                      onChange={(event) =>
-                        actualizarPersonaReportada(persona.id, (prev) => ({
-                          ...prev,
-                          representante: { ...prev.representante, rfc: event.target.value.toUpperCase() },
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>CURP</Label>
-                    <Input
-                      value={persona.representante.curp}
-                      onChange={(event) =>
-                        actualizarPersonaReportada(persona.id, (prev) => ({
-                          ...prev,
-                          representante: { ...prev.representante, curp: event.target.value.toUpperCase() },
-                        }))
-                      }
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label>Porcentaje de participación</Label>
+                  <Input
+                    value={persona.participacion.porcentajeCapital}
+                    onChange={(event) =>
+                      actualizarPersonaReportada(persona.id, (prev) => ({
+                        ...prev,
+                        participacion: { ...prev.participacion, porcentajeCapital: event.target.value },
+                      }))
+                    }
+                    placeholder="Ej. 25%"
+                  />
                 </div>
               </div>
 
@@ -2972,82 +3492,62 @@ function KycExpedienteContent() {
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <Globe2 className="h-4 w-4" /> Participación y origen de recursos
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Porcentaje de participación</Label>
-                    <Input
-                      value={persona.participacion.porcentajeCapital}
-                      onChange={(event) =>
-                        actualizarPersonaReportada(persona.id, (prev) => ({
-                          ...prev,
-                          participacion: { ...prev.participacion, porcentajeCapital: event.target.value },
-                        }))
-                      }
-                      placeholder="Ej. 25%"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>¿Es persona políticamente expuesta?</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {[{ value: "si", label: "Sí" }, { value: "no", label: "No" }].map((option) => (
-                        <Button
-                          key={option.value}
-                          type="button"
-                          variant={persona.participacion.esPep === option.value ? "default" : "outline"}
-                          onClick={() =>
-                            actualizarPersonaReportada(persona.id, (prev) => ({
-                              ...prev,
-                              participacion: { ...prev.participacion, esPep: option.value as RespuestaBinaria },
-                            }))
-                          }
-                        >
-                          {option.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="md:col-span-2 space-y-2">
-                    <Label>Origen de los recursos que aporta</Label>
-                    <Textarea
-                      value={persona.participacion.origenRecursos}
-                      onChange={(event) =>
-                        actualizarPersonaReportada(persona.id, (prev) => ({
-                          ...prev,
-                          participacion: { ...prev.participacion, origenRecursos: event.target.value },
-                        }))
-                      }
-                      rows={3}
-                    />
-                  </div>
-                  {persona.participacion.esPep === "si" && (
-                    <div className="md:col-span-2 space-y-2">
-                      <Label>Detalle del cargo público o parentesco</Label>
-                      <Textarea
-                        value={persona.participacion.detallePep}
-                        onChange={(event) =>
-                          actualizarPersonaReportada(persona.id, (prev) => ({
-                            ...prev,
-                            participacion: { ...prev.participacion, detallePep: event.target.value },
-                          }))
-                        }
-                        rows={3}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
           )})}
 
           <div className="flex justify-end">
             <Button type="button" variant="outline" onClick={agregarPersonaReportada} className="flex items-center gap-2">
-              <Plus className="h-4 w-4" /> Añadir otra persona
+              <Plus className="h-4 w-4" /> Añadir beneficiario controlador
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5 text-slate-600" /> Documentación que integra el expediente
+          </CardTitle>
+          <CardDescription>
+            Marca el estatus de cada documento para asegurar que el expediente esté listo ante cualquier revisión.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          {DOCUMENTACION_REQUERIDA.map((documento) => {
+            const estado = obtenerStatusDocumento(documentacionEstado[documento.id])
+            return (
+              <div key={documento.id} className="space-y-3 rounded border bg-white p-4 text-sm shadow-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-slate-700">{documento.titulo}</p>
+                    <p className="text-xs text-slate-500">{documento.descripcion}</p>
+                  </div>
+                  <Badge className={`${estado.classes} text-xs font-semibold capitalize`}>{estado.label}</Badge>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {DOCUMENTO_STATUS.map((opcion) => (
+                    <Button
+                      key={opcion.value}
+                      type="button"
+                      size="sm"
+                      variant={estado.value === opcion.value ? "default" : "outline"}
+                      onClick={() =>
+                        setDocumentacionEstado((prev) => ({
+                          ...prev,
+                          [documento.id]: opcion.value,
+                        }))
+                      }
+                    >
+                      {opcion.label}
+                    </Button>
+                  ))}
+                </div>
+                {documento.obligatorio && (
+                  <p className="text-[11px] text-rose-500">Documento indispensable para la integración del aviso.</p>
+                )}
+              </div>
+            )
+          })}
         </CardContent>
       </Card>
     </div>
