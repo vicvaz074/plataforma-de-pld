@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, type ChangeEvent } from "react"
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { actividadesVulnerables } from "@/lib/data/actividades"
+import { findCodigoPostalInfo, registerCodigoPostalInfo, type CodigoPostalInfo } from "@/lib/data/codigos-postales"
 import { PAISES } from "@/lib/data/paises"
 import { readFileAsDataUrl } from "@/lib/storage/read-file"
 import { cn } from "@/lib/utils"
@@ -392,6 +393,8 @@ const tiposSujetos: { value: SubjectType; label: string }[] = [
 
 const opcionesDocumento = ["Registro", "Autorización", "Patente", "Certificado", "Otro"]
 const opcionesAutoridad = ["SAT", "SHCP", "CNBV", "UIF", "Otra"]
+const SEPOMEX_API_BASE = "https://api.zippopotam.us/mx"
+const SEPOMEX_STORAGE_PREFIX = "codigo_postal_cache_"
 
 const normalizarTexto = (valor: unknown) => (typeof valor === "string" ? valor : "")
 
@@ -414,6 +417,46 @@ const obtenerEtiquetaNombre = (tipo: SubjectType) => {
   if (tipo === "moral") return "Denominación o Razón Social"
   if (tipo === "fideicomiso") return "Denominación"
   return "Nombre"
+}
+
+async function fetchCodigoPostalInfo(codigo: string): Promise<CodigoPostalInfo | undefined> {
+  try {
+    const response = await fetch(`${SEPOMEX_API_BASE}/${codigo}`)
+    if (!response.ok) return undefined
+    const data = (await response.json()) as {
+      "post code"?: string
+      country?: string
+      "country abbreviation"?: string
+      places?: Array<{
+        "place name"?: string
+        state?: string
+        "state abbreviation"?: string
+        "province"?: string
+        "province abbreviation"?: string
+        "community"?: string
+        "community abbreviation"?: string
+      }>
+    }
+    if (!data || !Array.isArray(data.places) || data.places.length === 0) return undefined
+    const place = data.places[0] ?? {}
+    const asentamientos = Array.from(
+      new Set(
+        data.places
+          .map((item) => item["place name"])
+          .filter((nombre): nombre is string => Boolean(nombre && nombre.trim().length > 0)),
+      ),
+    )
+    return {
+      codigo,
+      estado: place.state ?? "",
+      municipio: place.province ?? place.state ?? "",
+      ciudad: place.community ?? "",
+      asentamientos,
+    }
+  } catch (error) {
+    console.error("No se pudo consultar el código postal:", error)
+    return undefined
+  }
 }
 
 export default function RegistroSATPage() {
@@ -1083,6 +1126,108 @@ export default function RegistroSATPage() {
     }
   }
 
+  const hydrateCodigoPostalInfo = useCallback(
+    async (index: number, codigo: string) => {
+      if (typeof window === "undefined") return
+      const limpio = codigo.trim().replace(/[^0-9]/g, "")
+      if (limpio.length !== 5) return
+
+      const cacheKey = `${SEPOMEX_STORAGE_PREFIX}${limpio}`
+      let info: CodigoPostalInfo | undefined
+      const cacheRaw = window.localStorage.getItem(cacheKey)
+      if (cacheRaw) {
+        try {
+          info = JSON.parse(cacheRaw) as CodigoPostalInfo
+        } catch {
+          window.localStorage.removeItem(cacheKey)
+        }
+      }
+
+      if (!info) {
+        info = await fetchCodigoPostalInfo(limpio)
+        if (info) {
+          window.localStorage.setItem(cacheKey, JSON.stringify(info))
+        }
+      }
+
+      if (!info) return
+      registerCodigoPostalInfo(info)
+
+      setActividades((prev) =>
+        prev.map((actividad, idx) => {
+          if (idx !== index) return actividad
+          if (actividad.domicilio.codigoPostal !== limpio) return actividad
+          const colonias = info.asentamientos ?? []
+          return {
+            ...actividad,
+            domicilio: {
+              ...actividad.domicilio,
+              pais: "México",
+              entidad: info.estado ?? "",
+              alcaldia: info.municipio ?? "",
+              colonia:
+                colonias.length > 0
+                  ? colonias.includes(actividad.domicilio.colonia)
+                    ? actividad.domicilio.colonia
+                    : colonias[0]
+                  : actividad.domicilio.colonia,
+            },
+          }
+        }),
+      )
+    },
+    [setActividades],
+  )
+
+  const handleCodigoPostalChange = useCallback(
+    (index: number, value: string) => {
+      const limpio = value.replace(/[^0-9]/g, "").slice(0, 5)
+      setActividades((prev) =>
+        prev.map((actividad, idx) => {
+          if (idx !== index) return actividad
+
+          if (limpio.length !== 5) {
+            return {
+              ...actividad,
+              domicilio: {
+                ...actividad.domicilio,
+                codigoPostal: limpio,
+                pais: "México",
+                entidad: "",
+                alcaldia: "",
+              },
+            }
+          }
+
+          const info = findCodigoPostalInfo(limpio)
+          const colonias = info?.asentamientos ?? []
+
+          return {
+            ...actividad,
+            domicilio: {
+              ...actividad.domicilio,
+              codigoPostal: limpio,
+              pais: "México",
+              entidad: info?.estado ?? "",
+              alcaldia: info?.municipio ?? "",
+              colonia:
+                colonias.length > 0
+                  ? colonias.includes(actividad.domicilio.colonia)
+                    ? actividad.domicilio.colonia
+                    : colonias[0]
+                  : actividad.domicilio.colonia,
+            },
+          }
+        }),
+      )
+
+      if (limpio.length === 5 && !findCodigoPostalInfo(limpio)) {
+        void hydrateCodigoPostalInfo(index, limpio)
+      }
+    },
+    [hydrateCodigoPostalInfo],
+  )
+
   const actualizarIdentificacionCampo = (campo: keyof IdentificacionSujeto, valor: string) => {
     setIdentificacion((prev) => ({ ...prev, [campo]: valor }))
   }
@@ -1673,9 +1818,7 @@ export default function RegistroSATPage() {
                               <Input
                                 id={`domicilio-cp-${index}`}
                                 value={actividad.domicilio.codigoPostal}
-                                onChange={(event) =>
-                                  actualizarDomicilioActividadCampo(index, "codigoPostal", event.target.value)
-                                }
+                                onChange={(event) => handleCodigoPostalChange(index, event.target.value)}
                               />
                             </div>
                             <div className="space-y-2">
