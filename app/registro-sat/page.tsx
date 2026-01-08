@@ -136,6 +136,16 @@ interface RepresentanteCumplimiento {
   }
 }
 
+interface EjemploSujetoObligado {
+  id: string
+  label: string
+  tipo: SubjectType
+  identificacion: IdentificacionSujeto
+  contactos: ContactoSujeto[]
+  actividades: ActividadSujeto[]
+  representante?: RepresentanteCumplimiento | null
+}
+
 const datosAltaRegistro: RequiredDataSection[] = [
   {
     id: "actividad-vulnerable",
@@ -395,6 +405,207 @@ const opcionesDocumento = ["Registro", "Autorización", "Patente", "Certificado"
 const opcionesAutoridad = ["SAT", "SHCP", "CNBV", "UIF", "Otra"]
 const SEPOMEX_API_BASE = "https://api.zippopotam.us/mx"
 const SEPOMEX_STORAGE_PREFIX = "codigo_postal_cache_"
+const actividadEjemplo = actividadesVulnerables[0]?.key ?? ""
+
+const ejemplosSujetosObligados: EjemploSujetoObligado[] = [
+  {
+    id: "fisica-joyeria",
+    label: "Persona física · Joyería local",
+    tipo: "fisica",
+    identificacion: {
+      fecha: "1988-05-20",
+      rfc: "GOML880520ABC",
+      nombre: "Laura",
+      apellidoPaterno: "Gómez",
+      paisNacionalidad: "MX",
+      paisNacimiento: "MX",
+      curp: "GOML880520MDFRLR09",
+    },
+    contactos: [
+      {
+        nombreCompleto: "Laura Gómez Ruiz",
+        claveLada: "55",
+        telefonoFijo: "5512345678",
+        extension: "101",
+        telefonoMovil: "5511122233",
+        correo: "laura.gomez@joyeria.example",
+      },
+      {
+        nombreCompleto: "Carlos Hernández",
+        claveLada: "55",
+        telefonoFijo: "5588776655",
+        extension: "",
+        telefonoMovil: "5544332211",
+        correo: "c.hernandez@joyeria.example",
+      },
+    ],
+    actividades: [
+      {
+        actividadKey: actividadEjemplo,
+        fechaPrimera: "2023-01-15",
+        cuentaRegistro: "si",
+        tipoDocumento: "Registro",
+        autoridadDocumento: "SAT",
+        folioDocumento: "REG-12345",
+        periodoDocumento: "2023-2025",
+        domicilio: {
+          codigoPostal: "03100",
+          tipoVialidad: "Avenida",
+          nombreVialidad: "Insurgentes Sur",
+          numeroExterior: "123",
+          numeroInterior: "4B",
+          colonia: "Del Valle Centro",
+          alcaldia: "Benito Juárez",
+          entidad: "Ciudad de México",
+          pais: "México",
+        },
+      },
+    ],
+    representante: null,
+  },
+  {
+    id: "moral-inmobiliaria",
+    label: "Persona moral · Inmobiliaria",
+    tipo: "moral",
+    identificacion: {
+      fecha: "2015-09-10",
+      rfc: "INM150910XYZ",
+      nombre: "Inmuebles del Centro, S.A. de C.V.",
+      apellidoPaterno: "",
+      paisNacionalidad: "",
+      paisNacimiento: "",
+      curp: "",
+    },
+    contactos: [
+      {
+        nombreCompleto: "Marta Silva López",
+        claveLada: "81",
+        telefonoFijo: "8188996677",
+        extension: "200",
+        telefonoMovil: "8111223344",
+        correo: "marta.silva@inmuebles.example",
+      },
+    ],
+    actividades: [
+      {
+        actividadKey: actividadEjemplo,
+        fechaPrimera: "2019-06-01",
+        cuentaRegistro: "no",
+        tipoDocumento: "",
+        autoridadDocumento: "",
+        folioDocumento: "",
+        periodoDocumento: "",
+        domicilio: {
+          codigoPostal: "64000",
+          tipoVialidad: "Calle",
+          nombreVialidad: "Morelos",
+          numeroExterior: "250",
+          numeroInterior: "",
+          colonia: "Centro",
+          alcaldia: "Monterrey",
+          entidad: "Nuevo León",
+          pais: "México",
+        },
+      },
+    ],
+    representante: {
+      nombre: "Raúl",
+      apellidoPaterno: "Martínez",
+      apellidoMaterno: "Ortega",
+      fechaNacimiento: "1979-04-12",
+      rfc: "MAOR790412XYZ",
+      curp: "MAOR790412HMCRRL07",
+      paisNacionalidad: "MX",
+      fechaDesignacion: "2022-01-05",
+      fechaAceptacion: "2022-01-10",
+      contacto: {
+        claveLada: "81",
+        telefonoFijo: "8188553322",
+        extension: "115",
+        telefonoMovil: "8112233445",
+        correo: "raul.martinez@inmuebles.example",
+      },
+      certificacion: {
+        respuesta: "si",
+        tipoDocumento: "Certificado",
+        autoridadDocumento: "UIF",
+        folioDocumento: "CERT-7788",
+        periodoDocumento: "2023-2025",
+      },
+    },
+  },
+  {
+    id: "fideicomiso-energia",
+    label: "Fideicomiso · Energía renovable",
+    tipo: "fideicomiso",
+    identificacion: {
+      fecha: "2020-02-28",
+      rfc: "FEN200228AAA",
+      nombre: "Fideicomiso Energía Verde",
+      apellidoPaterno: "",
+      paisNacionalidad: "MX",
+      paisNacimiento: "",
+      curp: "",
+    },
+    contactos: [
+      {
+        nombreCompleto: "Valeria Soto Paredes",
+        claveLada: "33",
+        telefonoFijo: "3333556677",
+        extension: "12",
+        telefonoMovil: "3312345678",
+        correo: "valeria.soto@fideicomiso.example",
+      },
+    ],
+    actividades: [
+      {
+        actividadKey: actividadEjemplo,
+        fechaPrimera: "2021-03-15",
+        cuentaRegistro: "si",
+        tipoDocumento: "Autorización",
+        autoridadDocumento: "SHCP",
+        folioDocumento: "AUT-4599",
+        periodoDocumento: "2021-2026",
+        domicilio: {
+          codigoPostal: "44100",
+          tipoVialidad: "Avenida",
+          nombreVialidad: "Juárez",
+          numeroExterior: "880",
+          numeroInterior: "12",
+          colonia: "Americana",
+          alcaldia: "Guadalajara",
+          entidad: "Jalisco",
+          pais: "México",
+        },
+      },
+    ],
+    representante: {
+      nombre: "Patricia",
+      apellidoPaterno: "Luna",
+      apellidoMaterno: "Zepeda",
+      fechaNacimiento: "1982-11-30",
+      rfc: "LUZP821130QWE",
+      curp: "LUZP821130MJCLPR08",
+      paisNacionalidad: "MX",
+      fechaDesignacion: "2020-03-10",
+      fechaAceptacion: "2020-03-12",
+      contacto: {
+        claveLada: "33",
+        telefonoFijo: "3333778899",
+        extension: "",
+        telefonoMovil: "3311988877",
+        correo: "patricia.luna@fideicomiso.example",
+      },
+      certificacion: {
+        respuesta: "no",
+        tipoDocumento: "",
+        autoridadDocumento: "",
+        folioDocumento: "",
+        periodoDocumento: "",
+      },
+    },
+  },
+]
 
 const normalizarTexto = (valor: unknown) => (typeof valor === "string" ? valor : "")
 
@@ -480,6 +691,7 @@ export default function RegistroSATPage() {
   const [sujetosRegistrados, setSujetosRegistrados] = useState<SujetoRegistrado[]>([])
   const [sujetoSeleccionadoId, setSujetoSeleccionadoId] = useState<string | null>(null)
   const [sujetoEnEdicionId, setSujetoEnEdicionId] = useState<string | null>(null)
+  const [ejemploSeleccionado, setEjemploSeleccionado] = useState<string>("")
   const [datosChecklistState, setDatosChecklistState] = useState<DatosChecklistState>(() =>
     createDefaultDatosChecklistState(),
   )
@@ -919,6 +1131,42 @@ export default function RegistroSATPage() {
     setDocumentosRegistro({ detalle: null, acuse: null, aceptacion: null })
     setDatosChecklistState(createDefaultDatosChecklistState())
     setSujetoEnEdicionId(null)
+  }
+
+  const completarContactos = (contactosEjemplo: ContactoSujeto[]) =>
+    Array.from({ length: 3 }, (_, index) =>
+      contactosEjemplo[index] ? { ...createDefaultContacto(), ...contactosEjemplo[index] } : createDefaultContacto(),
+    )
+
+  const cargarEjemploSujeto = (ejemplo: EjemploSujetoObligado) => {
+    setTipoSujeto(ejemplo.tipo)
+    setIdentificacion({ ...createDefaultIdentificacion(), ...ejemplo.identificacion })
+    setContactos(completarContactos(ejemplo.contactos))
+    setActividades(
+      ejemplo.actividades.length > 0
+        ? ejemplo.actividades.map((actividad) => ({ ...createDefaultActividad(), ...actividad }))
+        : [createDefaultActividad()],
+    )
+    setRepresentante(
+      ejemplo.tipo === "moral" || ejemplo.tipo === "fideicomiso"
+        ? ({ ...createDefaultRepresentante(), ...(ejemplo.representante ?? {}) } as RepresentanteCumplimiento)
+        : createDefaultRepresentante(),
+    )
+    setDocumentosRegistro({ detalle: null, acuse: null, aceptacion: null })
+    setDatosChecklistState(createDefaultDatosChecklistState())
+    setSujetoEnEdicionId(null)
+    setEjemploSeleccionado(ejemplo.id)
+
+    toast({
+      title: "Ejemplo cargado",
+      description: "Se completaron los datos del formulario con un sujeto obligado de ejemplo.",
+    })
+  }
+
+  const manejarCargarEjemplo = () => {
+    const ejemplo = ejemplosSujetosObligados.find((item) => item.id === ejemploSeleccionado)
+    if (!ejemplo) return
+    cargarEjemploSujeto(ejemplo)
   }
 
   const registrarSujeto = (
@@ -1525,6 +1773,29 @@ export default function RegistroSATPage() {
                   contacto y actividades vulnerables requeridas.
                 </div>
               </div>
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="ejemplo-sujeto">Cargar ejemplo de sujeto obligado</Label>
+                  <Select value={ejemploSeleccionado} onValueChange={setEjemploSeleccionado}>
+                    <SelectTrigger id="ejemplo-sujeto">
+                      <SelectValue placeholder="Selecciona un ejemplo" />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      {ejemplosSujetosObligados.map((ejemplo) => (
+                        <SelectItem key={ejemplo.id} value={ejemplo.id}>
+                          {ejemplo.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={manejarCargarEjemplo} disabled={!ejemploSeleccionado}>
+                  Cargar ejemplo
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                El ejemplo reemplaza los datos actuales del formulario y es útil para pruebas rápidas.
+              </p>
               {tipoSujeto === "none" && (
                 <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
                   Selecciona un tipo de sujeto obligado para habilitar el resto del formulario.
