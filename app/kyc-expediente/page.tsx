@@ -1132,8 +1132,6 @@ function KycExpedienteContent() {
       setClaveSujetoObligado("")
       setClaveActividadVulnerable("")
       setDatosIdentificacion({ nombre: resumen.nombre, rfc: resumen.rfc })
-      setDatosFiscales({})
-      setPerfilOperaciones({})
       setDocumentacionEstado({})
       const base = crearPersonaBase()
       setPersonasReportadas([{ ...base, denominacion: resumen.nombre, rfc: resumen.rfc }])
@@ -1144,12 +1142,10 @@ function KycExpedienteContent() {
     [
       setClaveActividadVulnerable,
       setClaveSujetoObligado,
-      setDatosFiscales,
       setDatosIdentificacion,
       setDetalleTipoCliente,
       setDocumentacionEstado,
       setNombreExpediente,
-      setPerfilOperaciones,
       setPersonasReportadas,
       setResponsable,
       setTipoCliente,
@@ -1674,12 +1670,10 @@ function KycExpedienteContent() {
   }, [
     setClaveActividadVulnerable,
     setClaveSujetoObligado,
-    setDatosFiscales,
     setDatosIdentificacion,
     setDetalleTipoCliente,
     setDocumentacionEstado,
     setNombreExpediente,
-    setPerfilOperaciones,
     setPersonasReportadas,
     setResponsable,
     setTipoCliente,
