@@ -108,43 +108,77 @@ const IDENTIFICACION_CAMPOS: GrupoIdentificacion[] = [
 
 const DOCUMENTACION_REQUERIDA: DocumentoRequerido[] = [
   {
-    id: "identificacion-oficial",
-    titulo: "Identificación oficial vigente",
-    descripcion: "INE, pasaporte, cédula profesional o documento migratorio vigente de la persona obligada o representante.",
+    id: "formulario-identificacion",
+    titulo: "Formulario de Identificación del Cliente",
+    descripcion: "Formato interno completo con datos generales, domicilio, representante y beneficiarios.",
     obligatorio: true,
   },
   {
-    id: "acta-constitutiva",
-    titulo: "Acta constitutiva / acta de nacimiento",
-    descripcion: "Documento que acredita la creación de la persona moral o la identidad de la persona física.",
+    id: "documento-acto-operacion",
+    titulo: "Documento que acredita la celebración del Acto u Operación",
+    descripcion: "Contrato, factura, póliza o documento equivalente.",
     obligatorio: true,
   },
   {
-    id: "poder-notarial",
-    titulo: "Poderes notariales",
-    descripcion: "Poder general o especial que faculta al representante legal para actos de administración.",
+    id: "instrumento-constitucion",
+    titulo: "Instrumento público que acredita la constitución del Cliente",
+    descripcion: "Acta constitutiva o escritura pública vigente.",
+    obligatorio: true,
+  },
+  {
+    id: "registro-publico",
+    titulo: "Constancia de inscripción en el Registro Público",
+    descripcion: "Documento que acredita la inscripción del instrumento constitutivo.",
+    obligatorio: true,
   },
   {
     id: "situacion-fiscal",
-    titulo: "Constancia de situación fiscal",
-    descripcion: "Documento emitido por el SAT con datos de régimen, domicilio fiscal y obligaciones vigentes.",
+    titulo: "Constancia de Situación Fiscal (SAT)",
+    descripcion: "Documento emitido por el SAT con régimen y obligaciones vigentes.",
     obligatorio: true,
   },
   {
-    id: "comprobante-domicilio",
-    titulo: "Comprobante de domicilio",
-    descripcion: "Recibo de servicios, estado de cuenta o constancia de residencia con antigüedad no mayor a 3 meses.",
+    id: "comprobante-domicilio-cliente",
+    titulo: "Comprobante de domicilio del Cliente",
+    descripcion: "Recibo de servicios o estado de cuenta reciente.",
     obligatorio: true,
   },
   {
-    id: "estructura-accionaria",
-    titulo: "Estructura accionaria y beneficiarios",
-    descripcion: "Relación de accionistas o beneficiarios finales con porcentaje de participación y documentación soporte.",
+    id: "poder-representante",
+    titulo: "Instrumento que contiene los poderes del representante",
+    descripcion: "Poder notarial o documento equivalente.",
   },
   {
-    id: "declaracion-pep",
-    titulo: "Declaración de Personas Políticamente Expuestas",
-    descripcion: "Formato firmado donde el cliente manifiesta si es o no PEP y detalla el cargo en su caso.",
+    id: "identificacion-representante",
+    titulo: "Identificación oficial del representante o apoderado legal",
+    descripcion: "INE, pasaporte, cédula profesional o documento migratorio.",
+    obligatorio: true,
+  },
+  {
+    id: "comprobante-representante",
+    titulo: "Comprobante de domicilio del representante o apoderado legal",
+    descripcion: "Recibo de servicios o estado de cuenta reciente.",
+  },
+  {
+    id: "identificacion-beneficiario",
+    titulo: "Identificación oficial del Beneficiario Controlador",
+    descripcion: "INE, pasaporte o documento oficial equivalente.",
+    obligatorio: true,
+  },
+  {
+    id: "curp-beneficiario",
+    titulo: "Constancia CURP (o equivalente) del Beneficiario Controlador",
+    descripcion: "Documento de identificación poblacional.",
+  },
+  {
+    id: "rfc-beneficiario",
+    titulo: "Cédula de Identificación Fiscal o NIF del Beneficiario Controlador",
+    descripcion: "Documento fiscal vigente.",
+  },
+  {
+    id: "domicilio-beneficiario",
+    titulo: "Comprobante de domicilio del Beneficiario Controlador",
+    descripcion: "Aplica cuando no coincide con la identificación presentada.",
   },
 ]
 
@@ -236,6 +270,27 @@ const PERSONA_TIPO_OPCIONES = [
   { value: "persona_fisica", label: "Persona física" },
 ]
 
+const EXPEDIENTE_TIPOS = [
+  { value: "persona_moral", label: "Persona Moral" },
+  { value: "persona_fisica", label: "Persona Física" },
+  { value: "persona_moral_derecho_publico", label: "Persona Moral de Derecho Público" },
+  { value: "entidad_financiera_seguros", label: "Entidad Financiera / Seguros" },
+  {
+    value: "pm_derecho_publico_regimen_simplificado",
+    label: "PM de Derecho Público Régimen Simplificado",
+  },
+  { value: "embajada_consulado_organismo", label: "Embajada, Consulado u Organismo" },
+  { value: "fideicomiso", label: "Fideicomiso" },
+]
+
+const ACTO_OPERACION_OPCIONES = [
+  { value: "compraventa", label: "Compraventa" },
+  { value: "arrendamiento", label: "Arrendamiento" },
+  { value: "donacion", label: "Donación" },
+  { value: "constitucion", label: "Constitución de sociedad" },
+  { value: "otro", label: "Otro" },
+]
+
 function normalizarBusqueda(valor: string) {
   return valor
     .normalize("NFD")
@@ -293,6 +348,18 @@ interface PersonaReportada {
     esPep: RespuestaBinaria
     detallePep: string
   }
+}
+
+interface ActoOperacion {
+  tipo: string
+  fechaCelebracion: string
+  relacionNegocios: "" | RespuestaBinaria
+}
+
+interface SujetoObligadoOption {
+  id: string
+  nombre: string
+  rfc: string
 }
 
 const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
@@ -405,9 +472,11 @@ interface ExpedienteResumen {
 }
 
 interface ExpedienteDetalle extends ExpedienteResumen {
+  tipoExpediente?: (typeof EXPEDIENTE_TIPOS)[number]["value"]
   responsable?: string
   claveSujetoObligado?: string
   claveActividadVulnerable?: string
+  actoOperacion?: ActoOperacion
   identificacion?: Record<string, string>
   datosFiscales?: Record<string, string>
   perfilOperaciones?: Record<string, string>
@@ -434,6 +503,13 @@ function sanitizeTipoCliente(value: string | undefined | null) {
   if (!value) return CLIENTE_TIPOS[0]?.value ?? ""
   const encontrado = findClienteTipoOption(value)
   return encontrado ? encontrado.value : CLIENTE_TIPOS[0]?.value ?? ""
+}
+
+function sanitizeTipoExpediente(value: string | undefined | null) {
+  if (!value) return EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral"
+  return EXPEDIENTE_TIPOS.some((option) => option.value === value)
+    ? value
+    : EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral"
 }
 
 function sanitizeStringMap(raw: any): Record<string, string> {
@@ -626,11 +702,19 @@ function sanitizeExpedienteGuardado(raw: any): ExpedienteDetalle | null {
   const personas = personasRaw
     .map((item) => sanitizePersonaGuardada(item))
     .filter((item): item is PersonaReportada => Boolean(item))
+  const actoRaw = raw.actoOperacion && typeof raw.actoOperacion === "object" ? raw.actoOperacion : {}
+  const actoOperacion: ActoOperacion = {
+    tipo: typeof actoRaw.tipo === "string" ? actoRaw.tipo : "",
+    fechaCelebracion: typeof actoRaw.fechaCelebracion === "string" ? actoRaw.fechaCelebracion : "",
+    relacionNegocios:
+      actoRaw.relacionNegocios === "si" || actoRaw.relacionNegocios === "no" ? actoRaw.relacionNegocios : "",
+  }
 
   return {
     rfc,
     nombre,
     tipoCliente: sanitizeTipoCliente(typeof raw.tipoCliente === "string" ? raw.tipoCliente : undefined),
+    tipoExpediente: sanitizeTipoExpediente(typeof raw.tipoExpediente === "string" ? raw.tipoExpediente : undefined),
     detalleTipoCliente:
       typeof raw.detalleTipoCliente === "string" && raw.detalleTipoCliente.trim().length > 0
         ? raw.detalleTipoCliente
@@ -640,6 +724,7 @@ function sanitizeExpedienteGuardado(raw: any): ExpedienteDetalle | null {
       typeof raw.claveSujetoObligado === "string" ? raw.claveSujetoObligado : undefined,
     claveActividadVulnerable:
       typeof raw.claveActividadVulnerable === "string" ? raw.claveActividadVulnerable : undefined,
+    actoOperacion,
     identificacion: sanitizeStringMap(raw.identificacion),
     datosFiscales: sanitizeStringMap(raw.datosFiscales),
     perfilOperaciones: sanitizeStringMap(raw.perfilOperaciones),
@@ -689,12 +774,21 @@ function obtenerStatusDocumento(value: DocumentStatus | undefined) {
 function KycExpedienteContent() {
   const { toast } = useToast()
   const searchParams = useSearchParams()
+  const [tipoExpediente, setTipoExpediente] = useState<(typeof EXPEDIENTE_TIPOS)[number]["value"]>(
+    EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral",
+  )
   const [tipoCliente, setTipoCliente] = useState<string>(CLIENTE_TIPOS[0]?.value ?? "")
   const [detalleTipoCliente, setDetalleTipoCliente] = useState<string>("")
   const [responsable, setResponsable] = useState("")
   const [nombreExpediente, setNombreExpediente] = useState("")
+  const [fechaRegistro, setFechaRegistro] = useState(() => new Date().toISOString().slice(0, 10))
   const [claveSujetoObligado, setClaveSujetoObligado] = useState("")
   const [claveActividadVulnerable, setClaveActividadVulnerable] = useState("")
+  const [actoOperacion, setActoOperacion] = useState<ActoOperacion>({
+    tipo: "",
+    fechaCelebracion: "",
+    relacionNegocios: "",
+  })
   const [datosIdentificacion, setDatosIdentificacion] = useState<Record<string, string>>({})
   const [datosFiscales, setDatosFiscales] = useState<Record<string, string>>({})
   const [perfilOperaciones, setPerfilOperaciones] = useState<Record<string, string>>({})
@@ -708,6 +802,8 @@ function KycExpedienteContent() {
   const [busquedasColonias, setBusquedasColonias] = useState<Record<string, string>>({})
   const [busquedasCiudades, setBusquedasCiudades] = useState<Record<string, string>>({})
   const [busquedaExpedientes, setBusquedaExpedientes] = useState("")
+  const [sujetosObligados, setSujetosObligados] = useState<SujetoObligadoOption[]>([])
+  const [sujetoObligadoSeleccionado, setSujetoObligadoSeleccionado] = useState("")
 
   const tipoClienteSeleccionado = useMemo(() => findClienteTipoOption(tipoCliente), [tipoCliente])
   const tipoClienteLabel = useMemo(() => findClienteTipoLabel(tipoCliente), [tipoCliente])
@@ -715,6 +811,46 @@ function KycExpedienteContent() {
     () => (detalleTipoCliente ? `${tipoClienteLabel} – ${detalleTipoCliente}` : tipoClienteLabel),
     [detalleTipoCliente, tipoClienteLabel],
   )
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const savedData = window.localStorage.getItem("registro-sat-data")
+    if (!savedData) {
+      setSujetosObligados([])
+      return
+    }
+
+    try {
+      const data = JSON.parse(savedData)
+      const sujetos = Array.isArray(data.sujetosRegistrados)
+        ? data.sujetosRegistrados
+            .map((item: Partial<SujetoObligadoOption> & { identificacion?: { rfc?: string } }) => ({
+              id: typeof item.id === "string" ? item.id : "",
+              nombre: typeof item.nombre === "string" ? item.nombre : "",
+              rfc: typeof item.identificacion?.rfc === "string" ? item.identificacion.rfc : "",
+            }))
+            .filter((item) => item.id && item.nombre)
+        : []
+      setSujetosObligados(sujetos)
+    } catch (error) {
+      console.error("No fue posible leer los sujetos obligados registrados", error)
+      setSujetosObligados([])
+    }
+  }, [])
+
+  useEffect(() => {
+    if (sujetosObligados.length === 0) return
+    const sujetoActual = sujetosObligados.find((item) => item.rfc === claveSujetoObligado)
+    if (sujetoActual && sujetoActual.id !== sujetoObligadoSeleccionado) {
+      setSujetoObligadoSeleccionado(sujetoActual.id)
+    }
+    if (!sujetoObligadoSeleccionado) {
+      setSujetoObligadoSeleccionado(sujetoActual?.id ?? sujetosObligados[0]?.id ?? "")
+      if (!claveSujetoObligado && sujetosObligados[0]?.rfc) {
+        setClaveSujetoObligado(sujetosObligados[0].rfc)
+      }
+    }
+  }, [claveSujetoObligado, sujetoObligadoSeleccionado, sujetosObligados])
 
   const totalCamposIdentificacion = useMemo(
     () => IDENTIFICACION_CAMPOS.reduce((acc, grupo) => acc + grupo.campos.length, 0),
@@ -811,11 +947,27 @@ function KycExpedienteContent() {
   const aplicarDetalleEnFormulario = useCallback(
     (detalle: ExpedienteDetalle) => {
       setNombreExpediente(detalle.nombre ?? detalle.identificacion?.nombre ?? detalle.rfc)
+      const fechaBase = detalle.actualizadoEn ? new Date(detalle.actualizadoEn) : null
+      const fechaDetalle =
+        fechaBase && !Number.isNaN(fechaBase.getTime())
+          ? fechaBase.toISOString().slice(0, 10)
+          : new Date().toISOString().slice(0, 10)
+      setFechaRegistro(fechaDetalle)
+      setTipoExpediente(
+        sanitizeTipoExpediente(detalle.tipoExpediente ?? EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral"),
+      )
       setTipoCliente(detalle.tipoCliente ?? (CLIENTE_TIPOS[0]?.value ?? ""))
       setDetalleTipoCliente(detalle.detalleTipoCliente ?? "")
       setResponsable(detalle.responsable ?? "")
       setClaveSujetoObligado(detalle.claveSujetoObligado ?? "")
       setClaveActividadVulnerable(detalle.claveActividadVulnerable ?? "")
+      setActoOperacion(
+        detalle.actoOperacion ?? {
+          tipo: "",
+          fechaCelebracion: "",
+          relacionNegocios: "",
+        },
+      )
       const identificacion = {
         ...detalle.identificacion,
         nombre: detalle.identificacion?.nombre ?? detalle.nombre ?? "",
@@ -838,16 +990,19 @@ function KycExpedienteContent() {
       setBusquedaPais("")
     },
     [
+      setActoOperacion,
       setClaveActividadVulnerable,
       setClaveSujetoObligado,
       setDatosFiscales,
       setDatosIdentificacion,
       setDetalleTipoCliente,
       setDocumentacionEstado,
+      setFechaRegistro,
       setNombreExpediente,
       setPerfilOperaciones,
       setPersonasReportadas,
       setResponsable,
+      setTipoExpediente,
       setTipoCliente,
       setBusquedasColonias,
       setBusquedasCiudades,
@@ -1116,11 +1271,14 @@ function KycExpedienteContent() {
   const crearNuevoExpediente = useCallback(() => {
     setExpedienteSeleccionado(null)
     setNombreExpediente("")
+    setFechaRegistro(new Date().toISOString().slice(0, 10))
+    setTipoExpediente(EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral")
     setTipoCliente(CLIENTE_TIPOS[0]?.value ?? "")
     setDetalleTipoCliente("")
     setResponsable("")
     setClaveSujetoObligado("")
     setClaveActividadVulnerable("")
+    setActoOperacion({ tipo: "", fechaCelebracion: "", relacionNegocios: "" })
     setDatosIdentificacion({})
     setDatosFiscales({})
     setPerfilOperaciones({})
@@ -1135,11 +1293,14 @@ function KycExpedienteContent() {
     const demo = demoFraccionXV.expediente
 
     setNombreExpediente(demo.nombre ?? demo.rfc)
+    setFechaRegistro(new Date().toISOString().slice(0, 10))
+    setTipoExpediente(EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral")
     setTipoCliente(demo.tipoCliente ?? (CLIENTE_TIPOS[0]?.value ?? ""))
     setDetalleTipoCliente(demo.detalleTipoCliente ?? "")
     setResponsable(demo.responsable ?? "")
     setClaveSujetoObligado(demo.claveSujetoObligado ?? "")
     setClaveActividadVulnerable(demo.claveActividadVulnerable ?? "")
+    setActoOperacion({ tipo: "", fechaCelebracion: "", relacionNegocios: "" })
     setDatosIdentificacion(demo.identificacion ?? {})
     setDatosFiscales(demo.datosFiscales ?? {})
     setPerfilOperaciones(demo.perfilOperaciones ?? {})
@@ -1362,9 +1523,11 @@ function KycExpedienteContent() {
 
       const detalleExpediente = {
         ...resumenCliente,
+        tipoExpediente: sanitizeTipoExpediente(tipoExpediente),
         responsable,
         claveSujetoObligado,
         claveActividadVulnerable,
+        actoOperacion,
         identificacion: { ...datosIdentificacion, nombre, rfc },
         datosFiscales: { ...datosFiscales },
         perfilOperaciones: { ...perfilOperaciones },
@@ -1598,6 +1761,57 @@ function KycExpedienteContent() {
               <Input value={responsable} onChange={(event) => setResponsable(event.target.value)} />
             </div>
             <div className="space-y-2">
+              <Label>Fecha de registro / actualización</Label>
+              <Input type="date" value={fechaRegistro} readOnly className="bg-slate-50" />
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo de expediente</Label>
+              <Select value={tipoExpediente} onValueChange={setTipoExpediente}>
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder="Selecciona el tipo de expediente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXPEDIENTE_TIPOS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Sujeto obligado</Label>
+              <Select
+                value={sujetoObligadoSeleccionado}
+                onValueChange={(value) => {
+                  setSujetoObligadoSeleccionado(value)
+                  const seleccionado = sujetosObligados.find((item) => item.id === value)
+                  setClaveSujetoObligado(seleccionado?.rfc ?? "")
+                }}
+                disabled={sujetosObligados.length === 0}
+              >
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder="Selecciona un sujeto obligado" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sujetosObligados.length > 0 ? (
+                    sujetosObligados.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.nombre}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                      Sin sujetos obligados registrados.
+                    </div>
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Se conecta con el sujeto obligado registrado en el módulo de alta.
+              </p>
+            </div>
+            <div className="space-y-2">
               <Label>Clave de sujeto obligado</Label>
               <Input value={claveSujetoObligado} onChange={(event) => setClaveSujetoObligado(event.target.value)} />
             </div>
@@ -1649,6 +1863,72 @@ function KycExpedienteContent() {
             <div className="mt-4 flex justify-end">
               <Button onClick={guardarExpediente}>Guardar expediente</Button>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {tipoExpediente !== "persona_moral" && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          El formulario detallado solo está disponible para Persona Moral. Selecciona esa opción o espera la carga del
+          formato correspondiente.
+        </div>
+      )}
+
+      <Card className="border-slate-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5 text-slate-600" /> Acto u operación realizada con el cliente
+          </CardTitle>
+          <CardDescription>Registra los datos clave del acto u operación para el expediente.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Tipo de Acto u Operación</Label>
+            <Select
+              value={actoOperacion.tipo}
+              onValueChange={(value) => setActoOperacion((prev) => ({ ...prev, tipo: value }))}
+            >
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Selecciona el tipo de acto" />
+              </SelectTrigger>
+              <SelectContent>
+                {ACTO_OPERACION_OPCIONES.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Fecha de celebración del Acto u Operación</Label>
+            <Input
+              type="date"
+              value={actoOperacion.fechaCelebracion}
+              onChange={(event) =>
+                setActoOperacion((prev) => ({ ...prev, fechaCelebracion: event.target.value }))
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>¿Existe Relación de Negocios?</Label>
+            <Select
+              value={actoOperacion.relacionNegocios}
+              onValueChange={(value) =>
+                setActoOperacion((prev) => ({ ...prev, relacionNegocios: value as RespuestaBinaria }))
+              }
+            >
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Selecciona una opción" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="si">Sí</SelectItem>
+                <SelectItem value="no">No</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="md:col-span-2 text-xs text-muted-foreground">
+            Si existe relación de negocios, considera el expediente activo para seguimiento continuo.
           </div>
         </CardContent>
       </Card>
