@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, type ChangeEvent } from "react"
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,9 +9,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
+import { actividadesVulnerables } from "@/lib/data/actividades"
+import { findCodigoPostalInfo, registerCodigoPostalInfo, type CodigoPostalInfo } from "@/lib/data/codigos-postales"
+import { PAISES } from "@/lib/data/paises"
 import { readFileAsDataUrl } from "@/lib/storage/read-file"
 import { cn } from "@/lib/utils"
 import { Building2, ClipboardList, FileText, Paperclip, ShieldCheck, Upload, UserCog } from "lucide-react"
@@ -34,7 +38,7 @@ interface RequiredDataSection {
   appliesTo: SubjectType[]
 }
 
-type SubjectType = "fisica" | "moral" | "fideicomiso"
+type SubjectType = "none" | "fisica" | "moral" | "fideicomiso"
 type RegistroDocumentKey = "detalle" | "acuse" | "aceptacion"
 
 interface DocumentUpload {
@@ -56,9 +60,81 @@ interface SujetoRegistrado {
   documentos: Record<RegistroDocumentKey, DocumentUpload | null>
   checklistCampos: string[]
   registroCompleto: boolean
+  identificacion: IdentificacionSujeto
+  contactos: ContactoSujeto[]
+  actividades: ActividadSujeto[]
+  representante: RepresentanteCumplimiento | null
 }
 
 type DatosChecklistState = Record<string, { completed: boolean; notes: string }>
+
+interface IdentificacionSujeto {
+  fecha: string
+  rfc: string
+  nombre: string
+  apellidoPaterno: string
+  paisNacionalidad: string
+  paisNacimiento: string
+  curp: string
+}
+
+interface ContactoSujeto {
+  nombreCompleto: string
+  claveLada: string
+  telefonoFijo: string
+  extension: string
+  telefonoMovil: string
+  correo: string
+}
+
+interface DomicilioActividad {
+  codigoPostal: string
+  tipoVialidad: string
+  nombreVialidad: string
+  numeroExterior: string
+  numeroInterior: string
+  colonia: string
+  alcaldia: string
+  entidad: string
+  pais: string
+}
+
+interface ActividadSujeto {
+  actividadKey: string
+  fechaPrimera: string
+  cuentaRegistro: "" | "si" | "no"
+  tipoDocumento: string
+  autoridadDocumento: string
+  folioDocumento: string
+  periodoDocumento: string
+  domicilio: DomicilioActividad
+}
+
+interface RepresentanteCumplimiento {
+  nombre: string
+  apellidoPaterno: string
+  apellidoMaterno: string
+  fechaNacimiento: string
+  rfc: string
+  curp: string
+  paisNacionalidad: string
+  fechaDesignacion: string
+  fechaAceptacion: string
+  contacto: {
+    claveLada: string
+    telefonoFijo: string
+    extension: string
+    telefonoMovil: string
+    correo: string
+  }
+  certificacion: {
+    respuesta: "" | "si" | "no"
+    tipoDocumento: string
+    autoridadDocumento: string
+    folioDocumento: string
+    periodoDocumento: string
+  }
+}
 
 const datosAltaRegistro: RequiredDataSection[] = [
   {
@@ -181,7 +257,7 @@ const datosAltaRegistro: RequiredDataSection[] = [
     title: "Datos del encargado de cumplimiento",
     description: "Información del representante o encargado designado.",
     icon: UserCog,
-    appliesTo: ["fisica", "moral", "fideicomiso"],
+    appliesTo: ["moral", "fideicomiso"],
     fields: [
       {
         id: "rec-nombre",
@@ -240,18 +316,159 @@ const createDefaultDatosChecklistState = (): DatosChecklistState =>
     return acc
   }, {})
 
+const createDefaultIdentificacion = (): IdentificacionSujeto => ({
+  fecha: "",
+  rfc: "",
+  nombre: "",
+  apellidoPaterno: "",
+  paisNacionalidad: "",
+  paisNacimiento: "",
+  curp: "",
+})
+
+const createDefaultContacto = (): ContactoSujeto => ({
+  nombreCompleto: "",
+  claveLada: "",
+  telefonoFijo: "",
+  extension: "",
+  telefonoMovil: "",
+  correo: "",
+})
+
+const createDefaultDomicilio = (): DomicilioActividad => ({
+  codigoPostal: "",
+  tipoVialidad: "",
+  nombreVialidad: "",
+  numeroExterior: "",
+  numeroInterior: "",
+  colonia: "",
+  alcaldia: "",
+  entidad: "",
+  pais: "México",
+})
+
+const createDefaultActividad = (): ActividadSujeto => ({
+  actividadKey: "",
+  fechaPrimera: "",
+  cuentaRegistro: "",
+  tipoDocumento: "",
+  autoridadDocumento: "",
+  folioDocumento: "",
+  periodoDocumento: "",
+  domicilio: createDefaultDomicilio(),
+})
+
+const createDefaultRepresentante = (): RepresentanteCumplimiento => ({
+  nombre: "",
+  apellidoPaterno: "",
+  apellidoMaterno: "",
+  fechaNacimiento: "",
+  rfc: "",
+  curp: "",
+  paisNacionalidad: "",
+  fechaDesignacion: "",
+  fechaAceptacion: "",
+  contacto: {
+    claveLada: "",
+    telefonoFijo: "",
+    extension: "",
+    telefonoMovil: "",
+    correo: "",
+  },
+  certificacion: {
+    respuesta: "",
+    tipoDocumento: "",
+    autoridadDocumento: "",
+    folioDocumento: "",
+    periodoDocumento: "",
+  },
+})
+
 const tiposSujetos: { value: SubjectType; label: string }[] = [
+  { value: "none", label: "---" },
   { value: "fisica", label: "Persona física" },
   { value: "moral", label: "Persona moral" },
   { value: "fideicomiso", label: "Fideicomiso" },
 ]
 
+const opcionesDocumento = ["Registro", "Autorización", "Patente", "Certificado", "Otro"]
+const opcionesAutoridad = ["SAT", "SHCP", "CNBV", "UIF", "Otra"]
+const SEPOMEX_API_BASE = "https://api.zippopotam.us/mx"
+const SEPOMEX_STORAGE_PREFIX = "codigo_postal_cache_"
+
+const normalizarTexto = (valor: unknown) => (typeof valor === "string" ? valor : "")
+
+const construirNombreSujeto = (tipo: SubjectType, identificacion: IdentificacionSujeto) => {
+  if (tipo === "fisica") {
+    return [identificacion.nombre.trim(), identificacion.apellidoPaterno.trim()].filter(Boolean).join(" ")
+  }
+  return identificacion.nombre.trim()
+}
+
+const obtenerEtiquetaFecha = (tipo: SubjectType) => {
+  if (tipo === "fisica") return "Fecha de Nacimiento"
+  if (tipo === "moral") return "Fecha de Constitución"
+  if (tipo === "fideicomiso") return "Fecha de Constitución"
+  return "Fecha"
+}
+
+const obtenerEtiquetaNombre = (tipo: SubjectType) => {
+  if (tipo === "fisica") return "Nombre(s) (sin abreviaturas)"
+  if (tipo === "moral") return "Denominación o Razón Social"
+  if (tipo === "fideicomiso") return "Denominación"
+  return "Nombre"
+}
+
+async function fetchCodigoPostalInfo(codigo: string): Promise<CodigoPostalInfo | undefined> {
+  try {
+    const response = await fetch(`${SEPOMEX_API_BASE}/${codigo}`)
+    if (!response.ok) return undefined
+    const data = (await response.json()) as {
+      "post code"?: string
+      country?: string
+      "country abbreviation"?: string
+      places?: Array<{
+        "place name"?: string
+        state?: string
+        "state abbreviation"?: string
+        "province"?: string
+        "province abbreviation"?: string
+        "community"?: string
+        "community abbreviation"?: string
+      }>
+    }
+    if (!data || !Array.isArray(data.places) || data.places.length === 0) return undefined
+    const place = data.places[0] ?? {}
+    const asentamientos = Array.from(
+      new Set(
+        data.places
+          .map((item) => item["place name"])
+          .filter((nombre): nombre is string => Boolean(nombre && nombre.trim().length > 0)),
+      ),
+    )
+    return {
+      codigo,
+      estado: place.state ?? "",
+      municipio: place.province ?? place.state ?? "",
+      ciudad: place.community ?? "",
+      asentamientos,
+    }
+  } catch (error) {
+    console.error("No se pudo consultar el código postal:", error)
+    return undefined
+  }
+}
+
 export default function RegistroSATPage() {
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("nuevo")
-  const [tipoSujeto, setTipoSujeto] = useState<SubjectType>("moral")
-  const [nombreSujeto, setNombreSujeto] = useState("")
-  const [actividadVulnerable, setActividadVulnerable] = useState("")
+  const [tipoSujeto, setTipoSujeto] = useState<SubjectType>("none")
+  const [identificacion, setIdentificacion] = useState<IdentificacionSujeto>(() => createDefaultIdentificacion())
+  const [contactos, setContactos] = useState<ContactoSujeto[]>(() =>
+    Array.from({ length: 3 }, () => createDefaultContacto()),
+  )
+  const [actividades, setActividades] = useState<ActividadSujeto[]>(() => [createDefaultActividad()])
+  const [representante, setRepresentante] = useState<RepresentanteCumplimiento>(() => createDefaultRepresentante())
   const [documentosRegistro, setDocumentosRegistro] = useState<
     Record<RegistroDocumentKey, DocumentUpload | null>
   >({
@@ -267,10 +484,10 @@ export default function RegistroSATPage() {
     createDefaultDatosChecklistState(),
   )
 
-  const seccionesAplicables = useMemo(
-    () => datosAltaRegistro.filter((section) => section.appliesTo.includes(tipoSujeto)),
-    [tipoSujeto],
-  )
+  const seccionesAplicables = useMemo(() => {
+    if (tipoSujeto === "none") return []
+    return datosAltaRegistro.filter((section) => section.appliesTo.includes(tipoSujeto))
+  }, [tipoSujeto])
 
   const datosChecklistResumen = useMemo(() => {
     const total = seccionesAplicables.reduce((acc, section) => acc + section.fields.length, 0)
@@ -281,6 +498,26 @@ export default function RegistroSATPage() {
     const progreso = total === 0 ? 0 : Math.round((completados / total) * 100)
     return { total, completados, progreso }
   }, [datosChecklistState, seccionesAplicables])
+
+  const catalogoActividades = useMemo(
+    () =>
+      new Map(
+        actividadesVulnerables.map((actividad) => [
+          actividad.key,
+          `${actividad.fraccion} · ${actividad.nombre}`,
+        ]),
+      ),
+    [],
+  )
+
+  const nombreSujeto = construirNombreSujeto(tipoSujeto, identificacion)
+
+  const resumenActividades = useMemo(() => {
+    const seleccionadas = actividades
+      .map((actividad) => catalogoActividades.get(actividad.actividadKey))
+      .filter((actividad): actividad is string => Boolean(actividad))
+    return seleccionadas.join("; ")
+  }, [actividades, catalogoActividades])
 
   useEffect(() => {
     const savedData = localStorage.getItem("registro-sat-data")
@@ -355,6 +592,114 @@ export default function RegistroSATPage() {
                 aceptacion,
               },
               registroCompleto,
+              identificacion:
+                item.identificacion && typeof item.identificacion === "object"
+                  ? {
+                      fecha: normalizarTexto((item.identificacion as Record<string, unknown>).fecha),
+                      rfc: normalizarTexto((item.identificacion as Record<string, unknown>).rfc),
+                      nombre: normalizarTexto((item.identificacion as Record<string, unknown>).nombre),
+                      apellidoPaterno: normalizarTexto((item.identificacion as Record<string, unknown>).apellidoPaterno),
+                      paisNacionalidad: normalizarTexto((item.identificacion as Record<string, unknown>).paisNacionalidad),
+                      paisNacimiento: normalizarTexto((item.identificacion as Record<string, unknown>).paisNacimiento),
+                      curp: normalizarTexto((item.identificacion as Record<string, unknown>).curp),
+                    }
+                  : createDefaultIdentificacion(),
+              contactos: Array.isArray(item.contactos)
+                ? item.contactos.map((contacto: Record<string, unknown>) => ({
+                    nombreCompleto: normalizarTexto(contacto.nombreCompleto),
+                    claveLada: normalizarTexto(contacto.claveLada),
+                    telefonoFijo: normalizarTexto(contacto.telefonoFijo),
+                    extension: normalizarTexto(contacto.extension),
+                    telefonoMovil: normalizarTexto(contacto.telefonoMovil),
+                    correo: normalizarTexto(contacto.correo),
+                  }))
+                : Array.from({ length: 3 }, () => createDefaultContacto()),
+              actividades: Array.isArray(item.actividades)
+                ? item.actividades.map((actividad: Record<string, unknown>) => ({
+                    actividadKey: normalizarTexto(actividad.actividadKey),
+                    fechaPrimera: normalizarTexto(actividad.fechaPrimera),
+                    cuentaRegistro: normalizarTexto(actividad.cuentaRegistro) as "" | "si" | "no",
+                    tipoDocumento: normalizarTexto(actividad.tipoDocumento),
+                    autoridadDocumento: normalizarTexto(actividad.autoridadDocumento),
+                    folioDocumento: normalizarTexto(actividad.folioDocumento),
+                    periodoDocumento: normalizarTexto(actividad.periodoDocumento),
+                    domicilio: {
+                      codigoPostal: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.codigoPostal),
+                      tipoVialidad: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.tipoVialidad),
+                      nombreVialidad: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.nombreVialidad),
+                      numeroExterior: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.numeroExterior),
+                      numeroInterior: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.numeroInterior),
+                      colonia: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.colonia),
+                      alcaldia: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.alcaldia),
+                      entidad: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.entidad),
+                      pais:
+                        normalizarTexto((actividad.domicilio as Record<string, unknown>)?.pais) ||
+                        createDefaultDomicilio().pais,
+                    },
+                  }))
+                : [createDefaultActividad()],
+              representante:
+                item.representante && typeof item.representante === "object"
+                  ? {
+                      ...createDefaultRepresentante(),
+                      nombre: normalizarTexto((item.representante as Record<string, unknown>).nombre),
+                      apellidoPaterno: normalizarTexto((item.representante as Record<string, unknown>).apellidoPaterno),
+                      apellidoMaterno: normalizarTexto((item.representante as Record<string, unknown>).apellidoMaterno),
+                      fechaNacimiento: normalizarTexto((item.representante as Record<string, unknown>).fechaNacimiento),
+                      rfc: normalizarTexto((item.representante as Record<string, unknown>).rfc),
+                      curp: normalizarTexto((item.representante as Record<string, unknown>).curp),
+                      paisNacionalidad: normalizarTexto(
+                        (item.representante as Record<string, unknown>).paisNacionalidad,
+                      ),
+                      fechaDesignacion: normalizarTexto(
+                        (item.representante as Record<string, unknown>).fechaDesignacion,
+                      ),
+                      fechaAceptacion: normalizarTexto(
+                        (item.representante as Record<string, unknown>).fechaAceptacion,
+                      ),
+                      contacto: {
+                        claveLada: normalizarTexto(
+                          ((item.representante as Record<string, unknown>).contacto as Record<string, unknown>)?.claveLada,
+                        ),
+                        telefonoFijo: normalizarTexto(
+                          ((item.representante as Record<string, unknown>).contacto as Record<string, unknown>)
+                            ?.telefonoFijo,
+                        ),
+                        extension: normalizarTexto(
+                          ((item.representante as Record<string, unknown>).contacto as Record<string, unknown>)?.extension,
+                        ),
+                        telefonoMovil: normalizarTexto(
+                          ((item.representante as Record<string, unknown>).contacto as Record<string, unknown>)
+                            ?.telefonoMovil,
+                        ),
+                        correo: normalizarTexto(
+                          ((item.representante as Record<string, unknown>).contacto as Record<string, unknown>)?.correo,
+                        ),
+                      },
+                      certificacion: {
+                        respuesta: normalizarTexto(
+                          ((item.representante as Record<string, unknown>).certificacion as Record<string, unknown>)
+                            ?.respuesta,
+                        ) as "" | "si" | "no",
+                        tipoDocumento: normalizarTexto(
+                          ((item.representante as Record<string, unknown>).certificacion as Record<string, unknown>)
+                            ?.tipoDocumento,
+                        ),
+                        autoridadDocumento: normalizarTexto(
+                          ((item.representante as Record<string, unknown>).certificacion as Record<string, unknown>)
+                            ?.autoridadDocumento,
+                        ),
+                        folioDocumento: normalizarTexto(
+                          ((item.representante as Record<string, unknown>).certificacion as Record<string, unknown>)
+                            ?.folioDocumento,
+                        ),
+                        periodoDocumento: normalizarTexto(
+                          ((item.representante as Record<string, unknown>).certificacion as Record<string, unknown>)
+                            ?.periodoDocumento,
+                        ),
+                      },
+                    }
+                  : null,
             }
           })
         : []
@@ -379,13 +724,102 @@ export default function RegistroSATPage() {
             }, { detalle: null, acuse: null, aceptacion: null })
           : { detalle: null, acuse: null, aceptacion: null }
 
+      const identificacionRaw = (data.identificacion ?? {}) as Record<string, unknown>
+      const identificacionCargada: IdentificacionSujeto = {
+        fecha: normalizarTexto(identificacionRaw.fecha),
+        rfc: normalizarTexto(identificacionRaw.rfc),
+        nombre: normalizarTexto(identificacionRaw.nombre),
+        apellidoPaterno: normalizarTexto(identificacionRaw.apellidoPaterno),
+        paisNacionalidad: normalizarTexto(identificacionRaw.paisNacionalidad),
+        paisNacimiento: normalizarTexto(identificacionRaw.paisNacimiento),
+        curp: normalizarTexto(identificacionRaw.curp),
+      }
+
+      const contactosCargados = Array.isArray(data.contactos)
+        ? data.contactos.map((contacto: Record<string, unknown>) => ({
+            nombreCompleto: normalizarTexto(contacto.nombreCompleto),
+            claveLada: normalizarTexto(contacto.claveLada),
+            telefonoFijo: normalizarTexto(contacto.telefonoFijo),
+            extension: normalizarTexto(contacto.extension),
+            telefonoMovil: normalizarTexto(contacto.telefonoMovil),
+            correo: normalizarTexto(contacto.correo),
+          }))
+        : []
+
+      const contactosNormalizados = Array.from({ length: 3 }, (_, index) =>
+        contactosCargados[index] ? { ...createDefaultContacto(), ...contactosCargados[index] } : createDefaultContacto(),
+      )
+
+      const actividadesCargadas = Array.isArray(data.actividades)
+        ? data.actividades.map((actividad: Record<string, unknown>) => ({
+            actividadKey: normalizarTexto(actividad.actividadKey),
+            fechaPrimera: normalizarTexto(actividad.fechaPrimera),
+            cuentaRegistro: normalizarTexto(actividad.cuentaRegistro) as "" | "si" | "no",
+            tipoDocumento: normalizarTexto(actividad.tipoDocumento),
+            autoridadDocumento: normalizarTexto(actividad.autoridadDocumento),
+            folioDocumento: normalizarTexto(actividad.folioDocumento),
+            periodoDocumento: normalizarTexto(actividad.periodoDocumento),
+            domicilio: {
+              codigoPostal: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.codigoPostal),
+              tipoVialidad: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.tipoVialidad),
+              nombreVialidad: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.nombreVialidad),
+              numeroExterior: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.numeroExterior),
+              numeroInterior: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.numeroInterior),
+              colonia: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.colonia),
+              alcaldia: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.alcaldia),
+              entidad: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.entidad),
+              pais:
+                normalizarTexto((actividad.domicilio as Record<string, unknown>)?.pais) ||
+                createDefaultDomicilio().pais,
+            },
+          }))
+        : []
+
+      const actividadesNormalizadas =
+        actividadesCargadas.length > 0
+          ? actividadesCargadas.map((actividad) => ({ ...createDefaultActividad(), ...actividad }))
+          : [createDefaultActividad()]
+
+      const representanteRaw = (data.representante ?? {}) as Record<string, unknown>
+      const representanteCargado: RepresentanteCumplimiento = {
+        ...createDefaultRepresentante(),
+        nombre: normalizarTexto(representanteRaw.nombre),
+        apellidoPaterno: normalizarTexto(representanteRaw.apellidoPaterno),
+        apellidoMaterno: normalizarTexto(representanteRaw.apellidoMaterno),
+        fechaNacimiento: normalizarTexto(representanteRaw.fechaNacimiento),
+        rfc: normalizarTexto(representanteRaw.rfc),
+        curp: normalizarTexto(representanteRaw.curp),
+        paisNacionalidad: normalizarTexto(representanteRaw.paisNacionalidad),
+        fechaDesignacion: normalizarTexto(representanteRaw.fechaDesignacion),
+        fechaAceptacion: normalizarTexto(representanteRaw.fechaAceptacion),
+        contacto: {
+          claveLada: normalizarTexto((representanteRaw.contacto as Record<string, unknown>)?.claveLada),
+          telefonoFijo: normalizarTexto((representanteRaw.contacto as Record<string, unknown>)?.telefonoFijo),
+          extension: normalizarTexto((representanteRaw.contacto as Record<string, unknown>)?.extension),
+          telefonoMovil: normalizarTexto((representanteRaw.contacto as Record<string, unknown>)?.telefonoMovil),
+          correo: normalizarTexto((representanteRaw.contacto as Record<string, unknown>)?.correo),
+        },
+        certificacion: {
+          respuesta: normalizarTexto((representanteRaw.certificacion as Record<string, unknown>)?.respuesta) as
+            | ""
+            | "si"
+            | "no",
+          tipoDocumento: normalizarTexto((representanteRaw.certificacion as Record<string, unknown>)?.tipoDocumento),
+          autoridadDocumento: normalizarTexto((representanteRaw.certificacion as Record<string, unknown>)?.autoridadDocumento),
+          folioDocumento: normalizarTexto((representanteRaw.certificacion as Record<string, unknown>)?.folioDocumento),
+          periodoDocumento: normalizarTexto((representanteRaw.certificacion as Record<string, unknown>)?.periodoDocumento),
+        },
+      }
+
       setDocumentos(documentosGuardados as DocumentUpload[])
       setDatosChecklistState(checklist)
       setSujetosRegistrados(sujetosCargados as SujetoRegistrado[])
       setSujetoSeleccionadoId(sujetosCargados[0]?.id ?? null)
-      setTipoSujeto((data.tipoSujeto as SubjectType) ?? "moral")
-      setActividadVulnerable(typeof data.actividadVulnerable === "string" ? data.actividadVulnerable : "")
-      setNombreSujeto(typeof data.nombreSujeto === "string" ? data.nombreSujeto : "")
+      setTipoSujeto((data.tipoSujeto as SubjectType) ?? "none")
+      setIdentificacion(identificacionCargada)
+      setContactos(contactosNormalizados)
+      setActividades(actividadesNormalizadas)
+      setRepresentante(representanteCargado)
       setDocumentosRegistro(documentosRegistroGuardados)
     } catch (error) {
       console.error("Error al cargar datos de registro SAT", error)
@@ -398,8 +832,10 @@ export default function RegistroSATPage() {
       datosChecklist: datosChecklistState,
       sujetosRegistrados,
       tipoSujeto,
-      actividadVulnerable,
-      nombreSujeto,
+      identificacion,
+      contactos,
+      actividades,
+      representante,
       documentosRegistro,
     }
     localStorage.setItem("registro-sat-data", JSON.stringify(data))
@@ -408,8 +844,10 @@ export default function RegistroSATPage() {
     datosChecklistState,
     sujetosRegistrados,
     tipoSujeto,
-    actividadVulnerable,
-    nombreSujeto,
+    identificacion,
+    contactos,
+    actividades,
+    representante,
     documentosRegistro,
   ])
 
@@ -467,13 +905,17 @@ export default function RegistroSATPage() {
     return checklist
   }
 
-  const camposObligatoriosCapturados = Boolean(nombreSujeto.trim() && actividadVulnerable.trim())
+  const camposObligatoriosCapturados = Boolean(
+    tipoSujeto !== "none" && nombreSujeto.trim() && resumenActividades.trim(),
+  )
   const documentosRequeridosCompletos =
     !!documentosRegistro.detalle && !!documentosRegistro.acuse && !!documentosRegistro.aceptacion
 
   const limpiarFormulario = () => {
-    setNombreSujeto("")
-    setActividadVulnerable("")
+    setIdentificacion(createDefaultIdentificacion())
+    setContactos(Array.from({ length: 3 }, () => createDefaultContacto()))
+    setActividades([createDefaultActividad()])
+    setRepresentante(createDefaultRepresentante())
     setDocumentosRegistro({ detalle: null, acuse: null, aceptacion: null })
     setDatosChecklistState(createDefaultDatosChecklistState())
     setSujetoEnEdicionId(null)
@@ -483,7 +925,7 @@ export default function RegistroSATPage() {
     docs: Record<RegistroDocumentKey, DocumentUpload | null>,
     opciones?: { permitirIncompleto?: boolean },
   ) => {
-    if (!nombreSujeto.trim() || !actividadVulnerable.trim()) return false
+    if (tipoSujeto === "none" || !nombreSujeto.trim() || !resumenActividades.trim()) return false
 
     const registroCompleto = !!(docs.detalle && docs.acuse && docs.aceptacion)
     if (!registroCompleto && !opciones?.permitirIncompleto) return false
@@ -499,7 +941,7 @@ export default function RegistroSATPage() {
       id: sujetoExistente?.id ?? (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString()),
       nombre: nombreSujeto.trim(),
       tipo: tipoSujeto,
-      actividad: actividadVulnerable.trim(),
+      actividad: resumenActividades.trim(),
       creadoEn: sujetoExistente?.creadoEn ?? new Date(),
       checklistCampos: camposChecklist,
       documentos: {
@@ -508,6 +950,10 @@ export default function RegistroSATPage() {
         aceptacion: docs.aceptacion,
       },
       registroCompleto,
+      identificacion,
+      contactos,
+      actividades,
+      representante: tipoSujeto === "moral" || tipoSujeto === "fideicomiso" ? representante : null,
     }
 
     setSujetosRegistrados((prev) => {
@@ -544,7 +990,7 @@ export default function RegistroSATPage() {
     if (!camposObligatoriosCapturados) {
       toast({
         title: "Faltan datos clave",
-        description: "Captura el nombre del sujeto obligado y la actividad vulnerable.",
+        description: "Selecciona el tipo de sujeto, completa la identificación y agrega al menos una actividad vulnerable.",
         variant: "destructive",
       })
       return
@@ -594,8 +1040,16 @@ export default function RegistroSATPage() {
     if (!sujetoSeleccionado) return
 
     setTipoSujeto(sujetoSeleccionado.tipo)
-    setNombreSujeto(sujetoSeleccionado.nombre)
-    setActividadVulnerable(sujetoSeleccionado.actividad)
+    setIdentificacion(sujetoSeleccionado.identificacion ?? createDefaultIdentificacion())
+    setContactos(
+      sujetoSeleccionado.contactos?.length
+        ? sujetoSeleccionado.contactos
+        : Array.from({ length: 3 }, () => createDefaultContacto()),
+    )
+    setActividades(
+      sujetoSeleccionado.actividades?.length ? sujetoSeleccionado.actividades : [createDefaultActividad()],
+    )
+    setRepresentante(sujetoSeleccionado.representante ?? createDefaultRepresentante())
     setDocumentosRegistro(sujetoSeleccionado.documentos)
     setDatosChecklistState(
       obtenerChecklistDesdeCamposConfirmados(sujetoSeleccionado.checklistCampos, sujetoSeleccionado.tipo),
@@ -667,6 +1121,164 @@ export default function RegistroSATPage() {
     }
   }
 
+  const hydrateCodigoPostalInfo = useCallback(
+    async (index: number, codigo: string) => {
+      if (typeof window === "undefined") return
+      const limpio = codigo.trim().replace(/[^0-9]/g, "")
+      if (limpio.length !== 5) return
+
+      const cacheKey = `${SEPOMEX_STORAGE_PREFIX}${limpio}`
+      let info: CodigoPostalInfo | undefined
+      const cacheRaw = window.localStorage.getItem(cacheKey)
+      if (cacheRaw) {
+        try {
+          info = JSON.parse(cacheRaw) as CodigoPostalInfo
+        } catch {
+          window.localStorage.removeItem(cacheKey)
+        }
+      }
+
+      if (!info) {
+        info = await fetchCodigoPostalInfo(limpio)
+        if (info) {
+          window.localStorage.setItem(cacheKey, JSON.stringify(info))
+        }
+      }
+
+      if (!info) return
+      registerCodigoPostalInfo(info)
+
+      setActividades((prev) =>
+        prev.map((actividad, idx) => {
+          if (idx !== index) return actividad
+          if (actividad.domicilio.codigoPostal !== limpio) return actividad
+          const colonias = info.asentamientos ?? []
+          return {
+            ...actividad,
+            domicilio: {
+              ...actividad.domicilio,
+              pais: "México",
+              entidad: info.estado ?? "",
+              alcaldia: info.municipio ?? "",
+              colonia:
+                colonias.length > 0
+                  ? colonias.includes(actividad.domicilio.colonia)
+                    ? actividad.domicilio.colonia
+                    : colonias[0]
+                  : actividad.domicilio.colonia,
+            },
+          }
+        }),
+      )
+    },
+    [setActividades],
+  )
+
+  const handleCodigoPostalChange = useCallback(
+    (index: number, value: string) => {
+      const limpio = value.replace(/[^0-9]/g, "").slice(0, 5)
+      setActividades((prev) =>
+        prev.map((actividad, idx) => {
+          if (idx !== index) return actividad
+
+          if (limpio.length !== 5) {
+            return {
+              ...actividad,
+              domicilio: {
+                ...actividad.domicilio,
+                codigoPostal: limpio,
+                pais: "México",
+                entidad: "",
+                alcaldia: "",
+              },
+            }
+          }
+
+          const info = findCodigoPostalInfo(limpio)
+          const colonias = info?.asentamientos ?? []
+
+          return {
+            ...actividad,
+            domicilio: {
+              ...actividad.domicilio,
+              codigoPostal: limpio,
+              pais: "México",
+              entidad: info?.estado ?? "",
+              alcaldia: info?.municipio ?? "",
+              colonia:
+                colonias.length > 0
+                  ? colonias.includes(actividad.domicilio.colonia)
+                    ? actividad.domicilio.colonia
+                    : colonias[0]
+                  : actividad.domicilio.colonia,
+            },
+          }
+        }),
+      )
+
+      if (limpio.length === 5 && !findCodigoPostalInfo(limpio)) {
+        void hydrateCodigoPostalInfo(index, limpio)
+      }
+    },
+    [hydrateCodigoPostalInfo],
+  )
+
+  const agregarActividad = () => {
+    setActividades((prev) => {
+      if (prev.length >= 5) return prev
+      return [...prev, createDefaultActividad()]
+    })
+  }
+
+  const eliminarActividad = (index: number) => {
+    setActividades((prev) => {
+      if (prev.length <= 1) return prev
+      return prev.filter((_, idx) => idx !== index)
+    })
+  }
+
+  const actualizarIdentificacionCampo = (campo: keyof IdentificacionSujeto, valor: string) => {
+    setIdentificacion((prev) => ({ ...prev, [campo]: valor }))
+  }
+
+  const actualizarContactoCampo = (index: number, campo: keyof ContactoSujeto, valor: string) => {
+    setContactos((prev) =>
+      prev.map((contacto, idx) => (idx === index ? { ...contacto, [campo]: valor } : contacto)),
+    )
+  }
+
+  const actualizarActividadCampo = (index: number, campo: keyof ActividadSujeto, valor: string) => {
+    setActividades((prev) =>
+      prev.map((actividad, idx) => (idx === index ? { ...actividad, [campo]: valor } : actividad)),
+    )
+  }
+
+  const actualizarDomicilioActividadCampo = (index: number, campo: keyof DomicilioActividad, valor: string) => {
+    setActividades((prev) =>
+      prev.map((actividad, idx) =>
+        idx === index ? { ...actividad, domicilio: { ...actividad.domicilio, [campo]: valor } } : actividad,
+      ),
+    )
+  }
+
+  const actualizarRepresentanteCampo = (campo: keyof RepresentanteCumplimiento, valor: string) => {
+    setRepresentante((prev) => ({ ...prev, [campo]: valor }))
+  }
+
+  const actualizarRepresentanteContactoCampo = (
+    campo: keyof RepresentanteCumplimiento["contacto"],
+    valor: string,
+  ) => {
+    setRepresentante((prev) => ({ ...prev, contacto: { ...prev.contacto, [campo]: valor } }))
+  }
+
+  const actualizarRepresentanteCertificacionCampo = (
+    campo: keyof RepresentanteCumplimiento["certificacion"],
+    valor: string,
+  ) => {
+    setRepresentante((prev) => ({ ...prev, certificacion: { ...prev.certificacion, [campo]: valor } }))
+  }
+
   const sujetoSeleccionado = sujetosRegistrados.find((item) => item.id === sujetoSeleccionadoId)
   const documentosCompletados = (Object.values(documentosRegistro).filter(Boolean) as DocumentUpload[]).length
   const enEdicion = Boolean(sujetoEnEdicionId)
@@ -726,7 +1338,7 @@ export default function RegistroSATPage() {
             <CardContent className="space-y-2 pt-6">
               <p className="text-sm font-semibold">Guía rápida</p>
               <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-                <li>Captura el tipo de sujeto y actividad vulnerable.</li>
+                <li>Selecciona el tipo de sujeto y completa la identificación.</li>
                 <li>Adjunta detalle, acuse y aceptación (botones abajo).</li>
                 <li>Usa el botón Registrar sujeto para confirmar.</li>
               </ul>
@@ -886,53 +1498,683 @@ export default function RegistroSATPage() {
               <div className="space-y-1">
                 <CardTitle>Datos iniciales</CardTitle>
                 <CardDescription>
-                  Define si el sujeto obligado es persona física, moral o fideicomiso y responde qué actividad vulnerable realizará.
+                  Selecciona el tipo de sujeto obligado para habilitar los campos de identificación, contacto y actividades.
                 </CardDescription>
               </div>
               {enEdicion && <Badge variant="outline">Editando sujeto</Badge>}
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-3">
-                {tiposSujetos.map((tipo) => (
-                  <Button
-                    key={tipo.value}
-                    variant={tipoSujeto === tipo.value ? "default" : "outline"}
-                    className="h-full w-full justify-start text-left whitespace-normal break-words max-w-full"
-                    onClick={() => setTipoSujeto(tipo.value)}
-                  >
-                    <div className="flex flex-col text-left">
-                      <span className="font-semibold">{tipo.label}</span>
-                      <span className="text-xs text-muted-foreground">Selecciona para ver datos del anexo correspondiente</span>
-                    </div>
-                  </Button>
-                ))}
-              </div>
-
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="nombre-sujeto">Nombre o razón social</Label>
-                  <Input
-                    id="nombre-sujeto"
-                    value={nombreSujeto}
-                    onChange={(event) => setNombreSujeto(event.target.value)}
-                    placeholder="Introduce el nombre completo del sujeto obligado"
-                  />
+                  <Label htmlFor="tipo-sujeto">Tipo de Sujeto Obligado</Label>
+                  <Select value={tipoSujeto} onValueChange={(value) => setTipoSujeto(value as SubjectType)}>
+                    <SelectTrigger id="tipo-sujeto">
+                      <SelectValue placeholder="---" />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      {tiposSujetos.map((tipo) => (
+                        <SelectItem key={tipo.value} value={tipo.value}>
+                          {tipo.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="actividad-vulnerable">Actividad vulnerable a realizar</Label>
-                  <Textarea
-                    id="actividad-vulnerable"
-                    value={actividadVulnerable}
-                    onChange={(event) => setActividadVulnerable(event.target.value)}
-                    placeholder="Describe la actividad vulnerable y la fracción aplicable"
-                    className="min-h-[80px]"
-                  />
+                <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                  Si seleccionas "---", el resto del formulario no aplica. Al elegir un tipo se habilitan los datos de identificación,
+                  contacto y actividades vulnerables requeridas.
                 </div>
               </div>
+              {tipoSujeto === "none" && (
+                <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+                  Selecciona un tipo de sujeto obligado para habilitar el resto del formulario.
+                </div>
+              )}
             </CardContent>
           </Card>
+          {tipoSujeto !== "none" && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Datos de identificación del Sujeto Obligado</CardTitle>
+                  <CardDescription>Captura la información principal del sujeto obligado según su tipo.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="fecha-identificacion">{obtenerEtiquetaFecha(tipoSujeto)}</Label>
+                    <Input
+                      id="fecha-identificacion"
+                      type="date"
+                      value={identificacion.fecha}
+                      onChange={(event) => actualizarIdentificacionCampo("fecha", event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="rfc-sujeto">Registro Federal de Contribuyentes (RFC)</Label>
+                    <Input
+                      id="rfc-sujeto"
+                      value={identificacion.rfc}
+                      onChange={(event) => actualizarIdentificacionCampo("rfc", event.target.value.toUpperCase())}
+                      placeholder="RFC con homoclave"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="nombre-sujeto">{obtenerEtiquetaNombre(tipoSujeto)}</Label>
+                    <Input
+                      id="nombre-sujeto"
+                      value={identificacion.nombre}
+                      onChange={(event) => actualizarIdentificacionCampo("nombre", event.target.value)}
+                      placeholder="Captura el nombre o denominación"
+                    />
+                  </div>
+                  {tipoSujeto === "fisica" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="apellido-paterno">Apellido Paterno</Label>
+                      <Input
+                        id="apellido-paterno"
+                        value={identificacion.apellidoPaterno}
+                        onChange={(event) => actualizarIdentificacionCampo("apellidoPaterno", event.target.value)}
+                        placeholder="Apellido paterno"
+                      />
+                    </div>
+                  )}
+                  {(tipoSujeto === "fisica" || tipoSujeto === "fideicomiso") && (
+                    <div className="space-y-2">
+                      <Label htmlFor="pais-nacionalidad">País de Nacionalidad</Label>
+                      <Select
+                        value={identificacion.paisNacionalidad}
+                        onValueChange={(value) => actualizarIdentificacionCampo("paisNacionalidad", value)}
+                      >
+                        <SelectTrigger id="pais-nacionalidad">
+                          <SelectValue placeholder="Selecciona un país" />
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          {PAISES.map((pais) => (
+                            <SelectItem key={pais.code} value={pais.code}>
+                              {pais.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {tipoSujeto === "fisica" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="pais-nacimiento">País de Nacimiento</Label>
+                      <Select
+                        value={identificacion.paisNacimiento}
+                        onValueChange={(value) => actualizarIdentificacionCampo("paisNacimiento", value)}
+                      >
+                        <SelectTrigger id="pais-nacimiento">
+                          <SelectValue placeholder="Selecciona un país" />
+                        </SelectTrigger>
+                        <SelectContent position="popper">
+                          {PAISES.map((pais) => (
+                            <SelectItem key={pais.code} value={pais.code}>
+                              {pais.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {tipoSujeto === "fisica" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="curp-sujeto">Clave Única de Registro de Población (CURP)</Label>
+                      <Input
+                        id="curp-sujeto"
+                        value={identificacion.curp}
+                        onChange={(event) => actualizarIdentificacionCampo("curp", event.target.value.toUpperCase())}
+                        placeholder="CURP"
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-          <Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Datos de contacto del Sujeto Obligado</CardTitle>
+                  <CardDescription>Captura hasta tres personas de contacto con los mismos campos.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {contactos.map((contacto, index) => (
+                    <div key={`contacto-${index}`} className="space-y-4 rounded-lg border p-4">
+                      <p className="text-sm font-semibold">Persona {index + 1}</p>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor={`contacto-nombre-${index}`}>Nombre completo de la persona contacto</Label>
+                          <Input
+                            id={`contacto-nombre-${index}`}
+                            value={contacto.nombreCompleto}
+                            onChange={(event) => actualizarContactoCampo(index, "nombreCompleto", event.target.value)}
+                          />
+                        </div>
+                        <div className="grid gap-4 md:grid-cols-3 md:col-span-2">
+                          <div className="space-y-2">
+                            <Label htmlFor={`contacto-lada-${index}`}>Clave LADA</Label>
+                            <Input
+                              id={`contacto-lada-${index}`}
+                              value={contacto.claveLada}
+                              onChange={(event) => actualizarContactoCampo(index, "claveLada", event.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`contacto-fijo-${index}`}>Número Telefónico Fijo</Label>
+                            <Input
+                              id={`contacto-fijo-${index}`}
+                              value={contacto.telefonoFijo}
+                              onChange={(event) => actualizarContactoCampo(index, "telefonoFijo", event.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`contacto-ext-${index}`}>Extensión (en su caso)</Label>
+                            <Input
+                              id={`contacto-ext-${index}`}
+                              value={contacto.extension}
+                              onChange={(event) => actualizarContactoCampo(index, "extension", event.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor={`contacto-movil-${index}`}>Número Telefónico Móvil</Label>
+                          <Input
+                            id={`contacto-movil-${index}`}
+                            value={contacto.telefonoMovil}
+                            onChange={(event) => actualizarContactoCampo(index, "telefonoMovil", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor={`contacto-correo-${index}`}>Correo Electrónico</Label>
+                          <Input
+                            id={`contacto-correo-${index}`}
+                            type="email"
+                            value={contacto.correo}
+                            onChange={(event) => actualizarContactoCampo(index, "correo", event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-1">
+                      <CardTitle>Actividad Vulnerable</CardTitle>
+                      <CardDescription>
+                        Añade actividades vulnerables con su domicilio nacional. Se permiten hasta 5.
+                      </CardDescription>
+                    </div>
+                    <div className="flex flex-col items-start gap-2 md:items-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={agregarActividad}
+                        disabled={actividades.length >= 5}
+                      >
+                        Añadir Actividad Vulnerable
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        {actividades.length} de 5 actividades registradas.
+                      </p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {actividades.map((actividad, index) => {
+                    const registroSi = actividad.cuentaRegistro === "si"
+                    return (
+                      <div key={`actividad-${index}`} className="space-y-4 rounded-lg border p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-semibold">Actividad Vulnerable ({index + 1})</p>
+                          {actividades.length > 1 && (
+                            <Button variant="ghost" size="sm" onClick={() => eliminarActividad(index)}>
+                              Eliminar
+                            </Button>
+                          )}
+                        </div>
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor={`actividad-clave-${index}`}>Actividad Vulnerable que pretende realizar</Label>
+                            <Select
+                              value={actividad.actividadKey}
+                              onValueChange={(value) => actualizarActividadCampo(index, "actividadKey", value)}
+                            >
+                              <SelectTrigger id={`actividad-clave-${index}`}>
+                                <SelectValue placeholder="Selecciona una actividad" />
+                              </SelectTrigger>
+                              <SelectContent position="popper">
+                                {actividadesVulnerables.map((item) => (
+                                  <SelectItem key={item.key} value={item.key}>
+                                    {item.fraccion} · {item.nombre}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`actividad-fecha-${index}`}>
+                              Fecha en que se realizó por primera vez la Actividad Vulnerable
+                            </Label>
+                            <Input
+                              id={`actividad-fecha-${index}`}
+                              type="date"
+                              value={actividad.fechaPrimera}
+                              onChange={(event) => actualizarActividadCampo(index, "fechaPrimera", event.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                            <Label htmlFor={`actividad-registro-${index}`}>
+                              ¿Cuenta con registro / autorización / patente o certificado para realizar la Actividad Vulnerable?
+                            </Label>
+                            <Select
+                              value={actividad.cuentaRegistro}
+                              onValueChange={(value) => actualizarActividadCampo(index, "cuentaRegistro", value)}
+                            >
+                              <SelectTrigger id={`actividad-registro-${index}`}>
+                                <SelectValue placeholder="Selecciona una opción" />
+                              </SelectTrigger>
+                              <SelectContent position="popper">
+                                <SelectItem value="si">Sí</SelectItem>
+                                <SelectItem value="no">No</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        {registroSi && (
+                          <div className="grid gap-4 md:grid-cols-2 rounded-lg border border-dashed p-4">
+                            <div className="space-y-2">
+                              <Label htmlFor={`actividad-doc-tipo-${index}`}>Tipo de Documento</Label>
+                              <Select
+                                value={actividad.tipoDocumento}
+                                onValueChange={(value) => actualizarActividadCampo(index, "tipoDocumento", value)}
+                              >
+                                <SelectTrigger id={`actividad-doc-tipo-${index}`}>
+                                  <SelectValue placeholder="Selecciona" />
+                                </SelectTrigger>
+                                <SelectContent position="popper">
+                                  {opcionesDocumento.map((opcion) => (
+                                    <SelectItem key={opcion} value={opcion}>
+                                      {opcion}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`actividad-doc-autoridad-${index}`}>Autoridad que lo emite</Label>
+                              <Select
+                                value={actividad.autoridadDocumento}
+                                onValueChange={(value) => actualizarActividadCampo(index, "autoridadDocumento", value)}
+                              >
+                                <SelectTrigger id={`actividad-doc-autoridad-${index}`}>
+                                  <SelectValue placeholder="Selecciona" />
+                                </SelectTrigger>
+                                <SelectContent position="popper">
+                                  {opcionesAutoridad.map((opcion) => (
+                                    <SelectItem key={opcion} value={opcion}>
+                                      {opcion}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`actividad-doc-folio-${index}`}>Número o Folio de identificación</Label>
+                              <Input
+                                id={`actividad-doc-folio-${index}`}
+                                value={actividad.folioDocumento}
+                                onChange={(event) => actualizarActividadCampo(index, "folioDocumento", event.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`actividad-doc-periodo-${index}`}>Periodo que ampara el registro</Label>
+                              <Input
+                                id={`actividad-doc-periodo-${index}`}
+                                value={actividad.periodoDocumento}
+                                onChange={(event) => actualizarActividadCampo(index, "periodoDocumento", event.target.value)}
+                                placeholder="YYYY-MM-DD o rango"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-4 rounded-lg border border-dashed p-4">
+                          <p className="text-sm font-semibold">
+                            Domicilio en Territorio Nacional donde lleva a cabo la Actividad Vulnerable ({index + 1})
+                          </p>
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label htmlFor={`domicilio-cp-${index}`}>Código Postal</Label>
+                              <Input
+                                id={`domicilio-cp-${index}`}
+                                value={actividad.domicilio.codigoPostal}
+                                onChange={(event) => handleCodigoPostalChange(index, event.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`domicilio-tipo-${index}`}>Tipo de Vialidad</Label>
+                              <Input
+                                id={`domicilio-tipo-${index}`}
+                                value={actividad.domicilio.tipoVialidad}
+                                onChange={(event) =>
+                                  actualizarDomicilioActividadCampo(index, "tipoVialidad", event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`domicilio-nombre-${index}`}>Nombre de la Vialidad</Label>
+                              <Input
+                                id={`domicilio-nombre-${index}`}
+                                value={actividad.domicilio.nombreVialidad}
+                                onChange={(event) =>
+                                  actualizarDomicilioActividadCampo(index, "nombreVialidad", event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`domicilio-ext-${index}`}>Número Exterior</Label>
+                              <Input
+                                id={`domicilio-ext-${index}`}
+                                value={actividad.domicilio.numeroExterior}
+                                onChange={(event) =>
+                                  actualizarDomicilioActividadCampo(index, "numeroExterior", event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`domicilio-int-${index}`}>Número Interior</Label>
+                              <Input
+                                id={`domicilio-int-${index}`}
+                                value={actividad.domicilio.numeroInterior}
+                                onChange={(event) =>
+                                  actualizarDomicilioActividadCampo(index, "numeroInterior", event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`domicilio-colonia-${index}`}>Colonia / Urbanización</Label>
+                              <Input
+                                id={`domicilio-colonia-${index}`}
+                                value={actividad.domicilio.colonia}
+                                onChange={(event) =>
+                                  actualizarDomicilioActividadCampo(index, "colonia", event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`domicilio-alcaldia-${index}`}>Alcaldía / Municipio</Label>
+                              <Input
+                                id={`domicilio-alcaldia-${index}`}
+                                value={actividad.domicilio.alcaldia}
+                                placeholder="Se completa con el CP"
+                                disabled
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`domicilio-entidad-${index}`}>Entidad / Estado / Provincia</Label>
+                              <Input
+                                id={`domicilio-entidad-${index}`}
+                                value={actividad.domicilio.entidad}
+                                placeholder="Se completa con el CP"
+                                disabled
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor={`domicilio-pais-${index}`}>País</Label>
+                              <Input id={`domicilio-pais-${index}`} value={actividad.domicilio.pais} disabled />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </CardContent>
+              </Card>
+
+              {(tipoSujeto === "moral" || tipoSujeto === "fideicomiso") && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Representante Encargado de Cumplimiento</CardTitle>
+                    <CardDescription>Se captura únicamente para personas morales y fideicomisos.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-4">
+                      <p className="text-sm font-semibold">Datos del Representante Encargado de Cumplimiento</p>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-nombres">Nombre(s) (sin abreviaturas)</Label>
+                          <Input
+                            id="rec-nombres"
+                            value={representante.nombre}
+                            onChange={(event) => actualizarRepresentanteCampo("nombre", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-apellido-paterno">Apellido Paterno</Label>
+                          <Input
+                            id="rec-apellido-paterno"
+                            value={representante.apellidoPaterno}
+                            onChange={(event) => actualizarRepresentanteCampo("apellidoPaterno", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-apellido-materno">Apellido Materno</Label>
+                          <Input
+                            id="rec-apellido-materno"
+                            value={representante.apellidoMaterno}
+                            onChange={(event) => actualizarRepresentanteCampo("apellidoMaterno", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-fecha-nacimiento">Fecha de Nacimiento</Label>
+                          <Input
+                            id="rec-fecha-nacimiento"
+                            type="date"
+                            value={representante.fechaNacimiento}
+                            onChange={(event) => actualizarRepresentanteCampo("fechaNacimiento", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-rfc">RFC</Label>
+                          <Input
+                            id="rec-rfc"
+                            value={representante.rfc}
+                            onChange={(event) => actualizarRepresentanteCampo("rfc", event.target.value.toUpperCase())}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-curp">CURP</Label>
+                          <Input
+                            id="rec-curp"
+                            value={representante.curp}
+                            onChange={(event) => actualizarRepresentanteCampo("curp", event.target.value.toUpperCase())}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-pais">País de Nacionalidad</Label>
+                          <Select
+                            value={representante.paisNacionalidad}
+                            onValueChange={(value) => actualizarRepresentanteCampo("paisNacionalidad", value)}
+                          >
+                            <SelectTrigger id="rec-pais">
+                              <SelectValue placeholder="Selecciona un país" />
+                            </SelectTrigger>
+                            <SelectContent position="popper">
+                              {PAISES.map((pais) => (
+                                <SelectItem key={pais.code} value={pais.code}>
+                                  {pais.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-fecha-designacion">Fecha de Designación</Label>
+                          <Input
+                            id="rec-fecha-designacion"
+                            type="date"
+                            value={representante.fechaDesignacion}
+                            onChange={(event) => actualizarRepresentanteCampo("fechaDesignacion", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-fecha-aceptacion">Fecha de Aceptación de la Designación</Label>
+                          <Input
+                            id="rec-fecha-aceptacion"
+                            type="date"
+                            value={representante.fechaAceptacion}
+                            onChange={(event) => actualizarRepresentanteCampo("fechaAceptacion", event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <p className="text-sm font-semibold">Datos de contacto del Representante Encargado de Cumplimiento</p>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-lada">Clave LADA</Label>
+                          <Input
+                            id="rec-lada"
+                            value={representante.contacto.claveLada}
+                            onChange={(event) => actualizarRepresentanteContactoCampo("claveLada", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-telefono">Número Telefónico Fijo</Label>
+                          <Input
+                            id="rec-telefono"
+                            value={representante.contacto.telefonoFijo}
+                            onChange={(event) => actualizarRepresentanteContactoCampo("telefonoFijo", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-extension">Extensión (en su caso)</Label>
+                          <Input
+                            id="rec-extension"
+                            value={representante.contacto.extension}
+                            onChange={(event) => actualizarRepresentanteContactoCampo("extension", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-movil">Número Telefónico Móvil</Label>
+                          <Input
+                            id="rec-movil"
+                            value={representante.contacto.telefonoMovil}
+                            onChange={(event) => actualizarRepresentanteContactoCampo("telefonoMovil", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="rec-correo">Correo Electrónico</Label>
+                          <Input
+                            id="rec-correo"
+                            type="email"
+                            value={representante.contacto.correo}
+                            onChange={(event) => actualizarRepresentanteContactoCampo("correo", event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <p className="text-sm font-semibold">Credenciales del Representante Encargado de Cumplimiento</p>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="rec-certificacion">
+                            ¿El Representante Encargado de Cumplimiento cuenta con Certificación en materia de PLD/FT?
+                          </Label>
+                          <Select
+                            value={representante.certificacion.respuesta}
+                            onValueChange={(value) =>
+                              actualizarRepresentanteCertificacionCampo("respuesta", value)
+                            }
+                          >
+                            <SelectTrigger id="rec-certificacion">
+                              <SelectValue placeholder="Selecciona una opción" />
+                            </SelectTrigger>
+                            <SelectContent position="popper">
+                              <SelectItem value="si">Sí</SelectItem>
+                              <SelectItem value="no">No</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {representante.certificacion.respuesta === "si" && (
+                          <>
+                            <div className="space-y-2">
+                              <Label htmlFor="rec-cert-tipo">Tipo de Documento</Label>
+                              <Select
+                                value={representante.certificacion.tipoDocumento}
+                                onValueChange={(value) =>
+                                  actualizarRepresentanteCertificacionCampo("tipoDocumento", value)
+                                }
+                              >
+                                <SelectTrigger id="rec-cert-tipo">
+                                  <SelectValue placeholder="Selecciona" />
+                                </SelectTrigger>
+                                <SelectContent position="popper">
+                                  {opcionesDocumento.map((opcion) => (
+                                    <SelectItem key={opcion} value={opcion}>
+                                      {opcion}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="rec-cert-autoridad">Autoridad que lo emite</Label>
+                              <Select
+                                value={representante.certificacion.autoridadDocumento}
+                                onValueChange={(value) =>
+                                  actualizarRepresentanteCertificacionCampo("autoridadDocumento", value)
+                                }
+                              >
+                                <SelectTrigger id="rec-cert-autoridad">
+                                  <SelectValue placeholder="Selecciona" />
+                                </SelectTrigger>
+                                <SelectContent position="popper">
+                                  {opcionesAutoridad.map((opcion) => (
+                                    <SelectItem key={opcion} value={opcion}>
+                                      {opcion}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="rec-cert-folio">Número o Folio de identificación</Label>
+                              <Input
+                                id="rec-cert-folio"
+                                value={representante.certificacion.folioDocumento}
+                                onChange={(event) =>
+                                  actualizarRepresentanteCertificacionCampo("folioDocumento", event.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="rec-cert-periodo">Periodo que ampara el registro</Label>
+                              <Input
+                                id="rec-cert-periodo"
+                                value={representante.certificacion.periodoDocumento}
+                                onChange={(event) =>
+                                  actualizarRepresentanteCertificacionCampo("periodoDocumento", event.target.value)
+                                }
+                                placeholder="YYYY-MM-DD o rango"
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card>
               <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="space-y-1">
                   <CardTitle>Documentos obligatorios del alta</CardTitle>
@@ -1141,6 +2383,8 @@ export default function RegistroSATPage() {
               ))}
             </CardContent>
           </Card>
+          </>
+          )}
         </TabsContent>
       </Tabs>
     </div>
