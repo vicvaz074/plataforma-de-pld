@@ -467,9 +467,7 @@ export default function RegistroSATPage() {
   const [contactos, setContactos] = useState<ContactoSujeto[]>(() =>
     Array.from({ length: 3 }, () => createDefaultContacto()),
   )
-  const [actividades, setActividades] = useState<ActividadSujeto[]>(() =>
-    Array.from({ length: 5 }, () => createDefaultActividad()),
-  )
+  const [actividades, setActividades] = useState<ActividadSujeto[]>(() => [createDefaultActividad()])
   const [representante, setRepresentante] = useState<RepresentanteCumplimiento>(() => createDefaultRepresentante())
   const [documentosRegistro, setDocumentosRegistro] = useState<
     Record<RegistroDocumentKey, DocumentUpload | null>
@@ -639,7 +637,7 @@ export default function RegistroSATPage() {
                         createDefaultDomicilio().pais,
                     },
                   }))
-                : Array.from({ length: 5 }, () => createDefaultActividad()),
+                : [createDefaultActividad()],
               representante:
                 item.representante && typeof item.representante === "object"
                   ? {
@@ -777,11 +775,10 @@ export default function RegistroSATPage() {
           }))
         : []
 
-      const actividadesNormalizadas = Array.from({ length: 5 }, (_, index) =>
-        actividadesCargadas[index]
-          ? { ...createDefaultActividad(), ...actividadesCargadas[index] }
-          : createDefaultActividad(),
-      )
+      const actividadesNormalizadas =
+        actividadesCargadas.length > 0
+          ? actividadesCargadas.map((actividad) => ({ ...createDefaultActividad(), ...actividad }))
+          : [createDefaultActividad()]
 
       const representanteRaw = (data.representante ?? {}) as Record<string, unknown>
       const representanteCargado: RepresentanteCumplimiento = {
@@ -917,7 +914,7 @@ export default function RegistroSATPage() {
   const limpiarFormulario = () => {
     setIdentificacion(createDefaultIdentificacion())
     setContactos(Array.from({ length: 3 }, () => createDefaultContacto()))
-    setActividades(Array.from({ length: 5 }, () => createDefaultActividad()))
+    setActividades([createDefaultActividad()])
     setRepresentante(createDefaultRepresentante())
     setDocumentosRegistro({ detalle: null, acuse: null, aceptacion: null })
     setDatosChecklistState(createDefaultDatosChecklistState())
@@ -1050,9 +1047,7 @@ export default function RegistroSATPage() {
         : Array.from({ length: 3 }, () => createDefaultContacto()),
     )
     setActividades(
-      sujetoSeleccionado.actividades?.length
-        ? sujetoSeleccionado.actividades
-        : Array.from({ length: 5 }, () => createDefaultActividad()),
+      sujetoSeleccionado.actividades?.length ? sujetoSeleccionado.actividades : [createDefaultActividad()],
     )
     setRepresentante(sujetoSeleccionado.representante ?? createDefaultRepresentante())
     setDocumentosRegistro(sujetoSeleccionado.documentos)
@@ -1227,6 +1222,20 @@ export default function RegistroSATPage() {
     },
     [hydrateCodigoPostalInfo],
   )
+
+  const agregarActividad = () => {
+    setActividades((prev) => {
+      if (prev.length >= 5) return prev
+      return [...prev, createDefaultActividad()]
+    })
+  }
+
+  const eliminarActividad = (index: number) => {
+    setActividades((prev) => {
+      if (prev.length <= 1) return prev
+      return prev.filter((_, idx) => idx !== index)
+    })
+  }
 
   const actualizarIdentificacionCampo = (campo: keyof IdentificacionSujeto, valor: string) => {
     setIdentificacion((prev) => ({ ...prev, [campo]: valor }))
@@ -1692,15 +1701,41 @@ export default function RegistroSATPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Actividad Vulnerable</CardTitle>
-                  <CardDescription>Captura hasta cinco bloques con actividad vulnerable y domicilio nacional.</CardDescription>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-1">
+                      <CardTitle>Actividad Vulnerable</CardTitle>
+                      <CardDescription>
+                        Añade actividades vulnerables con su domicilio nacional. Se permiten hasta 5.
+                      </CardDescription>
+                    </div>
+                    <div className="flex flex-col items-start gap-2 md:items-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={agregarActividad}
+                        disabled={actividades.length >= 5}
+                      >
+                        Añadir Actividad Vulnerable
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        {actividades.length} de 5 actividades registradas.
+                      </p>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {actividades.map((actividad, index) => {
                     const registroSi = actividad.cuentaRegistro === "si"
                     return (
                       <div key={`actividad-${index}`} className="space-y-4 rounded-lg border p-4">
-                        <p className="text-sm font-semibold">Actividad Vulnerable ({index + 1})</p>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-semibold">Actividad Vulnerable ({index + 1})</p>
+                          {actividades.length > 1 && (
+                            <Button variant="ghost" size="sm" onClick={() => eliminarActividad(index)}>
+                              Eliminar
+                            </Button>
+                          )}
+                        </div>
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-2">
                             <Label htmlFor={`actividad-clave-${index}`}>Actividad Vulnerable que pretende realizar</Label>
