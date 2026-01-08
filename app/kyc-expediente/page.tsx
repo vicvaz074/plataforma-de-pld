@@ -239,6 +239,11 @@ interface SujetoObligadoResumen {
   nombre: string
   tipo: string
   actividad: string
+  identificacion: {
+    rfc: string
+    nombre: string
+    paisNacionalidad: string
+  }
 }
 
 const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
@@ -489,7 +494,19 @@ function KycExpedienteContent() {
     const savedData = window.localStorage.getItem("registro-sat-data")
     if (!savedData) return
     try {
-      const data = JSON.parse(savedData) as { sujetosRegistrados?: Partial<SujetoObligadoResumen>[] }
+      const data = JSON.parse(savedData) as {
+        sujetosRegistrados?: Array<{
+          id?: string
+          nombre?: string
+          tipo?: string
+          actividad?: string
+          identificacion?: {
+            rfc?: string
+            nombre?: string
+            paisNacionalidad?: string
+          }
+        }>
+      }
       const sujetos = Array.isArray(data.sujetosRegistrados)
         ? data.sujetosRegistrados
             .map((item) => ({
@@ -497,6 +514,14 @@ function KycExpedienteContent() {
               nombre: typeof item.nombre === "string" ? item.nombre : "",
               tipo: typeof item.tipo === "string" ? item.tipo : "",
               actividad: typeof item.actividad === "string" ? item.actividad : "",
+              identificacion: {
+                rfc: typeof item.identificacion?.rfc === "string" ? item.identificacion.rfc : "",
+                nombre: typeof item.identificacion?.nombre === "string" ? item.identificacion.nombre : "",
+                paisNacionalidad:
+                  typeof item.identificacion?.paisNacionalidad === "string"
+                    ? item.identificacion.paisNacionalidad
+                    : "MX",
+              },
             }))
             .filter((item) => item.id && item.nombre)
         : []
@@ -505,6 +530,17 @@ function KycExpedienteContent() {
       console.error("No se pudo leer sujetos obligados:", error)
     }
   }, [])
+
+  useEffect(() => {
+    if (!sujetoObligadoId) return
+    const seleccionado = sujetosRegistrados.find((sujeto) => sujeto.id === sujetoObligadoId)
+    if (!seleccionado) return
+    const nombre = seleccionado.identificacion.nombre || seleccionado.nombre
+    setClienteDenominacion(nombre)
+    setClienteRfc(seleccionado.identificacion.rfc)
+    setClientePais(seleccionado.identificacion.paisNacionalidad || "MX")
+    setClienteActividad(seleccionado.actividad)
+  }, [sujetoObligadoId, sujetosRegistrados])
 
   useEffect(() => {
     if (typeof window === "undefined") return
