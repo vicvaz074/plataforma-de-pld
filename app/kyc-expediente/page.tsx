@@ -162,12 +162,11 @@ const DOCUMENTACION_REQUERIDA: DocumentoRequerido[] = [
   },
 ]
 
-type DocumentStatus = "pendiente" | "en-proceso" | "completo"
+type DocumentStatus = "presente" | "no-presente"
 
 const DOCUMENTO_STATUS: { value: DocumentStatus; label: string; classes: string }[] = [
-  { value: "pendiente", label: "Pendiente", classes: "bg-rose-100 text-rose-700" },
-  { value: "en-proceso", label: "En revisión", classes: "bg-amber-100 text-amber-700" },
-  { value: "completo", label: "Completo", classes: "bg-emerald-100 text-emerald-700" },
+  { value: "presente", label: "Presente", classes: "bg-emerald-100 text-emerald-700" },
+  { value: "no-presente", label: "No presente", classes: "bg-rose-100 text-rose-700" },
 ]
 
 const TIPO_VIALIDAD_OPCIONES = [
@@ -266,6 +265,20 @@ interface PersonaReportada {
     ciudad: string
     colonia: string
     codigoPostal: string
+    tipoVialidad: string
+    calle: string
+    numeroExterior: string
+    numeroInterior: string
+  }
+  residenciaExtranjera: RespuestaBinaria
+  domicilioCorrespondencia: {
+    tipoVialidad: string
+    pais: string
+    entidad: string
+    municipio: string
+    ciudad: string
+    colonia: string
+    codigoPostal: string
     calle: string
     numeroExterior: string
     numeroInterior: string
@@ -276,11 +289,15 @@ interface PersonaReportada {
     clavePais: string
     telefono: string
     correo: string
+    extension: string
+    telefonoMovil: string
+    clavePaisMovil: string
   }
   identificacion: {
     tipo: string
     numero: string
     pais: string
+    autoridad: string
     fechaVencimiento: string
   }
   participacion: {
@@ -401,6 +418,20 @@ function crearPersonaBase(): PersonaReportada {
       ciudad: "",
       colonia: "",
       codigoPostal: "",
+      tipoVialidad: "",
+      calle: "",
+      numeroExterior: "",
+      numeroInterior: "",
+    },
+    residenciaExtranjera: "no",
+    domicilioCorrespondencia: {
+      tipoVialidad: "",
+      pais: "MX",
+      entidad: "",
+      municipio: "",
+      ciudad: "",
+      colonia: "",
+      codigoPostal: "",
       calle: "",
       numeroExterior: "",
       numeroInterior: "",
@@ -411,11 +442,15 @@ function crearPersonaBase(): PersonaReportada {
       clavePais: "MX",
       telefono: "",
       correo: "",
+      extension: "",
+      telefonoMovil: "",
+      clavePaisMovil: "MX",
     },
     identificacion: {
       tipo: "",
       numero: "",
       pais: "MX",
+      autoridad: "",
       fechaVencimiento: "",
     },
     participacion: {
@@ -534,7 +569,7 @@ function sanitizeDocumentacionMap(raw: any): Record<string, DocumentStatus> {
   if (!raw || typeof raw !== "object") return {}
   const resultado: Record<string, DocumentStatus> = {}
   for (const [key, value] of Object.entries(raw)) {
-    if (value === "pendiente" || value === "en-proceso" || value === "completo") {
+    if (value === "presente" || value === "no-presente") {
       resultado[key] = value
     }
   }
@@ -547,6 +582,10 @@ function sanitizePersonaGuardada(raw: any): PersonaReportada | null {
   const base = crearPersonaBase()
   const representanteRaw = typeof raw.representante === "object" && raw.representante ? raw.representante : {}
   const domicilioRaw = typeof raw.domicilio === "object" && raw.domicilio ? raw.domicilio : {}
+  const domicilioCorrespondenciaRaw =
+    typeof raw.domicilioCorrespondencia === "object" && raw.domicilioCorrespondencia
+      ? raw.domicilioCorrespondencia
+      : {}
   const contactoRaw = typeof raw.contacto === "object" && raw.contacto ? raw.contacto : {}
   const identificacionRaw =
     typeof raw.identificacion === "object" && raw.identificacion ? raw.identificacion : {}
@@ -616,6 +655,8 @@ function sanitizePersonaGuardada(raw: any): PersonaReportada | null {
         typeof domicilioRaw.codigoPostal === "string"
           ? domicilioRaw.codigoPostal.replace(/[^0-9]/g, "").slice(0, 5)
           : base.domicilio.codigoPostal,
+      tipoVialidad:
+        typeof domicilioRaw.tipoVialidad === "string" ? domicilioRaw.tipoVialidad : base.domicilio.tipoVialidad,
       calle: typeof domicilioRaw.calle === "string" ? domicilioRaw.calle : base.domicilio.calle,
       numeroExterior:
         typeof domicilioRaw.numeroExterior === "string"
@@ -625,6 +666,55 @@ function sanitizePersonaGuardada(raw: any): PersonaReportada | null {
         typeof domicilioRaw.numeroInterior === "string"
           ? domicilioRaw.numeroInterior
           : base.domicilio.numeroInterior,
+    },
+    residenciaExtranjera:
+      raw.residenciaExtranjera === "si" || raw.residenciaExtranjera === "no"
+        ? raw.residenciaExtranjera
+        : base.residenciaExtranjera,
+    domicilioCorrespondencia: {
+      ...base.domicilioCorrespondencia,
+      tipoVialidad:
+        typeof domicilioCorrespondenciaRaw.tipoVialidad === "string"
+          ? domicilioCorrespondenciaRaw.tipoVialidad
+          : base.domicilioCorrespondencia.tipoVialidad,
+      pais:
+        typeof domicilioCorrespondenciaRaw.pais === "string"
+          ? findPaisByNombre(domicilioCorrespondenciaRaw.pais)?.code ??
+            findPaisByCodigo(domicilioCorrespondenciaRaw.pais)?.code ??
+            domicilioCorrespondenciaRaw.pais
+          : base.domicilioCorrespondencia.pais,
+      entidad:
+        typeof domicilioCorrespondenciaRaw.entidad === "string"
+          ? domicilioCorrespondenciaRaw.entidad
+          : base.domicilioCorrespondencia.entidad,
+      municipio:
+        typeof domicilioCorrespondenciaRaw.municipio === "string"
+          ? domicilioCorrespondenciaRaw.municipio
+          : base.domicilioCorrespondencia.municipio,
+      ciudad:
+        typeof domicilioCorrespondenciaRaw.ciudad === "string"
+          ? domicilioCorrespondenciaRaw.ciudad
+          : base.domicilioCorrespondencia.ciudad,
+      colonia:
+        typeof domicilioCorrespondenciaRaw.colonia === "string"
+          ? domicilioCorrespondenciaRaw.colonia
+          : base.domicilioCorrespondencia.colonia,
+      codigoPostal:
+        typeof domicilioCorrespondenciaRaw.codigoPostal === "string"
+          ? domicilioCorrespondenciaRaw.codigoPostal.replace(/[^0-9]/g, "").slice(0, 5)
+          : base.domicilioCorrespondencia.codigoPostal,
+      calle:
+        typeof domicilioCorrespondenciaRaw.calle === "string"
+          ? domicilioCorrespondenciaRaw.calle
+          : base.domicilioCorrespondencia.calle,
+      numeroExterior:
+        typeof domicilioCorrespondenciaRaw.numeroExterior === "string"
+          ? domicilioCorrespondenciaRaw.numeroExterior
+          : base.domicilioCorrespondencia.numeroExterior,
+      numeroInterior:
+        typeof domicilioCorrespondenciaRaw.numeroInterior === "string"
+          ? domicilioCorrespondenciaRaw.numeroInterior
+          : base.domicilioCorrespondencia.numeroInterior,
     },
     contacto: {
       ...base.contacto,
@@ -641,6 +731,15 @@ function sanitizePersonaGuardada(raw: any): PersonaReportada | null {
           : base.contacto.clavePais,
       telefono: typeof contactoRaw.telefono === "string" ? contactoRaw.telefono : base.contacto.telefono,
       correo: typeof contactoRaw.correo === "string" ? contactoRaw.correo : base.contacto.correo,
+      extension: typeof contactoRaw.extension === "string" ? contactoRaw.extension : base.contacto.extension,
+      telefonoMovil:
+        typeof contactoRaw.telefonoMovil === "string" ? contactoRaw.telefonoMovil : base.contacto.telefonoMovil,
+      clavePaisMovil:
+        typeof contactoRaw.clavePaisMovil === "string"
+          ? findPaisByNombre(contactoRaw.clavePaisMovil)?.code ??
+            findPaisByCodigo(contactoRaw.clavePaisMovil)?.code ??
+            contactoRaw.clavePaisMovil
+          : base.contacto.clavePaisMovil,
     },
     identificacion: {
       ...base.identificacion,
@@ -652,6 +751,8 @@ function sanitizePersonaGuardada(raw: any): PersonaReportada | null {
             findPaisByCodigo(identificacionRaw.pais)?.code ??
             identificacionRaw.pais
           : base.identificacion.pais,
+      autoridad:
+        typeof identificacionRaw.autoridad === "string" ? identificacionRaw.autoridad : base.identificacion.autoridad,
       fechaVencimiento:
         typeof identificacionRaw.fechaVencimiento === "string"
           ? identificacionRaw.fechaVencimiento
@@ -941,7 +1042,7 @@ function KycExpedienteContent() {
   ])
 
   const documentosCompletos = useMemo(
-    () => DOCUMENTACION_REQUERIDA.filter((doc) => documentacionEstado[doc.id] === "completo").length,
+    () => DOCUMENTACION_REQUERIDA.filter((doc) => documentacionEstado[doc.id] === "presente").length,
     [documentacionEstado],
   )
 
@@ -1126,12 +1227,43 @@ function KycExpedienteContent() {
   const aplicarResumenEnFormulario = useCallback(
     (resumen: ExpedienteResumen) => {
       setNombreExpediente(resumen.nombre)
+      setTipoExpediente(EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral")
       setTipoCliente(resumen.tipoCliente)
       setDetalleTipoCliente(resumen.detalleTipoCliente ?? "")
       setResponsable("")
       setClaveSujetoObligado("")
       setClaveActividadVulnerable("")
+      setActoOperacion({ tipo: "", fechaCelebracion: "", relacionNegocios: "" })
       setDatosIdentificacion({ nombre: resumen.nombre, rfc: resumen.rfc })
+      setDomicilioCliente(crearDomicilioBase())
+      setContactoCliente({
+        ladaFijo: "",
+        telefonoFijo: "",
+        extension: "",
+        ladaMovil: "",
+        telefonoMovil: "",
+        correo: "",
+      })
+      setRepresentanteLegal({
+        nombre: "",
+        apellidoPaterno: "",
+        apellidoMaterno: "",
+        rfc: "",
+        puesto: "",
+        paisNacionalidad: "MX",
+      })
+      setIdentificacionRepresentante({
+        tipo: "",
+        numero: "",
+        autoridad: "",
+        vigencia: "",
+      })
+      setInmueble({
+        tipo: "",
+        valorReferencia: "",
+        folioReal: "",
+      })
+      setUbicacionInmueble(crearDomicilioBase())
       setDocumentacionEstado({})
       const base = crearPersonaBase()
       setPersonasReportadas([{ ...base, denominacion: resumen.nombre, rfc: resumen.rfc }])
@@ -1145,13 +1277,21 @@ function KycExpedienteContent() {
       setDatosIdentificacion,
       setDetalleTipoCliente,
       setDocumentacionEstado,
+      setDomicilioCliente,
+      setActoOperacion,
+      setContactoCliente,
+      setIdentificacionRepresentante,
+      setInmueble,
       setNombreExpediente,
       setPersonasReportadas,
+      setRepresentanteLegal,
       setResponsable,
+      setTipoExpediente,
       setTipoCliente,
       setBusquedasColonias,
       setBusquedasCiudades,
       setBusquedaPais,
+      setUbicacionInmueble,
     ],
   )
 
@@ -2794,10 +2934,6 @@ function KycExpedienteContent() {
             const paisPersonaOption = findPaisByCodigo(persona.pais) ?? findPaisByNombre(persona.pais)
             const paisDomicilioOption =
               findPaisByCodigo(persona.domicilio.pais) ?? findPaisByNombre(persona.domicilio.pais)
-            const paisIdentificacionOption =
-              findPaisByCodigo(persona.identificacion.pais) ?? findPaisByNombre(persona.identificacion.pais)
-            const paisContactoOption =
-              findPaisByCodigo(persona.contacto.clavePais) ?? findPaisByNombre(persona.contacto.clavePais)
             const infoCodigoPostal =
               persona.domicilio.ambito === "nacional" && persona.domicilio.codigoPostal.length === 5
                 ? findCodigoPostalInfo(persona.domicilio.codigoPostal)
@@ -3024,7 +3160,7 @@ function KycExpedienteContent() {
 
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <MapPin className="h-4 w-4" /> Domicilio de la persona
+                  <MapPin className="h-4 w-4" /> Domicilio del Beneficiario Controlador
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {DOMICILIO_TIPOS.map((opcion) => (
@@ -3053,6 +3189,7 @@ function KycExpedienteContent() {
                               municipio: "",
                               ciudad: "",
                               colonia: "",
+                              tipoVialidad: "",
                             },
                           }
                         })
@@ -3080,6 +3217,7 @@ function KycExpedienteContent() {
                             municipio: "",
                             ciudad: "",
                             colonia: "",
+                            tipoVialidad: "",
                           },
                         }))
                       }}
@@ -3113,7 +3251,7 @@ function KycExpedienteContent() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Entidad federativa / Estado</Label>
+                    <Label>Entidad, Estado, Provincia</Label>
                     <Input
                       value={persona.domicilio.entidad}
                       onChange={(event) =>
@@ -3125,7 +3263,7 @@ function KycExpedienteContent() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Municipio o delegación</Label>
+                    <Label>Alcaldía / Municipio / Demarcación</Label>
                     <Input
                       value={persona.domicilio.municipio}
                       onChange={(event) =>
@@ -3137,7 +3275,7 @@ function KycExpedienteContent() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Ciudad</Label>
+                    <Label>Ciudad o Población</Label>
                     {mostrarCiudadesMexico ? (
                       <Select
                         value={persona.domicilio.ciudad}
@@ -3194,7 +3332,7 @@ function KycExpedienteContent() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>Colonia o localidad</Label>
+                    <Label>Colonia / Urbanización</Label>
                     {coloniasDisponibles.length > 0 ? (
                       <Select
                         value={coloniaSeleccionada}
@@ -3251,7 +3389,7 @@ function KycExpedienteContent() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>Código postal</Label>
+                    <Label>Código Postal</Label>
                     <Input
                       value={persona.domicilio.codigoPostal}
                       onChange={(event) => handleCodigoPostalChange(persona.id, event.target.value)}
@@ -3264,7 +3402,30 @@ function KycExpedienteContent() {
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <Label>Calle</Label>
+                    <Label>Tipo de Vialidad</Label>
+                    <Select
+                      value={persona.domicilio.tipoVialidad}
+                      onValueChange={(value) =>
+                        actualizarPersonaReportada(persona.id, (prev) => ({
+                          ...prev,
+                          domicilio: { ...prev.domicilio, tipoVialidad: value },
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Selecciona el tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIPO_VIALIDAD_OPCIONES.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nombre de la Vialidad</Label>
                     <Input
                       value={persona.domicilio.calle}
                       onChange={(event) =>
@@ -3276,7 +3437,7 @@ function KycExpedienteContent() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Número exterior</Label>
+                    <Label>Número Exterior</Label>
                     <Input
                       value={persona.domicilio.numeroExterior}
                       onChange={(event) =>
@@ -3288,7 +3449,7 @@ function KycExpedienteContent() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Número interior</Label>
+                    <Label>Número Interior</Label>
                     <Input
                       value={persona.domicilio.numeroInterior}
                       onChange={(event) =>
@@ -3305,85 +3466,67 @@ function KycExpedienteContent() {
 
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <Phone className="h-4 w-4" /> Medios de contacto
+                  <Phone className="h-4 w-4" /> Datos de contacto del Beneficiario Controlador
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>¿Se conoce la clave de país?</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {[{ value: "si", label: "Sí" }, { value: "no", label: "No" }].map((option) => (
-                        <Button
-                          key={option.value}
-                          type="button"
-                          variant={persona.contacto.conocePaisTelefono === option.value ? "default" : "outline"}
-                          onClick={() =>
-                            actualizarPersonaReportada(persona.id, (prev) => ({
-                              ...prev,
-                              contacto: { ...prev.contacto, conocePaisTelefono: option.value as RespuestaBinaria },
-                            }))
-                          }
-                        >
-                          {option.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Clave de país</Label>
-                    <Select
-                      value={paisContactoOption?.code ?? persona.contacto.clavePais}
-                      onValueChange={(nuevoPais) =>
+                    <Label>Lada</Label>
+                    <Input
+                      value={persona.contacto.clavePais}
+                      onChange={(event) =>
                         actualizarPersonaReportada(persona.id, (prev) => ({
                           ...prev,
-                          contacto: { ...prev.contacto, clavePais: nuevoPais },
+                          contacto: { ...prev.contacto, clavePais: event.target.value },
                         }))
                       }
-                      disabled={persona.contacto.conocePaisTelefono === "no"}
-                      onOpenChange={(open) => {
-                        if (open) setBusquedaPais("")
-                      }}
-                    >
-                      <SelectTrigger
-                        className="bg-white"
-                        disabled={persona.contacto.conocePaisTelefono === "no"}
-                      >
-                        <SelectValue placeholder="Selecciona código" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <div className="p-2">
-                          <Input
-                            autoFocus
-                            placeholder="Buscar país..."
-                            value={busquedaPais}
-                            onChange={(event) => setBusquedaPais(event.target.value)}
-                          />
-                        </div>
-                        {paisesFiltrados.length > 0 ? (
-                          paisesFiltrados.map((pais) => (
-                            <SelectItem key={pais.code} value={pais.code}>
-                              {pais.code} – {pais.label}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <div className="px-3 py-2 text-sm text-muted-foreground">Sin coincidencias</div>
-                        )}
-                      </SelectContent>
-                    </Select>
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label>Teléfono</Label>
+                    <Label>Número Telefónico (Fijo)</Label>
                     <Input
                       value={persona.contacto.telefono}
                       onChange={(event) =>
                         actualizarPersonaReportada(persona.id, (prev) => ({
                           ...prev,
-                          contacto: {
-                            ...prev.contacto,
-                            telefono: event.target.value.replace(/[^0-9]/g, ""),
-                          },
+                          contacto: { ...prev.contacto, telefono: event.target.value },
                         }))
                       }
-                      inputMode="tel"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Extensión (en su caso)</Label>
+                    <Input
+                      value={persona.contacto.extension}
+                      onChange={(event) =>
+                        actualizarPersonaReportada(persona.id, (prev) => ({
+                          ...prev,
+                          contacto: { ...prev.contacto, extension: event.target.value },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Lada (móvil)</Label>
+                    <Input
+                      value={persona.contacto.clavePaisMovil}
+                      onChange={(event) =>
+                        actualizarPersonaReportada(persona.id, (prev) => ({
+                          ...prev,
+                          contacto: { ...prev.contacto, clavePaisMovil: event.target.value },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Número Telefónico (Móvil)</Label>
+                    <Input
+                      value={persona.contacto.telefonoMovil}
+                      onChange={(event) =>
+                        actualizarPersonaReportada(persona.id, (prev) => ({
+                          ...prev,
+                          contacto: { ...prev.contacto, telefonoMovil: event.target.value },
+                        }))
+                      }
                     />
                   </div>
                   <div className="space-y-2">
@@ -3404,24 +3547,196 @@ function KycExpedienteContent() {
 
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <FileText className="h-4 w-4" /> Identificación presentada
+                  <MapPin className="h-4 w-4" /> Domicilio en México para correspondencia
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Tipo de documento</Label>
-                    <Input
-                      value={persona.identificacion.tipo}
-                      onChange={(event) =>
+                    <Label>¿Reside en el extranjero?</Label>
+                    <Select
+                      value={persona.residenciaExtranjera}
+                      onValueChange={(value) =>
                         actualizarPersonaReportada(persona.id, (prev) => ({
                           ...prev,
-                          identificacion: { ...prev.identificacion, tipo: event.target.value },
+                          residenciaExtranjera: value as RespuestaBinaria,
                         }))
                       }
-                      placeholder="INE, pasaporte, cédula, etc."
-                    />
+                    >
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Selecciona una opción" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="si">Sí</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {persona.residenciaExtranjera === "si" && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Código Postal</Label>
+                      <Input
+                        value={persona.domicilioCorrespondencia.codigoPostal}
+                        onChange={(event) => {
+                          const limpio = event.target.value.replace(/[^0-9]/g, "").slice(0, 5)
+                          const info = limpio.length === 5 ? findCodigoPostalInfo(limpio) : undefined
+                          const colonias = info?.asentamientos ?? []
+                          actualizarPersonaReportada(persona.id, (prev) => ({
+                            ...prev,
+                            domicilioCorrespondencia: {
+                              ...prev.domicilioCorrespondencia,
+                              codigoPostal: limpio,
+                              pais: "MX",
+                              entidad: info?.estado ?? "",
+                              municipio: info?.municipio ?? "",
+                              ciudad: info?.ciudad ?? "",
+                              colonia:
+                                colonias.length > 0
+                                  ? colonias.includes(prev.domicilioCorrespondencia.colonia)
+                                    ? prev.domicilioCorrespondencia.colonia
+                                    : colonias[0]
+                                  : "",
+                            },
+                          }))
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tipo de Vialidad</Label>
+                      <Select
+                        value={persona.domicilioCorrespondencia.tipoVialidad}
+                        onValueChange={(value) =>
+                          actualizarPersonaReportada(persona.id, (prev) => ({
+                            ...prev,
+                            domicilioCorrespondencia: {
+                              ...prev.domicilioCorrespondencia,
+                              tipoVialidad: value,
+                            },
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Selecciona el tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TIPO_VIALIDAD_OPCIONES.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Nombre de la Vialidad</Label>
+                      <Input
+                        value={persona.domicilioCorrespondencia.calle}
+                        onChange={(event) =>
+                          actualizarPersonaReportada(persona.id, (prev) => ({
+                            ...prev,
+                            domicilioCorrespondencia: {
+                              ...prev.domicilioCorrespondencia,
+                              calle: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Número Exterior</Label>
+                      <Input
+                        value={persona.domicilioCorrespondencia.numeroExterior}
+                        onChange={(event) =>
+                          actualizarPersonaReportada(persona.id, (prev) => ({
+                            ...prev,
+                            domicilioCorrespondencia: {
+                              ...prev.domicilioCorrespondencia,
+                              numeroExterior: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Número Interior</Label>
+                      <Input
+                        value={persona.domicilioCorrespondencia.numeroInterior}
+                        onChange={(event) =>
+                          actualizarPersonaReportada(persona.id, (prev) => ({
+                            ...prev,
+                            domicilioCorrespondencia: {
+                              ...prev.domicilioCorrespondencia,
+                              numeroInterior: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Colonia / Urbanización</Label>
+                      <Input
+                        value={persona.domicilioCorrespondencia.colonia}
+                        onChange={(event) =>
+                          actualizarPersonaReportada(persona.id, (prev) => ({
+                            ...prev,
+                            domicilioCorrespondencia: {
+                              ...prev.domicilioCorrespondencia,
+                              colonia: event.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Alcaldía / Municipio / Demarcación</Label>
+                      <Input value={persona.domicilioCorrespondencia.municipio} readOnly className="bg-slate-50" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Ciudad o Población</Label>
+                      <Input value={persona.domicilioCorrespondencia.ciudad} readOnly className="bg-slate-50" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Entidad, Estado, Provincia</Label>
+                      <Input value={persona.domicilioCorrespondencia.entidad} readOnly className="bg-slate-50" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>País</Label>
+                      <Input value={persona.domicilioCorrespondencia.pais} readOnly className="bg-slate-50" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <FileText className="h-4 w-4" /> Identificación del Beneficiario Controlador
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Tipo de identificación</Label>
+                    <Select
+                      value={persona.identificacion.tipo}
+                      onValueChange={(value) =>
+                        actualizarPersonaReportada(persona.id, (prev) => ({
+                          ...prev,
+                          identificacion: { ...prev.identificacion, tipo: value },
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Selecciona el tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {IDENTIFICACION_TIPOS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Número de documento</Label>
+                    <Label>Número de identificación</Label>
                     <Input
                       value={persona.identificacion.numero}
                       onChange={(event) =>
@@ -3433,45 +3748,19 @@ function KycExpedienteContent() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>País de expedición</Label>
-                    <Select
-                      value={paisIdentificacionOption?.code ?? persona.identificacion.pais}
-                      onValueChange={(nuevoPais) =>
+                    <Label>Autoridad que emite</Label>
+                    <Input
+                      value={persona.identificacion.autoridad}
+                      onChange={(event) =>
                         actualizarPersonaReportada(persona.id, (prev) => ({
                           ...prev,
-                          identificacion: { ...prev.identificacion, pais: nuevoPais },
+                          identificacion: { ...prev.identificacion, autoridad: event.target.value },
                         }))
                       }
-                      onOpenChange={(open) => {
-                        if (open) setBusquedaPais("")
-                      }}
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="Selecciona país" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <div className="p-2">
-                          <Input
-                            autoFocus
-                            placeholder="Buscar país..."
-                            value={busquedaPais}
-                            onChange={(event) => setBusquedaPais(event.target.value)}
-                          />
-                        </div>
-                        {paisesFiltrados.length > 0 ? (
-                          paisesFiltrados.map((pais) => (
-                            <SelectItem key={pais.code} value={pais.code}>
-                              {pais.label}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <div className="px-3 py-2 text-sm text-muted-foreground">Sin coincidencias</div>
-                        )}
-                      </SelectContent>
-                    </Select>
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label>Vigencia</Label>
+                    <Label>Fecha de vigencia</Label>
                     <Input
                       type="date"
                       value={persona.identificacion.fechaVencimiento}
