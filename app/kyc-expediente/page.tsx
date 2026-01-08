@@ -244,6 +244,24 @@ interface SujetoObligadoResumen {
     nombre: string
     paisNacionalidad: string
   }
+  contacto: {
+    lada: string
+    telefonoFijo: string
+    extension: string
+    telefonoMovil: string
+    correo: string
+  }
+  domicilio: {
+    codigoPostal: string
+    tipoVialidad: string
+    nombreVialidad: string
+    numeroExterior: string
+    numeroInterior: string
+    colonia: string
+    alcaldia: string
+    entidad: string
+    pais: string
+  }
 }
 
 const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
@@ -505,6 +523,26 @@ function KycExpedienteContent() {
             nombre?: string
             paisNacionalidad?: string
           }
+          contactos?: Array<{
+            claveLada?: string
+            telefonoFijo?: string
+            extension?: string
+            telefonoMovil?: string
+            correo?: string
+          }>
+          actividades?: Array<{
+            domicilio?: {
+              codigoPostal?: string
+              tipoVialidad?: string
+              nombreVialidad?: string
+              numeroExterior?: string
+              numeroInterior?: string
+              colonia?: string
+              alcaldia?: string
+              entidad?: string
+              pais?: string
+            }
+          }>
         }>
       }
       const sujetos = Array.isArray(data.sujetosRegistrados)
@@ -520,6 +558,53 @@ function KycExpedienteContent() {
                 paisNacionalidad:
                   typeof item.identificacion?.paisNacionalidad === "string"
                     ? item.identificacion.paisNacionalidad
+                    : "MX",
+              },
+              contacto: {
+                lada: typeof item.contactos?.[0]?.claveLada === "string" ? item.contactos[0].claveLada : "",
+                telefonoFijo:
+                  typeof item.contactos?.[0]?.telefonoFijo === "string" ? item.contactos[0].telefonoFijo : "",
+                extension: typeof item.contactos?.[0]?.extension === "string" ? item.contactos[0].extension : "",
+                telefonoMovil:
+                  typeof item.contactos?.[0]?.telefonoMovil === "string" ? item.contactos[0].telefonoMovil : "",
+                correo: typeof item.contactos?.[0]?.correo === "string" ? item.contactos[0].correo : "",
+              },
+              domicilio: {
+                codigoPostal:
+                  typeof item.actividades?.[0]?.domicilio?.codigoPostal === "string"
+                    ? item.actividades[0].domicilio.codigoPostal
+                    : "",
+                tipoVialidad:
+                  typeof item.actividades?.[0]?.domicilio?.tipoVialidad === "string"
+                    ? item.actividades[0].domicilio.tipoVialidad
+                    : "",
+                nombreVialidad:
+                  typeof item.actividades?.[0]?.domicilio?.nombreVialidad === "string"
+                    ? item.actividades[0].domicilio.nombreVialidad
+                    : "",
+                numeroExterior:
+                  typeof item.actividades?.[0]?.domicilio?.numeroExterior === "string"
+                    ? item.actividades[0].domicilio.numeroExterior
+                    : "",
+                numeroInterior:
+                  typeof item.actividades?.[0]?.domicilio?.numeroInterior === "string"
+                    ? item.actividades[0].domicilio.numeroInterior
+                    : "",
+                colonia:
+                  typeof item.actividades?.[0]?.domicilio?.colonia === "string"
+                    ? item.actividades[0].domicilio.colonia
+                    : "",
+                alcaldia:
+                  typeof item.actividades?.[0]?.domicilio?.alcaldia === "string"
+                    ? item.actividades[0].domicilio.alcaldia
+                    : "",
+                entidad:
+                  typeof item.actividades?.[0]?.domicilio?.entidad === "string"
+                    ? item.actividades[0].domicilio.entidad
+                    : "",
+                pais:
+                  typeof item.actividades?.[0]?.domicilio?.pais === "string"
+                    ? item.actividades[0].domicilio.pais
                     : "MX",
               },
             }))
@@ -540,6 +625,27 @@ function KycExpedienteContent() {
     setClienteRfc(seleccionado.identificacion.rfc)
     setClientePais(seleccionado.identificacion.paisNacionalidad || "MX")
     setClienteActividad(seleccionado.actividad)
+    setContactoCliente((prev) => ({
+      ...prev,
+      ladaFijo: seleccionado.contacto.lada,
+      telefonoFijo: seleccionado.contacto.telefonoFijo,
+      extension: seleccionado.contacto.extension,
+      telefonoMovil: seleccionado.contacto.telefonoMovil,
+      correo: seleccionado.contacto.correo,
+    }))
+    setDomicilioCliente((prev) => ({
+      ...prev,
+      codigoPostal: seleccionado.domicilio.codigoPostal,
+      tipoVialidad: seleccionado.domicilio.tipoVialidad,
+      nombreVialidad: seleccionado.domicilio.nombreVialidad,
+      numeroExterior: seleccionado.domicilio.numeroExterior,
+      numeroInterior: seleccionado.domicilio.numeroInterior,
+      colonia: seleccionado.domicilio.colonia,
+      alcaldia: seleccionado.domicilio.alcaldia,
+      entidad: seleccionado.domicilio.entidad,
+      pais: seleccionado.domicilio.pais,
+      ciudad: prev.ciudad,
+    }))
   }, [sujetoObligadoId, sujetosRegistrados])
 
   useEffect(() => {
