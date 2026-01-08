@@ -53,6 +53,20 @@ const TIPO_VIALIDAD_OPCIONES = [
   "Otro",
 ]
 
+const TIPO_VIALIDAD_PERSONA_FISICA = [
+  "AVENIDA",
+  "BOULEVARD",
+  "CALLE",
+  "CALZADA",
+  "EJE VIAL",
+  "VIA",
+]
+
+const TIPO_CLIENTE_PERSONA_FISICA = [
+  "Persona Física Mexicana",
+  "Persona Física Extranjera",
+]
+
 const ACTO_OPERACION_OPCIONES = [
   "Compra/Venta",
   "Arrendamiento",
@@ -62,6 +76,26 @@ const ACTO_OPERACION_OPCIONES = [
   "Otro",
 ]
 
+const ACTO_OPERACION_PERSONA_FISICA = [
+  "Fracción I – Juegos con apuesta, concursos o sorteos",
+  "Fracción II – Tarjetas de servicios, crédito, prepagadas o instrumentos de valor",
+  "Fracción III – Cheques de viajero",
+  "Fracción IV – Operaciones de mutuo, préstamos o créditos",
+  "Fracción V – Construcción, desarrollo o intermediación inmobiliaria",
+  "Fracción V Bis – Recepción de recursos para desarrollo inmobiliario",
+  "Fracción VI – Metales preciosos, joyas, relojes",
+  "Fracción VII – Subasta o comercialización de obras de arte",
+  "Fracción VIII – Comercialización o distribución de vehículos",
+  "Fracción IX – Blindaje de vehículos e inmuebles",
+  "Fracción X – Traslado o custodia de dinero y valores",
+  "Fracción XI – Servicios profesionales",
+  "Fracción XII – Servicios de fe pública",
+  "Fracción XIII – Recepción de donativos",
+  "Fracción XIV – Servicios de comercio exterior",
+  "Fracción XV – Derechos personales de uso o goce de inmuebles",
+  "Fracción XVI – Intercambio de activos virtuales",
+]
+
 const TIPO_INMUEBLE_OPCIONES = [
   "Casa habitación",
   "Departamento",
@@ -69,6 +103,37 @@ const TIPO_INMUEBLE_OPCIONES = [
   "Local comercial",
   "Oficina",
   "Nave industrial",
+  "Otro",
+]
+
+const IDENTIFICACION_OPCIONES = [
+  "Credencial para Votar",
+  "Pasaporte",
+  "Documento que acredita estancia en México",
+  "Licencia de Conducir",
+  "Cédula Profesional",
+  "Cartilla del Servicio Militar",
+  "Documento Nacional de Identidad",
+]
+
+const AUTORIDAD_IDENTIFICACION_OPCIONES = [
+  "Instituto Nacional Electoral",
+  "Secretaría de Relaciones Exteriores",
+  "Instituto Nacional de Migración",
+  "Secretaría de Transportes y Vialidad o equivalente",
+  "Secretaría de Educación Pública",
+  "Secretaría de la Defensa Nacional",
+]
+
+const OCUPACIONES_OPCIONES = [
+  "Empleado",
+  "Profesional independiente",
+  "Empresario",
+  "Comerciante",
+  "Ama de casa",
+  "Estudiante",
+  "Jubilado",
+  "Servidor público",
   "Otro",
 ]
 
@@ -86,6 +151,15 @@ const DOCUMENTOS_EUI = [
   "Constancia CURP (o equivalente) del Beneficiario Controlador",
   "Cédula de Identificación Fiscal o NIF del Beneficiario Controlador",
   "Comprobante de domicilio del Beneficiario Controlador (si no coincide con la ID)",
+]
+
+const DOCUMENTOS_EUI_PERSONA_FISICA = [
+  "Formulario de Identificación del Cliente",
+  "Documento que acredita la celebración del Acto u Operación",
+  "Identificación oficial del Cliente",
+  "Comprobante de domicilio del Cliente",
+  "Identificación oficial del Representante (si aplica)",
+  "Comprobante de domicilio del Representante (si aplica)",
 ]
 
 type RespuestaSiNo = "" | "si" | "no"
@@ -176,6 +250,44 @@ interface ExpedienteEuiPersonaMoral {
   documentacion: Record<string, boolean>
 }
 
+interface ExpedienteEuiPersonaFisica {
+  fechaRegistro: string
+  tipoExpediente: string
+  sujetoObligadoNombre: string
+  sujetoObligadoRfc: string
+  tipoCliente: string
+  tipoActoOperacion: string
+  fechaActoOperacion: string
+  relacionNegocios: RespuestaSiNo
+  cliente: {
+    nombres: string
+    apellidoPaterno: string
+    apellidoMaterno: string
+    fechaNacimiento: string
+    paisNacimiento: string
+    paisNacionalidad: string
+    curp: string
+    rfc: string
+    ocupacion: string
+  }
+  domicilioCliente: DireccionState
+  contactoCliente: ContactoState
+  actuaRepresentante: string
+  representante: {
+    nombres: string
+    apellidoPaterno: string
+    apellidoMaterno: string
+    fechaNacimiento: string
+    paisNacionalidad: string
+    ocupacion: string
+    contacto: ContactoState
+    identificacion: IdentificacionState
+  }
+  domicilioCorrespondencia: DireccionState
+  identificacionCliente: IdentificacionState
+  documentacion: Record<string, boolean>
+}
+
 interface ExpedientePersonaResumen {
   id?: string
   tipo?: "persona_moral" | "persona_fisica"
@@ -218,7 +330,7 @@ interface ExpedienteDetalle {
   detalleTipoCliente?: string
   sujetoObligadoId?: string
   sujetoObligadoNombre?: string
-  expedienteEui?: ExpedienteEuiPersonaMoral
+  expedienteEui?: ExpedienteEuiPersonaMoral | ExpedienteEuiPersonaFisica
   personas?: ExpedientePersonaResumen[]
   actualizadoEn?: string
 }
@@ -475,6 +587,8 @@ function KycExpedienteContent() {
   const [sujetosRegistrados, setSujetosRegistrados] = useState<SujetoObligadoResumen[]>([])
   const [tipoExpediente, setTipoExpediente] = useState<string>(EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral")
   const [sujetoObligadoId, setSujetoObligadoId] = useState("")
+  const [sujetoObligadoNombrePf, setSujetoObligadoNombrePf] = useState("")
+  const [sujetoObligadoRfcPf, setSujetoObligadoRfcPf] = useState("")
   const [tipoCliente, setTipoCliente] = useState<string>(CLIENTE_TIPOS[0]?.value ?? "")
   const [tipoActoOperacion, setTipoActoOperacion] = useState("")
   const [fechaActoOperacion, setFechaActoOperacion] = useState("")
@@ -499,6 +613,40 @@ function KycExpedienteContent() {
   const [ubicacionInmueble, setUbicacionInmueble] = useState<DireccionState>(() => createDireccion())
   const [documentacion, setDocumentacion] = useState<Record<string, boolean>>({})
   const [fechaRegistro, setFechaRegistro] = useState(todayDateString())
+
+  const [tipoClienteFisica, setTipoClienteFisica] = useState(TIPO_CLIENTE_PERSONA_FISICA[0] ?? "")
+  const [tipoActoOperacionFisica, setTipoActoOperacionFisica] = useState("")
+  const [fechaActoOperacionFisica, setFechaActoOperacionFisica] = useState("")
+  const [relacionNegociosFisica, setRelacionNegociosFisica] = useState<RespuestaSiNo>("")
+  const [clienteFisicaNombres, setClienteFisicaNombres] = useState("")
+  const [clienteFisicaApellidoPaterno, setClienteFisicaApellidoPaterno] = useState("")
+  const [clienteFisicaApellidoMaterno, setClienteFisicaApellidoMaterno] = useState("")
+  const [clienteFisicaFechaNacimiento, setClienteFisicaFechaNacimiento] = useState("")
+  const [clienteFisicaPaisNacimiento, setClienteFisicaPaisNacimiento] = useState("MX")
+  const [clienteFisicaPaisNacionalidad, setClienteFisicaPaisNacionalidad] = useState("MX")
+  const [clienteFisicaCurp, setClienteFisicaCurp] = useState("")
+  const [clienteFisicaRfc, setClienteFisicaRfc] = useState("")
+  const [clienteFisicaOcupacion, setClienteFisicaOcupacion] = useState("")
+  const [domicilioClienteFisica, setDomicilioClienteFisica] = useState<DireccionState>(() => createDireccion())
+  const [contactoClienteFisica, setContactoClienteFisica] = useState<ContactoState>(() => createContacto())
+  const [actuaRepresentante, setActuaRepresentante] = useState("")
+  const [representanteFisica, setRepresentanteFisica] = useState({
+    nombres: "",
+    apellidoPaterno: "",
+    apellidoMaterno: "",
+    fechaNacimiento: "",
+    paisNacionalidad: "MX",
+    ocupacion: "",
+    contacto: createContacto(),
+    identificacion: createIdentificacion(),
+  })
+  const [domicilioCorrespondenciaFisica, setDomicilioCorrespondenciaFisica] = useState<DireccionState>(() =>
+    createDireccion(),
+  )
+  const [identificacionClienteFisica, setIdentificacionClienteFisica] = useState<IdentificacionState>(() =>
+    createIdentificacion(),
+  )
+  const [documentacionFisica, setDocumentacionFisica] = useState<Record<string, boolean>>({})
 
   const [expedientesResumen, setExpedientesResumen] = useState<ExpedienteResumen[]>([])
   const [expedientesDetalle, setExpedientesDetalle] = useState<Record<string, ExpedienteDetalle>>({})
@@ -625,6 +773,9 @@ function KycExpedienteContent() {
     setClienteRfc(seleccionado.identificacion.rfc)
     setClientePais(seleccionado.identificacion.paisNacionalidad || "MX")
     setClienteActividad(seleccionado.actividad)
+    setSujetoObligadoNombrePf(nombre)
+    setSujetoObligadoRfcPf(seleccionado.identificacion.rfc)
+    setClienteFisicaPaisNacionalidad(seleccionado.identificacion.paisNacionalidad || "MX")
     setContactoCliente((prev) => ({
       ...prev,
       ladaFijo: seleccionado.contacto.lada,
@@ -633,7 +784,28 @@ function KycExpedienteContent() {
       telefonoMovil: seleccionado.contacto.telefonoMovil,
       correo: seleccionado.contacto.correo,
     }))
+    setContactoClienteFisica((prev) => ({
+      ...prev,
+      ladaFijo: seleccionado.contacto.lada,
+      telefonoFijo: seleccionado.contacto.telefonoFijo,
+      extension: seleccionado.contacto.extension,
+      telefonoMovil: seleccionado.contacto.telefonoMovil,
+      correo: seleccionado.contacto.correo,
+    }))
     setDomicilioCliente((prev) => ({
+      ...prev,
+      codigoPostal: seleccionado.domicilio.codigoPostal,
+      tipoVialidad: seleccionado.domicilio.tipoVialidad,
+      nombreVialidad: seleccionado.domicilio.nombreVialidad,
+      numeroExterior: seleccionado.domicilio.numeroExterior,
+      numeroInterior: seleccionado.domicilio.numeroInterior,
+      colonia: seleccionado.domicilio.colonia,
+      alcaldia: seleccionado.domicilio.alcaldia,
+      entidad: seleccionado.domicilio.entidad,
+      pais: seleccionado.domicilio.pais,
+      ciudad: prev.ciudad,
+    }))
+    setDomicilioClienteFisica((prev) => ({
       ...prev,
       codigoPostal: seleccionado.domicilio.codigoPostal,
       tipoVialidad: seleccionado.domicilio.tipoVialidad,
@@ -759,29 +931,58 @@ function KycExpedienteContent() {
       const expediente = detalle.expedienteEui
       if (!expediente) return
       setTipoExpediente(expediente.tipoExpediente)
-      setSujetoObligadoId(expediente.sujetoObligadoId)
-      setTipoCliente(expediente.tipoCliente)
-      setTipoActoOperacion(expediente.tipoActoOperacion)
-      setFechaActoOperacion(expediente.fechaActoOperacion)
-      setRelacionNegocios(expediente.relacionNegocios)
-      setClienteDenominacion(expediente.cliente.denominacion)
-      setClienteFechaConstitucion(expediente.cliente.fechaConstitucion)
-      setClientePais(expediente.cliente.paisNacionalidad)
-      setClienteRfc(expediente.cliente.rfc)
-      setClienteActividad(expediente.cliente.actividad)
-      setDomicilioCliente(expediente.domicilioCliente)
-      setContactoCliente(expediente.contactoCliente)
-      setRepresentante(expediente.representante)
-      setIdentificacionRepresentante(expediente.identificacionRepresentante)
-      setBeneficiario1(expediente.beneficiario1)
-      setBeneficiario2(expediente.beneficiario2 ?? createBeneficiario())
-      setTieneBeneficiario2(Boolean(expediente.beneficiario2))
-      setInmuebleTipo(expediente.inmueble.tipo)
-      setInmuebleValor(expediente.inmueble.valorReferencia)
-      setInmuebleFolio(expediente.inmueble.folioReal)
-      setUbicacionInmueble(expediente.inmueble.ubicacion)
-      setDocumentacion(expediente.documentacion)
       setFechaRegistro(expediente.fechaRegistro)
+
+      if (expediente.tipoExpediente === "persona_fisica") {
+        const expedienteFisica = expediente as ExpedienteEuiPersonaFisica
+        setSujetoObligadoNombrePf(expedienteFisica.sujetoObligadoNombre)
+        setSujetoObligadoRfcPf(expedienteFisica.sujetoObligadoRfc)
+        setTipoClienteFisica(expedienteFisica.tipoCliente)
+        setTipoActoOperacionFisica(expedienteFisica.tipoActoOperacion)
+        setFechaActoOperacionFisica(expedienteFisica.fechaActoOperacion)
+        setRelacionNegociosFisica(expedienteFisica.relacionNegocios)
+        setClienteFisicaNombres(expedienteFisica.cliente.nombres)
+        setClienteFisicaApellidoPaterno(expedienteFisica.cliente.apellidoPaterno)
+        setClienteFisicaApellidoMaterno(expedienteFisica.cliente.apellidoMaterno)
+        setClienteFisicaFechaNacimiento(expedienteFisica.cliente.fechaNacimiento)
+        setClienteFisicaPaisNacimiento(expedienteFisica.cliente.paisNacimiento)
+        setClienteFisicaPaisNacionalidad(expedienteFisica.cliente.paisNacionalidad)
+        setClienteFisicaCurp(expedienteFisica.cliente.curp)
+        setClienteFisicaRfc(expedienteFisica.cliente.rfc)
+        setClienteFisicaOcupacion(expedienteFisica.cliente.ocupacion)
+        setDomicilioClienteFisica(expedienteFisica.domicilioCliente)
+        setContactoClienteFisica(expedienteFisica.contactoCliente)
+        setActuaRepresentante(expedienteFisica.actuaRepresentante)
+        setRepresentanteFisica(expedienteFisica.representante)
+        setDomicilioCorrespondenciaFisica(expedienteFisica.domicilioCorrespondencia)
+        setIdentificacionClienteFisica(expedienteFisica.identificacionCliente)
+        setDocumentacionFisica(expedienteFisica.documentacion)
+        return
+      }
+
+      const expedienteMoral = expediente as ExpedienteEuiPersonaMoral
+      setSujetoObligadoId(expedienteMoral.sujetoObligadoId)
+      setTipoCliente(expedienteMoral.tipoCliente)
+      setTipoActoOperacion(expedienteMoral.tipoActoOperacion)
+      setFechaActoOperacion(expedienteMoral.fechaActoOperacion)
+      setRelacionNegocios(expedienteMoral.relacionNegocios)
+      setClienteDenominacion(expedienteMoral.cliente.denominacion)
+      setClienteFechaConstitucion(expedienteMoral.cliente.fechaConstitucion)
+      setClientePais(expedienteMoral.cliente.paisNacionalidad)
+      setClienteRfc(expedienteMoral.cliente.rfc)
+      setClienteActividad(expedienteMoral.cliente.actividad)
+      setDomicilioCliente(expedienteMoral.domicilioCliente)
+      setContactoCliente(expedienteMoral.contactoCliente)
+      setRepresentante(expedienteMoral.representante)
+      setIdentificacionRepresentante(expedienteMoral.identificacionRepresentante)
+      setBeneficiario1(expedienteMoral.beneficiario1)
+      setBeneficiario2(expedienteMoral.beneficiario2 ?? createBeneficiario())
+      setTieneBeneficiario2(Boolean(expedienteMoral.beneficiario2))
+      setInmuebleTipo(expedienteMoral.inmueble.tipo)
+      setInmuebleValor(expedienteMoral.inmueble.valorReferencia)
+      setInmuebleFolio(expedienteMoral.inmueble.folioReal)
+      setUbicacionInmueble(expedienteMoral.inmueble.ubicacion)
+      setDocumentacion(expedienteMoral.documentacion)
     },
     [],
   )
@@ -789,6 +990,8 @@ function KycExpedienteContent() {
   const limpiarFormulario = useCallback(() => {
     setTipoExpediente(EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral")
     setSujetoObligadoId("")
+    setSujetoObligadoNombrePf("")
+    setSujetoObligadoRfcPf("")
     setTipoCliente(CLIENTE_TIPOS[0]?.value ?? "")
     setTipoActoOperacion("")
     setFechaActoOperacion("")
@@ -811,6 +1014,35 @@ function KycExpedienteContent() {
     setUbicacionInmueble(createDireccion())
     setDocumentacion({})
     setFechaRegistro(todayDateString())
+    setTipoClienteFisica(TIPO_CLIENTE_PERSONA_FISICA[0] ?? "")
+    setTipoActoOperacionFisica("")
+    setFechaActoOperacionFisica("")
+    setRelacionNegociosFisica("")
+    setClienteFisicaNombres("")
+    setClienteFisicaApellidoPaterno("")
+    setClienteFisicaApellidoMaterno("")
+    setClienteFisicaFechaNacimiento("")
+    setClienteFisicaPaisNacimiento("MX")
+    setClienteFisicaPaisNacionalidad("MX")
+    setClienteFisicaCurp("")
+    setClienteFisicaRfc("")
+    setClienteFisicaOcupacion("")
+    setDomicilioClienteFisica(createDireccion())
+    setContactoClienteFisica(createContacto())
+    setActuaRepresentante("")
+    setRepresentanteFisica({
+      nombres: "",
+      apellidoPaterno: "",
+      apellidoMaterno: "",
+      fechaNacimiento: "",
+      paisNacionalidad: "MX",
+      ocupacion: "",
+      contacto: createContacto(),
+      identificacion: createIdentificacion(),
+    })
+    setDomicilioCorrespondenciaFisica(createDireccion())
+    setIdentificacionClienteFisica(createIdentificacion())
+    setDocumentacionFisica({})
   }, [])
 
   useEffect(() => {
@@ -829,7 +1061,16 @@ function KycExpedienteContent() {
   }, [aplicarDetalleEnFormulario, expedientesCargados, expedientesDisponibles, searchParams, toast])
 
   const guardarExpediente = () => {
-    if (!clienteRfc.trim()) {
+    if (tipoExpediente === "persona_fisica" && !clienteFisicaRfc.trim()) {
+      toast({
+        title: "Falta RFC",
+        description: "Registra el RFC del cliente para guardar el expediente.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (tipoExpediente !== "persona_fisica" && !clienteRfc.trim()) {
       toast({
         title: "Falta RFC/NIF",
         description: "Registra el RFC/NIF del cliente para guardar el expediente.",
@@ -842,6 +1083,94 @@ function KycExpedienteContent() {
 
     const fechaActual = todayDateString()
     setFechaRegistro(fechaActual)
+    if (tipoExpediente === "persona_fisica") {
+      const expedienteEui: ExpedienteEuiPersonaFisica = {
+        fechaRegistro: fechaActual,
+        tipoExpediente,
+        sujetoObligadoNombre: sujetoObligadoNombrePf || sujetoSeleccionado?.nombre || "",
+        sujetoObligadoRfc: sujetoObligadoRfcPf || sujetoSeleccionado?.identificacion?.rfc || "",
+        tipoCliente: tipoClienteFisica,
+        tipoActoOperacion: tipoActoOperacionFisica,
+        fechaActoOperacion: fechaActoOperacionFisica,
+        relacionNegocios: relacionNegociosFisica,
+        cliente: {
+          nombres: clienteFisicaNombres,
+          apellidoPaterno: clienteFisicaApellidoPaterno,
+          apellidoMaterno: clienteFisicaApellidoMaterno,
+          fechaNacimiento: clienteFisicaFechaNacimiento,
+          paisNacimiento: clienteFisicaPaisNacimiento,
+          paisNacionalidad: clienteFisicaPaisNacionalidad,
+          curp: clienteFisicaCurp,
+          rfc: clienteFisicaRfc.toUpperCase(),
+          ocupacion: clienteFisicaOcupacion,
+        },
+        domicilioCliente: domicilioClienteFisica,
+        contactoCliente: contactoClienteFisica,
+        actuaRepresentante,
+        representante: representanteFisica,
+        domicilioCorrespondencia: domicilioCorrespondenciaFisica,
+        identificacionCliente: identificacionClienteFisica,
+        documentacion: documentacionFisica,
+      }
+
+      const detalle: ExpedienteDetalle = {
+        rfc: expedienteEui.cliente.rfc,
+        nombre: `${expedienteEui.cliente.nombres} ${expedienteEui.cliente.apellidoPaterno} ${expedienteEui.cliente.apellidoMaterno}`.trim() ||
+          expedienteEui.cliente.rfc,
+        tipoCliente: tipoClienteFisica,
+        sujetoObligadoNombre: expedienteEui.sujetoObligadoNombre,
+        expedienteEui,
+        personas: [
+          {
+            id: `cliente-${expedienteEui.cliente.rfc}`,
+            tipo: "persona_fisica",
+            denominacion: `${expedienteEui.cliente.nombres} ${expedienteEui.cliente.apellidoPaterno} ${expedienteEui.cliente.apellidoMaterno}`.trim(),
+            rfc: expedienteEui.cliente.rfc,
+            curp: expedienteEui.cliente.curp,
+            pais: expedienteEui.cliente.paisNacionalidad,
+            giro: expedienteEui.cliente.ocupacion,
+            rolRelacion: "Cliente",
+            domicilio: {
+              codigoPostal: expedienteEui.domicilioCliente.codigoPostal,
+              tipoVialidad: expedienteEui.domicilioCliente.tipoVialidad,
+              nombreVialidad: expedienteEui.domicilioCliente.nombreVialidad,
+              numeroExterior: expedienteEui.domicilioCliente.numeroExterior,
+              numeroInterior: expedienteEui.domicilioCliente.numeroInterior,
+              colonia: expedienteEui.domicilioCliente.colonia,
+              alcaldia: expedienteEui.domicilioCliente.alcaldia,
+              entidad: expedienteEui.domicilioCliente.entidad,
+              pais: expedienteEui.domicilioCliente.pais,
+            },
+            contacto: {
+              clavePais: expedienteEui.domicilioCliente.pais,
+              telefono: expedienteEui.contactoCliente.telefonoMovil || expedienteEui.contactoCliente.telefonoFijo,
+              correo: expedienteEui.contactoCliente.correo,
+            },
+          },
+        ],
+        actualizadoEn: new Date().toISOString(),
+      }
+
+      setExpedientesDetalle((prev) => ({ ...prev, [detalle.rfc]: detalle }))
+      setExpedientesResumen((prev) => {
+        const existing = prev.find((item) => item.rfc === detalle.rfc)
+        if (existing) {
+          return prev.map((item) => (item.rfc === detalle.rfc ? buildResumen(detalle) : item))
+        }
+        return [...prev, buildResumen(detalle)]
+      })
+      setExpedienteSeleccionado(detalle.rfc)
+
+      const almacenados = Object.values({ ...expedientesDetalle, [detalle.rfc]: detalle })
+      window.localStorage.setItem(EXPEDIENTE_DETALLE_STORAGE_KEY, JSON.stringify(almacenados))
+
+      toast({
+        title: "Expediente guardado",
+        description: "El expediente se actualizó correctamente.",
+      })
+      return
+    }
+
     const expedienteEui: ExpedienteEuiPersonaMoral = {
       fechaRegistro: fechaActual,
       tipoExpediente,
@@ -939,6 +1268,18 @@ function KycExpedienteContent() {
       : undefined
   const coloniasInmueble = infoUbicacionInmueble?.asentamientos ?? []
 
+  const infoClienteFisicaCodigoPostal =
+    domicilioClienteFisica.codigoPostal.length === 5
+      ? findCodigoPostalInfo(domicilioClienteFisica.codigoPostal)
+      : undefined
+  const coloniasClienteFisica = infoClienteFisicaCodigoPostal?.asentamientos ?? []
+
+  const infoCorrespondenciaFisica =
+    domicilioCorrespondenciaFisica.codigoPostal.length === 5
+      ? findCodigoPostalInfo(domicilioCorrespondenciaFisica.codigoPostal)
+      : undefined
+  const coloniasCorrespondenciaFisica = infoCorrespondenciaFisica?.asentamientos ?? []
+
   const tipoClienteResumen = tipoClienteLabel
 
   return (
@@ -950,7 +1291,7 @@ function KycExpedienteContent() {
               <FileText className="h-5 w-5 text-slate-600" /> Expediente único de identificación
             </CardTitle>
             <CardDescription>
-              Captura el Expediente Único de Identificación para persona moral y conecta con el sujeto obligado registrado.
+              Captura el Expediente Único de Identificación para persona moral o física y conecta con el sujeto obligado registrado.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1005,11 +1346,11 @@ function KycExpedienteContent() {
             </div>
           </div>
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
-            {tipoExpediente === "persona_moral" ? (
-              "Formulario activo: Persona Moral. El resto de tipos mostrará este mismo flujo mientras se habilitan." 
-            ) : (
-              "Por ahora solo está habilitado el formulario de Persona Moral. Puedes continuar con este flujo." 
-            )}
+            {tipoExpediente === "persona_moral"
+              ? "Formulario activo: Persona Moral."
+              : tipoExpediente === "persona_fisica"
+                ? "Formulario activo: Persona Física."
+                : "Por ahora solo están habilitados Persona Moral y Persona Física."}
           </div>
         </CardContent>
       </Card>
@@ -1083,63 +1424,700 @@ function KycExpedienteContent() {
         </Card>
       )}
 
-      <Card className="border-slate-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CalendarClock className="h-5 w-5 text-slate-600" /> Tipo de cliente y acto u operación
-          </CardTitle>
-          <CardDescription>Define el tipo de cliente y la operación celebrada.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Tipo de cliente</Label>
-            <Select value={tipoCliente} onValueChange={setTipoCliente}>
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder="---" />
-              </SelectTrigger>
-              <SelectContent>
-                {CLIENTE_TIPOS.map((opcion) => (
-                  <SelectItem key={opcion.value} value={opcion.value}>
-                    {opcion.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">{tipoClienteResumen}</p>
-          </div>
-          <div className="space-y-2">
-            <Label>Tipo de acto u operación</Label>
-            <Select value={tipoActoOperacion} onValueChange={setTipoActoOperacion}>
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder="---" />
-              </SelectTrigger>
-              <SelectContent>
-                {ACTO_OPERACION_OPCIONES.map((opcion) => (
-                  <SelectItem key={opcion} value={opcion}>
-                    {opcion}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Fecha de celebración del acto u operación</Label>
-            <Input type="date" value={fechaActoOperacion} onChange={(event) => setFechaActoOperacion(event.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>¿Existe relación de negocios?</Label>
-            <Select value={relacionNegocios} onValueChange={(value) => setRelacionNegocios(value as RespuestaSiNo)}>
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder="---" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="si">Sí</SelectItem>
-                <SelectItem value="no">No</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      {tipoExpediente === "persona_fisica" && (
+        <>
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-slate-600" /> Sujeto obligado
+              </CardTitle>
+              <CardDescription>Datos del sujeto obligado vinculados al expediente.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Nombre, denominación o razón social</Label>
+                <Input value={sujetoObligadoNombrePf} onChange={(event) => setSujetoObligadoNombrePf(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Registro Federal de Contribuyentes (RFC)</Label>
+                <Input value={sujetoObligadoRfcPf} onChange={(event) => setSujetoObligadoRfcPf(event.target.value.toUpperCase())} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarClock className="h-5 w-5 text-slate-600" /> Tipo de cliente y acto u operación
+              </CardTitle>
+              <CardDescription>Selecciona el tipo de cliente y la fracción aplicable.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Tipo de cliente</Label>
+                <Select value={tipoClienteFisica} onValueChange={setTipoClienteFisica}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="---" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIPO_CLIENTE_PERSONA_FISICA.map((opcion) => (
+                      <SelectItem key={opcion} value={opcion}>
+                        {opcion}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Tipo de acto u operación</Label>
+                <Select value={tipoActoOperacionFisica} onValueChange={setTipoActoOperacionFisica}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="---" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACTO_OPERACION_PERSONA_FISICA.map((opcion) => (
+                      <SelectItem key={opcion} value={opcion}>
+                        {opcion}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha de celebración del acto u operación</Label>
+                <Input
+                  type="date"
+                  value={fechaActoOperacionFisica}
+                  onChange={(event) => setFechaActoOperacionFisica(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>¿Existe relación de negocios?</Label>
+                <Select
+                  value={relacionNegociosFisica}
+                  onValueChange={(value) => setRelacionNegociosFisica(value as RespuestaSiNo)}
+                >
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="---" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="si">Sí</SelectItem>
+                    <SelectItem value="no">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-slate-600" /> Datos de identificación del cliente
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Nombre(s)</Label>
+                <Input value={clienteFisicaNombres} onChange={(event) => setClienteFisicaNombres(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Apellido paterno</Label>
+                <Input
+                  value={clienteFisicaApellidoPaterno}
+                  onChange={(event) => setClienteFisicaApellidoPaterno(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Apellido materno</Label>
+                <Input
+                  value={clienteFisicaApellidoMaterno}
+                  onChange={(event) => setClienteFisicaApellidoMaterno(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha de nacimiento</Label>
+                <Input
+                  type="date"
+                  value={clienteFisicaFechaNacimiento}
+                  onChange={(event) => setClienteFisicaFechaNacimiento(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>País de nacimiento</Label>
+                <Select value={clienteFisicaPaisNacimiento} onValueChange={setClienteFisicaPaisNacimiento}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Selecciona país" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAISES.map((pais) => (
+                      <SelectItem key={pais.code} value={pais.code}>
+                        {pais.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>País de nacionalidad</Label>
+                <Select value={clienteFisicaPaisNacionalidad} onValueChange={setClienteFisicaPaisNacionalidad}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Selecciona país" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAISES.map((pais) => (
+                      <SelectItem key={pais.code} value={pais.code}>
+                        {pais.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>CURP</Label>
+                <Input
+                  value={clienteFisicaCurp}
+                  onChange={(event) => setClienteFisicaCurp(event.target.value.toUpperCase())}
+                  placeholder={tipoClienteFisica === "Persona Física Mexicana" ? "Obligatoria" : "Opcional"}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>RFC</Label>
+                <Input value={clienteFisicaRfc} onChange={(event) => setClienteFisicaRfc(event.target.value.toUpperCase())} />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Actividad, ocupación, profesión</Label>
+                <Select value={clienteFisicaOcupacion} onValueChange={setClienteFisicaOcupacion}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Selecciona ocupación" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {OCUPACIONES_OPCIONES.map((opcion) => (
+                      <SelectItem key={opcion} value={opcion}>
+                        {opcion}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-slate-600" /> Domicilio del cliente (residencia)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Código Postal</Label>
+                  <Input
+                    value={domicilioClienteFisica.codigoPostal}
+                    onChange={(event) =>
+                      actualizarDireccionDesdeCodigoPostal(event.target.value, setDomicilioClienteFisica, domicilioClienteFisica)
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tipo de vialidad</Label>
+                  <Select
+                    value={domicilioClienteFisica.tipoVialidad}
+                    onValueChange={(value) => setDomicilioClienteFisica((prev) => ({ ...prev, tipoVialidad: value }))}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="---" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIPO_VIALIDAD_PERSONA_FISICA.map((tipo) => (
+                        <SelectItem key={tipo} value={tipo}>
+                          {tipo}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Nombre de la vialidad</Label>
+                  <Input
+                    value={domicilioClienteFisica.nombreVialidad}
+                    onChange={(event) => setDomicilioClienteFisica((prev) => ({ ...prev, nombreVialidad: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Número exterior</Label>
+                  <Input
+                    value={domicilioClienteFisica.numeroExterior}
+                    onChange={(event) => setDomicilioClienteFisica((prev) => ({ ...prev, numeroExterior: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Número interior</Label>
+                  <Input
+                    value={domicilioClienteFisica.numeroInterior}
+                    onChange={(event) => setDomicilioClienteFisica((prev) => ({ ...prev, numeroInterior: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Colonia / Urbanización</Label>
+                  <Select
+                    value={domicilioClienteFisica.colonia}
+                    onValueChange={(value) => setDomicilioClienteFisica((prev) => ({ ...prev, colonia: value }))}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="---" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from(new Set([...coloniasClienteFisica, domicilioClienteFisica.colonia].filter(Boolean))).map((colonia) => (
+                        <SelectItem key={colonia} value={colonia}>
+                          {colonia}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-4">
+                <div className="space-y-2">
+                  <Label>Alcaldía / Municipio</Label>
+                  <Input value={domicilioClienteFisica.alcaldia} readOnly />
+                </div>
+                <div className="space-y-2">
+                  <Label>Ciudad o población</Label>
+                  <Input value={domicilioClienteFisica.ciudad} readOnly />
+                </div>
+                <div className="space-y-2">
+                  <Label>Entidad / Estado / Provincia</Label>
+                  <Input value={domicilioClienteFisica.entidad} readOnly />
+                </div>
+                <div className="space-y-2">
+                  <Label>País</Label>
+                  <Input value={findPaisByCodigo(domicilioClienteFisica.pais)?.label ?? domicilioClienteFisica.pais} readOnly />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-slate-600" /> Datos de contacto del cliente
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label>Clave LADA</Label>
+                <Input value={contactoClienteFisica.ladaFijo} onChange={(event) => setContactoClienteFisica((prev) => ({ ...prev, ladaFijo: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Teléfono fijo</Label>
+                <Input value={contactoClienteFisica.telefonoFijo} onChange={(event) => setContactoClienteFisica((prev) => ({ ...prev, telefonoFijo: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Extensión</Label>
+                <Input value={contactoClienteFisica.extension} onChange={(event) => setContactoClienteFisica((prev) => ({ ...prev, extension: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Teléfono móvil</Label>
+                <Input value={contactoClienteFisica.telefonoMovil} onChange={(event) => setContactoClienteFisica((prev) => ({ ...prev, telefonoMovil: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Correo electrónico</Label>
+                <Input type="email" value={contactoClienteFisica.correo} onChange={(event) => setContactoClienteFisica((prev) => ({ ...prev, correo: event.target.value }))} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-slate-600" /> Actúa mediante representante
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label>¿El cliente actúa por cuenta propia o mediante representante?</Label>
+                <Select value={actuaRepresentante} onValueChange={setActuaRepresentante}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Selecciona opción" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="si">Sí, el Cliente actúa por conducto de representante o apoderado legal</SelectItem>
+                    <SelectItem value="no">No, el Cliente actúa por cuenta propia</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {actuaRepresentante === "si" && (
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-slate-600" /> Datos del representante o apoderado legal
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Nombre(s)</Label>
+                    <Input value={representanteFisica.nombres} onChange={(event) => setRepresentanteFisica((prev) => ({ ...prev, nombres: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Apellido paterno</Label>
+                    <Input value={representanteFisica.apellidoPaterno} onChange={(event) => setRepresentanteFisica((prev) => ({ ...prev, apellidoPaterno: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Apellido materno</Label>
+                    <Input value={representanteFisica.apellidoMaterno} onChange={(event) => setRepresentanteFisica((prev) => ({ ...prev, apellidoMaterno: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Fecha de nacimiento</Label>
+                    <Input type="date" value={representanteFisica.fechaNacimiento} onChange={(event) => setRepresentanteFisica((prev) => ({ ...prev, fechaNacimiento: event.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>País de nacionalidad</Label>
+                    <Select value={representanteFisica.paisNacionalidad} onValueChange={(value) => setRepresentanteFisica((prev) => ({ ...prev, paisNacionalidad: value }))}>
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Selecciona país" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAISES.map((pais) => (
+                          <SelectItem key={pais.code} value={pais.code}>
+                            {pais.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Actividad, ocupación, profesión</Label>
+                    <Select value={representanteFisica.ocupacion} onValueChange={(value) => setRepresentanteFisica((prev) => ({ ...prev, ocupacion: value }))}>
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Selecciona ocupación" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {OCUPACIONES_OPCIONES.map((opcion) => (
+                          <SelectItem key={opcion} value={opcion}>
+                            {opcion}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="rounded border border-slate-200 p-4">
+                  <p className="text-sm font-semibold text-slate-700">Datos de contacto del representante</p>
+                  <div className="mt-3 grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label>Clave LADA</Label>
+                      <Input value={representanteFisica.contacto.ladaFijo} onChange={(event) => setRepresentanteFisica((prev) => ({ ...prev, contacto: { ...prev.contacto, ladaFijo: event.target.value } }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Teléfono fijo</Label>
+                      <Input value={representanteFisica.contacto.telefonoFijo} onChange={(event) => setRepresentanteFisica((prev) => ({ ...prev, contacto: { ...prev.contacto, telefonoFijo: event.target.value } }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Extensión</Label>
+                      <Input value={representanteFisica.contacto.extension} onChange={(event) => setRepresentanteFisica((prev) => ({ ...prev, contacto: { ...prev.contacto, extension: event.target.value } }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Teléfono móvil</Label>
+                      <Input value={representanteFisica.contacto.telefonoMovil} onChange={(event) => setRepresentanteFisica((prev) => ({ ...prev, contacto: { ...prev.contacto, telefonoMovil: event.target.value } }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Correo electrónico</Label>
+                      <Input type="email" value={representanteFisica.contacto.correo} onChange={(event) => setRepresentanteFisica((prev) => ({ ...prev, contacto: { ...prev.contacto, correo: event.target.value } }))} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded border border-slate-200 p-4">
+                  <p className="text-sm font-semibold text-slate-700">Identificación oficial del representante</p>
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Tipo de identificación</Label>
+                      <Select
+                        value={representanteFisica.identificacion.tipo}
+                        onValueChange={(value) => setRepresentanteFisica((prev) => ({ ...prev, identificacion: { ...prev.identificacion, tipo: value } }))}
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Selecciona identificación" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {IDENTIFICACION_OPCIONES.map((opcion) => (
+                            <SelectItem key={opcion} value={opcion}>
+                              {opcion}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Número de identificación</Label>
+                      <Input value={representanteFisica.identificacion.numero} onChange={(event) => setRepresentanteFisica((prev) => ({ ...prev, identificacion: { ...prev.identificacion, numero: event.target.value } }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Autoridad que emite</Label>
+                      <Select
+                        value={representanteFisica.identificacion.autoridad}
+                        onValueChange={(value) => setRepresentanteFisica((prev) => ({ ...prev, identificacion: { ...prev.identificacion, autoridad: value } }))}
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Selecciona autoridad" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AUTORIDAD_IDENTIFICACION_OPCIONES.map((opcion) => (
+                            <SelectItem key={opcion} value={opcion}>
+                              {opcion}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Fecha de vigencia</Label>
+                      <Input type="date" value={representanteFisica.identificacion.vigencia} onChange={(event) => setRepresentanteFisica((prev) => ({ ...prev, identificacion: { ...prev.identificacion, vigencia: event.target.value } }))} />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {(clienteFisicaPaisNacionalidad !== "MX" || (actuaRepresentante === "si" && representanteFisica.paisNacionalidad !== "MX")) && (
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-slate-600" /> Domicilio en México para correspondencia
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>Código Postal</Label>
+                    <Input
+                      value={domicilioCorrespondenciaFisica.codigoPostal}
+                      onChange={(event) =>
+                        actualizarDireccionDesdeCodigoPostal(event.target.value, setDomicilioCorrespondenciaFisica, domicilioCorrespondenciaFisica)
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tipo de vialidad</Label>
+                    <Select
+                      value={domicilioCorrespondenciaFisica.tipoVialidad}
+                      onValueChange={(value) => setDomicilioCorrespondenciaFisica((prev) => ({ ...prev, tipoVialidad: value }))}
+                    >
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="---" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIPO_VIALIDAD_PERSONA_FISICA.map((tipo) => (
+                          <SelectItem key={tipo} value={tipo}>
+                            {tipo}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nombre de la vialidad</Label>
+                    <Input
+                      value={domicilioCorrespondenciaFisica.nombreVialidad}
+                      onChange={(event) => setDomicilioCorrespondenciaFisica((prev) => ({ ...prev, nombreVialidad: event.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Número exterior</Label>
+                    <Input
+                      value={domicilioCorrespondenciaFisica.numeroExterior}
+                      onChange={(event) => setDomicilioCorrespondenciaFisica((prev) => ({ ...prev, numeroExterior: event.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Número interior</Label>
+                    <Input
+                      value={domicilioCorrespondenciaFisica.numeroInterior}
+                      onChange={(event) => setDomicilioCorrespondenciaFisica((prev) => ({ ...prev, numeroInterior: event.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Colonia / Urbanización</Label>
+                    <Select
+                      value={domicilioCorrespondenciaFisica.colonia}
+                      onValueChange={(value) => setDomicilioCorrespondenciaFisica((prev) => ({ ...prev, colonia: value }))}
+                    >
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="---" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from(new Set([...coloniasCorrespondenciaFisica, domicilioCorrespondenciaFisica.colonia].filter(Boolean))).map((colonia) => (
+                          <SelectItem key={colonia} value={colonia}>
+                            {colonia}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div className="space-y-2">
+                    <Label>Municipio</Label>
+                    <Input value={domicilioCorrespondenciaFisica.alcaldia} readOnly />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Ciudad</Label>
+                    <Input value={domicilioCorrespondenciaFisica.ciudad} readOnly />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Entidad</Label>
+                    <Input value={domicilioCorrespondenciaFisica.entidad} readOnly />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>País</Label>
+                    <Input value={findPaisByCodigo(domicilioCorrespondenciaFisica.pais)?.label ?? domicilioCorrespondenciaFisica.pais} readOnly />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-slate-600" /> Identificación del cliente (documento oficial)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Tipo de identificación</Label>
+                <Select
+                  value={identificacionClienteFisica.tipo}
+                  onValueChange={(value) => setIdentificacionClienteFisica((prev) => ({ ...prev, tipo: value }))}
+                >
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Selecciona identificación" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {IDENTIFICACION_OPCIONES.map((opcion) => (
+                      <SelectItem key={opcion} value={opcion}>
+                        {opcion}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Número de identificación</Label>
+                <Input value={identificacionClienteFisica.numero} onChange={(event) => setIdentificacionClienteFisica((prev) => ({ ...prev, numero: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Autoridad que la emite</Label>
+                <Select
+                  value={identificacionClienteFisica.autoridad}
+                  onValueChange={(value) => setIdentificacionClienteFisica((prev) => ({ ...prev, autoridad: value }))}
+                >
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Selecciona autoridad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AUTORIDAD_IDENTIFICACION_OPCIONES.map((opcion) => (
+                      <SelectItem key={opcion} value={opcion}>
+                        {opcion}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha de vigencia</Label>
+                <Input type="date" value={identificacionClienteFisica.vigencia} onChange={(event) => setIdentificacionClienteFisica((prev) => ({ ...prev, vigencia: event.target.value }))} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-slate-600" /> Integración del expediente (checklist documental)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2">
+              {DOCUMENTOS_EUI_PERSONA_FISICA.map((doc) => (
+                <label key={doc} className="flex items-start gap-3 rounded border border-slate-200 bg-white p-3 text-sm">
+                  <Checkbox
+                    checked={Boolean(documentacionFisica[doc])}
+                    onCheckedChange={(value) => setDocumentacionFisica((prev) => ({ ...prev, [doc]: Boolean(value) }))}
+                  />
+                  <span>{doc}</span>
+                </label>
+              ))}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {tipoExpediente === "persona_moral" && (
+        <Card className="border-slate-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarClock className="h-5 w-5 text-slate-600" /> Tipo de cliente y acto u operación
+            </CardTitle>
+            <CardDescription>Define el tipo de cliente y la operación celebrada.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Tipo de cliente</Label>
+              <Select value={tipoCliente} onValueChange={setTipoCliente}>
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder="---" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CLIENTE_TIPOS.map((opcion) => (
+                    <SelectItem key={opcion.value} value={opcion.value}>
+                      {opcion.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{tipoClienteResumen}</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo de acto u operación</Label>
+              <Select value={tipoActoOperacion} onValueChange={setTipoActoOperacion}>
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder="---" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACTO_OPERACION_OPCIONES.map((opcion) => (
+                    <SelectItem key={opcion} value={opcion}>
+                      {opcion}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Fecha de celebración del acto u operación</Label>
+              <Input type="date" value={fechaActoOperacion} onChange={(event) => setFechaActoOperacion(event.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>¿Existe relación de negocios?</Label>
+              <Select value={relacionNegocios} onValueChange={(value) => setRelacionNegocios(value as RespuestaSiNo)}>
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder="---" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="si">Sí</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-slate-200">
         <CardHeader>
@@ -2528,6 +3506,7 @@ function KycExpedienteContent() {
           ))}
         </CardContent>
       </Card>
+      )}
     </div>
   )
 }
