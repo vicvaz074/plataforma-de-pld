@@ -354,7 +354,12 @@ interface SujetoObligadoResumen {
   identificacion: {
     rfc: string
     nombre: string
+    apellidoPaterno: string
+    apellidoMaterno: string
+    fechaNacimiento: string
     paisNacionalidad: string
+    paisNacimiento: string
+    curp: string
   }
   contacto: {
     lada: string
@@ -669,7 +674,12 @@ function KycExpedienteContent() {
           identificacion?: {
             rfc?: string
             nombre?: string
+            apellidoPaterno?: string
+            apellidoMaterno?: string
+            fecha?: string
             paisNacionalidad?: string
+            paisNacimiento?: string
+            curp?: string
           }
           contactos?: Array<{
             claveLada?: string
@@ -703,10 +713,20 @@ function KycExpedienteContent() {
               identificacion: {
                 rfc: typeof item.identificacion?.rfc === "string" ? item.identificacion.rfc : "",
                 nombre: typeof item.identificacion?.nombre === "string" ? item.identificacion.nombre : "",
+                apellidoPaterno:
+                  typeof item.identificacion?.apellidoPaterno === "string" ? item.identificacion.apellidoPaterno : "",
+                apellidoMaterno:
+                  typeof item.identificacion?.apellidoMaterno === "string" ? item.identificacion.apellidoMaterno : "",
+                fechaNacimiento: typeof item.identificacion?.fecha === "string" ? item.identificacion.fecha : "",
                 paisNacionalidad:
                   typeof item.identificacion?.paisNacionalidad === "string"
                     ? item.identificacion.paisNacionalidad
                     : "MX",
+                paisNacimiento:
+                  typeof item.identificacion?.paisNacimiento === "string"
+                    ? item.identificacion.paisNacimiento
+                    : "MX",
+                curp: typeof item.identificacion?.curp === "string" ? item.identificacion.curp : "",
               },
               contacto: {
                 lada: typeof item.contactos?.[0]?.claveLada === "string" ? item.contactos[0].claveLada : "",
@@ -769,6 +789,12 @@ function KycExpedienteContent() {
     const seleccionado = sujetosRegistrados.find((sujeto) => sujeto.id === sujetoObligadoId)
     if (!seleccionado) return
     const nombre = seleccionado.identificacion.nombre || seleccionado.nombre
+    const esPersonaFisica = seleccionado.tipo === "fisica"
+    if (esPersonaFisica) {
+      setTipoExpediente("persona_fisica")
+    } else if (seleccionado.tipo === "moral") {
+      setTipoExpediente("persona_moral")
+    }
     setClienteDenominacion(nombre)
     setClienteRfc(seleccionado.identificacion.rfc)
     setClientePais(seleccionado.identificacion.paisNacionalidad || "MX")
@@ -776,6 +802,15 @@ function KycExpedienteContent() {
     setSujetoObligadoNombrePf(nombre)
     setSujetoObligadoRfcPf(seleccionado.identificacion.rfc)
     setClienteFisicaPaisNacionalidad(seleccionado.identificacion.paisNacionalidad || "MX")
+    if (esPersonaFisica) {
+      setClienteFisicaNombres(seleccionado.identificacion.nombre)
+      setClienteFisicaApellidoPaterno(seleccionado.identificacion.apellidoPaterno)
+      setClienteFisicaApellidoMaterno(seleccionado.identificacion.apellidoMaterno)
+      setClienteFisicaFechaNacimiento(seleccionado.identificacion.fechaNacimiento)
+      setClienteFisicaPaisNacimiento(seleccionado.identificacion.paisNacimiento || "MX")
+      setClienteFisicaCurp(seleccionado.identificacion.curp)
+      setClienteFisicaRfc(seleccionado.identificacion.rfc)
+    }
     setContactoCliente((prev) => ({
       ...prev,
       ladaFijo: seleccionado.contacto.lada,
