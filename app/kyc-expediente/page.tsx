@@ -96,6 +96,26 @@ const ACTO_OPERACION_PERSONA_FISICA = [
   "Fracción XVI – Intercambio de activos virtuales",
 ]
 
+const ACTO_OPERACION_PMDP = [
+  "Fracción I - Juegos con apuesta, concursos o sorteos",
+  "Fracción II - Tarjetas de servicios o de crédito, prepagadas o instrumentos de almacenamiento de valor monetario",
+  "Fracción III - Cheques de viajero",
+  "Fracción IV - Operaciones de mutuo o garantía, préstamos o créditos",
+  "Fracción V - Construcción o desarrollo de inmuebles, intermediación en la transmisión de propiedad o constitución de derechos",
+  "Fracción V Bis - Rececpción de recursos para desarrollo inmobiliario",
+  "Fracción VI - Metales preciosos, piedras precios, joyas o relojes",
+  "Fracción VII - Subasta o comercialización de obras de arte",
+  "Fracción VIII - Comercialización o distribución de vehículos",
+  "Fracción IX - Blindaje de vehículos terrestres e inmuebles",
+  "Fracción X - Traslado de custodia de dinero y valores",
+  "Fracción XI - Servicios profesionales",
+  "Fracción XII - Servicios de fe pública",
+  "Fracción XIII - Recepción de donativos",
+  "Fracción XIV - Servicios de comercio exterior",
+  "Fracción XV - Derechos personales de uso o goce de inmuebles (Arrendamiento)",
+  "Fracción XVI - Intercambio de activos virtuales",
+]
+
 const TIPO_INMUEBLE_OPCIONES = [
   "Casa habitación",
   "Departamento",
@@ -104,6 +124,28 @@ const TIPO_INMUEBLE_OPCIONES = [
   "Oficina",
   "Nave industrial",
   "Otro",
+]
+
+const TIPO_INMUEBLE_PMDP = [
+  "1, Casa /Casa en condominio",
+  "2, Departamento",
+  "3, Edificio habitacional",
+  "4, Edificio comercial",
+  "5, Edificio oficinas",
+  "6, Local comercial independiente",
+  "7, Local en centro comercial",
+  "8, Oficina",
+  "9, Bodega comercial",
+  "10, Bodega industrial",
+  "11, Nave Industrial",
+  "12, Terreno urbano habitacional",
+  "13, Terreno no urbano habitacional",
+  "14, Terreno urbano comercial o industrial",
+  "15, Terreno no urbano comercial o industrial",
+  "16, Terreno ejidal",
+  "17, Rancho/Hacienda/Quinta",
+  "18, Huerta",
+  "99, Otro",
 ]
 
 const IDENTIFICACION_OPCIONES = [
@@ -162,6 +204,17 @@ const DOCUMENTOS_EUI_PERSONA_FISICA = [
   "Comprobante de domicilio del Representante (si aplica)",
 ]
 
+const DOCUMENTOS_EUI_PMDP = [
+  "Formulario de Identificación del Cliente",
+  "Documento que acredita la celebración del Acto u Operación (contrato, factura, etc.)",
+  "Documento que acredite la legal existencia de la Persona Moral de Derecho Público",
+  "Constancia de Situación Fiscal del Cliente (SAT)",
+  "Comprobante de domicilio del Cliente",
+  "Documento que acredite facultades del(de los) servidor(es) público(s) que actúe(n) en nombre del Cliente",
+  "Documento en el que conste el nombramiento del(de los) servidor(es) público(s)",
+  "Identificación oficial del servidor público que actúe en nombre del Cliente",
+  "Comprobante de domicilio del servidor público (en caso de que la identificación no lo contenga)",
+]
 type RespuestaSiNo = "" | "si" | "no"
 
 interface DireccionState {
@@ -200,6 +253,18 @@ interface IdentificacionState {
   numero: string
   autoridad: string
   vigencia: string
+}
+
+interface ServidorPublicoState {
+  identidad: {
+    nombres: string
+    apellidoPaterno: string
+    apellidoMaterno: string
+    fechaNacimiento: string
+    rfc: string
+    curp: string
+  }
+  identificacion: IdentificacionState
 }
 
 interface BeneficiarioState {
@@ -288,6 +353,38 @@ interface ExpedienteEuiPersonaFisica {
   documentacion: Record<string, boolean>
 }
 
+interface ExpedienteEuiPersonaMoralDerechoPublico {
+  fechaRegistro: string
+  tipoExpediente: string
+  sujetoObligadoNombre: string
+  sujetoObligadoRfc: string
+  tipoActoOperacion: string
+  fechaActoOperacion: string
+  relacionNegocios: RespuestaSiNo
+  cliente: {
+    nombre: string
+    fechaConstitucion: string
+    rfc: string
+    actividad: string
+  }
+  domicilioCliente: DireccionState
+  contactoCliente: {
+    lada: string
+    telefonoFijo: string
+    extension: string
+    correo: string
+  }
+  servidorPublico1: ServidorPublicoState
+  servidorPublico2: ServidorPublicoState
+  inmueble: {
+    tipo: string
+    valorReferencia: string
+    folioReal: string
+  }
+  ubicacionInmueble: DireccionState
+  documentacion: Record<string, boolean>
+}
+
 interface ExpedientePersonaResumen {
   id?: string
   tipo?: "persona_moral" | "persona_fisica"
@@ -330,7 +427,7 @@ interface ExpedienteDetalle {
   detalleTipoCliente?: string
   sujetoObligadoId?: string
   sujetoObligadoNombre?: string
-  expedienteEui?: ExpedienteEuiPersonaMoral | ExpedienteEuiPersonaFisica
+  expedienteEui?: ExpedienteEuiPersonaMoral | ExpedienteEuiPersonaFisica | ExpedienteEuiPersonaMoralDerechoPublico
   personas?: ExpedientePersonaResumen[]
   actualizadoEn?: string
 }
@@ -431,6 +528,20 @@ function createIdentificacion(): IdentificacionState {
   }
 }
 
+function createServidorPublico(): ServidorPublicoState {
+  return {
+    identidad: {
+      nombres: "",
+      apellidoPaterno: "",
+      apellidoMaterno: "",
+      fechaNacimiento: "",
+      rfc: "",
+      curp: "",
+    },
+    identificacion: createIdentificacion(),
+  }
+}
+
 function createBeneficiario(): BeneficiarioState {
   return {
     nombres: "",
@@ -509,7 +620,7 @@ function sanitizeDetalle(raw: any): ExpedienteDetalle | null {
     detalleTipoCliente: typeof raw.detalleTipoCliente === "string" ? raw.detalleTipoCliente : undefined,
     sujetoObligadoId: typeof raw.sujetoObligadoId === "string" ? raw.sujetoObligadoId : undefined,
     sujetoObligadoNombre: typeof raw.sujetoObligadoNombre === "string" ? raw.sujetoObligadoNombre : undefined,
-    expedienteEui: typeof raw.expedienteEui === "object" ? (raw.expedienteEui as ExpedienteEuiPersonaMoral) : undefined,
+    expedienteEui: typeof raw.expedienteEui === "object" ? (raw.expedienteEui as ExpedienteDetalle["expedienteEui"]) : undefined,
     personas: Array.isArray(raw.personas) ? (raw.personas as ExpedientePersonaResumen[]) : undefined,
     actualizadoEn: typeof raw.actualizadoEn === "string" ? raw.actualizadoEn : undefined,
   }
@@ -652,6 +763,30 @@ function KycExpedienteContent() {
     createIdentificacion(),
   )
   const [documentacionFisica, setDocumentacionFisica] = useState<Record<string, boolean>>({})
+
+  const [sujetoObligadoNombrePmdp, setSujetoObligadoNombrePmdp] = useState("")
+  const [sujetoObligadoRfcPmdp, setSujetoObligadoRfcPmdp] = useState("")
+  const [tipoActoOperacionPmdp, setTipoActoOperacionPmdp] = useState("")
+  const [fechaActoOperacionPmdp, setFechaActoOperacionPmdp] = useState("")
+  const [relacionNegociosPmdp, setRelacionNegociosPmdp] = useState<RespuestaSiNo>("")
+  const [clientePmdpNombre, setClientePmdpNombre] = useState("")
+  const [clientePmdpFechaConstitucion, setClientePmdpFechaConstitucion] = useState("")
+  const [clientePmdpRfc, setClientePmdpRfc] = useState("")
+  const [clientePmdpActividad, setClientePmdpActividad] = useState("")
+  const [domicilioClientePmdp, setDomicilioClientePmdp] = useState<DireccionState>(() => createDireccion())
+  const [contactoClientePmdp, setContactoClientePmdp] = useState({
+    lada: "",
+    telefonoFijo: "",
+    extension: "",
+    correo: "",
+  })
+  const [servidorPublico1, setServidorPublico1] = useState<ServidorPublicoState>(() => createServidorPublico())
+  const [servidorPublico2, setServidorPublico2] = useState<ServidorPublicoState>(() => createServidorPublico())
+  const [inmuebleTipoPmdp, setInmuebleTipoPmdp] = useState("")
+  const [inmuebleValorPmdp, setInmuebleValorPmdp] = useState("")
+  const [inmuebleFolioPmdp, setInmuebleFolioPmdp] = useState("")
+  const [ubicacionInmueblePmdp, setUbicacionInmueblePmdp] = useState<DireccionState>(() => createDireccion())
+  const [documentacionPmdp, setDocumentacionPmdp] = useState<Record<string, boolean>>({})
 
   const [expedientesResumen, setExpedientesResumen] = useState<ExpedienteResumen[]>([])
   const [expedientesDetalle, setExpedientesDetalle] = useState<Record<string, ExpedienteDetalle>>({})
@@ -811,6 +946,8 @@ function KycExpedienteContent() {
       setClienteFisicaCurp(seleccionado.identificacion.curp)
       setClienteFisicaRfc(seleccionado.identificacion.rfc)
     }
+    setSujetoObligadoNombrePmdp(nombre)
+    setSujetoObligadoRfcPmdp(seleccionado.identificacion.rfc)
     setContactoCliente((prev) => ({
       ...prev,
       ladaFijo: seleccionado.contacto.lada,
@@ -852,6 +989,26 @@ function KycExpedienteContent() {
       entidad: seleccionado.domicilio.entidad,
       pais: seleccionado.domicilio.pais,
       ciudad: prev.ciudad,
+    }))
+    setDomicilioClientePmdp((prev) => ({
+      ...prev,
+      codigoPostal: seleccionado.domicilio.codigoPostal,
+      tipoVialidad: seleccionado.domicilio.tipoVialidad,
+      nombreVialidad: seleccionado.domicilio.nombreVialidad,
+      numeroExterior: seleccionado.domicilio.numeroExterior,
+      numeroInterior: seleccionado.domicilio.numeroInterior,
+      colonia: seleccionado.domicilio.colonia,
+      alcaldia: seleccionado.domicilio.alcaldia,
+      entidad: seleccionado.domicilio.entidad,
+      pais: seleccionado.domicilio.pais,
+      ciudad: prev.ciudad,
+    }))
+    setContactoClientePmdp((prev) => ({
+      ...prev,
+      lada: seleccionado.contacto.lada,
+      telefonoFijo: seleccionado.contacto.telefonoFijo,
+      extension: seleccionado.contacto.extension,
+      correo: seleccionado.contacto.correo,
     }))
   }, [sujetoObligadoId, sujetosRegistrados])
 
@@ -994,6 +1151,28 @@ function KycExpedienteContent() {
         setDocumentacionFisica(expedienteFisica.documentacion)
         return
       }
+      if (expediente.tipoExpediente === "persona_moral_derecho_publico") {
+        const expedientePmdp = expediente as ExpedienteEuiPersonaMoralDerechoPublico
+        setSujetoObligadoNombrePmdp(expedientePmdp.sujetoObligadoNombre)
+        setSujetoObligadoRfcPmdp(expedientePmdp.sujetoObligadoRfc)
+        setTipoActoOperacionPmdp(expedientePmdp.tipoActoOperacion)
+        setFechaActoOperacionPmdp(expedientePmdp.fechaActoOperacion)
+        setRelacionNegociosPmdp(expedientePmdp.relacionNegocios)
+        setClientePmdpNombre(expedientePmdp.cliente.nombre)
+        setClientePmdpFechaConstitucion(expedientePmdp.cliente.fechaConstitucion)
+        setClientePmdpRfc(expedientePmdp.cliente.rfc)
+        setClientePmdpActividad(expedientePmdp.cliente.actividad)
+        setDomicilioClientePmdp(expedientePmdp.domicilioCliente)
+        setContactoClientePmdp(expedientePmdp.contactoCliente)
+        setServidorPublico1(expedientePmdp.servidorPublico1)
+        setServidorPublico2(expedientePmdp.servidorPublico2)
+        setInmuebleTipoPmdp(expedientePmdp.inmueble.tipo)
+        setInmuebleValorPmdp(expedientePmdp.inmueble.valorReferencia)
+        setInmuebleFolioPmdp(expedientePmdp.inmueble.folioReal)
+        setUbicacionInmueblePmdp(expedientePmdp.ubicacionInmueble)
+        setDocumentacionPmdp(expedientePmdp.documentacion)
+        return
+      }
 
       const expedienteMoral = expediente as ExpedienteEuiPersonaMoral
       setSujetoObligadoId(expedienteMoral.sujetoObligadoId)
@@ -1078,6 +1257,29 @@ function KycExpedienteContent() {
     setDomicilioCorrespondenciaFisica(createDireccion())
     setIdentificacionClienteFisica(createIdentificacion())
     setDocumentacionFisica({})
+    setSujetoObligadoNombrePmdp("")
+    setSujetoObligadoRfcPmdp("")
+    setTipoActoOperacionPmdp("")
+    setFechaActoOperacionPmdp("")
+    setRelacionNegociosPmdp("")
+    setClientePmdpNombre("")
+    setClientePmdpFechaConstitucion("")
+    setClientePmdpRfc("")
+    setClientePmdpActividad("")
+    setDomicilioClientePmdp(createDireccion())
+    setContactoClientePmdp({
+      lada: "",
+      telefonoFijo: "",
+      extension: "",
+      correo: "",
+    })
+    setServidorPublico1(createServidorPublico())
+    setServidorPublico2(createServidorPublico())
+    setInmuebleTipoPmdp("")
+    setInmuebleValorPmdp("")
+    setInmuebleFolioPmdp("")
+    setUbicacionInmueblePmdp(createDireccion())
+    setDocumentacionPmdp({})
   }, [])
 
   useEffect(() => {
@@ -1105,7 +1307,16 @@ function KycExpedienteContent() {
       return
     }
 
-    if (tipoExpediente !== "persona_fisica" && !clienteRfc.trim()) {
+    if (tipoExpediente === "persona_moral_derecho_publico" && !clientePmdpRfc.trim()) {
+      toast({
+        title: "Falta RFC",
+        description: "Registra el RFC del cliente para guardar el expediente.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (tipoExpediente !== "persona_fisica" && tipoExpediente !== "persona_moral_derecho_publico" && !clienteRfc.trim()) {
       toast({
         title: "Falta RFC/NIF",
         description: "Registra el RFC/NIF del cliente para guardar el expediente.",
@@ -1179,6 +1390,89 @@ function KycExpedienteContent() {
             contacto: {
               clavePais: expedienteEui.domicilioCliente.pais,
               telefono: expedienteEui.contactoCliente.telefonoMovil || expedienteEui.contactoCliente.telefonoFijo,
+              correo: expedienteEui.contactoCliente.correo,
+            },
+          },
+        ],
+        actualizadoEn: new Date().toISOString(),
+      }
+
+      setExpedientesDetalle((prev) => ({ ...prev, [detalle.rfc]: detalle }))
+      setExpedientesResumen((prev) => {
+        const existing = prev.find((item) => item.rfc === detalle.rfc)
+        if (existing) {
+          return prev.map((item) => (item.rfc === detalle.rfc ? buildResumen(detalle) : item))
+        }
+        return [...prev, buildResumen(detalle)]
+      })
+      setExpedienteSeleccionado(detalle.rfc)
+
+      const almacenados = Object.values({ ...expedientesDetalle, [detalle.rfc]: detalle })
+      window.localStorage.setItem(EXPEDIENTE_DETALLE_STORAGE_KEY, JSON.stringify(almacenados))
+
+      toast({
+        title: "Expediente guardado",
+        description: "El expediente se actualizó correctamente.",
+      })
+      return
+    }
+
+    if (tipoExpediente === "persona_moral_derecho_publico") {
+      const expedienteEui: ExpedienteEuiPersonaMoralDerechoPublico = {
+        fechaRegistro: fechaActual,
+        tipoExpediente,
+        sujetoObligadoNombre: sujetoObligadoNombrePmdp,
+        sujetoObligadoRfc: sujetoObligadoRfcPmdp,
+        tipoActoOperacion: tipoActoOperacionPmdp,
+        fechaActoOperacion: fechaActoOperacionPmdp,
+        relacionNegocios: relacionNegociosPmdp,
+        cliente: {
+          nombre: clientePmdpNombre,
+          fechaConstitucion: clientePmdpFechaConstitucion,
+          rfc: clientePmdpRfc.toUpperCase(),
+          actividad: clientePmdpActividad,
+        },
+        domicilioCliente: domicilioClientePmdp,
+        contactoCliente: contactoClientePmdp,
+        servidorPublico1,
+        servidorPublico2,
+        inmueble: {
+          tipo: inmuebleTipoPmdp,
+          valorReferencia: inmuebleValorPmdp,
+          folioReal: inmuebleFolioPmdp,
+        },
+        ubicacionInmueble: ubicacionInmueblePmdp,
+        documentacion: documentacionPmdp,
+      }
+
+      const detalle: ExpedienteDetalle = {
+        rfc: expedienteEui.cliente.rfc,
+        nombre: expedienteEui.cliente.nombre || expedienteEui.cliente.rfc,
+        tipoCliente: "pm_derecho_publico",
+        sujetoObligadoNombre: expedienteEui.sujetoObligadoNombre,
+        expedienteEui,
+        personas: [
+          {
+            id: `cliente-${expedienteEui.cliente.rfc}`,
+            tipo: "persona_moral",
+            denominacion: expedienteEui.cliente.nombre,
+            rfc: expedienteEui.cliente.rfc,
+            giro: expedienteEui.cliente.actividad,
+            rolRelacion: "Cliente",
+            domicilio: {
+              codigoPostal: expedienteEui.domicilioCliente.codigoPostal,
+              tipoVialidad: expedienteEui.domicilioCliente.tipoVialidad,
+              nombreVialidad: expedienteEui.domicilioCliente.nombreVialidad,
+              numeroExterior: expedienteEui.domicilioCliente.numeroExterior,
+              numeroInterior: expedienteEui.domicilioCliente.numeroInterior,
+              colonia: expedienteEui.domicilioCliente.colonia,
+              alcaldia: expedienteEui.domicilioCliente.alcaldia,
+              entidad: expedienteEui.domicilioCliente.entidad,
+              pais: expedienteEui.domicilioCliente.pais,
+            },
+            contacto: {
+              clavePais: expedienteEui.domicilioCliente.pais,
+              telefono: expedienteEui.contactoCliente.telefonoFijo,
               correo: expedienteEui.contactoCliente.correo,
             },
           },
@@ -1315,6 +1609,18 @@ function KycExpedienteContent() {
       : undefined
   const coloniasCorrespondenciaFisica = infoCorrespondenciaFisica?.asentamientos ?? []
 
+  const infoClientePmdpCodigoPostal =
+    domicilioClientePmdp.codigoPostal.length === 5
+      ? findCodigoPostalInfo(domicilioClientePmdp.codigoPostal)
+      : undefined
+  const coloniasClientePmdp = infoClientePmdpCodigoPostal?.asentamientos ?? []
+
+  const infoUbicacionInmueblePmdp =
+    ubicacionInmueblePmdp.codigoPostal.length === 5
+      ? findCodigoPostalInfo(ubicacionInmueblePmdp.codigoPostal)
+      : undefined
+  const coloniasInmueblePmdp = infoUbicacionInmueblePmdp?.asentamientos ?? []
+
   const tipoClienteResumen = tipoClienteLabel
 
   return (
@@ -1385,7 +1691,9 @@ function KycExpedienteContent() {
               ? "Formulario activo: Persona Moral."
               : tipoExpediente === "persona_fisica"
                 ? "Formulario activo: Persona Física."
-                : "Por ahora solo están habilitados Persona Moral y Persona Física."}
+                : tipoExpediente === "persona_moral_derecho_publico"
+                  ? "Formulario activo: Persona Moral de Derecho Público."
+                  : "Por ahora solo están habilitados Persona Moral, Persona Física y Persona Moral de Derecho Público."}
           </div>
         </CardContent>
       </Card>
@@ -2152,6 +2460,470 @@ function KycExpedienteContent() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {tipoExpediente === "persona_moral_derecho_publico" && (
+        <>
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-slate-600" /> Sujeto obligado
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Nombre, denominación o razón social</Label>
+                <Input
+                  value={sujetoObligadoNombrePmdp}
+                  onChange={(event) => setSujetoObligadoNombrePmdp(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Registro Federal de Contribuyentes</Label>
+                <Input
+                  value={sujetoObligadoRfcPmdp}
+                  onChange={(event) => setSujetoObligadoRfcPmdp(event.target.value.toUpperCase())}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarClock className="h-5 w-5 text-slate-600" /> Acto u operación
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Tipo de acto u operación</Label>
+                <Select value={tipoActoOperacionPmdp} onValueChange={setTipoActoOperacionPmdp}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="---" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACTO_OPERACION_PMDP.map((opcion) => (
+                      <SelectItem key={opcion} value={opcion}>
+                        {opcion}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha de celebración del acto u operación</Label>
+                <Input
+                  type="date"
+                  value={fechaActoOperacionPmdp}
+                  onChange={(event) => setFechaActoOperacionPmdp(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>¿Existe relación de negocios?</Label>
+                <Select
+                  value={relacionNegociosPmdp}
+                  onValueChange={(value) => setRelacionNegociosPmdp(value as RespuestaSiNo)}
+                >
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="---" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="si">Sí</SelectItem>
+                    <SelectItem value="no">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-slate-600" /> Datos de identificación del cliente
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Nombre de la Persona Moral de Derecho Público</Label>
+                <Input value={clientePmdpNombre} onChange={(event) => setClientePmdpNombre(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha de creación o constitución</Label>
+                <Input
+                  type="date"
+                  value={clientePmdpFechaConstitucion}
+                  onChange={(event) => setClientePmdpFechaConstitucion(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Registro Federal de Contribuyentes</Label>
+                <Input value={clientePmdpRfc} onChange={(event) => setClientePmdpRfc(event.target.value.toUpperCase())} />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Actividad u objeto</Label>
+                <Textarea value={clientePmdpActividad} onChange={(event) => setClientePmdpActividad(event.target.value)} rows={3} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-slate-600" /> Domicilio del cliente
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Código Postal</Label>
+                  <Input
+                    value={domicilioClientePmdp.codigoPostal}
+                    onChange={(event) =>
+                      actualizarDireccionDesdeCodigoPostal(event.target.value, setDomicilioClientePmdp, domicilioClientePmdp)
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tipo de vialidad</Label>
+                  <Select
+                    value={domicilioClientePmdp.tipoVialidad}
+                    onValueChange={(value) => setDomicilioClientePmdp((prev) => ({ ...prev, tipoVialidad: value }))}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="---" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIPO_VIALIDAD_PERSONA_FISICA.map((tipo) => (
+                        <SelectItem key={tipo} value={tipo}>
+                          {tipo}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Nombre de la vialidad</Label>
+                  <Input
+                    value={domicilioClientePmdp.nombreVialidad}
+                    onChange={(event) => setDomicilioClientePmdp((prev) => ({ ...prev, nombreVialidad: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Número exterior</Label>
+                  <Input
+                    value={domicilioClientePmdp.numeroExterior}
+                    onChange={(event) => setDomicilioClientePmdp((prev) => ({ ...prev, numeroExterior: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Número interior</Label>
+                  <Input
+                    value={domicilioClientePmdp.numeroInterior}
+                    onChange={(event) => setDomicilioClientePmdp((prev) => ({ ...prev, numeroInterior: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Colonia / Urbanización</Label>
+                  <Select
+                    value={domicilioClientePmdp.colonia}
+                    onValueChange={(value) => setDomicilioClientePmdp((prev) => ({ ...prev, colonia: value }))}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="---" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from(new Set([...coloniasClientePmdp, domicilioClientePmdp.colonia].filter(Boolean))).map((colonia) => (
+                        <SelectItem key={colonia} value={colonia}>
+                          {colonia}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-4">
+                <div className="space-y-2">
+                  <Label>Alcaldía / Municipio</Label>
+                  <Input value={domicilioClientePmdp.alcaldia} readOnly />
+                </div>
+                <div className="space-y-2">
+                  <Label>Ciudad o población</Label>
+                  <Input value={domicilioClientePmdp.ciudad} readOnly />
+                </div>
+                <div className="space-y-2">
+                  <Label>Entidad, estado, provincia</Label>
+                  <Input value={domicilioClientePmdp.entidad} readOnly />
+                </div>
+                <div className="space-y-2">
+                  <Label>País</Label>
+                  <Input value={findPaisByCodigo(domicilioClientePmdp.pais)?.label ?? domicilioClientePmdp.pais} readOnly />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-slate-600" /> Datos de contacto del cliente
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Lada</Label>
+                <Input value={contactoClientePmdp.lada} onChange={(event) => setContactoClientePmdp((prev) => ({ ...prev, lada: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Número telefónico (fijo)</Label>
+                <Input value={contactoClientePmdp.telefonoFijo} onChange={(event) => setContactoClientePmdp((prev) => ({ ...prev, telefonoFijo: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Extensión</Label>
+                <Input value={contactoClientePmdp.extension} onChange={(event) => setContactoClientePmdp((prev) => ({ ...prev, extension: event.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Correo electrónico</Label>
+                <Input type="email" value={contactoClientePmdp.correo} onChange={(event) => setContactoClientePmdp((prev) => ({ ...prev, correo: event.target.value }))} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {[{ label: "Servidor Público 1", data: servidorPublico1, setter: setServidorPublico1 }, { label: "Servidor Público 2", data: servidorPublico2, setter: setServidorPublico2 }].map((block) => (
+            <Card key={block.label} className="border-slate-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-slate-600" /> {block.label}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Nombre(s)</Label>
+                    <Input value={block.data.identidad.nombres} onChange={(event) => block.setter((prev) => ({ ...prev, identidad: { ...prev.identidad, nombres: event.target.value } }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Apellido paterno</Label>
+                    <Input value={block.data.identidad.apellidoPaterno} onChange={(event) => block.setter((prev) => ({ ...prev, identidad: { ...prev.identidad, apellidoPaterno: event.target.value } }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Apellido materno</Label>
+                    <Input value={block.data.identidad.apellidoMaterno} onChange={(event) => block.setter((prev) => ({ ...prev, identidad: { ...prev.identidad, apellidoMaterno: event.target.value } }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Fecha de nacimiento</Label>
+                    <Input type="date" value={block.data.identidad.fechaNacimiento} onChange={(event) => block.setter((prev) => ({ ...prev, identidad: { ...prev.identidad, fechaNacimiento: event.target.value } }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>RFC</Label>
+                    <Input value={block.data.identidad.rfc} onChange={(event) => block.setter((prev) => ({ ...prev, identidad: { ...prev.identidad, rfc: event.target.value.toUpperCase() } }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>CURP</Label>
+                    <Input value={block.data.identidad.curp} onChange={(event) => block.setter((prev) => ({ ...prev, identidad: { ...prev.identidad, curp: event.target.value.toUpperCase() } }))} />
+                  </div>
+                </div>
+
+                <div className="rounded border border-slate-200 p-4">
+                  <p className="text-sm font-semibold text-slate-700">Identificación</p>
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Tipo de identificación</Label>
+                      <Select
+                        value={block.data.identificacion.tipo}
+                        onValueChange={(value) => block.setter((prev) => ({ ...prev, identificacion: { ...prev.identificacion, tipo: value } }))}
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Selecciona identificación" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {IDENTIFICACION_OPCIONES.map((opcion) => (
+                            <SelectItem key={opcion} value={opcion}>
+                              {opcion}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Autoridad que la emite</Label>
+                      <Select
+                        value={block.data.identificacion.autoridad}
+                        onValueChange={(value) => block.setter((prev) => ({ ...prev, identificacion: { ...prev.identificacion, autoridad: value } }))}
+                      >
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Selecciona autoridad" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AUTORIDAD_IDENTIFICACION_OPCIONES.map((opcion) => (
+                            <SelectItem key={opcion} value={opcion}>
+                              {opcion}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Número de identificación</Label>
+                      <Input value={block.data.identificacion.numero} onChange={(event) => block.setter((prev) => ({ ...prev, identificacion: { ...prev.identificacion, numero: event.target.value } }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Fecha de expiración de la vigencia</Label>
+                      <Input type="date" value={block.data.identificacion.vigencia} onChange={(event) => block.setter((prev) => ({ ...prev, identificacion: { ...prev.identificacion, vigencia: event.target.value } }))} />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Home className="h-5 w-5 text-slate-600" /> Características del inmueble
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Tipo de inmueble</Label>
+                <Select value={inmuebleTipoPmdp} onValueChange={setInmuebleTipoPmdp}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="---" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIPO_INMUEBLE_PMDP.map((tipo) => (
+                      <SelectItem key={tipo} value={tipo}>
+                        {tipo}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Valor de referencia</Label>
+                <Input value={inmuebleValorPmdp} onChange={(event) => setInmuebleValorPmdp(event.target.value)} />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Folio Real o Antecedentes Registrales</Label>
+                <Input value={inmuebleFolioPmdp} onChange={(event) => setInmuebleFolioPmdp(event.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-slate-600" /> Ubicación del inmueble
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Código Postal</Label>
+                  <Input
+                    value={ubicacionInmueblePmdp.codigoPostal}
+                    onChange={(event) =>
+                      actualizarDireccionDesdeCodigoPostal(event.target.value, setUbicacionInmueblePmdp, ubicacionInmueblePmdp)
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tipo de vialidad</Label>
+                  <Select
+                    value={ubicacionInmueblePmdp.tipoVialidad}
+                    onValueChange={(value) => setUbicacionInmueblePmdp((prev) => ({ ...prev, tipoVialidad: value }))}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="---" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIPO_VIALIDAD_PERSONA_FISICA.map((tipo) => (
+                        <SelectItem key={tipo} value={tipo}>
+                          {tipo}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Nombre de la vialidad</Label>
+                  <Input
+                    value={ubicacionInmueblePmdp.nombreVialidad}
+                    onChange={(event) => setUbicacionInmueblePmdp((prev) => ({ ...prev, nombreVialidad: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Número exterior</Label>
+                  <Input
+                    value={ubicacionInmueblePmdp.numeroExterior}
+                    onChange={(event) => setUbicacionInmueblePmdp((prev) => ({ ...prev, numeroExterior: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Número interior</Label>
+                  <Input
+                    value={ubicacionInmueblePmdp.numeroInterior}
+                    onChange={(event) => setUbicacionInmueblePmdp((prev) => ({ ...prev, numeroInterior: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Colonia / Urbanización</Label>
+                  <Select
+                    value={ubicacionInmueblePmdp.colonia}
+                    onValueChange={(value) => setUbicacionInmueblePmdp((prev) => ({ ...prev, colonia: value }))}
+                  >
+                    <SelectTrigger className="bg-white">
+                      <SelectValue placeholder="---" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from(new Set([...coloniasInmueblePmdp, ubicacionInmueblePmdp.colonia].filter(Boolean))).map((colonia) => (
+                        <SelectItem key={colonia} value={colonia}>
+                          {colonia}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-4">
+                <div className="space-y-2">
+                  <Label>Alcaldía / Municipio</Label>
+                  <Input value={ubicacionInmueblePmdp.alcaldia} readOnly />
+                </div>
+                <div className="space-y-2">
+                  <Label>Ciudad o población</Label>
+                  <Input value={ubicacionInmueblePmdp.ciudad} readOnly />
+                </div>
+                <div className="space-y-2">
+                  <Label>Entidad, estado, provincia</Label>
+                  <Input value={ubicacionInmueblePmdp.entidad} readOnly />
+                </div>
+                <div className="space-y-2">
+                  <Label>País</Label>
+                  <Input value={findPaisByCodigo(ubicacionInmueblePmdp.pais)?.label ?? ubicacionInmueblePmdp.pais} readOnly />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-slate-600" /> Documentación que integra el EUI – PM de Derecho Público
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2">
+              {DOCUMENTOS_EUI_PMDP.map((doc) => (
+                <label key={doc} className="flex items-start gap-3 rounded border border-slate-200 bg-white p-3 text-sm">
+                  <Checkbox
+                    checked={Boolean(documentacionPmdp[doc])}
+                    onCheckedChange={(value) => setDocumentacionPmdp((prev) => ({ ...prev, [doc]: Boolean(value) }))}
+                  />
+                  <span>{doc}</span>
+                </label>
+              ))}
+            </CardContent>
+          </Card>
+        </>
       )}
 
       <Card className="border-slate-200">
