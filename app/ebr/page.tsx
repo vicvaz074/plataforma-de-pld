@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { useLanguage } from "@/lib/LanguageContext"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -19,6 +20,38 @@ interface RiskFactor {
   weight: number
   score: number
 }
+
+interface ExpedienteDetalle {
+  rfc: string
+  nombre: string
+  tipoCliente?: string
+  actualizadoEn?: string
+}
+
+interface OperacionCliente {
+  id: string
+  rfc: string
+  cliente: string
+  actividadNombre: string
+  tipoOperacion: string
+  monto: number
+  fechaOperacion: string
+  umbralStatus?: "sin-obligacion" | "identificacion" | "aviso"
+  alerta?: string | null
+  avisoPresentado?: boolean
+  documentosSoporte?: Array<{ id: string }>
+}
+
+interface StoredEvaluation {
+  rfc: string
+  riskFactors: RiskFactor[]
+  notes: string
+  updatedAt: string
+}
+
+const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
+const OPERACIONES_STORAGE_KEY = "actividades_vulnerables_operaciones"
+const EBR_STORAGE_KEY = "ebr_evaluaciones"
 
 const scoreOptions = [
   { value: "1", label: "Bajo (1)" },
@@ -66,58 +99,158 @@ const initialRiskFactors: RiskFactor[] = [
   },
 ]
 
-const mitigationActions = [
-  {
-    id: "mt-01",
-    title: "Reforzar monitoreo transaccional",
-    description: "Activar reglas de alerta para operaciones recurrentes y montos atípicos.",
-    owner: "Oficial de Cumplimiento",
-    dueDate: "30 Oct 2024",
-    status: "En progreso",
-  },
-  {
-    id: "mt-02",
-    title: "Actualizar expediente y documentación",
-    description: "Revalidar KYC, domicilio fiscal y beneficiario controlador.",
-    owner: "Equipo de KYC",
-    dueDate: "15 Nov 2024",
-    status: "Pendiente",
-  },
-  {
-    id: "mt-03",
-    title: "Capacitación focalizada",
-    description: "Sesión interna sobre señales de riesgo y tipologías relevantes.",
-    owner: "Capital Humano",
-    dueDate: "05 Dic 2024",
-    status: "Programado",
-  },
-]
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
+}
 
-const monitoringUpdates = [
-  {
-    id: "up-01",
-    title: "Revisión trimestral completada",
-    description: "Se validaron 12 alertas y se cerraron sin observaciones.",
-    date: "20 Sep 2024",
-  },
-  {
-    id: "up-02",
-    title: "Auditoría interna",
-    description: "Observación menor sobre soporte documental; plan de acción en curso.",
-    date: "15 Aug 2024",
-  },
-  {
-    id: "up-03",
-    title: "Actualización de matriz",
-    description: "Se ajustaron ponderaciones para operaciones digitales.",
-    date: "30 Jul 2024",
-  },
-]
+const formatDate = (date: Date) =>
+  new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date)
+
+const safeDate = (value?: string) => {
+  if (!value) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+const buildRiskFactorsFromData = (operaciones: OperacionCliente[], expediente?: ExpedienteDetalle | null) => {
+  const totalMonto = operaciones.reduce((sum, operacion) => sum + (Number.isFinite(operacion.monto) ? operacion.monto : 0), 0)
+  const alertas = operaciones.filter((operacion) => Boolean(operacion.alerta) || operacion.umbralStatus === "aviso")
+  const tieneIdentificacion = operaciones.some((operacion) => operacion.umbralStatus === "identificacion")
+  const actividadesUnicas = new Set(operaciones.map((operacion) => operacion.actividadNombre)).size
+  const tipoCliente = expediente?.tipoCliente?.toLowerCase() ?? ""
+
+  const perfilScore = tipoCliente.includes("moral") ? 3 : tipoCliente.includes("fideicomiso") ? 4 : 2
+  const productoScore = actividadesUnicas >= 3 ? 4 : actividadesUnicas === 2 ? 3 : 2
+  const canalScore = operaciones.length >= 6 ? 4 : operaciones.length >= 3 ? 3 : 2
+  const volumenScore = totalMonto >= 1000000 ? 5 : totalMonto >= 500000 ? 4 : totalMonto >= 100000 ? 3 : 2
+  const cumplimientoScore = alertas.length > 0 ? 4 : tieneIdentificacion ? 3 : 2
+
+  return initialRiskFactors.map((factor) => {
+    switch (factor.id) {
+      case "rf-01":
+        return { ...factor, score: perfilScore }
+      case "rf-02":
+        return { ...factor, score: productoScore }
+      case "rf-03":
+        return { ...factor, score: canalScore }
+      case "rf-04":
+        return { ...factor, score: volumenScore }
+      case "rf-05":
+        return { ...factor, score: cumplimientoScore }
+      default:
+        return factor
+    }
+  })
+}
 
 export default function EbrPage() {
   const { language } = useLanguage()
   const t = translations[language]
+  const [expedientes, setExpedientes] = useState<ExpedienteDetalle[]>([])
+  const [operaciones, setOperaciones] = useState<OperacionCliente[]>([])
+  const [evaluacionesGuardadas, setEvaluacionesGuardadas] = useState<Record<string, StoredEvaluation>>({})
+  const [clienteSeleccionado, setClienteSeleccionado] = useState("")
   const [riskFactors, setRiskFactors] = useState<RiskFactor[]>(initialRiskFactors)
+  const [notes, setNotes] = useState("")
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    try {
+      const storedExpedientes = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
+      if (storedExpedientes) {
+        const parsed = JSON.parse(storedExpedientes) as unknown
+        if (Array.isArray(parsed)) {
+          const clean = parsed.filter((item): item is ExpedienteDetalle => Boolean(item?.rfc))
+          setExpedientes(clean)
+        }
+      }
+    } catch (_error) {
+      setExpedientes([])
+    }
+
+    try {
+      const storedOperaciones = window.localStorage.getItem(OPERACIONES_STORAGE_KEY)
+      if (storedOperaciones) {
+        const parsed = JSON.parse(storedOperaciones) as unknown
+        if (Array.isArray(parsed)) {
+          const clean = parsed.filter((item): item is OperacionCliente => Boolean(item?.id && item?.rfc))
+          setOperaciones(clean)
+        }
+      }
+    } catch (_error) {
+      setOperaciones([])
+    }
+
+    try {
+      const storedEvaluaciones = window.localStorage.getItem(EBR_STORAGE_KEY)
+      if (storedEvaluaciones) {
+        const parsed = JSON.parse(storedEvaluaciones) as Record<string, StoredEvaluation>
+        setEvaluacionesGuardadas(parsed ?? {})
+      }
+    } catch (_error) {
+      setEvaluacionesGuardadas({})
+    }
+  }, [])
+
+  const clientesDisponibles = useMemo(() => {
+    const mapa = new Map<string, { rfc: string; nombre: string }>()
+    expedientes.forEach((expediente) => {
+      if (!expediente?.rfc) return
+      mapa.set(expediente.rfc, { rfc: expediente.rfc, nombre: expediente.nombre })
+    })
+    operaciones.forEach((operacion) => {
+      if (!operacion?.rfc) return
+      if (mapa.has(operacion.rfc)) return
+      mapa.set(operacion.rfc, { rfc: operacion.rfc, nombre: operacion.cliente || operacion.rfc })
+    })
+    return Array.from(mapa.values())
+  }, [expedientes, operaciones])
+
+  useEffect(() => {
+    if (clienteSeleccionado) return
+    if (clientesDisponibles.length === 0) return
+    setClienteSeleccionado(clientesDisponibles[0].rfc)
+  }, [clienteSeleccionado, clientesDisponibles])
+
+  const expedienteActual = useMemo(
+    () => expedientes.find((expediente) => expediente.rfc === clienteSeleccionado) ?? null,
+    [expedientes, clienteSeleccionado],
+  )
+
+  const operacionesCliente = useMemo(
+    () => operaciones.filter((operacion) => operacion.rfc === clienteSeleccionado),
+    [operaciones, clienteSeleccionado],
+  )
+
+  const ultimoMovimiento = useMemo(() => {
+    const fechas = operacionesCliente.map((operacion) => safeDate(operacion.fechaOperacion)).filter(Boolean) as Date[]
+    const fechaExpediente = safeDate(expedienteActual?.actualizadoEn)
+    if (fechaExpediente) fechas.push(fechaExpediente)
+    if (fechas.length === 0) return null
+    return new Date(Math.max(...fechas.map((fecha) => fecha.getTime())))
+  }, [operacionesCliente, expedienteActual])
+
+  const fechaRevision = useMemo(() => addDays(ultimoMovimiento ?? new Date(), 90), [ultimoMovimiento])
+
+  useEffect(() => {
+    if (!clienteSeleccionado) return
+    const stored = evaluacionesGuardadas[clienteSeleccionado]
+    if (stored) {
+      setRiskFactors(stored.riskFactors)
+      setNotes(stored.notes)
+      return
+    }
+
+    setRiskFactors(buildRiskFactorsFromData(operacionesCliente, expedienteActual))
+    setNotes("")
+  }, [clienteSeleccionado, evaluacionesGuardadas, operacionesCliente, expedienteActual])
 
   const totalWeight = useMemo(
     () => riskFactors.reduce((sum, factor) => sum + factor.weight, 0),
@@ -152,6 +285,87 @@ export default function EbrPage() {
     )
   }
 
+  const totalDocumentos = useMemo(
+    () =>
+      operacionesCliente.reduce(
+        (sum, operacion) => sum + (operacion.documentosSoporte ? operacion.documentosSoporte.length : 0),
+        0,
+      ),
+    [operacionesCliente],
+  )
+
+  const mitigacionBaseDate = useMemo(() => addDays(new Date(), 14), [])
+  const mitigationActions = useMemo(
+    () => [
+      {
+        id: "mt-01",
+        title: "Reforzar monitoreo transaccional",
+        description: "Activar reglas de alerta para operaciones recurrentes y montos atípicos.",
+        owner: "Oficial de Cumplimiento",
+        dueDate: formatDate(addDays(mitigacionBaseDate, 15)),
+        status: operacionesCliente.some((operacion) => operacion.umbralStatus === "aviso") ? "En progreso" : "Pendiente",
+      },
+      {
+        id: "mt-02",
+        title: "Actualizar expediente y documentación",
+        description: "Revalidar KYC, domicilio fiscal y beneficiario controlador.",
+        owner: "Equipo de KYC",
+        dueDate: formatDate(addDays(mitigacionBaseDate, 30)),
+        status: expedienteActual ? "En progreso" : "Pendiente",
+      },
+      {
+        id: "mt-03",
+        title: "Capacitación focalizada",
+        description: "Sesión interna sobre señales de riesgo y tipologías relevantes.",
+        owner: "Capital Humano",
+        dueDate: formatDate(addDays(mitigacionBaseDate, 45)),
+        status: "Programado",
+      },
+    ],
+    [mitigacionBaseDate, operacionesCliente, expedienteActual],
+  )
+
+  const monitoringUpdates = useMemo(
+    () => [
+      {
+        id: "up-01",
+        title: "Revisión de alertas y umbrales",
+        description: `${operacionesCliente.length} operaciones analizadas para el cliente seleccionado.`,
+        date: formatDate(addDays(new Date(), -45)),
+      },
+      {
+        id: "up-02",
+        title: "Sincronización con EUI",
+        description: expedienteActual
+          ? `Expediente actualizado para ${expedienteActual.nombre}.`
+          : "Sin expediente vinculado; se requiere completar el EUI.",
+        date: formatDate(addDays(new Date(), -25)),
+      },
+      {
+        id: "up-03",
+        title: "Ajuste de matriz",
+        description: "Se recalcularon ponderaciones con base en evidencia operativa.",
+        date: formatDate(addDays(new Date(), -10)),
+      },
+    ],
+    [operacionesCliente.length, expedienteActual],
+  )
+
+  const saveEvaluation = () => {
+    if (!clienteSeleccionado) return
+    const updated: StoredEvaluation = {
+      rfc: clienteSeleccionado,
+      riskFactors,
+      notes,
+      updatedAt: new Date().toISOString(),
+    }
+    const next = { ...evaluacionesGuardadas, [clienteSeleccionado]: updated }
+    setEvaluacionesGuardadas(next)
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(EBR_STORAGE_KEY, JSON.stringify(next))
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -160,16 +374,71 @@ export default function EbrPage() {
           <p className="text-muted-foreground mt-2 max-w-2xl">{t.ebrSubtitle}</p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button variant="outline">
-            <FileText className="mr-2 h-4 w-4" />
-            Descargar reporte
+          <Button asChild variant="outline">
+            <Link href="/actividades-vulnerables">
+              <FileText className="mr-2 h-4 w-4" />
+              Ver operaciones
+            </Link>
           </Button>
-          <Button>
+          <Button asChild variant="outline">
+            <Link href="/kyc-expediente">
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              Ver expediente
+            </Link>
+          </Button>
+          <Button onClick={saveEvaluation}>
             <ClipboardCheck className="mr-2 h-4 w-4" />
             Guardar evaluación
           </Button>
         </div>
       </div>
+
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle>Conexión con expedientes y operaciones</CardTitle>
+          <CardDescription>
+            La EBR reutiliza el expediente único y las operaciones registradas para construir la matriz de riesgo.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-gray-900">Cliente seleccionado</p>
+            <Select value={clienteSeleccionado} onValueChange={setClienteSeleccionado}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                {clientesDisponibles.map((cliente) => (
+                  <SelectItem key={cliente.rfc} value={cliente.rfc}>
+                    {cliente.nombre} ({cliente.rfc})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {clienteSeleccionado
+                ? `${operacionesCliente.length} operaciones vinculadas`
+                : "Sin cliente seleccionado"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border p-4">
+            <p className="text-sm text-muted-foreground">Expediente EUI</p>
+            <p className="text-base font-medium text-gray-900">
+              {expedienteActual ? expedienteActual.nombre : "Pendiente de integración"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {expedienteActual?.tipoCliente ?? "Sin tipo definido"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-border p-4">
+            <p className="text-sm text-muted-foreground">Operaciones recientes</p>
+            <p className="text-base font-medium text-gray-900">{operacionesCliente.length}</p>
+            <p className="text-xs text-muted-foreground">
+              {ultimoMovimiento ? `Último movimiento: ${formatDate(ultimoMovimiento)}` : "Sin operaciones aún"}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
@@ -193,14 +462,16 @@ export default function EbrPage() {
           </CardHeader>
           <CardContent>
             <Progress value={scorePercent} className="h-2" />
-            <p className="text-xs text-muted-foreground mt-2">Última actualización: 03 Oct 2024</p>
+            <p className="text-xs text-muted-foreground mt-2">
+              Última actualización: {formatDate(ultimoMovimiento ?? new Date())}
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
             <CardDescription>Próxima revisión</CardDescription>
-            <CardTitle className="text-2xl">15 Dic 2024</CardTitle>
+            <CardTitle className="text-2xl">{formatDate(fechaRevision)}</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center gap-3">
             <CalendarClock className="h-8 w-8 text-muted-foreground" />
@@ -211,7 +482,7 @@ export default function EbrPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardDescription>Evidencias activas</CardDescription>
-            <CardTitle className="text-2xl">18 documentos</CardTitle>
+            <CardTitle className="text-2xl">{totalDocumentos} documentos</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center gap-3">
             <ShieldCheck className="h-8 w-8 text-muted-foreground" />
@@ -276,6 +547,8 @@ export default function EbrPage() {
                 <Textarea
                   placeholder="Documenta hallazgos relevantes, supuestos y fuentes de información."
                   className="min-h-[120px]"
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
                 />
               </div>
             </CardContent>
@@ -339,7 +612,8 @@ export default function EbrPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-900">Pendiente de revisión anual</p>
                   <p className="text-sm text-muted-foreground">
-                    Debe realizarse una validación completa de la metodología y evidencias antes del 15 Dic 2024.
+                    Debe realizarse una validación completa de la metodología y evidencias antes del{" "}
+                    {formatDate(addDays(fechaRevision, 90))}.
                   </p>
                 </div>
               </div>
@@ -350,4 +624,3 @@ export default function EbrPage() {
     </div>
   )
 }
-
