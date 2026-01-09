@@ -16,6 +16,7 @@ import {
   Settings,
   Sparkles,
   Book,
+  ClipboardCheck,
 } from "lucide-react"
 import { translations } from "@/lib/translations"
 import { aliciaTranslations } from "@/lib/alicia-translations"
@@ -29,6 +30,7 @@ const navigationItems = [
   { key: "capacitacionControl", icon: GraduationCap, href: "/capacitacion-control" },
   { key: "auditoriaVerificacion", icon: Search, href: "/auditoria-verificacion" },
   { key: "evidenciasTrazabilidad", icon: Database, href: "/evidencias-trazabilidad" },
+  { key: "ebr", icon: ClipboardCheck, href: "/ebr" },
   { key: "gobernanzaControl", icon: Settings, href: "/gobernanza-control" },
   { key: "compiladoLeyes", icon: Book, href: "/marco-normativo-aplicable" },
   { key: "alicia", icon: Sparkles, href: "https://asistentelegal02.azurewebsites.net/", external: true },

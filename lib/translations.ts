@@ -31,6 +31,7 @@ export const translations = {
     capacitacionControl: "Capacitación y Control Interno",
     auditoriaVerificacion: "Auditoría y Verificación Interna",
     evidenciasTrazabilidad: "Evidencias y Trazabilidad",
+    ebr: "Evaluación Basada en Riesgo (EBR)",
     gobernanzaControl: "Gobernanza y Control Interno",
     compiladoLeyes: "Marco Normativo Aplicable",
 
@@ -77,6 +78,8 @@ export const translations = {
       "Revisiones documentales y atención a observaciones de SAT/UIF con planes de acción.",
     evidenciasTrazabilidadDescription:
       "Repositorio digital centralizado con sellos de tiempo, control de versiones y logs de acceso.",
+    ebrDescription:
+      "Matriz de riesgo integral para evaluar clientes, productos y operaciones, con seguimiento de planes de mitigación.",
     gobernanzaControlDescription:
       "Acreditación de órganos de control como Oficial de Cumplimiento, manuales internos y Comité de Comunicación y Control.",
     compiladoLeyesDescription:
@@ -183,6 +186,9 @@ export const translations = {
     beneficiarioControladorTitle: "Beneficiario Controlador",
     beneficiarioControladorSubtitle:
       "Módulo para identificar a la(s) persona(s) física(s) que obtienen el beneficio o ejercen control efectivo sobre el cliente",
+    ebrTitle: "Evaluación Basada en Riesgo (EBR)",
+    ebrSubtitle:
+      "Módulo para documentar la metodología de riesgo, el puntaje ponderado y los planes de mitigación asociados",
 
     // Beneficiario Controlador sections
     existenciaDeclaracion: "Existencia y declaración",
@@ -242,6 +248,7 @@ export const translations = {
     capacitacionControl: "Training and Internal Control",
     auditoriaVerificacion: "Audit and Internal Verification",
     evidenciasTrazabilidad: "Evidence and Traceability",
+    ebr: "Risk-Based Assessment (RBA)",
     gobernanzaControl: "Governance and Internal Control",
     compiladoLeyes: "Applicable Legal Framework",
 
@@ -284,6 +291,8 @@ export const translations = {
     auditoriaVerificacionDescription: "Documentary reviews and attention to SAT/UIF observations with action plans.",
     evidenciasTrazabilidadDescription:
       "Centralized digital repository with timestamps, version control and access logs.",
+    ebrDescription:
+      "Comprehensive risk matrix to evaluate clients, products, and operations with mitigation plan tracking.",
     gobernanzaControlDescription:
       "Accreditation of control bodies such as Compliance Officer, internal manuals and Communication and Control Committee.",
     compiladoLeyesDescription:
@@ -388,6 +397,9 @@ export const translations = {
     beneficiarioControladorTitle: "Controlling Beneficiary",
     beneficiarioControladorSubtitle:
       "Module to identify the natural person(s) who obtain the benefit or exercise effective control over the client",
+    ebrTitle: "Risk-Based Assessment (RBA)",
+    ebrSubtitle:
+      "Module to document the risk methodology, weighted scoring, and associated mitigation plans",
 
     // Beneficiario Controlador sections
     existenciaDeclaracion: "Existence and declaration",
