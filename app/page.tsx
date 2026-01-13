@@ -15,6 +15,7 @@ import {
   Settings,
   Sparkles,
   Book,
+  ClipboardCheck,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { translations } from "@/lib/translations"
@@ -27,6 +28,7 @@ const options = [
   { name: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },
   { name: "avisosInformes", icon: FileText, href: "/avisos-informes" },
   { name: "evidenciasTrazabilidad", icon: Database, href: "/evidencias-trazabilidad" },
+  { name: "ebr", icon: ClipboardCheck, href: "/ebr" },
   { name: "capacitacionControl", icon: GraduationCap, href: "/capacitacion-control" },
   { name: "auditoriaVerificacion", icon: Search, href: "/auditoria-verificacion" },
   { name: "gobernanzaControl", icon: Settings, href: "/gobernanza-control" },
