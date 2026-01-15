@@ -2058,16 +2058,30 @@ export default function ActividadesVulnerablesPage() {
     [expedientesDisponibles, sujetoObligadoOperacion],
   )
 
-  const actividadesRegistradasCliente = useMemo(() => {
+  const actividadRegistroOperacion = useMemo(() => {
+    if (!clienteOperacionSeleccionado) {
+      return { actividades: [], tieneRegistro: false }
+    }
     const expedienteCliente = expedientesDisponibles.find(
       (expediente) => expediente.rfc === clienteOperacionSeleccionado,
     )
-    if (!expedienteCliente?.claveActividadVulnerable) return []
-    const actividad = actividadesVulnerables.find(
-      (item) => item.key === expedienteCliente.claveActividadVulnerable,
-    )
-    return actividad ? [actividad] : []
+    if (!expedienteCliente) {
+      return { actividades: [], tieneRegistro: false }
+    }
+    if (expedienteCliente.claveActividadVulnerable) {
+      const actividad = actividadesVulnerables.find(
+        (item) => item.key === expedienteCliente.claveActividadVulnerable,
+      )
+      return {
+        actividades: actividad ? [actividad] : [],
+        tieneRegistro: Boolean(actividad),
+      }
+    }
+
+    return { actividades: actividadesVulnerables, tieneRegistro: false }
   }, [clienteOperacionSeleccionado, expedientesDisponibles])
+
+  const actividadesRegistradasCliente = actividadRegistroOperacion.actividades
 
   const actividadOperacionDetalle = useMemo(
     () =>
@@ -4226,7 +4240,7 @@ const cambiarMesCalendario = (delta: number) => {
                   <Select
                     value={actividadOperacionSeleccionada}
                     onValueChange={setActividadOperacionSeleccionada}
-                    disabled={actividadesRegistradasCliente.length === 0}
+                    disabled={!clienteOperacionSeleccionado || actividadesRegistradasCliente.length === 0}
                   >
                     <SelectTrigger className="bg-white">
                       <SelectValue placeholder="Actividad vinculada en expediente" />
@@ -4240,7 +4254,9 @@ const cambiarMesCalendario = (delta: number) => {
                         ))
                       ) : (
                         <div className="px-3 py-2 text-sm text-muted-foreground">
-                          Solo aparecen actividades registradas en el expediente del cliente.
+                          {clienteOperacionSeleccionado
+                            ? "No hay actividades registradas en el expediente. Selecciona una para continuar."
+                            : "Selecciona un cliente para ver actividades disponibles."}
                         </div>
                       )}
                     </SelectContent>
@@ -4328,7 +4344,9 @@ const cambiarMesCalendario = (delta: number) => {
                   Sincronizar con la captura guiada
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  Solo se muestran actividades vulnerables registradas en el expediente del cliente.
+                  {actividadRegistroOperacion.tieneRegistro
+                    ? "Solo se muestran actividades vulnerables registradas en el expediente del cliente."
+                    : "Si el expediente no tiene actividad registrada, selecciona una manualmente para sincronizar."}
                 </p>
               </div>
           </CardContent>
