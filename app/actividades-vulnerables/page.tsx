@@ -88,6 +88,16 @@ function normalizarBusqueda(valor: string) {
     .trim()
 }
 
+function findActividadOperacionLabel(fraccion: string | undefined) {
+  if (!fraccion) return ""
+  const prefix = `Fracción ${fraccion}`.toLowerCase()
+  return (
+    ACTIVIDAD_VULNERABLE_OPERACIONES.find((opcion) =>
+      opcion.toLowerCase().startsWith(prefix),
+    ) ?? ""
+  )
+}
+
 const LEGACY_CLIENTE_TIPO_MAP: Record<string, ClienteTipoOption["value"]> = {
   pfn: "pf_residente",
   pfe: "pf_visitante",
@@ -740,6 +750,8 @@ interface ExpedienteDetalle {
   tipoCliente?: string
   detalleTipoCliente?: string
   responsable?: string
+  sujetoObligadoNombre?: string
+  sujetoObligadoRfc?: string
   claveSujetoObligado?: string
   claveActividadVulnerable?: string
   identificacion?: Record<string, string>
@@ -1290,6 +1302,18 @@ function sanitizeExpediente(raw: any): ExpedienteDetalle | null {
     detalleTipoCliente:
       typeof raw.detalleTipoCliente === "string" ? raw.detalleTipoCliente : undefined,
     responsable: typeof raw.responsable === "string" ? raw.responsable : undefined,
+    sujetoObligadoNombre:
+      typeof raw.sujetoObligadoNombre === "string"
+        ? raw.sujetoObligadoNombre
+        : typeof raw.expedienteEui?.sujetoObligadoNombre === "string"
+          ? raw.expedienteEui.sujetoObligadoNombre
+          : undefined,
+    sujetoObligadoRfc:
+      typeof raw.sujetoObligadoRfc === "string"
+        ? raw.sujetoObligadoRfc
+        : typeof raw.expedienteEui?.sujetoObligadoRfc === "string"
+          ? raw.expedienteEui.sujetoObligadoRfc
+          : undefined,
     claveSujetoObligado:
       typeof raw.claveSujetoObligado === "string" ? raw.claveSujetoObligado : undefined,
     claveActividadVulnerable:
@@ -1702,6 +1726,19 @@ export default function ActividadesVulnerablesPage() {
   const [busquedaCiudadInmueble, setBusquedaCiudadInmueble] = useState("")
   const [busquedaColoniaInmueble, setBusquedaColoniaInmueble] = useState("")
   const demoCargaRef = useRef(false)
+  const autoRellenoOperacionRef = useRef<{
+    sujetoNombre: string
+    sujetoRfc: string
+    clienteNombre: string
+    clienteRfc: string
+    actividad: string
+  }>({
+    sujetoNombre: "",
+    sujetoRfc: "",
+    clienteNombre: "",
+    clienteRfc: "",
+    actividad: "",
+  })
 
   const actualizarInmuebleForm = useCallback(
     (campo: keyof DatosInmuebleFormState, valor: string) => {
@@ -2083,6 +2120,14 @@ export default function ActividadesVulnerablesPage() {
 
   const actividadesRegistradasCliente = actividadRegistroOperacion.actividades
 
+  const expedienteClienteOperacion = useMemo(
+    () =>
+      expedientesDisponibles.find(
+        (expediente) => expediente.rfc === clienteOperacionSeleccionado,
+      ) ?? null,
+    [clienteOperacionSeleccionado, expedientesDisponibles],
+  )
+
   const actividadOperacionDetalle = useMemo(
     () =>
       actividadesRegistradasCliente.find(
@@ -2295,6 +2340,114 @@ export default function ActividadesVulnerablesPage() {
       setActividadOperacionSeleccionada(actividadesRegistradasCliente[0].key)
     }
   }, [actividadOperacionSeleccionada, actividadesRegistradasCliente])
+
+  const datosAutorellenoOperacion = useMemo(() => {
+    if (!clienteOperacionSeleccionado || !expedienteClienteOperacion) {
+      return null
+    }
+
+    const sujetoNombreDisponible =
+      expedienteClienteOperacion.sujetoObligadoNombre ??
+      expedienteClienteOperacion.responsable ??
+      ""
+    const sujetoNombre =
+      sujetoNombreDisponible ||
+      sujetosObligadosDisponibles.find((item) => item.value === sujetoObligadoOperacion)?.label ||
+      ""
+    const sujetoRfc =
+      expedienteClienteOperacion.sujetoObligadoRfc ??
+      (typeof expedienteClienteOperacion.identificacion?.rfc === "string"
+        ? expedienteClienteOperacion.identificacion.rfc
+        : "")
+    const clienteNombre = expedienteClienteOperacion.nombre ?? expedienteClienteOperacion.rfc
+    const clienteRfc = expedienteClienteOperacion.rfc
+    const actividad =
+      findActividadOperacionLabel(actividadOperacionDetalle?.fraccion) || actividadVulnerableOperacion
+
+    return {
+      sujetoNombre,
+      sujetoRfc,
+      clienteNombre,
+      clienteRfc,
+      actividad,
+    }
+  }, [
+    clienteOperacionSeleccionado,
+    expedienteClienteOperacion,
+    actividadOperacionDetalle,
+    actividadVulnerableOperacion,
+    sujetosObligadosDisponibles,
+    sujetoObligadoOperacion,
+  ])
+
+  useEffect(() => {
+    const autoPrevio = autoRellenoOperacionRef.current
+
+    if (!datosAutorellenoOperacion) {
+      if (sujetoObligadoOperacionNombre === autoPrevio.sujetoNombre) {
+        setSujetoObligadoOperacionNombre("")
+      }
+      if (sujetoObligadoOperacionRfc === autoPrevio.sujetoRfc) {
+        setSujetoObligadoOperacionRfc("")
+      }
+      if (clienteOperacionNombre === autoPrevio.clienteNombre) {
+        setClienteOperacionNombre("")
+      }
+      if (clienteOperacionRfc === autoPrevio.clienteRfc) {
+        setClienteOperacionRfc("")
+      }
+      if (actividadVulnerableOperacion === autoPrevio.actividad) {
+        setActividadVulnerableOperacion("")
+      }
+      autoRellenoOperacionRef.current = {
+        sujetoNombre: "",
+        sujetoRfc: "",
+        clienteNombre: "",
+        clienteRfc: "",
+        actividad: "",
+      }
+      return
+    }
+
+    const nextAuto = {
+      sujetoNombre: datosAutorellenoOperacion.sujetoNombre,
+      sujetoRfc: datosAutorellenoOperacion.sujetoRfc.toUpperCase(),
+      clienteNombre: datosAutorellenoOperacion.clienteNombre,
+      clienteRfc: datosAutorellenoOperacion.clienteRfc.toUpperCase(),
+      actividad: datosAutorellenoOperacion.actividad,
+    }
+
+    if (
+      !sujetoObligadoOperacionNombre ||
+      sujetoObligadoOperacionNombre === autoPrevio.sujetoNombre
+    ) {
+      setSujetoObligadoOperacionNombre(nextAuto.sujetoNombre)
+    }
+    if (
+      !sujetoObligadoOperacionRfc ||
+      sujetoObligadoOperacionRfc === autoPrevio.sujetoRfc
+    ) {
+      setSujetoObligadoOperacionRfc(nextAuto.sujetoRfc)
+    }
+    if (!clienteOperacionNombre || clienteOperacionNombre === autoPrevio.clienteNombre) {
+      setClienteOperacionNombre(nextAuto.clienteNombre)
+    }
+    if (!clienteOperacionRfc || clienteOperacionRfc === autoPrevio.clienteRfc) {
+      setClienteOperacionRfc(nextAuto.clienteRfc)
+    }
+    if (!actividadVulnerableOperacion || actividadVulnerableOperacion === autoPrevio.actividad) {
+      setActividadVulnerableOperacion(nextAuto.actividad)
+    }
+
+    autoRellenoOperacionRef.current = nextAuto
+  }, [
+    datosAutorellenoOperacion,
+    sujetoObligadoOperacionNombre,
+    sujetoObligadoOperacionRfc,
+    clienteOperacionNombre,
+    clienteOperacionRfc,
+    actividadVulnerableOperacion,
+  ])
 
   useEffect(() => {
     if (!inmuebleForm.codigoPostal) {
@@ -4399,6 +4552,9 @@ const cambiarMesCalendario = (delta: number) => {
                 />
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Estos datos se autocompletan desde el expediente seleccionado en la captura guiada para evitar doble captura.
+            </p>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
