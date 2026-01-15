@@ -439,7 +439,9 @@ export default function EbrPage() {
   const exportPdfReport = () => {
     const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" })
     const marginX = 40
-    let cursorY = 60
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const contentWidth = doc.internal.pageSize.getWidth() - marginX * 2
+    let cursorY = 56
     const lineHeight = 18
 
     const nombre = expedienteActual?.nombre ?? "Sin expediente asociado"
@@ -448,42 +450,73 @@ export default function EbrPage() {
       ? formatDate(new Date(savedEvaluation.updatedAt))
       : formatDate(new Date())
 
-    doc.setFontSize(16)
-    doc.text("Reporte EBR - Perfil del Sujeto Obligado", marginX, cursorY)
-    cursorY += 24
+    const ensureSpace = (space: number) => {
+      if (cursorY + space <= pageHeight - 40) return
+      doc.addPage()
+      cursorY = 56
+    }
 
-    doc.setFontSize(11)
+    doc.setFillColor(17, 24, 39)
+    doc.rect(0, 0, doc.internal.pageSize.getWidth(), 64, "F")
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(16)
+    doc.text("Reporte EBR - Perfil del Sujeto Obligado", marginX, 40)
+    doc.setFontSize(10)
+    doc.text(`Generado: ${ultimaActualizacion}`, marginX, 56)
+
+    doc.setTextColor(31, 41, 55)
+    cursorY = 86
+
+    doc.setFontSize(12)
+    doc.text("Identificación del sujeto obligado", marginX, cursorY)
+    cursorY += lineHeight
+    doc.setFontSize(10)
     doc.text(`Nombre: ${nombre}`, marginX, cursorY)
     cursorY += lineHeight
     doc.text(`RFC: ${rfc}`, marginX, cursorY)
     cursorY += lineHeight
-    doc.text(`Fecha de generación: ${ultimaActualizacion}`, marginX, cursorY)
-    cursorY += lineHeight
     doc.text(`Nivel de riesgo: ${riskLevel} (${scorePercent}%)`, marginX, cursorY)
+    cursorY += lineHeight
+    doc.text(`Puntaje total: ${totalScore} / ${maxScore}`, marginX, cursorY)
     cursorY += 24
 
+    ensureSpace(40)
     doc.setFontSize(12)
     doc.text("Detalle de respuestas", marginX, cursorY)
-    cursorY += 16
-    doc.setFontSize(10)
+    cursorY += 12
+    doc.setDrawColor(209, 213, 219)
+    doc.line(marginX, cursorY, marginX + contentWidth, cursorY)
+    cursorY += 12
 
+    doc.setFontSize(10)
     riskQuestions.forEach((question) => {
       const option = getSelectedOption(question)
-      const line = `${question.name}: ${option.label}`
-      doc.text(line, marginX, cursorY)
-      cursorY += lineHeight
-      if (cursorY > 760) {
-        doc.addPage()
-        cursorY = 60
-      }
+      const questionText = `${question.name}`
+      const answerText = option.label
+      const questionLines = doc.splitTextToSize(questionText, contentWidth * 0.45)
+      const answerLines = doc.splitTextToSize(answerText, contentWidth * 0.5)
+      const rowHeight = Math.max(questionLines.length, answerLines.length) * 14 + 10
+      ensureSpace(rowHeight + 12)
+
+      doc.setFillColor(243, 244, 246)
+      doc.rect(marginX, cursorY - 8, contentWidth, rowHeight, "F")
+      doc.setTextColor(31, 41, 55)
+      doc.text(questionLines, marginX + 8, cursorY + 6)
+      doc.setTextColor(55, 65, 81)
+      doc.text(answerLines, marginX + contentWidth * 0.5, cursorY + 6)
+      cursorY += rowHeight + 6
     })
 
-    cursorY += 8
-    doc.setFontSize(11)
-    doc.text("Observaciones:", marginX, cursorY)
-    cursorY += lineHeight
+    ensureSpace(80)
+    doc.setTextColor(31, 41, 55)
+    doc.setFontSize(12)
+    doc.text("Observaciones", marginX, cursorY)
+    cursorY += 12
+    doc.setDrawColor(209, 213, 219)
+    doc.line(marginX, cursorY, marginX + contentWidth, cursorY)
+    cursorY += 16
     doc.setFontSize(10)
-    const notesLines = doc.splitTextToSize(notes || "Sin observaciones.", 520)
+    const notesLines = doc.splitTextToSize(notes || "Sin observaciones.", contentWidth)
     doc.text(notesLines, marginX, cursorY)
 
     doc.save(`ebr-${rfc}.pdf`)
@@ -773,48 +806,68 @@ export default function EbrPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Reporte EBR</CardTitle>
-              <CardDescription>
+          <Card className="overflow-hidden border-border/60">
+            <CardHeader className="bg-gradient-to-r from-slate-900 to-slate-700 text-white">
+              <CardTitle className="text-lg">Reporte EBR</CardTitle>
+              <CardDescription className="text-slate-200">
                 Consolida el perfil del sujeto obligado y genera un PDF para auditorías y seguimiento.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-sm text-muted-foreground">Sujeto obligado</p>
-                  <p className="text-base font-medium text-gray-900">
+            <CardContent className="space-y-6 pt-6">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-lg border border-border bg-slate-50 p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Sujeto obligado</p>
+                  <p className="text-base font-semibold text-gray-900">
                     {expedienteActual?.nombre ?? "Sin expediente asociado"}
                   </p>
                   <p className="text-xs text-muted-foreground">{clienteSeleccionado || "Sin RFC"}</p>
                 </div>
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-sm text-muted-foreground">Resultado</p>
-                  <p className="text-base font-medium text-gray-900">
-                    Riesgo {riskLevel} ({scorePercent}%)
-                  </p>
-                  <p className="text-xs text-muted-foreground">
+                <div className="rounded-lg border border-border bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Resultado</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Badge className={riskBadgeStyles[riskLevel as keyof typeof riskBadgeStyles]}>
+                      Riesgo {riskLevel}
+                    </Badge>
+                    <span className="text-sm font-semibold text-gray-900">{scorePercent}%</span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
                     {savedEvaluation ? `Actualizado: ${formatDate(new Date(savedEvaluation.updatedAt))}` : "Sin guardar"}
                   </p>
                 </div>
+                <div className="rounded-lg border border-border bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Puntaje</p>
+                  <p className="text-base font-semibold text-gray-900">
+                    {totalScore} / {maxScore} puntos
+                  </p>
+                  <p className="text-xs text-muted-foreground">Referencia sobre el máximo posible.</p>
+                </div>
               </div>
 
-              <div className="rounded-lg border border-border p-4">
-                <p className="text-sm font-medium text-gray-900">Resumen de respuestas</p>
-                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+              <div className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-gray-900">Resumen de respuestas</p>
+                  <span className="text-xs text-muted-foreground">{riskQuestions.length} respuestas</span>
+                </div>
+                <div className="mt-3 grid gap-3 lg:grid-cols-2">
                   {riskQuestions.map((question) => {
                     const option = getSelectedOption(question)
                     return (
-                      <li key={`summary-${question.id}`}>
-                        <span className="font-medium text-gray-900">{question.name}:</span> {option.label}
-                      </li>
+                      <div key={`summary-${question.id}`} className="rounded-lg border border-border bg-white p-3">
+                        <p className="text-xs font-semibold text-gray-900">{question.name}</p>
+                        <p className="text-sm text-muted-foreground">{option.label}</p>
+                      </div>
                     )
                   })}
-                </ul>
+                </div>
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border p-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Exportación</p>
+                  <p className="text-xs text-muted-foreground">
+                    Descarga el reporte con detalle de preguntas y observaciones.
+                  </p>
+                </div>
                 <Button variant="outline" onClick={exportPdfReport}>
                   <FileText className="mr-2 h-4 w-4" />
                   Exportar reporte PDF
