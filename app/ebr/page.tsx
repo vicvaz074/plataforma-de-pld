@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { jsPDF } from "jspdf"
 import { useLanguage } from "@/lib/LanguageContext"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -13,12 +16,19 @@ import { Textarea } from "@/components/ui/textarea"
 import { AlertTriangle, CalendarClock, ClipboardCheck, FileText, ShieldCheck, TrendingUp } from "lucide-react"
 import { translations } from "@/lib/translations"
 
-interface RiskFactor {
+interface RiskOption {
+  value: string
+  label: string
+  score: number
+}
+
+interface RiskQuestion {
   id: string
   name: string
   description: string
-  weight: number
-  score: number
+  group: "caracteristicas" | "zonas"
+  options: RiskOption[]
+  selectedValue: string
 }
 
 interface ExpedienteDetalle {
@@ -44,58 +54,189 @@ interface OperacionCliente {
 
 interface StoredEvaluation {
   rfc: string
-  riskFactors: RiskFactor[]
+  riskQuestions: RiskQuestion[]
+  clientProfile: ClientProfile
   notes: string
   updatedAt: string
 }
+
+interface ClientProfile {
+  paisNacionalidad: string
+  paisResidencia: string
+  localidad: string
+  codigoPostal: string
+  tipoCliente: string
+  fechaConstitucion: string
+  edadRepresentante: string
+  sectorEconomico: string
+  giroActividad: string
+  domiciliosVirtuales: string
+}
+
+const clientTypeOptions: RiskOption[] = [
+  { value: "fisica", label: "Persona física", score: 1 },
+  { value: "moral", label: "Persona moral", score: 2 },
+  { value: "fideicomiso", label: "Fideicomiso", score: 3 },
+]
+
+const domiciliosVirtualesOptions: RiskOption[] = [
+  { value: "sin", label: "Sin domicilios virtuales", score: 1 },
+  { value: "parcial", label: "Uso parcial de domicilios virtuales", score: 2 },
+  { value: "principal", label: "Operación principalmente virtual", score: 3 },
+]
+
+const edadRepresentanteOptions: RiskOption[] = [
+  { value: "mayor-25", label: "Mayor o igual a 25 años", score: 1 },
+  { value: "18-24", label: "Entre 18 y 24 años", score: 2 },
+  { value: "menor-18", label: "Menor de 18 o sin validar", score: 3 },
+]
+
+const initialClientProfile: ClientProfile = {
+  paisNacionalidad: "mexico",
+  paisResidencia: "mexico",
+  localidad: "",
+  codigoPostal: "",
+  tipoCliente: "fisica",
+  fechaConstitucion: "",
+  edadRepresentante: "mayor-25",
+  sectorEconomico: "agropecuario",
+  giroActividad: "",
+  domiciliosVirtuales: "sin",
+}
+
 
 const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
 const OPERACIONES_STORAGE_KEY = "actividades_vulnerables_operaciones"
 const EBR_STORAGE_KEY = "ebr_evaluaciones"
 
-const scoreOptions = [
-  { value: "1", label: "Bajo (1)" },
-  { value: "2", label: "Bajo-Medio (2)" },
-  { value: "3", label: "Medio (3)" },
-  { value: "4", label: "Medio-Alto (4)" },
-  { value: "5", label: "Alto (5)" },
+const sectorEconomicoOptions: RiskOption[] = [
+  { value: "agropecuario", label: "Agropecuario (1)", score: 1 },
+  { value: "comercio", label: "Comercio minorista (1)", score: 1 },
+  { value: "manufactura", label: "Manufactura (2)", score: 2 },
+  { value: "servicios-profesionales", label: "Servicios profesionales (2)", score: 2 },
+  { value: "inmobiliario", label: "Inmobiliario (3)", score: 3 },
+  { value: "juegos-apuestas", label: "Juegos y apuestas (3)", score: 3 },
+  { value: "metales", label: "Metales/preciosos (3)", score: 3 },
+  { value: "criptoactivos", label: "Criptoactivos (3)", score: 3 },
 ]
 
-const initialRiskFactors: RiskFactor[] = [
+const countryOptions: RiskOption[] = [
+  { value: "mexico", label: "México (1)", score: 1 },
+  { value: "canada", label: "Canadá (1)", score: 1 },
+  { value: "estados-unidos", label: "Estados Unidos (1)", score: 1 },
+  { value: "espana", label: "España (1)", score: 1 },
+  { value: "alemania", label: "Alemania (1)", score: 1 },
+  { value: "brasil", label: "Brasil (2)", score: 2 },
+  { value: "colombia", label: "Colombia (2)", score: 2 },
+  { value: "argentina", label: "Argentina (2)", score: 2 },
+  { value: "peru", label: "Perú (2)", score: 2 },
+  { value: "chile", label: "Chile (2)", score: 2 },
+  { value: "rusia", label: "Rusia (3)", score: 3 },
+  { value: "venezuela", label: "Venezuela (3)", score: 3 },
+  { value: "nigeria", label: "Nigeria (3)", score: 3 },
+  { value: "afganistan", label: "Afganistán (3)", score: 3 },
+  { value: "siria", label: "Siria (3)", score: 3 },
+  { value: "corea-norte", label: "Corea del Norte (4)", score: 4 },
+  { value: "iran", label: "Irán (4)", score: 4 },
+  { value: "myanmar", label: "Myanmar (4)", score: 4 },
+]
+
+const initialRiskQuestions: RiskQuestion[] = [
   {
-    id: "rf-01",
-    name: "Perfil del cliente",
-    description: "Actividad económica, jurisdicción, estructura accionaria y antecedentes.",
-    weight: 30,
-    score: 3,
+    id: "so-tipo",
+    name: "Tipo de SO",
+    description: "Figura legal y complejidad de la estructura del sujeto obligado.",
+    group: "caracteristicas",
+    options: [
+      { value: "fisica", label: "Persona física (1)", score: 1 },
+      { value: "moral-nacional", label: "Persona moral nacional (2)", score: 2 },
+      { value: "moral-extranjera", label: "Persona moral extranjera o fideicomiso (3)", score: 3 },
+    ],
+    selectedValue: "fisica",
   },
   {
-    id: "rf-02",
-    name: "Producto o servicio",
-    description: "Nivel de exposición, complejidad operativa y tipo de transacción.",
-    weight: 25,
-    score: 2,
+    id: "so-constitucion",
+    name: "Fecha de Constitución o Nacimiento",
+    description: "Antigüedad del sujeto obligado.",
+    group: "caracteristicas",
+    options: [
+      { value: "mas-5", label: "Más de 5 años (1)", score: 1 },
+      { value: "1-5", label: "Entre 1 y 5 años (2)", score: 2 },
+      { value: "menos-1", label: "Menos de 1 año (3)", score: 3 },
+    ],
+    selectedValue: "mas-5",
   },
   {
-    id: "rf-03",
-    name: "Canal de distribución",
-    description: "Presencial, digital, intermediarios y controles de autenticación.",
-    weight: 20,
-    score: 3,
+    id: "so-edad",
+    name: "Edad del SO, apoderado o representante legal",
+    description: "Rango etario del apoderado o representante legal.",
+    group: "caracteristicas",
+    options: [
+      { value: "mayor-25", label: "Mayor o igual a 25 años (1)", score: 1 },
+      { value: "18-24", label: "Entre 18 y 24 años (2)", score: 2 },
+      { value: "menor-18", label: "Menor de 18 o sin validar (3)", score: 3 },
+    ],
+    selectedValue: "mayor-25",
   },
   {
-    id: "rf-04",
-    name: "Operación y volumen",
-    description: "Frecuencia, montos y señales de transacciones inusuales.",
-    weight: 15,
-    score: 4,
+    id: "so-sector",
+    name: "Sector Económico",
+    description: "Nivel de exposición del sector a riesgos LA/FT.",
+    group: "caracteristicas",
+    options: sectorEconomicoOptions,
+    selectedValue: "agropecuario",
   },
   {
-    id: "rf-05",
-    name: "Historial de cumplimiento",
-    description: "Alertas previas, hallazgos de auditoría y observaciones regulatorias.",
-    weight: 10,
-    score: 2,
+    id: "so-domicilios",
+    name: "Domicilios Virtuales",
+    description: "Nivel de operación remota o digital del sujeto obligado.",
+    group: "caracteristicas",
+    options: [
+      { value: "sin", label: "Sin domicilios virtuales (1)", score: 1 },
+      { value: "parcial", label: "Uso parcial de domicilios virtuales (2)", score: 2 },
+      { value: "principal", label: "Operación principalmente virtual (3)", score: 3 },
+    ],
+    selectedValue: "sin",
+  },
+  {
+    id: "so-destino",
+    name: "Destino de los Recursos",
+    description: "Finalidad y destino operativo de los recursos.",
+    group: "caracteristicas",
+    options: [
+      { value: "propio", label: "Operación propia/local (1)", score: 1 },
+      { value: "mixto", label: "Destino mixto (2)", score: 2 },
+      { value: "terceros", label: "Transferencias a terceros o exterior (3)", score: 3 },
+    ],
+    selectedValue: "propio",
+  },
+  {
+    id: "so-pep",
+    name: "Persona Políticamente Expuesta",
+    description: "Condición PEP del sujeto obligado o su representante legal.",
+    group: "caracteristicas",
+    options: [
+      { value: "no", label: "No PEP (1)", score: 1 },
+      { value: "nacional", label: "PEP nacional (2)", score: 2 },
+      { value: "extranjera", label: "PEP extranjero o de alto perfil (3)", score: 3 },
+    ],
+    selectedValue: "no",
+  },
+  {
+    id: "so-nacionalidad",
+    name: "País de Nacionalidad",
+    description: "Jurisdicción de nacionalidad y riesgo geográfico.",
+    group: "zonas",
+    options: countryOptions,
+    selectedValue: "mexico",
+  },
+  {
+    id: "so-residencia",
+    name: "País de Residencia",
+    description: "Residencia fiscal o habitual y riesgo geográfico.",
+    group: "zonas",
+    options: countryOptions,
+    selectedValue: "mexico",
   },
 ]
 
@@ -118,36 +259,11 @@ const safeDate = (value?: string) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
-const buildRiskFactorsFromData = (operaciones: OperacionCliente[], expediente?: ExpedienteDetalle | null) => {
-  const totalMonto = operaciones.reduce((sum, operacion) => sum + (Number.isFinite(operacion.monto) ? operacion.monto : 0), 0)
-  const alertas = operaciones.filter((operacion) => Boolean(operacion.alerta) || operacion.umbralStatus === "aviso")
-  const tieneIdentificacion = operaciones.some((operacion) => operacion.umbralStatus === "identificacion")
-  const actividadesUnicas = new Set(operaciones.map((operacion) => operacion.actividadNombre)).size
-  const tipoCliente = expediente?.tipoCliente?.toLowerCase() ?? ""
+const getSelectedOption = (question: RiskQuestion) =>
+  question.options.find((option) => option.value === question.selectedValue) ?? question.options[0]
 
-  const perfilScore = tipoCliente.includes("moral") ? 3 : tipoCliente.includes("fideicomiso") ? 4 : 2
-  const productoScore = actividadesUnicas >= 3 ? 4 : actividadesUnicas === 2 ? 3 : 2
-  const canalScore = operaciones.length >= 6 ? 4 : operaciones.length >= 3 ? 3 : 2
-  const volumenScore = totalMonto >= 1000000 ? 5 : totalMonto >= 500000 ? 4 : totalMonto >= 100000 ? 3 : 2
-  const cumplimientoScore = alertas.length > 0 ? 4 : tieneIdentificacion ? 3 : 2
-
-  return initialRiskFactors.map((factor) => {
-    switch (factor.id) {
-      case "rf-01":
-        return { ...factor, score: perfilScore }
-      case "rf-02":
-        return { ...factor, score: productoScore }
-      case "rf-03":
-        return { ...factor, score: canalScore }
-      case "rf-04":
-        return { ...factor, score: volumenScore }
-      case "rf-05":
-        return { ...factor, score: cumplimientoScore }
-      default:
-        return factor
-    }
-  })
-}
+const getMaxScore = (question: RiskQuestion) =>
+  question.options.reduce((max, option) => (option.score > max ? option.score : max), 0)
 
 export default function EbrPage() {
   const { language } = useLanguage()
@@ -156,7 +272,8 @@ export default function EbrPage() {
   const [operaciones, setOperaciones] = useState<OperacionCliente[]>([])
   const [evaluacionesGuardadas, setEvaluacionesGuardadas] = useState<Record<string, StoredEvaluation>>({})
   const [clienteSeleccionado, setClienteSeleccionado] = useState("")
-  const [riskFactors, setRiskFactors] = useState<RiskFactor[]>(initialRiskFactors)
+  const [riskQuestions, setRiskQuestions] = useState<RiskQuestion[]>(initialRiskQuestions)
+  const [clientProfile, setClientProfile] = useState<ClientProfile>(initialClientProfile)
   const [notes, setNotes] = useState("")
 
   useEffect(() => {
@@ -243,29 +360,33 @@ export default function EbrPage() {
     if (!clienteSeleccionado) return
     const stored = evaluacionesGuardadas[clienteSeleccionado]
     if (stored) {
-      setRiskFactors(stored.riskFactors)
+      setRiskQuestions(stored.riskQuestions)
+      setClientProfile(stored.clientProfile ?? initialClientProfile)
       setNotes(stored.notes)
       return
     }
 
-    setRiskFactors(buildRiskFactorsFromData(operacionesCliente, expedienteActual))
+    setRiskQuestions(initialRiskQuestions)
+    setClientProfile(initialClientProfile)
     setNotes("")
   }, [clienteSeleccionado, evaluacionesGuardadas, operacionesCliente, expedienteActual])
 
-  const totalWeight = useMemo(
-    () => riskFactors.reduce((sum, factor) => sum + factor.weight, 0),
-    [riskFactors],
-  )
+  const savedEvaluation = evaluacionesGuardadas[clienteSeleccionado]
 
   const totalScore = useMemo(
-    () => riskFactors.reduce((sum, factor) => sum + factor.weight * factor.score, 0),
-    [riskFactors],
+    () => riskQuestions.reduce((sum, question) => sum + getSelectedOption(question).score, 0),
+    [riskQuestions],
+  )
+
+  const maxScore = useMemo(
+    () => riskQuestions.reduce((sum, question) => sum + getMaxScore(question), 0),
+    [riskQuestions],
   )
 
   const scorePercent = useMemo(() => {
-    const maxScore = totalWeight * 5
+    if (!maxScore) return 0
     return Math.round((totalScore / maxScore) * 100)
-  }, [totalScore, totalWeight])
+  }, [totalScore, maxScore])
 
   const riskLevel = useMemo(() => {
     if (scorePercent < 35) return "Bajo"
@@ -280,8 +401,8 @@ export default function EbrPage() {
   }
 
   const updateRiskScore = (id: string, value: string) => {
-    setRiskFactors((prev) =>
-      prev.map((factor) => (factor.id === id ? { ...factor, score: Number(value) } : factor)),
+    setRiskQuestions((prev) =>
+      prev.map((question) => (question.id === id ? { ...question, selectedValue: value } : question)),
     )
   }
 
@@ -355,12 +476,157 @@ export default function EbrPage() {
     if (!clienteSeleccionado) return
     const updated: StoredEvaluation = {
       rfc: clienteSeleccionado,
-      riskFactors,
+      riskQuestions,
+      clientProfile,
       notes,
       updatedAt: new Date().toISOString(),
     }
     const next = { ...evaluacionesGuardadas, [clienteSeleccionado]: updated }
     setEvaluacionesGuardadas(next)
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(EBR_STORAGE_KEY, JSON.stringify(next))
+    }
+  }
+
+  const exportPdfReport = () => {
+    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" })
+    const marginX = 40
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const contentWidth = doc.internal.pageSize.getWidth() - marginX * 2
+    let cursorY = 56
+    const lineHeight = 18
+
+    const nombre = expedienteActual?.nombre ?? "Sin expediente asociado"
+    const rfc = clienteSeleccionado || "Sin RFC"
+    const ultimaActualizacion = savedEvaluation?.updatedAt
+      ? formatDate(new Date(savedEvaluation.updatedAt))
+      : formatDate(new Date())
+    const nacionalidadLabel =
+      countryOptions.find((option) => option.value === clientProfile.paisNacionalidad)?.label ?? "Sin definir"
+    const residenciaLabel =
+      countryOptions.find((option) => option.value === clientProfile.paisResidencia)?.label ?? "Sin definir"
+    const tipoClienteLabel =
+      clientTypeOptions.find((option) => option.value === clientProfile.tipoCliente)?.label ?? "Sin definir"
+    const sectorLabel =
+      sectorEconomicoOptions.find((option) => option.value === clientProfile.sectorEconomico)?.label ?? "Sin definir"
+    const domiciliosLabel =
+      domiciliosVirtualesOptions.find((option) => option.value === clientProfile.domiciliosVirtuales)?.label ??
+      "Sin definir"
+    const edadLabel =
+      edadRepresentanteOptions.find((option) => option.value === clientProfile.edadRepresentante)?.label ??
+      "Sin definir"
+
+    const ensureSpace = (space: number) => {
+      if (cursorY + space <= pageHeight - 40) return
+      doc.addPage()
+      cursorY = 56
+    }
+
+    doc.setFillColor(17, 24, 39)
+    doc.rect(0, 0, doc.internal.pageSize.getWidth(), 64, "F")
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(16)
+    doc.text("Reporte EBR - Perfil del Sujeto Obligado", marginX, 40)
+    doc.setFontSize(10)
+    doc.text(`Generado: ${ultimaActualizacion}`, marginX, 56)
+
+    doc.setTextColor(31, 41, 55)
+    cursorY = 86
+
+    doc.setFontSize(12)
+    doc.text("Identificación del sujeto obligado", marginX, cursorY)
+    cursorY += lineHeight
+    doc.setFontSize(10)
+    doc.text(`Nombre: ${nombre}`, marginX, cursorY)
+    cursorY += lineHeight
+    doc.text(`RFC: ${rfc}`, marginX, cursorY)
+    cursorY += lineHeight
+    doc.text(`Nivel de riesgo: ${riskLevel} (${scorePercent}%)`, marginX, cursorY)
+    cursorY += lineHeight
+    doc.text(`Puntaje total: ${totalScore} / ${maxScore}`, marginX, cursorY)
+    cursorY += 24
+
+    ensureSpace(120)
+    doc.setFontSize(12)
+    doc.text("Perfil del cliente", marginX, cursorY)
+    cursorY += 12
+    doc.setDrawColor(209, 213, 219)
+    doc.line(marginX, cursorY, marginX + contentWidth, cursorY)
+    cursorY += 16
+    doc.setFontSize(10)
+    const profileRows = [
+      ["País de nacionalidad", nacionalidadLabel],
+      ["País de residencia", residenciaLabel],
+      ["Localidad", clientProfile.localidad || "Sin definir"],
+      ["Código Postal", clientProfile.codigoPostal || "Sin definir"],
+      ["Tipo de cliente", tipoClienteLabel],
+      ["Fecha de constitución o nacimiento", clientProfile.fechaConstitucion || "Sin definir"],
+      ["Edad del representante", edadLabel],
+      ["Sector económico", sectorLabel],
+      ["Giro / actividad económica", clientProfile.giroActividad || "Sin definir"],
+      ["Domicilios virtuales", domiciliosLabel],
+    ]
+
+    profileRows.forEach(([label, value]) => {
+      const rowText = `${label}: ${value}`
+      const lines = doc.splitTextToSize(rowText, contentWidth)
+      ensureSpace(lines.length * 14 + 8)
+      doc.text(lines, marginX, cursorY)
+      cursorY += lines.length * 14 + 4
+    })
+
+    cursorY += 12
+    ensureSpace(40)
+    doc.setFontSize(12)
+    doc.text("Detalle de respuestas", marginX, cursorY)
+    cursorY += 12
+    doc.setDrawColor(209, 213, 219)
+    doc.line(marginX, cursorY, marginX + contentWidth, cursorY)
+    cursorY += 12
+
+    doc.setFontSize(10)
+    riskQuestions.forEach((question) => {
+      const option = getSelectedOption(question)
+      const questionText = `${question.name}`
+      const answerText = option.label
+      const questionLines = doc.splitTextToSize(questionText, contentWidth * 0.45)
+      const answerLines = doc.splitTextToSize(answerText, contentWidth * 0.5)
+      const rowHeight = Math.max(questionLines.length, answerLines.length) * 14 + 10
+      ensureSpace(rowHeight + 12)
+
+      doc.setFillColor(243, 244, 246)
+      doc.rect(marginX, cursorY - 8, contentWidth, rowHeight, "F")
+      doc.setTextColor(31, 41, 55)
+      doc.text(questionLines, marginX + 8, cursorY + 6)
+      doc.setTextColor(55, 65, 81)
+      doc.text(answerLines, marginX + contentWidth * 0.5, cursorY + 6)
+      cursorY += rowHeight + 6
+    })
+
+    ensureSpace(80)
+    doc.setTextColor(31, 41, 55)
+    doc.setFontSize(12)
+    doc.text("Observaciones", marginX, cursorY)
+    cursorY += 12
+    doc.setDrawColor(209, 213, 219)
+    doc.line(marginX, cursorY, marginX + contentWidth, cursorY)
+    cursorY += 16
+    doc.setFontSize(10)
+    const notesLines = doc.splitTextToSize(notes || "Sin observaciones.", contentWidth)
+    doc.text(notesLines, marginX, cursorY)
+
+    doc.save(`ebr-${rfc}.pdf`)
+  }
+
+  const deleteEvaluation = () => {
+    if (!clienteSeleccionado) return
+    if (!evaluacionesGuardadas[clienteSeleccionado]) return
+    const next = { ...evaluacionesGuardadas }
+    delete next[clienteSeleccionado]
+    setEvaluacionesGuardadas(next)
+    setRiskQuestions(initialRiskQuestions)
+    setClientProfile(initialClientProfile)
+    setNotes("")
     if (typeof window !== "undefined") {
       window.localStorage.setItem(EBR_STORAGE_KEY, JSON.stringify(next))
     }
@@ -388,7 +654,10 @@ export default function EbrPage() {
           </Button>
           <Button onClick={saveEvaluation}>
             <ClipboardCheck className="mr-2 h-4 w-4" />
-            Guardar evaluación
+            {savedEvaluation ? "Actualizar evaluación" : "Guardar evaluación"}
+          </Button>
+          <Button variant="destructive" onClick={deleteEvaluation} disabled={!savedEvaluation}>
+            Borrar evaluación
           </Button>
         </div>
       </div>
@@ -400,45 +669,54 @@ export default function EbrPage() {
             La EBR reutiliza el expediente único y las operaciones registradas para construir la matriz de riesgo.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-gray-900">Cliente seleccionado</p>
-            <Select value={clienteSeleccionado} onValueChange={setClienteSeleccionado}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona un cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                {clientesDisponibles.map((cliente) => (
-                  <SelectItem key={cliente.rfc} value={cliente.rfc}>
-                    {cliente.nombre} ({cliente.rfc})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {clienteSeleccionado
-                ? `${operacionesCliente.length} operaciones vinculadas`
-                : "Sin cliente seleccionado"}
-            </p>
-          </div>
-          <div className="rounded-lg border border-border p-4">
-            <p className="text-sm text-muted-foreground">Expediente EUI</p>
-            <p className="text-base font-medium text-gray-900">
-              {expedienteActual ? expedienteActual.nombre : "Pendiente de integración"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {expedienteActual?.tipoCliente ?? "Sin tipo definido"}
-            </p>
-          </div>
-          <div className="rounded-lg border border-border p-4">
-            <p className="text-sm text-muted-foreground">Operaciones recientes</p>
-            <p className="text-base font-medium text-gray-900">{operacionesCliente.length}</p>
-            <p className="text-xs text-muted-foreground">
-              {ultimoMovimiento ? `Último movimiento: ${formatDate(ultimoMovimiento)}` : "Sin operaciones aún"}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+          <CardContent className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-900">Cliente seleccionado</p>
+              <Select value={clienteSeleccionado} onValueChange={setClienteSeleccionado}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clientesDisponibles.map((cliente) => (
+                    <SelectItem key={cliente.rfc} value={cliente.rfc}>
+                      {cliente.nombre} ({cliente.rfc})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {clienteSeleccionado
+                  ? `${operacionesCliente.length} operaciones vinculadas`
+                  : "Sin cliente seleccionado"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border p-4">
+              <p className="text-sm text-muted-foreground">Expediente EUI</p>
+              <p className="text-base font-medium text-gray-900">
+                {expedienteActual ? expedienteActual.nombre : "Pendiente de integración"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {expedienteActual?.tipoCliente ?? "Sin tipo definido"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border p-4">
+              <p className="text-sm text-muted-foreground">Operaciones recientes</p>
+              <p className="text-base font-medium text-gray-900">{operacionesCliente.length}</p>
+              <p className="text-xs text-muted-foreground">
+                {ultimoMovimiento ? `Último movimiento: ${formatDate(ultimoMovimiento)}` : "Sin operaciones aún"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border p-4 md:col-span-3">
+              <p className="text-sm text-muted-foreground">Evaluación guardada</p>
+              <p className="text-base font-medium text-gray-900">
+                {savedEvaluation ? "Disponible para edición" : "Sin evaluación guardada"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {savedEvaluation ? `Última actualización: ${formatDate(new Date(savedEvaluation.updatedAt))}` : ""}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
@@ -493,7 +771,7 @@ export default function EbrPage() {
 
       <Tabs defaultValue="matriz" className="space-y-6">
         <TabsList className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3">
-          <TabsTrigger value="matriz">Matriz de riesgo</TabsTrigger>
+          <TabsTrigger value="matriz">Perfil del sujeto obligado</TabsTrigger>
           <TabsTrigger value="mitigacion">Plan de mitigación</TabsTrigger>
           <TabsTrigger value="seguimiento">Seguimiento</TabsTrigger>
         </TabsList>
@@ -501,27 +779,139 @@ export default function EbrPage() {
         <TabsContent value="matriz" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Matriz de evaluación</CardTitle>
-              <CardDescription>Actualiza el puntaje de cada factor para recalcular el riesgo global.</CardDescription>
+              <CardTitle>Perfil de Riesgo del Sujeto Obligado</CardTitle>
+              <CardDescription>
+                Captura las preguntas clave del sujeto obligado con puntajes de 1 a 3; los países
+                Corea del Norte, Irán y Myanmar se califican con 4 puntos.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {riskFactors.map((factor) => (
-                <div
-                  key={factor.id}
-                  className="rounded-lg border border-border p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
-                >
-                  <div className="space-y-1">
-                    <p className="font-medium text-gray-900">{factor.name}</p>
-                    <p className="text-sm text-muted-foreground">{factor.description}</p>
+            <CardContent className="space-y-6">
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-sm text-muted-foreground">Nombre del Sujeto Obligado</p>
+                <p className="text-base font-medium text-gray-900">
+                  {expedienteActual?.nombre ?? "Sin expediente asociado"}
+                </p>
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Características del Sujeto Obligado</p>
+                    <p className="text-sm text-muted-foreground">
+                      Perfil operativo, legal y de cumplimiento del sujeto obligado.
+                    </p>
                   </div>
-                  <div className="flex flex-col gap-2 md:items-end">
-                    <span className="text-xs text-muted-foreground">Peso: {factor.weight}%</span>
-                    <Select value={String(factor.score)} onValueChange={(value) => updateRiskScore(factor.id, value)}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Selecciona" />
+                  {riskQuestions
+                    .filter((question) => question.group === "caracteristicas")
+                    .map((question) => (
+                      <div
+                        key={question.id}
+                        className="rounded-lg border border-border p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+                      >
+                        <div className="space-y-1">
+                          <p className="font-medium text-gray-900">{question.name}</p>
+                          <p className="text-sm text-muted-foreground">{question.description}</p>
+                        </div>
+                        <div className="flex flex-col gap-2 md:items-end">
+                          <span className="text-xs text-muted-foreground">
+                            Puntaje: {getSelectedOption(question).score}
+                          </span>
+                          <Select
+                            value={question.selectedValue}
+                            onValueChange={(value) => updateRiskScore(question.id, value)}
+                          >
+                            <SelectTrigger className="w-[220px]">
+                              <SelectValue placeholder="Selecciona" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {question.options.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      Zonas y Áreas Geográficas en que opera el Sujeto Obligado
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Países de nacionalidad y residencia con mayor exposición geográfica.
+                    </p>
+                  </div>
+                  {riskQuestions
+                    .filter((question) => question.group === "zonas")
+                    .map((question) => (
+                      <div
+                        key={question.id}
+                        className="rounded-lg border border-border p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+                      >
+                        <div className="space-y-1">
+                          <p className="font-medium text-gray-900">{question.name}</p>
+                          <p className="text-sm text-muted-foreground">{question.description}</p>
+                        </div>
+                        <div className="flex flex-col gap-2 md:items-end">
+                          <span className="text-xs text-muted-foreground">
+                            Puntaje: {getSelectedOption(question).score}
+                          </span>
+                          <Select
+                            value={question.selectedValue}
+                            onValueChange={(value) => updateRiskScore(question.id, value)}
+                          >
+                            <SelectTrigger className="w-[220px]">
+                              <SelectValue placeholder="Selecciona" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {question.options.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg bg-muted/50 p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Puntaje total</p>
+                  <p className="text-2xl font-semibold text-gray-900">{scorePercent}%</p>
+                </div>
+                <Badge className={riskBadgeStyles[riskLevel as keyof typeof riskBadgeStyles]}>
+                  Riesgo {riskLevel}
+                </Badge>
+              </div>
+
+              <Card className="border-dashed">
+                <CardHeader>
+                  <CardTitle className="text-base">Perfil del cliente</CardTitle>
+                  <CardDescription>
+                    Captura la información complementaria del cliente para la evaluación EBR.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>País de Nacionalidad</Label>
+                    <Select
+                      value={clientProfile.paisNacionalidad}
+                      onValueChange={(value) =>
+                        setClientProfile((prev) => ({ ...prev, paisNacionalidad: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona país" />
                       </SelectTrigger>
                       <SelectContent>
-                        {scoreOptions.map((option) => (
+                        {countryOptions.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
                           </SelectItem>
@@ -529,18 +919,146 @@ export default function EbrPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-              ))}
-
-              <div className="rounded-lg bg-muted/50 p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Puntaje ponderado total</p>
-                  <p className="text-2xl font-semibold text-gray-900">{scorePercent}%</p>
-                </div>
-                <Badge className={riskBadgeStyles[riskLevel as keyof typeof riskBadgeStyles]}>
-                  Riesgo {riskLevel}
-                </Badge>
-              </div>
+                  <div className="space-y-2">
+                    <Label>País de Residencia</Label>
+                    <Select
+                      value={clientProfile.paisResidencia}
+                      onValueChange={(value) =>
+                        setClientProfile((prev) => ({ ...prev, paisResidencia: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona país" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {countryOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Localidad</Label>
+                    <Input
+                      value={clientProfile.localidad}
+                      onChange={(event) =>
+                        setClientProfile((prev) => ({ ...prev, localidad: event.target.value }))
+                      }
+                      placeholder="Ciudad o municipio"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Código Postal</Label>
+                    <Input
+                      value={clientProfile.codigoPostal}
+                      onChange={(event) =>
+                        setClientProfile((prev) => ({ ...prev, codigoPostal: event.target.value }))
+                      }
+                      placeholder="CP"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tipos de Clientes</Label>
+                    <Select
+                      value={clientProfile.tipoCliente}
+                      onValueChange={(value) => setClientProfile((prev) => ({ ...prev, tipoCliente: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clientTypeOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Fecha de Constitución o Nacimiento</Label>
+                    <Input
+                      type="date"
+                      value={clientProfile.fechaConstitucion}
+                      onChange={(event) =>
+                        setClientProfile((prev) => ({ ...prev, fechaConstitucion: event.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Edad del SO, apoderado o representante legal</Label>
+                    <Select
+                      value={clientProfile.edadRepresentante}
+                      onValueChange={(value) =>
+                        setClientProfile((prev) => ({ ...prev, edadRepresentante: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona edad" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {edadRepresentanteOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Sector Económico</Label>
+                    <Select
+                      value={clientProfile.sectorEconomico}
+                      onValueChange={(value) =>
+                        setClientProfile((prev) => ({ ...prev, sectorEconomico: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona sector" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sectorEconomicoOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Giro - Actividad Económica</Label>
+                    <Input
+                      value={clientProfile.giroActividad}
+                      onChange={(event) =>
+                        setClientProfile((prev) => ({ ...prev, giroActividad: event.target.value }))
+                      }
+                      placeholder="Actividad principal"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Domicilios Virtuales</Label>
+                    <Select
+                      value={clientProfile.domiciliosVirtuales}
+                      onValueChange={(value) =>
+                        setClientProfile((prev) => ({ ...prev, domiciliosVirtuales: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona opción" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {domiciliosVirtualesOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
 
               <div className="space-y-2">
                 <p className="text-sm font-medium text-gray-900">Observaciones clave</p>
@@ -550,6 +1068,146 @@ export default function EbrPage() {
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden border-border/60">
+            <CardHeader className="bg-gradient-to-r from-slate-900 to-slate-700 text-white">
+              <CardTitle className="text-lg">Reporte EBR</CardTitle>
+              <CardDescription className="text-slate-200">
+                Consolida el perfil del sujeto obligado y genera un PDF para auditorías y seguimiento.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6 pt-6">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-lg border border-border bg-slate-50 p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Sujeto obligado</p>
+                  <p className="text-base font-semibold text-gray-900">
+                    {expedienteActual?.nombre ?? "Sin expediente asociado"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{clienteSeleccionado || "Sin RFC"}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Resultado</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Badge className={riskBadgeStyles[riskLevel as keyof typeof riskBadgeStyles]}>
+                      Riesgo {riskLevel}
+                    </Badge>
+                    <span className="text-sm font-semibold text-gray-900">{scorePercent}%</span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {savedEvaluation ? `Actualizado: ${formatDate(new Date(savedEvaluation.updatedAt))}` : "Sin guardar"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Puntaje</p>
+                  <p className="text-base font-semibold text-gray-900">
+                    {totalScore} / {maxScore} puntos
+                  </p>
+                  <p className="text-xs text-muted-foreground">Referencia sobre el máximo posible.</p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-gray-900">Resumen de respuestas</p>
+                  <span className="text-xs text-muted-foreground">{riskQuestions.length} respuestas</span>
+                </div>
+                <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                  {riskQuestions.map((question) => {
+                    const option = getSelectedOption(question)
+                    return (
+                      <div key={`summary-${question.id}`} className="rounded-lg border border-border bg-white p-3">
+                        <p className="text-xs font-semibold text-gray-900">{question.name}</p>
+                        <p className="text-sm text-muted-foreground">{option.label}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-white p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-gray-900">Perfil del cliente</p>
+                  <span className="text-xs text-muted-foreground">Información capturada</span>
+                </div>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">País de Nacionalidad</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {countryOptions.find((option) => option.value === clientProfile.paisNacionalidad)?.label ??
+                        "Sin definir"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">País de Residencia</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {countryOptions.find((option) => option.value === clientProfile.paisResidencia)?.label ??
+                        "Sin definir"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Localidad</p>
+                    <p className="text-sm font-medium text-gray-900">{clientProfile.localidad || "Sin definir"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Código Postal</p>
+                    <p className="text-sm font-medium text-gray-900">{clientProfile.codigoPostal || "Sin definir"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Tipos de Clientes</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {clientTypeOptions.find((option) => option.value === clientProfile.tipoCliente)?.label ??
+                        "Sin definir"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Fecha de Constitución o Nacimiento</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {clientProfile.fechaConstitucion || "Sin definir"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Edad del representante</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {edadRepresentanteOptions.find((option) => option.value === clientProfile.edadRepresentante)
+                        ?.label ?? "Sin definir"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Sector Económico</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {sectorEconomicoOptions.find((option) => option.value === clientProfile.sectorEconomico)
+                        ?.label ?? "Sin definir"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Giro - Actividad Económica</p>
+                    <p className="text-sm font-medium text-gray-900">{clientProfile.giroActividad || "Sin definir"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Domicilios Virtuales</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {domiciliosVirtualesOptions.find(
+                        (option) => option.value === clientProfile.domiciliosVirtuales,
+                      )?.label ?? "Sin definir"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border p-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Exportación</p>
+                  <p className="text-xs text-muted-foreground">
+                    Descarga el reporte con detalle de preguntas y observaciones.
+                  </p>
+                </div>
+                <Button variant="outline" onClick={exportPdfReport}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Exportar reporte PDF
+                </Button>
               </div>
             </CardContent>
           </Card>
