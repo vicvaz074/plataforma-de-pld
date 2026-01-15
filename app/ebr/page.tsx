@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { jsPDF } from "jspdf"
 import { useLanguage } from "@/lib/LanguageContext"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -435,6 +436,59 @@ export default function EbrPage() {
     }
   }
 
+  const exportPdfReport = () => {
+    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" })
+    const marginX = 40
+    let cursorY = 60
+    const lineHeight = 18
+
+    const nombre = expedienteActual?.nombre ?? "Sin expediente asociado"
+    const rfc = clienteSeleccionado || "Sin RFC"
+    const ultimaActualizacion = savedEvaluation?.updatedAt
+      ? formatDate(new Date(savedEvaluation.updatedAt))
+      : formatDate(new Date())
+
+    doc.setFontSize(16)
+    doc.text("Reporte EBR - Perfil del Sujeto Obligado", marginX, cursorY)
+    cursorY += 24
+
+    doc.setFontSize(11)
+    doc.text(`Nombre: ${nombre}`, marginX, cursorY)
+    cursorY += lineHeight
+    doc.text(`RFC: ${rfc}`, marginX, cursorY)
+    cursorY += lineHeight
+    doc.text(`Fecha de generación: ${ultimaActualizacion}`, marginX, cursorY)
+    cursorY += lineHeight
+    doc.text(`Nivel de riesgo: ${riskLevel} (${scorePercent}%)`, marginX, cursorY)
+    cursorY += 24
+
+    doc.setFontSize(12)
+    doc.text("Detalle de respuestas", marginX, cursorY)
+    cursorY += 16
+    doc.setFontSize(10)
+
+    riskQuestions.forEach((question) => {
+      const option = getSelectedOption(question)
+      const line = `${question.name}: ${option.label}`
+      doc.text(line, marginX, cursorY)
+      cursorY += lineHeight
+      if (cursorY > 760) {
+        doc.addPage()
+        cursorY = 60
+      }
+    })
+
+    cursorY += 8
+    doc.setFontSize(11)
+    doc.text("Observaciones:", marginX, cursorY)
+    cursorY += lineHeight
+    doc.setFontSize(10)
+    const notesLines = doc.splitTextToSize(notes || "Sin observaciones.", 520)
+    doc.text(notesLines, marginX, cursorY)
+
+    doc.save(`ebr-${rfc}.pdf`)
+  }
+
   const deleteEvaluation = () => {
     if (!clienteSeleccionado) return
     if (!evaluacionesGuardadas[clienteSeleccionado]) return
@@ -489,22 +543,22 @@ export default function EbrPage() {
             <div className="space-y-2">
               <p className="text-sm font-medium text-gray-900">Cliente seleccionado</p>
               <Select value={clienteSeleccionado} onValueChange={setClienteSeleccionado}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona un cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                {clientesDisponibles.map((cliente) => (
-                  <SelectItem key={cliente.rfc} value={cliente.rfc}>
-                    {cliente.nombre} ({cliente.rfc})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {clienteSeleccionado
-                ? `${operacionesCliente.length} operaciones vinculadas`
-                : "Sin cliente seleccionado"}
-            </p>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clientesDisponibles.map((cliente) => (
+                    <SelectItem key={cliente.rfc} value={cliente.rfc}>
+                      {cliente.nombre} ({cliente.rfc})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {clienteSeleccionado
+                  ? `${operacionesCliente.length} operaciones vinculadas`
+                  : "Sin cliente seleccionado"}
+              </p>
             </div>
             <div className="rounded-lg border border-border p-4">
               <p className="text-sm text-muted-foreground">Expediente EUI</p>
@@ -715,6 +769,56 @@ export default function EbrPage() {
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Reporte EBR</CardTitle>
+              <CardDescription>
+                Consolida el perfil del sujeto obligado y genera un PDF para auditorías y seguimiento.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-sm text-muted-foreground">Sujeto obligado</p>
+                  <p className="text-base font-medium text-gray-900">
+                    {expedienteActual?.nombre ?? "Sin expediente asociado"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{clienteSeleccionado || "Sin RFC"}</p>
+                </div>
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-sm text-muted-foreground">Resultado</p>
+                  <p className="text-base font-medium text-gray-900">
+                    Riesgo {riskLevel} ({scorePercent}%)
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {savedEvaluation ? `Actualizado: ${formatDate(new Date(savedEvaluation.updatedAt))}` : "Sin guardar"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-sm font-medium text-gray-900">Resumen de respuestas</p>
+                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  {riskQuestions.map((question) => {
+                    const option = getSelectedOption(question)
+                    return (
+                      <li key={`summary-${question.id}`}>
+                        <span className="font-medium text-gray-900">{question.name}:</span> {option.label}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Button variant="outline" onClick={exportPdfReport}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Exportar reporte PDF
+                </Button>
               </div>
             </CardContent>
           </Card>
