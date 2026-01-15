@@ -88,6 +88,27 @@ function normalizarBusqueda(valor: string) {
     .trim()
 }
 
+function normalizarFraccion(valor: string) {
+  return normalizarBusqueda(
+    valor
+      .replace(/^fraccion\s+/i, "")
+      .replace(/^fracción\s+/i, "")
+      .trim(),
+  )
+}
+
+function resolveActividadPorClave(clave: string | undefined) {
+  if (!clave) return null
+  const normalizada = normalizarBusqueda(clave)
+  return (
+    actividadesVulnerables.find((actividad) => normalizarBusqueda(actividad.key) === normalizada) ??
+    actividadesVulnerables.find((actividad) => normalizarBusqueda(actividad.fraccion) === normalizada) ??
+    actividadesVulnerables.find(
+      (actividad) => normalizarFraccion(actividad.fraccion) === normalizarFraccion(clave),
+    )
+  )
+}
+
 const LEGACY_CLIENTE_TIPO_MAP: Record<string, ClienteTipoOption["value"]> = {
   pfn: "pf_residente",
   pfe: "pf_visitante",
@@ -111,261 +132,6 @@ const MONEDAS = [
   { value: "OTRA", label: "Otra divisa (especificar)" },
 ]
 
-const ACTIVIDAD_VULNERABLE_OPERACIONES = [
-  "Fracción I - Juegos con apuesta, concursos o sorteos",
-  "Fracción II - Tarjetas de servicios o de crédito, prepagadas o instrumentos de almacenamiento de valor monetario",
-  "Fracción III - Cheques de viajero",
-  "Fracción IV - Operaciones de mutuo o garantía, préstamos o créditos",
-  "Fracción V - Construcción o desarrollo de inmuebles, intermediación en la transmisión de propiedad o constitución de derechos",
-  "Fracción V Bis - Rececpción de recursos para desarrollo inmobiliario",
-  "Fracción VI - Metales preciosos, piedras precios, joyas o relojes",
-  "Fracción VII - Subasta o comercialización de obras de arte",
-  "Fracción VIII - Comercialización o distribución de vehículos",
-  "Fracción IX - Blindaje de vehículos terrestres e inmuebles",
-  "Fracción X - Traslado de custodia de dinero y valores",
-  "Fracción XI - Servicios profesionales",
-  "Fracción XII - Servicios de fe pública",
-  "Fracción XIII - Recepción de donativos",
-  "Fracción XIV - Servicios de comercio exterior",
-  "Fracción XV - Derechos personales de uso o goce de inmuebles (Arrendamiento)",
-  "Fracción XVI - Intercambio de activos virtuales",
-]
-
-const FORMA_PAGO_OPERACIONES = [
-  "1,Efectivo",
-  "2,Tarjeta de Crédito",
-  "3,Tarjeta de Debito",
-  "4,Tarjeta de Prepago",
-  "5,Cheque Nominativo",
-  "6,Cheque de Caja",
-  "7,Cheques de Viajero",
-  "8,Transferencia Interbancaria",
-  "9,Transferencia Misma Institución",
-  "10,Transferencia Internacional",
-  "11,Orden de Pago",
-  "12,Giro",
-  "13,Oro o Platino Amonedados",
-  "14,Plata Amonedada",
-  "15,Metales Preciosos",
-  "16,Activos Virtuales",
-  "99,Otros",
-]
-
-const MONEDAS_OPERACIONES = [
-  "1,Peso mexicano",
-  "2,Dólar estadounidense",
-  "3,Euro",
-  "4,Dirham de los Emiratos Árabes Unidos",
-  "5,Afgani afgano",
-  "6,Lek albanés",
-  "7,Dram armenio",
-  "8,Florín antillano neerlandés",
-  "9,Kwanza angoleño",
-  "10,Peso argentino",
-  "11,Dólar australiano",
-  "12,Florín arubeño",
-  "13,Manat azerí",
-  "14,Marco convertible",
-  "15,Dólar de Barbados",
-  "16,Taka bangladesí",
-  "17,Lev búlgaro",
-  "18,Dinar bahreiní",
-  "19,Franco burundés",
-  "20,Dólar bermudeño",
-  "21,Dólar de Brunéi",
-  "22,Boliviano",
-  "23,Unidad de fomento boliviana",
-  "24,Real brasileño",
-  "25,Dólar bahameño",
-  "26,Ngultrum butanés",
-  "27,Pula botsuanés",
-  "28,Rublo bielorruso",
-  "29,Dólar beliceño",
-  "30,Dólar canadiense",
-  "31,Franco congoleño",
-  "32,Euro WIR",
-  "33,Franco suizo",
-  "34,Franc WIR",
-  "35,Unidad de Fomento chilena",
-  "36,Peso chileno",
-  "37,Yuan renminbi",
-  "38,Peso colombiano",
-  "39,Unidad de Valor Real",
-  "40,Colón costarricense",
-  "41,Peso cubano",
-  "42,Peso cubano convertible",
-  "43,Escudo caboverdiano",
-  "44,Corona checa",
-  "45,Franco yibutiano",
-  "46,Corona danesa",
-  "47,Peso dominicano",
-  "48,Dinar argelino",
-  "49,Libra egipcia",
-  "50,Nakfa eritreo",
-  "51,Birr etíope",
-  "52,Dólar fiyiano",
-  "53,Libra de las Malvinas",
-  "54,Libra esterlina",
-  "55,Lari georgiano",
-  "56,Cedi ghanés",
-  "57,Libra de Gibraltar",
-  "58,Dalasi gambiano",
-  "59,Franco guineano",
-  "60,Quetzal guatemalteco",
-  "61,Dólar guyanés",
-  "62,Dólar de Hong Kong",
-  "63,Lempira hondureña",
-  "64,Kuná croata",
-  "65,Gourde haitiano",
-  "66,Forinto húngaro",
-  "67,Rupia indonesia",
-  "68,Shekel israelí",
-  "69,Rupia india",
-  "70,Dinar iraquí",
-  "71,Rial iraní",
-  "72,Corona islandesa",
-  "73,Dólar jamaicano",
-  "74,Dinar jordano",
-  "75,Yen japonés",
-  "76,Chelín keniano",
-  "77,Som kirguís",
-  "78,Riel camboyano",
-  "79,Franco comorense",
-  "80,Won norcoreano",
-  "81,Won surcoreano",
-  "82,Dinar kuwaití",
-  "83,Dólar de las Islas Caimán",
-  "84,Tenge kazajo",
-  "85,Kip laosiano",
-  "86,Libra libanesa",
-  "87,Rupia de Sri Lanka",
-  "88,Dólar liberiano",
-  "89,Loti lesotense",
-  "90,Dinar libio",
-  "91,Dirham marroquí",
-  "92,Leu moldavo",
-  "93,Ariary malgache",
-  "94,Denar macedonio",
-  "95,Kyat birmano",
-  "96,Tugrik mongol",
-  "97,Pataca macaense",
-  "98,Ouguiya mauritana",
-  "99,Rupia mauriciana",
-  "100,Rupia maldiva",
-  "101,Kwacha malauí",
-  "102,Peso mexicano",
-  "103,Unidad de inversión mexicana",
-  "104,Ringgit malasio",
-  "105,Metical mozambiqueño",
-  "106,Dólar namibio",
-  "107,Naira nigeriana",
-  "108,Córdoba nicaragüense",
-  "109,Corona noruega",
-  "110,Rupia nepalí",
-  "111,Dólar neozelandés",
-  "112,Rial omaní",
-  "113,Balboa panameño",
-  "114,Sol peruano",
-  "115,Kina papú",
-  "116,Peso filipino",
-  "117,Rupia pakistaní",
-  "118,Zloty polaco",
-  "119,Guaraní paraguayo",
-  "120,Rial catarí",
-  "121,Leu rumano",
-  "122,Dinar serbio",
-  "123,Rublo ruso",
-  "124,Franco ruandés",
-  "125,Rial saudí",
-  "126,Dólar de las Islas Salomón",
-  "127,Rupia seychelense",
-  "128,Libra sudanesa",
-  "129,Corona sueca",
-  "130,Dólar de Singapur",
-  "131,Libra de Santa Elena",
-  "132,Leone sierraleonés",
-  "133,Shilling somalí",
-  "134,Dólar surinamés",
-  "135,Libra sursudanesa",
-  "136,Dobra santotomense",
-  "137,Colón salvadoreño",
-  "138,Libra siria",
-  "139,Lilangeni suazi",
-  "140,Baht tailandés",
-  "141,Somoni tayiko",
-  "142,Manat turcomano",
-  "143,Dinar tunecino",
-  "144,Paʻanga tongano",
-  "145,Lira turca",
-  "146,Dólar de Trinidad y Tobago",
-  "147,Dólar taiwanés",
-  "148,Chelín tanzano",
-  "149,Grivna ucraniana",
-  "150,Chelín ugandés",
-  "151,Dólar estadounidense",
-  "152,Peso uruguayo",
-  "153,Peso uruguayo en unidades indexadas",
-  "154,Som uzbeko",
-  "155,Bolívar venezolano",
-  "156,Dong vietnamita",
-  "157,Vatu vanuatuense",
-  "158,Tala samoano",
-  "159,Franco CFA de África Central",
-  "160,Plata",
-  "161,Oro",
-  "162,Unidad monetaria de cuenta europea",
-  "163,Dólar del Caribe Oriental",
-  "164,DEG (Derechos Especiales de Giro)",
-  "165,Franco CFA de África Occidental",
-  "166,Palladium",
-  "167,Franco CFP",
-  "168,Platino",
-  "169,Rial yemení",
-  "170,Rand sudafricano",
-  "171,Kwacha zambiano",
-  "172,Dólar zimbabuense",
-]
-
-const DOCUMENTACION_OPERACIONES = [
-  "Formulario de Registro de Actos u Operaciones",
-  "Comprobante(s) Fiscal(es) Digital(es) por Internet (CFDI)",
-  "Estado(s) de cuenta bancario(s) en el(los) que se registra el pago",
-  "Comprobante(s) de transferencia(s), ficha(s) de depósito o equivalente",
-]
-
-const TIPO_INMUEBLE_OPERACIONES = [
-  "1,Casa /Casa en condominio",
-  "2,Departamento",
-  "3,Edificio habitacional",
-  "4,Edificio comercial",
-  "5,Edificio oficinas",
-  "6,Local comercial independiente",
-  "7,Local en centro comercial",
-  "8,Oficina",
-  "9,Bodega comercial",
-  "10,Bodega industrial",
-  "11,Nave Industrial",
-  "12,Terreno urbano habitacional",
-  "13,Terreno no urbano habitacional",
-  "14,Terreno urbano comercial o industrial",
-  "15,Terreno no urbano comercial o industrial",
-  "16,Terreno ejidal",
-  "17,Rancho/Hacienda/Quinta",
-  "18,Huerta",
-  "99,Otro",
-]
-
-const TIPO_VIALIDAD_OPERACIONES = [
-  "AVENIDA",
-  "BOULEVARD",
-  "CALLE",
-  "CALZADA",
-  "EJE VIAL",
-  "VIA",
-]
-
-const ANIOS_OPERACIONES = ["---", ...Array.from({ length: 23 }, (_, index) => `${2013 + index}`)]
-const MESES_OPERACIONES = ["---", ...MONTHS]
 
 const ACTIVIDAD_INMUEBLES_KEY = "fraccion-xv-uso-goce"
 
@@ -702,17 +468,6 @@ interface InstrumentoPublicoFormState {
   valorAvaluo: string
 }
 
-interface ActoOperacionFormState {
-  fechaCelebracion: string
-  fechaPago: string
-  formaPago: string
-  instrumentoMonetario: string
-  moneda: string
-  monto: string
-  fechaInicio: string
-  fechaTermino: string
-}
-
 interface ExpedientePersona {
   id?: string
   tipo?: "persona_moral" | "persona_fisica"
@@ -740,6 +495,8 @@ interface ExpedienteDetalle {
   tipoCliente?: string
   detalleTipoCliente?: string
   responsable?: string
+  sujetoObligadoNombre?: string
+  sujetoObligadoRfc?: string
   claveSujetoObligado?: string
   claveActividadVulnerable?: string
   identificacion?: Record<string, string>
@@ -1290,6 +1047,18 @@ function sanitizeExpediente(raw: any): ExpedienteDetalle | null {
     detalleTipoCliente:
       typeof raw.detalleTipoCliente === "string" ? raw.detalleTipoCliente : undefined,
     responsable: typeof raw.responsable === "string" ? raw.responsable : undefined,
+    sujetoObligadoNombre:
+      typeof raw.sujetoObligadoNombre === "string"
+        ? raw.sujetoObligadoNombre
+        : typeof raw.expedienteEui?.sujetoObligadoNombre === "string"
+          ? raw.expedienteEui.sujetoObligadoNombre
+          : undefined,
+    sujetoObligadoRfc:
+      typeof raw.sujetoObligadoRfc === "string"
+        ? raw.sujetoObligadoRfc
+        : typeof raw.expedienteEui?.sujetoObligadoRfc === "string"
+          ? raw.expedienteEui.sujetoObligadoRfc
+          : undefined,
     claveSujetoObligado:
       typeof raw.claveSujetoObligado === "string" ? raw.claveSujetoObligado : undefined,
     claveActividadVulnerable:
@@ -1593,37 +1362,6 @@ export default function ActividadesVulnerablesPage() {
   const [expedienteSeleccionado, setExpedienteSeleccionado] = useState<string | null>(null)
   const [personaExpedienteSeleccionada, setPersonaExpedienteSeleccionada] = useState<string>("")
 
-  const [registroFechaOperacion, setRegistroFechaOperacion] = useState(() =>
-    new Date().toISOString().split("T")[0],
-  )
-  const [sujetoObligadoOperacionNombre, setSujetoObligadoOperacionNombre] = useState("")
-  const [sujetoObligadoOperacionRfc, setSujetoObligadoOperacionRfc] = useState("")
-  const [clienteOperacionNombre, setClienteOperacionNombre] = useState("")
-  const [clienteOperacionRfc, setClienteOperacionRfc] = useState("")
-  const [actividadVulnerableOperacion, setActividadVulnerableOperacion] = useState("")
-  const [actosOperacion, setActosOperacion] = useState<ActoOperacionFormState[]>(
-    Array.from({ length: 5 }, () => ({
-      fechaCelebracion: "",
-      fechaPago: "",
-      formaPago: "",
-      instrumentoMonetario: "",
-      moneda: "",
-      monto: "",
-      fechaInicio: "",
-      fechaTermino: "",
-    })),
-  )
-  const [inmuebleOperacionTipo, setInmuebleOperacionTipo] = useState("")
-  const [inmuebleOperacionValor, setInmuebleOperacionValor] = useState("")
-  const [inmuebleOperacionFolio, setInmuebleOperacionFolio] = useState("")
-  const [ubicacionInmuebleOperacion, setUbicacionInmuebleOperacion] = useState<DatosInmuebleFormState>(() => ({
-    ...INMUEBLE_FORM_DEFAULT,
-  }))
-  const [tipoVialidadOperacion, setTipoVialidadOperacion] = useState("")
-  const [valorMensualAnio, setValorMensualAnio] = useState("---")
-  const [valorMensualMes, setValorMensualMes] = useState("---")
-  const [documentacionOperacion, setDocumentacionOperacion] = useState<Record<string, boolean>>({})
-  const [coloniasOperacion, setColoniasOperacion] = useState<string[]>([])
   const [personaAvisoActual, setPersonaAvisoActual] = useState<PersonaAvisoOperacion | null>(null)
   const [codigoOperacionInmueble, setCodigoOperacionInmueble] = useState<string>("")
   const [figuraClienteInmueble, setFiguraClienteInmueble] = useState<string>("")
@@ -2069,9 +1807,7 @@ export default function ActividadesVulnerablesPage() {
       return { actividades: [], tieneRegistro: false }
     }
     if (expedienteCliente.claveActividadVulnerable) {
-      const actividad = actividadesVulnerables.find(
-        (item) => item.key === expedienteCliente.claveActividadVulnerable,
-      )
+      const actividad = resolveActividadPorClave(expedienteCliente.claveActividadVulnerable)
       return {
         actividades: actividad ? [actividad] : [],
         tieneRegistro: Boolean(actividad),
@@ -2082,6 +1818,14 @@ export default function ActividadesVulnerablesPage() {
   }, [clienteOperacionSeleccionado, expedientesDisponibles])
 
   const actividadesRegistradasCliente = actividadRegistroOperacion.actividades
+
+  const expedienteClienteOperacion = useMemo(
+    () =>
+      expedientesDisponibles.find(
+        (expediente) => expediente.rfc === clienteOperacionSeleccionado,
+      ) ?? null,
+    [clienteOperacionSeleccionado, expedientesDisponibles],
+  )
 
   const actividadOperacionDetalle = useMemo(
     () =>
@@ -2324,61 +2068,12 @@ export default function ActividadesVulnerablesPage() {
     }))
   }, [inmuebleForm.codigoPostal, coloniasDisponibles.length])
 
-  useEffect(() => {
-    if (!ubicacionInmuebleOperacion.codigoPostal) {
-      if (coloniasOperacion.length > 0) {
-        setColoniasOperacion([])
-      }
-      return
-    }
-
-    const info = findCodigoPostalInfo(ubicacionInmuebleOperacion.codigoPostal)
-    if (!info) {
-      if (coloniasOperacion.length > 0) {
-        setColoniasOperacion([])
-      }
-      return
-    }
-
-    setColoniasOperacion(info.asentamientos)
-    setUbicacionInmuebleOperacion((prev) => ({
-      ...prev,
-      entidad: prev.entidad || info.estado,
-      municipio: prev.municipio || info.municipio,
-      ciudad: prev.ciudad || info.ciudad || "",
-      colonia: info.asentamientos.includes(prev.colonia)
-        ? prev.colonia
-        : info.asentamientos[0] ?? prev.colonia,
-      pais: prev.pais || "MX",
-    }))
-  }, [ubicacionInmuebleOperacion.codigoPostal, coloniasOperacion.length])
-
-  const valorAcumuladoOperacion = useMemo(
-    () =>
-      actosOperacion.reduce((acc, acto) => acc + (Number.parseFloat(acto.monto) || 0), 0),
-    [actosOperacion],
-  )
-
-  const numeroOperacionesMes = useMemo(
-    () => actosOperacion.filter((acto) => (Number.parseFloat(acto.monto) || 0) > 0).length,
-    [actosOperacion],
-  )
-
   const umaSeleccionada = useMemo(() => {
     const encontrada = umaVentana.find(
       (entry) => entry.month === mesSeleccionado && entry.year === anioSeleccionado,
     )
     return encontrada ?? findUmaByMonthYear(mesSeleccionado, anioSeleccionado)
   }, [mesSeleccionado, anioSeleccionado, umaVentana])
-
-  const actualizarActoOperacion = useCallback(
-    (index: number, campo: keyof ActoOperacionFormState, valor: string) => {
-      setActosOperacion((prev) =>
-        prev.map((acto, idx) => (idx === index ? { ...acto, [campo]: valor } : acto)),
-      )
-    },
-    [],
-  )
 
   const umbralPesos = useMemo(() => {
     if (!umaSeleccionada || !actividadSeleccionada) {
@@ -4330,6 +4025,11 @@ const cambiarMesCalendario = (delta: number) => {
               <div className="flex flex-wrap gap-3">
                 <Button
                   onClick={() => {
+                    if (clienteOperacionSeleccionado) {
+                      setExpedienteSeleccionado(clienteOperacionSeleccionado)
+                      setPersonaExpedienteSeleccionada("")
+                      setPersonaAvisoActual(null)
+                    }
                     if (actividadOperacionDetalle) {
                       setActividadKey(actividadOperacionDetalle.key)
                       setActividadInfoKey(actividadOperacionDetalle.key)
@@ -4349,383 +4049,6 @@ const cambiarMesCalendario = (delta: number) => {
                     : "Si el expediente no tiene actividad registrada, selecciona una manualmente para sincronizar."}
                 </p>
               </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-emerald-600" /> Registro de Actos y Operaciones (Inmobiliario)
-            </CardTitle>
-            <CardDescription>
-              Captura la hoja de operaciones con hasta cinco actos y la documentación comprobatoria requerida.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Fecha de Registro del Acto u Operación</Label>
-                <Input type="date" value={registroFechaOperacion} readOnly />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Nombre, Denominación o Razón social (Sujeto Obligado)</Label>
-                <Input
-                  value={sujetoObligadoOperacionNombre}
-                  onChange={(event) => setSujetoObligadoOperacionNombre(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Registro Federal de Contribuyentes (RFC)</Label>
-                <Input
-                  value={sujetoObligadoOperacionRfc}
-                  onChange={(event) => setSujetoObligadoOperacionRfc(event.target.value.toUpperCase())}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Nombre, Denominación o Razón Social (Cliente)</Label>
-                <Input
-                  value={clienteOperacionNombre}
-                  onChange={(event) => setClienteOperacionNombre(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>RFC del Cliente</Label>
-                <Input
-                  value={clienteOperacionRfc}
-                  onChange={(event) => setClienteOperacionRfc(event.target.value.toUpperCase())}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Actividad Vulnerable realizada</Label>
-                <Select value={actividadVulnerableOperacion} onValueChange={setActividadVulnerableOperacion}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Selecciona actividad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ACTIVIDAD_VULNERABLE_OPERACIONES.map((opcion) => (
-                      <SelectItem key={opcion} value={opcion}>
-                        {opcion}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {actosOperacion.map((acto, index) => (
-                <div key={`acto-${index}`} className="rounded border border-slate-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-700">Acto u Operación ({index + 1})</p>
-                  <div className="mt-3 grid gap-4 md:grid-cols-4">
-                    <div className="space-y-2">
-                      <Label>Fecha de celebración</Label>
-                      <Input
-                        type="date"
-                        value={acto.fechaCelebracion}
-                        onChange={(event) => actualizarActoOperacion(index, "fechaCelebracion", event.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Fecha de pago</Label>
-                      <Input
-                        type="date"
-                        value={acto.fechaPago}
-                        onChange={(event) => actualizarActoOperacion(index, "fechaPago", event.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Forma de pago</Label>
-                      <Select
-                        value={acto.formaPago}
-                        onValueChange={(value) => actualizarActoOperacion(index, "formaPago", value)}
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Selecciona forma" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {FORMA_PAGO_OPERACIONES.map((opcion) => (
-                            <SelectItem key={opcion} value={opcion}>
-                              {opcion}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Instrumento monetario</Label>
-                      <Select
-                        value={acto.instrumentoMonetario}
-                        onValueChange={(value) => actualizarActoOperacion(index, "instrumentoMonetario", value)}
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Selecciona instrumento" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {FORMA_PAGO_OPERACIONES.map((opcion) => (
-                            <SelectItem key={opcion} value={opcion}>
-                              {opcion}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Moneda o divisa</Label>
-                      <Select
-                        value={acto.moneda}
-                        onValueChange={(value) => actualizarActoOperacion(index, "moneda", value)}
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Selecciona moneda" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {MONEDAS_OPERACIONES.map((opcion) => (
-                            <SelectItem key={opcion} value={opcion}>
-                              {opcion}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Monto de la operación (sin IVA)</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={acto.monto}
-                        onChange={(event) => actualizarActoOperacion(index, "monto", event.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Fecha de inicio</Label>
-                      <Input
-                        type="date"
-                        value={acto.fechaInicio}
-                        onChange={(event) => actualizarActoOperacion(index, "fechaInicio", event.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Fecha de término</Label>
-                      <Input
-                        type="date"
-                        value={acto.fechaTermino}
-                        onChange={(event) => actualizarActoOperacion(index, "fechaTermino", event.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Tipo de inmueble</Label>
-                <Select value={inmuebleOperacionTipo} onValueChange={setInmuebleOperacionTipo}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Selecciona tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIPO_INMUEBLE_OPERACIONES.map((opcion) => (
-                      <SelectItem key={opcion} value={opcion}>
-                        {opcion}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Valor de referencia</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={inmuebleOperacionValor}
-                  onChange={(event) => setInmuebleOperacionValor(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label>Folio Real o Antecedentes Registrales</Label>
-                <Input value={inmuebleOperacionFolio} onChange={(event) => setInmuebleOperacionFolio(event.target.value)} />
-              </div>
-            </div>
-
-            <div className="rounded border border-slate-200 bg-white p-4">
-              <p className="text-sm font-semibold text-slate-700">Ubicación del inmueble</p>
-              <div className="mt-3 grid gap-4 md:grid-cols-3">
-                <div className="space-y-2">
-                  <Label>Código Postal</Label>
-                  <Input
-                    value={ubicacionInmuebleOperacion.codigoPostal}
-                    onChange={(event) =>
-                      setUbicacionInmuebleOperacion((prev) => ({
-                        ...prev,
-                        codigoPostal: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Tipo de vialidad</Label>
-                  <Select value={tipoVialidadOperacion} onValueChange={setTipoVialidadOperacion}>
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="Selecciona vialidad" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIPO_VIALIDAD_OPERACIONES.map((opcion) => (
-                        <SelectItem key={opcion} value={opcion}>
-                          {opcion}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Nombre de la vialidad</Label>
-                  <Input
-                    value={ubicacionInmuebleOperacion.calle}
-                    onChange={(event) =>
-                      setUbicacionInmuebleOperacion((prev) => ({
-                        ...prev,
-                        calle: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Número exterior</Label>
-                  <Input
-                    value={ubicacionInmuebleOperacion.numeroExterior}
-                    onChange={(event) =>
-                      setUbicacionInmuebleOperacion((prev) => ({
-                        ...prev,
-                        numeroExterior: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Número interior</Label>
-                  <Input
-                    value={ubicacionInmuebleOperacion.numeroInterior}
-                    onChange={(event) =>
-                      setUbicacionInmuebleOperacion((prev) => ({
-                        ...prev,
-                        numeroInterior: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Colonia / Urbanización</Label>
-                  <Select
-                    value={ubicacionInmuebleOperacion.colonia}
-                    onValueChange={(value) =>
-                      setUbicacionInmuebleOperacion((prev) => ({
-                        ...prev,
-                        colonia: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="Selecciona colonia" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from(new Set([...coloniasOperacion, ubicacionInmuebleOperacion.colonia].filter(Boolean))).map((colonia) => (
-                        <SelectItem key={colonia} value={colonia}>
-                          {colonia}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="mt-4 grid gap-4 md:grid-cols-4">
-                <div className="space-y-2">
-                  <Label>Alcaldía / Municipio / Demarcación</Label>
-                  <Input value={ubicacionInmuebleOperacion.municipio} readOnly />
-                </div>
-                <div className="space-y-2">
-                  <Label>Ciudad o Población</Label>
-                  <Input value={ubicacionInmuebleOperacion.ciudad} readOnly />
-                </div>
-                <div className="space-y-2">
-                  <Label>Entidad, Estado, Provincia</Label>
-                  <Input value={ubicacionInmuebleOperacion.entidad} readOnly />
-                </div>
-                <div className="space-y-2">
-                  <Label>País</Label>
-                  <Input value={ubicacionInmuebleOperacion.pais} readOnly />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Año</Label>
-                <Select value={valorMensualAnio} onValueChange={setValorMensualAnio}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Selecciona año" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ANIOS_OPERACIONES.map((anio) => (
-                      <SelectItem key={anio} value={anio}>
-                        {anio}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Mes</Label>
-                <Select value={valorMensualMes} onValueChange={setValorMensualMes}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Selecciona mes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MESES_OPERACIONES.map((mes) => (
-                      <SelectItem key={mes} value={mes}>
-                        {mes}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Valor acumulado de Actos y Operaciones (sin IVA)</Label>
-                <Input value={valorAcumuladoOperacion.toFixed(2)} readOnly />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Número de operaciones realizadas en el mes</Label>
-                <Input value={numeroOperacionesMes.toString()} readOnly />
-              </div>
-            </div>
-
-            <div className="rounded border border-slate-200 bg-white p-4">
-              <p className="text-sm font-semibold text-slate-700">Documentación comprobatoria del Acto u Operación</p>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                {DOCUMENTACION_OPERACIONES.map((doc) => (
-                  <label key={doc} className="flex items-start gap-3 rounded border border-slate-200 bg-white p-3 text-sm">
-                    <Checkbox
-                      checked={Boolean(documentacionOperacion[doc])}
-                      onCheckedChange={(value) =>
-                        setDocumentacionOperacion((prev) => ({ ...prev, [doc]: Boolean(value) }))
-                      }
-                    />
-                    <span>{doc}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
           </CardContent>
         </Card>
 
