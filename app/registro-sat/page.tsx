@@ -646,7 +646,8 @@ const encontrarActividadKey = (actividad: string) => {
   )
 }
 
-const extraerContactosDesdeTexto = (texto: string): ContactoSujeto[] => {
+const extraerContactosDesdeTexto = (textoPlano: string): ContactoSujeto[] => {
+  const texto = normalizarEspacios(textoPlano)
   const contactos: ContactoSujeto[] = []
 
   const detalleRegex =
@@ -685,6 +686,33 @@ const extraerContactosDesdeTexto = (texto: string): ContactoSujeto[] => {
     match = acuseRegex.exec(texto)
   }
 
+  const ladas = Array.from(texto.matchAll(/Clave Lada:\s*([0-9]{2,3})/gi)).map(
+    (item) => item[1] ?? "",
+  )
+  const telefonos = Array.from(texto.matchAll(/Telef[oó]no:\s*([0-9]+)/gi)).map(
+    (item) => item[1] ?? "",
+  )
+  const celulares = Array.from(texto.matchAll(/Celular:\s*([0-9]+)/gi)).map(
+    (item) => item[1] ?? "",
+  )
+  const correos = Array.from(texto.matchAll(/Correo electrónico:\s*([^\s]+)/gi)).map(
+    (item) => item[1] ?? "",
+  )
+
+  const maxRegistros = Math.max(ladas.length, telefonos.length, celulares.length, correos.length)
+  if (maxRegistros > 0) {
+    for (let index = 0; index < maxRegistros; index += 1) {
+      contactos.push({
+        nombreCompleto: "",
+        claveLada: ladas[index] ?? "",
+        telefonoFijo: telefonos[index] ?? "",
+        extension: "",
+        telefonoMovil: celulares[index] ?? "",
+        correo: correos[index] ?? "",
+      })
+    }
+  }
+
   const unicos = new Map<string, ContactoSujeto>()
   contactos.forEach((contacto) => {
     const key = `${contacto.correo}-${contacto.telefonoFijo}-${contacto.telefonoMovil}`
@@ -718,6 +746,9 @@ const extraerDatosRegistroDesdeTexto = (textoPlano: string) => {
   const denominacionMatch = texto.match(
     /Denominaci[oó]n o raz[oó]n social:\s*(.+?)\s*Fecha de constituci[oó]n/i,
   )
+  const identificacionMatch = texto.match(
+    /([A-ZÁÉÍÓÚÑ0-9/.\s]+?)\s+(\d{2}\/\d{2}\/\d{4})\s+([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})/i,
+  )
   const rfcMatch = texto.match(/RFC:\s*([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})/i)
   const fechaConstitucionMatch = texto.match(/Fecha de constituci[oó]n:\s*(\d{2}\/\d{2}\/\d{4})/i)
   const nacionalidadMatch = texto.match(/Pa[ií]s de nacionalidad:\s*([A-ZÁÉÍÓÚÑ\s]+)/i)
@@ -727,10 +758,18 @@ const extraerDatosRegistroDesdeTexto = (textoPlano: string) => {
 
   const paisNacionalidad = (nacionalidadMatch?.[1] ?? paisConstitucionMatch?.[2] ?? "").trim()
 
+  const nombreExtraido = normalizarEspacios(
+    denominacionMatch?.[1]?.trim() ??
+      identificacionMatch?.[1]?.trim() ??
+      "",
+  )
+  const fechaExtraida = convertirFecha(fechaConstitucionMatch?.[1] ?? identificacionMatch?.[2])
+  const rfcExtraido = rfcMatch?.[1]?.trim() ?? identificacionMatch?.[3]?.trim() ?? ""
+
   datos.identificacion = {
-    nombre: denominacionMatch?.[1]?.trim() ?? "",
-    rfc: rfcMatch?.[1]?.trim() ?? "",
-    fecha: convertirFecha(fechaConstitucionMatch?.[1]),
+    nombre: nombreExtraido,
+    rfc: rfcExtraido,
+    fecha: fechaExtraida,
     paisNacionalidad: obtenerCodigoPais(paisNacionalidad),
   }
 
@@ -1804,7 +1843,8 @@ export default function RegistroSATPage() {
         }
       }
 
-      if (datos.representante && (tipoSujeto === "moral" || tipoSujeto === "fideicomiso")) {
+      const tipoAplicable = datos.tipoSujeto ?? tipoSujeto
+      if (datos.representante && (tipoAplicable === "moral" || tipoAplicable === "fideicomiso")) {
         setRepresentante((prev) => ({
           ...prev,
           nombre: prev.nombre.trim() ? prev.nombre : datos.representante?.nombre ?? "",
