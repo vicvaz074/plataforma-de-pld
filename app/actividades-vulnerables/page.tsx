@@ -88,13 +88,35 @@ function normalizarBusqueda(valor: string) {
     .trim()
 }
 
+function normalizarFraccion(valor: string) {
+  return normalizarBusqueda(
+    valor
+      .replace(/^fraccion\s+/i, "")
+      .replace(/^fracción\s+/i, "")
+      .trim(),
+  )
+}
+
 function findActividadOperacionLabel(fraccion: string | undefined) {
   if (!fraccion) return ""
-  const prefix = `Fracción ${fraccion}`.toLowerCase()
+  const normalizada = normalizarFraccion(fraccion)
+  if (!normalizada) return ""
   return (
     ACTIVIDAD_VULNERABLE_OPERACIONES.find((opcion) =>
-      opcion.toLowerCase().startsWith(prefix),
+      normalizarFraccion(opcion).startsWith(normalizada),
     ) ?? ""
+  )
+}
+
+function resolveActividadPorClave(clave: string | undefined) {
+  if (!clave) return null
+  const normalizada = normalizarBusqueda(clave)
+  return (
+    actividadesVulnerables.find((actividad) => normalizarBusqueda(actividad.key) === normalizada) ??
+    actividadesVulnerables.find((actividad) => normalizarBusqueda(actividad.fraccion) === normalizada) ??
+    actividadesVulnerables.find(
+      (actividad) => normalizarFraccion(actividad.fraccion) === normalizarFraccion(clave),
+    )
   )
 }
 
@@ -850,6 +872,18 @@ const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
 const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
 const NUEVO_CLIENTE_VALUE = "__nuevo__"
 const MANUAL_EXPEDIENTE_VALUE = "__manual__"
+const MAX_ACTOS_OPERACION = 5
+
+const createActoOperacionFormState = (): ActoOperacionFormState => ({
+  fechaCelebracion: "",
+  fechaPago: "",
+  formaPago: "",
+  instrumentoMonetario: "",
+  moneda: "",
+  monto: "",
+  fechaInicio: "",
+  fechaTermino: "",
+})
 
 function normalizarTipoCliente(value: string) {
   const option = CLIENTE_TIPOS.find((tipo) => tipo.value === value)
@@ -1626,16 +1660,7 @@ export default function ActividadesVulnerablesPage() {
   const [clienteOperacionRfc, setClienteOperacionRfc] = useState("")
   const [actividadVulnerableOperacion, setActividadVulnerableOperacion] = useState("")
   const [actosOperacion, setActosOperacion] = useState<ActoOperacionFormState[]>(
-    Array.from({ length: 5 }, () => ({
-      fechaCelebracion: "",
-      fechaPago: "",
-      formaPago: "",
-      instrumentoMonetario: "",
-      moneda: "",
-      monto: "",
-      fechaInicio: "",
-      fechaTermino: "",
-    })),
+    [createActoOperacionFormState()],
   )
   const [inmuebleOperacionTipo, setInmuebleOperacionTipo] = useState("")
   const [inmuebleOperacionValor, setInmuebleOperacionValor] = useState("")
@@ -2106,9 +2131,7 @@ export default function ActividadesVulnerablesPage() {
       return { actividades: [], tieneRegistro: false }
     }
     if (expedienteCliente.claveActividadVulnerable) {
-      const actividad = actividadesVulnerables.find(
-        (item) => item.key === expedienteCliente.claveActividadVulnerable,
-      )
+      const actividad = resolveActividadPorClave(expedienteCliente.claveActividadVulnerable)
       return {
         actividades: actividad ? [actividad] : [],
         tieneRegistro: Boolean(actividad),
@@ -2532,6 +2555,20 @@ export default function ActividadesVulnerablesPage() {
     },
     [],
   )
+
+  const agregarActoOperacion = useCallback(() => {
+    setActosOperacion((prev) => {
+      if (prev.length >= MAX_ACTOS_OPERACION) return prev
+      return [...prev, createActoOperacionFormState()]
+    })
+  }, [])
+
+  const eliminarActoOperacion = useCallback((index: number) => {
+    setActosOperacion((prev) => {
+      if (prev.length <= 1) return prev
+      return prev.filter((_, idx) => idx !== index)
+    })
+  }, [])
 
   const umbralPesos = useMemo(() => {
     if (!umaSeleccionada || !actividadSeleccionada) {
@@ -4483,6 +4520,11 @@ const cambiarMesCalendario = (delta: number) => {
               <div className="flex flex-wrap gap-3">
                 <Button
                   onClick={() => {
+                    if (clienteOperacionSeleccionado) {
+                      setExpedienteSeleccionado(clienteOperacionSeleccionado)
+                      setPersonaExpedienteSeleccionada("")
+                      setPersonaAvisoActual(null)
+                    }
                     if (actividadOperacionDetalle) {
                       setActividadKey(actividadOperacionDetalle.key)
                       setActividadInfoKey(actividadOperacionDetalle.key)
@@ -4577,7 +4619,19 @@ const cambiarMesCalendario = (delta: number) => {
             <div className="space-y-4">
               {actosOperacion.map((acto, index) => (
                 <div key={`acto-${index}`} className="rounded border border-slate-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-700">Acto u Operación ({index + 1})</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-700">Acto u Operación ({index + 1})</p>
+                    {actosOperacion.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => eliminarActoOperacion(index)}
+                      >
+                        Quitar acto
+                      </Button>
+                    )}
+                  </div>
                   <div className="mt-3 grid gap-4 md:grid-cols-4">
                     <div className="space-y-2">
                       <Label>Fecha de celebración</Label>
@@ -4678,6 +4732,19 @@ const cambiarMesCalendario = (delta: number) => {
                   </div>
                 </div>
               ))}
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={agregarActoOperacion}
+                  disabled={actosOperacion.length >= MAX_ACTOS_OPERACION}
+                >
+                  Añadir otro acto u operación
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  {actosOperacion.length}/{MAX_ACTOS_OPERACION} actos u operaciones.
+                </p>
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
