@@ -7,6 +7,8 @@ import { useLanguage } from "@/lib/LanguageContext"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -53,9 +55,55 @@ interface OperacionCliente {
 interface StoredEvaluation {
   rfc: string
   riskQuestions: RiskQuestion[]
+  clientProfile: ClientProfile
   notes: string
   updatedAt: string
 }
+
+interface ClientProfile {
+  paisNacionalidad: string
+  paisResidencia: string
+  localidad: string
+  codigoPostal: string
+  tipoCliente: string
+  fechaConstitucion: string
+  edadRepresentante: string
+  sectorEconomico: string
+  giroActividad: string
+  domiciliosVirtuales: string
+}
+
+const clientTypeOptions: RiskOption[] = [
+  { value: "fisica", label: "Persona física", score: 1 },
+  { value: "moral", label: "Persona moral", score: 2 },
+  { value: "fideicomiso", label: "Fideicomiso", score: 3 },
+]
+
+const domiciliosVirtualesOptions: RiskOption[] = [
+  { value: "sin", label: "Sin domicilios virtuales", score: 1 },
+  { value: "parcial", label: "Uso parcial de domicilios virtuales", score: 2 },
+  { value: "principal", label: "Operación principalmente virtual", score: 3 },
+]
+
+const edadRepresentanteOptions: RiskOption[] = [
+  { value: "mayor-25", label: "Mayor o igual a 25 años", score: 1 },
+  { value: "18-24", label: "Entre 18 y 24 años", score: 2 },
+  { value: "menor-18", label: "Menor de 18 o sin validar", score: 3 },
+]
+
+const initialClientProfile: ClientProfile = {
+  paisNacionalidad: "mexico",
+  paisResidencia: "mexico",
+  localidad: "",
+  codigoPostal: "",
+  tipoCliente: "fisica",
+  fechaConstitucion: "",
+  edadRepresentante: "mayor-25",
+  sectorEconomico: "agropecuario",
+  giroActividad: "",
+  domiciliosVirtuales: "sin",
+}
+
 
 const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
 const OPERACIONES_STORAGE_KEY = "actividades_vulnerables_operaciones"
@@ -225,6 +273,7 @@ export default function EbrPage() {
   const [evaluacionesGuardadas, setEvaluacionesGuardadas] = useState<Record<string, StoredEvaluation>>({})
   const [clienteSeleccionado, setClienteSeleccionado] = useState("")
   const [riskQuestions, setRiskQuestions] = useState<RiskQuestion[]>(initialRiskQuestions)
+  const [clientProfile, setClientProfile] = useState<ClientProfile>(initialClientProfile)
   const [notes, setNotes] = useState("")
 
   useEffect(() => {
@@ -312,11 +361,13 @@ export default function EbrPage() {
     const stored = evaluacionesGuardadas[clienteSeleccionado]
     if (stored) {
       setRiskQuestions(stored.riskQuestions)
+      setClientProfile(stored.clientProfile ?? initialClientProfile)
       setNotes(stored.notes)
       return
     }
 
     setRiskQuestions(initialRiskQuestions)
+    setClientProfile(initialClientProfile)
     setNotes("")
   }, [clienteSeleccionado, evaluacionesGuardadas, operacionesCliente, expedienteActual])
 
@@ -426,6 +477,7 @@ export default function EbrPage() {
     const updated: StoredEvaluation = {
       rfc: clienteSeleccionado,
       riskQuestions,
+      clientProfile,
       notes,
       updatedAt: new Date().toISOString(),
     }
@@ -449,6 +501,20 @@ export default function EbrPage() {
     const ultimaActualizacion = savedEvaluation?.updatedAt
       ? formatDate(new Date(savedEvaluation.updatedAt))
       : formatDate(new Date())
+    const nacionalidadLabel =
+      countryOptions.find((option) => option.value === clientProfile.paisNacionalidad)?.label ?? "Sin definir"
+    const residenciaLabel =
+      countryOptions.find((option) => option.value === clientProfile.paisResidencia)?.label ?? "Sin definir"
+    const tipoClienteLabel =
+      clientTypeOptions.find((option) => option.value === clientProfile.tipoCliente)?.label ?? "Sin definir"
+    const sectorLabel =
+      sectorEconomicoOptions.find((option) => option.value === clientProfile.sectorEconomico)?.label ?? "Sin definir"
+    const domiciliosLabel =
+      domiciliosVirtualesOptions.find((option) => option.value === clientProfile.domiciliosVirtuales)?.label ??
+      "Sin definir"
+    const edadLabel =
+      edadRepresentanteOptions.find((option) => option.value === clientProfile.edadRepresentante)?.label ??
+      "Sin definir"
 
     const ensureSpace = (space: number) => {
       if (cursorY + space <= pageHeight - 40) return
@@ -480,6 +546,36 @@ export default function EbrPage() {
     doc.text(`Puntaje total: ${totalScore} / ${maxScore}`, marginX, cursorY)
     cursorY += 24
 
+    ensureSpace(120)
+    doc.setFontSize(12)
+    doc.text("Perfil del cliente", marginX, cursorY)
+    cursorY += 12
+    doc.setDrawColor(209, 213, 219)
+    doc.line(marginX, cursorY, marginX + contentWidth, cursorY)
+    cursorY += 16
+    doc.setFontSize(10)
+    const profileRows = [
+      ["País de nacionalidad", nacionalidadLabel],
+      ["País de residencia", residenciaLabel],
+      ["Localidad", clientProfile.localidad || "Sin definir"],
+      ["Código Postal", clientProfile.codigoPostal || "Sin definir"],
+      ["Tipo de cliente", tipoClienteLabel],
+      ["Fecha de constitución o nacimiento", clientProfile.fechaConstitucion || "Sin definir"],
+      ["Edad del representante", edadLabel],
+      ["Sector económico", sectorLabel],
+      ["Giro / actividad económica", clientProfile.giroActividad || "Sin definir"],
+      ["Domicilios virtuales", domiciliosLabel],
+    ]
+
+    profileRows.forEach(([label, value]) => {
+      const rowText = `${label}: ${value}`
+      const lines = doc.splitTextToSize(rowText, contentWidth)
+      ensureSpace(lines.length * 14 + 8)
+      doc.text(lines, marginX, cursorY)
+      cursorY += lines.length * 14 + 4
+    })
+
+    cursorY += 12
     ensureSpace(40)
     doc.setFontSize(12)
     doc.text("Detalle de respuestas", marginX, cursorY)
@@ -529,6 +625,7 @@ export default function EbrPage() {
     delete next[clienteSeleccionado]
     setEvaluacionesGuardadas(next)
     setRiskQuestions(initialRiskQuestions)
+    setClientProfile(initialClientProfile)
     setNotes("")
     if (typeof window !== "undefined") {
       window.localStorage.setItem(EBR_STORAGE_KEY, JSON.stringify(next))
@@ -794,6 +891,175 @@ export default function EbrPage() {
                 </Badge>
               </div>
 
+              <Card className="border-dashed">
+                <CardHeader>
+                  <CardTitle className="text-base">Perfil del cliente</CardTitle>
+                  <CardDescription>
+                    Captura la información complementaria del cliente para la evaluación EBR.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>País de Nacionalidad</Label>
+                    <Select
+                      value={clientProfile.paisNacionalidad}
+                      onValueChange={(value) =>
+                        setClientProfile((prev) => ({ ...prev, paisNacionalidad: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona país" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {countryOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>País de Residencia</Label>
+                    <Select
+                      value={clientProfile.paisResidencia}
+                      onValueChange={(value) =>
+                        setClientProfile((prev) => ({ ...prev, paisResidencia: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona país" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {countryOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Localidad</Label>
+                    <Input
+                      value={clientProfile.localidad}
+                      onChange={(event) =>
+                        setClientProfile((prev) => ({ ...prev, localidad: event.target.value }))
+                      }
+                      placeholder="Ciudad o municipio"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Código Postal</Label>
+                    <Input
+                      value={clientProfile.codigoPostal}
+                      onChange={(event) =>
+                        setClientProfile((prev) => ({ ...prev, codigoPostal: event.target.value }))
+                      }
+                      placeholder="CP"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tipos de Clientes</Label>
+                    <Select
+                      value={clientProfile.tipoCliente}
+                      onValueChange={(value) => setClientProfile((prev) => ({ ...prev, tipoCliente: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clientTypeOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Fecha de Constitución o Nacimiento</Label>
+                    <Input
+                      type="date"
+                      value={clientProfile.fechaConstitucion}
+                      onChange={(event) =>
+                        setClientProfile((prev) => ({ ...prev, fechaConstitucion: event.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Edad del SO, apoderado o representante legal</Label>
+                    <Select
+                      value={clientProfile.edadRepresentante}
+                      onValueChange={(value) =>
+                        setClientProfile((prev) => ({ ...prev, edadRepresentante: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona edad" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {edadRepresentanteOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Sector Económico</Label>
+                    <Select
+                      value={clientProfile.sectorEconomico}
+                      onValueChange={(value) =>
+                        setClientProfile((prev) => ({ ...prev, sectorEconomico: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona sector" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sectorEconomicoOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Giro - Actividad Económica</Label>
+                    <Input
+                      value={clientProfile.giroActividad}
+                      onChange={(event) =>
+                        setClientProfile((prev) => ({ ...prev, giroActividad: event.target.value }))
+                      }
+                      placeholder="Actividad principal"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Domicilios Virtuales</Label>
+                    <Select
+                      value={clientProfile.domiciliosVirtuales}
+                      onValueChange={(value) =>
+                        setClientProfile((prev) => ({ ...prev, domiciliosVirtuales: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona opción" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {domiciliosVirtualesOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
               <div className="space-y-2">
                 <p className="text-sm font-medium text-gray-900">Observaciones clave</p>
                 <Textarea
@@ -858,6 +1124,76 @@ export default function EbrPage() {
                       </div>
                     )
                   })}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border bg-white p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-gray-900">Perfil del cliente</p>
+                  <span className="text-xs text-muted-foreground">Información capturada</span>
+                </div>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">País de Nacionalidad</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {countryOptions.find((option) => option.value === clientProfile.paisNacionalidad)?.label ??
+                        "Sin definir"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">País de Residencia</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {countryOptions.find((option) => option.value === clientProfile.paisResidencia)?.label ??
+                        "Sin definir"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Localidad</p>
+                    <p className="text-sm font-medium text-gray-900">{clientProfile.localidad || "Sin definir"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Código Postal</p>
+                    <p className="text-sm font-medium text-gray-900">{clientProfile.codigoPostal || "Sin definir"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Tipos de Clientes</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {clientTypeOptions.find((option) => option.value === clientProfile.tipoCliente)?.label ??
+                        "Sin definir"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Fecha de Constitución o Nacimiento</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {clientProfile.fechaConstitucion || "Sin definir"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Edad del representante</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {edadRepresentanteOptions.find((option) => option.value === clientProfile.edadRepresentante)
+                        ?.label ?? "Sin definir"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Sector Económico</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {sectorEconomicoOptions.find((option) => option.value === clientProfile.sectorEconomico)
+                        ?.label ?? "Sin definir"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Giro - Actividad Económica</p>
+                    <p className="text-sm font-medium text-gray-900">{clientProfile.giroActividad || "Sin definir"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-muted-foreground">Domicilios Virtuales</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {domiciliosVirtualesOptions.find(
+                        (option) => option.value === clientProfile.domiciliosVirtuales,
+                      )?.label ?? "Sin definir"}
+                    </p>
+                  </div>
                 </div>
               </div>
 
