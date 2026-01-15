@@ -60,6 +60,38 @@ const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
 const OPERACIONES_STORAGE_KEY = "actividades_vulnerables_operaciones"
 const EBR_STORAGE_KEY = "ebr_evaluaciones"
 
+const sectorEconomicoOptions: RiskOption[] = [
+  { value: "agropecuario", label: "Agropecuario (1)", score: 1 },
+  { value: "comercio", label: "Comercio minorista (1)", score: 1 },
+  { value: "manufactura", label: "Manufactura (2)", score: 2 },
+  { value: "servicios-profesionales", label: "Servicios profesionales (2)", score: 2 },
+  { value: "inmobiliario", label: "Inmobiliario (3)", score: 3 },
+  { value: "juegos-apuestas", label: "Juegos y apuestas (3)", score: 3 },
+  { value: "metales", label: "Metales/preciosos (3)", score: 3 },
+  { value: "criptoactivos", label: "Criptoactivos (3)", score: 3 },
+]
+
+const countryOptions: RiskOption[] = [
+  { value: "mexico", label: "México (1)", score: 1 },
+  { value: "canada", label: "Canadá (1)", score: 1 },
+  { value: "estados-unidos", label: "Estados Unidos (1)", score: 1 },
+  { value: "espana", label: "España (1)", score: 1 },
+  { value: "alemania", label: "Alemania (1)", score: 1 },
+  { value: "brasil", label: "Brasil (2)", score: 2 },
+  { value: "colombia", label: "Colombia (2)", score: 2 },
+  { value: "argentina", label: "Argentina (2)", score: 2 },
+  { value: "peru", label: "Perú (2)", score: 2 },
+  { value: "chile", label: "Chile (2)", score: 2 },
+  { value: "rusia", label: "Rusia (3)", score: 3 },
+  { value: "venezuela", label: "Venezuela (3)", score: 3 },
+  { value: "nigeria", label: "Nigeria (3)", score: 3 },
+  { value: "afganistan", label: "Afganistán (3)", score: 3 },
+  { value: "siria", label: "Siria (3)", score: 3 },
+  { value: "corea-norte", label: "Corea del Norte (4)", score: 4 },
+  { value: "iran", label: "Irán (4)", score: 4 },
+  { value: "myanmar", label: "Myanmar (4)", score: 4 },
+]
+
 const initialRiskQuestions: RiskQuestion[] = [
   {
     id: "so-tipo",
@@ -91,23 +123,19 @@ const initialRiskQuestions: RiskQuestion[] = [
     description: "Rango etario del apoderado o representante legal.",
     group: "caracteristicas",
     options: [
-      { value: "mayor-30", label: "Mayor a 30 años (1)", score: 1 },
-      { value: "18-30", label: "Entre 18 y 30 años (2)", score: 2 },
+      { value: "mayor-25", label: "Mayor o igual a 25 años (1)", score: 1 },
+      { value: "18-24", label: "Entre 18 y 24 años (2)", score: 2 },
       { value: "menor-18", label: "Menor de 18 o sin validar (3)", score: 3 },
     ],
-    selectedValue: "mayor-30",
+    selectedValue: "mayor-25",
   },
   {
     id: "so-sector",
     name: "Sector Económico",
     description: "Nivel de exposición del sector a riesgos LA/FT.",
     group: "caracteristicas",
-    options: [
-      { value: "bajo", label: "Sector de bajo riesgo (1)", score: 1 },
-      { value: "medio", label: "Sector de riesgo medio (2)", score: 2 },
-      { value: "alto", label: "Sector de alto riesgo (3)", score: 3 },
-    ],
-    selectedValue: "bajo",
+    options: sectorEconomicoOptions,
+    selectedValue: "agropecuario",
   },
   {
     id: "so-domicilios",
@@ -150,30 +178,16 @@ const initialRiskQuestions: RiskQuestion[] = [
     name: "País de Nacionalidad",
     description: "Jurisdicción de nacionalidad y riesgo geográfico.",
     group: "zonas",
-    options: [
-      { value: "bajo", label: "México/OCDE de bajo riesgo (1)", score: 1 },
-      { value: "medio", label: "País de riesgo medio (2)", score: 2 },
-      { value: "alto", label: "País de riesgo alto (3)", score: 3 },
-      { value: "corea-norte", label: "Corea del Norte (4)", score: 4 },
-      { value: "iran", label: "Irán (4)", score: 4 },
-      { value: "myanmar", label: "Myanmar (4)", score: 4 },
-    ],
-    selectedValue: "bajo",
+    options: countryOptions,
+    selectedValue: "mexico",
   },
   {
     id: "so-residencia",
     name: "País de Residencia",
     description: "Residencia fiscal o habitual y riesgo geográfico.",
     group: "zonas",
-    options: [
-      { value: "bajo", label: "México/OCDE de bajo riesgo (1)", score: 1 },
-      { value: "medio", label: "País de riesgo medio (2)", score: 2 },
-      { value: "alto", label: "País de riesgo alto (3)", score: 3 },
-      { value: "corea-norte", label: "Corea del Norte (4)", score: 4 },
-      { value: "iran", label: "Irán (4)", score: 4 },
-      { value: "myanmar", label: "Myanmar (4)", score: 4 },
-    ],
-    selectedValue: "bajo",
+    options: countryOptions,
+    selectedValue: "mexico",
   },
 ]
 
@@ -305,6 +319,8 @@ export default function EbrPage() {
     setNotes("")
   }, [clienteSeleccionado, evaluacionesGuardadas, operacionesCliente, expedienteActual])
 
+  const savedEvaluation = evaluacionesGuardadas[clienteSeleccionado]
+
   const totalScore = useMemo(
     () => riskQuestions.reduce((sum, question) => sum + getSelectedOption(question).score, 0),
     [riskQuestions],
@@ -419,6 +435,19 @@ export default function EbrPage() {
     }
   }
 
+  const deleteEvaluation = () => {
+    if (!clienteSeleccionado) return
+    if (!evaluacionesGuardadas[clienteSeleccionado]) return
+    const next = { ...evaluacionesGuardadas }
+    delete next[clienteSeleccionado]
+    setEvaluacionesGuardadas(next)
+    setRiskQuestions(initialRiskQuestions)
+    setNotes("")
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(EBR_STORAGE_KEY, JSON.stringify(next))
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -441,7 +470,10 @@ export default function EbrPage() {
           </Button>
           <Button onClick={saveEvaluation}>
             <ClipboardCheck className="mr-2 h-4 w-4" />
-            Guardar evaluación
+            {savedEvaluation ? "Actualizar evaluación" : "Guardar evaluación"}
+          </Button>
+          <Button variant="destructive" onClick={deleteEvaluation} disabled={!savedEvaluation}>
+            Borrar evaluación
           </Button>
         </div>
       </div>
@@ -453,10 +485,10 @@ export default function EbrPage() {
             La EBR reutiliza el expediente único y las operaciones registradas para construir la matriz de riesgo.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-gray-900">Cliente seleccionado</p>
-            <Select value={clienteSeleccionado} onValueChange={setClienteSeleccionado}>
+          <CardContent className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-900">Cliente seleccionado</p>
+              <Select value={clienteSeleccionado} onValueChange={setClienteSeleccionado}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecciona un cliente" />
               </SelectTrigger>
@@ -473,25 +505,34 @@ export default function EbrPage() {
                 ? `${operacionesCliente.length} operaciones vinculadas`
                 : "Sin cliente seleccionado"}
             </p>
-          </div>
-          <div className="rounded-lg border border-border p-4">
-            <p className="text-sm text-muted-foreground">Expediente EUI</p>
-            <p className="text-base font-medium text-gray-900">
-              {expedienteActual ? expedienteActual.nombre : "Pendiente de integración"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {expedienteActual?.tipoCliente ?? "Sin tipo definido"}
-            </p>
-          </div>
-          <div className="rounded-lg border border-border p-4">
-            <p className="text-sm text-muted-foreground">Operaciones recientes</p>
-            <p className="text-base font-medium text-gray-900">{operacionesCliente.length}</p>
-            <p className="text-xs text-muted-foreground">
-              {ultimoMovimiento ? `Último movimiento: ${formatDate(ultimoMovimiento)}` : "Sin operaciones aún"}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+            <div className="rounded-lg border border-border p-4">
+              <p className="text-sm text-muted-foreground">Expediente EUI</p>
+              <p className="text-base font-medium text-gray-900">
+                {expedienteActual ? expedienteActual.nombre : "Pendiente de integración"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {expedienteActual?.tipoCliente ?? "Sin tipo definido"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border p-4">
+              <p className="text-sm text-muted-foreground">Operaciones recientes</p>
+              <p className="text-base font-medium text-gray-900">{operacionesCliente.length}</p>
+              <p className="text-xs text-muted-foreground">
+                {ultimoMovimiento ? `Último movimiento: ${formatDate(ultimoMovimiento)}` : "Sin operaciones aún"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border p-4 md:col-span-3">
+              <p className="text-sm text-muted-foreground">Evaluación guardada</p>
+              <p className="text-base font-medium text-gray-900">
+                {savedEvaluation ? "Disponible para edición" : "Sin evaluación guardada"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {savedEvaluation ? `Última actualización: ${formatDate(new Date(savedEvaluation.updatedAt))}` : ""}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
