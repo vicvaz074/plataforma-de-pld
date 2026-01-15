@@ -749,6 +749,9 @@ const extraerDatosRegistroDesdeTexto = (textoPlano: string) => {
   const identificacionMatch = texto.match(
     /([A-ZÁÉÍÓÚÑ0-9/.\s]+?)\s+(\d{2}\/\d{2}\/\d{4})\s+([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})/i,
   )
+  const identificacionInvertidaMatch = texto.match(
+    /([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})\s+([A-ZÁÉÍÓÚÑ0-9/.\s]+?)\s+(\d{2}\/\d{2}\/\d{4})/i,
+  )
   const rfcMatch = texto.match(/RFC:\s*([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})/i)
   const fechaConstitucionMatch = texto.match(/Fecha de constituci[oó]n:\s*(\d{2}\/\d{2}\/\d{4})/i)
   const nacionalidadMatch = texto.match(/Pa[ií]s de nacionalidad:\s*([A-ZÁÉÍÓÚÑ\s]+)/i)
@@ -761,10 +764,17 @@ const extraerDatosRegistroDesdeTexto = (textoPlano: string) => {
   const nombreExtraido = normalizarEspacios(
     denominacionMatch?.[1]?.trim() ??
       identificacionMatch?.[1]?.trim() ??
+      identificacionInvertidaMatch?.[2]?.trim() ??
       "",
   )
-  const fechaExtraida = convertirFecha(fechaConstitucionMatch?.[1] ?? identificacionMatch?.[2])
-  const rfcExtraido = rfcMatch?.[1]?.trim() ?? identificacionMatch?.[3]?.trim() ?? ""
+  const fechaExtraida = convertirFecha(
+    fechaConstitucionMatch?.[1] ?? identificacionMatch?.[2] ?? identificacionInvertidaMatch?.[3],
+  )
+  const rfcExtraido =
+    rfcMatch?.[1]?.trim() ??
+    identificacionMatch?.[3]?.trim() ??
+    identificacionInvertidaMatch?.[1]?.trim() ??
+    ""
 
   datos.identificacion = {
     nombre: nombreExtraido,
@@ -1318,12 +1328,8 @@ export default function RegistroSATPage() {
     }
 
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf")
-    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-      "pdfjs-dist/legacy/build/pdf.worker.mjs",
-      import.meta.url,
-    ).toString()
     const buffer = await file.arrayBuffer()
-    const pdf = await pdfjs.getDocument({ data: buffer }).promise
+    const pdf = await pdfjs.getDocument({ data: buffer, disableWorker: true }).promise
     let textoCompleto = ""
 
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
