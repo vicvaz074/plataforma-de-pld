@@ -13,12 +13,19 @@ import { Textarea } from "@/components/ui/textarea"
 import { AlertTriangle, CalendarClock, ClipboardCheck, FileText, ShieldCheck, TrendingUp } from "lucide-react"
 import { translations } from "@/lib/translations"
 
-interface RiskFactor {
+interface RiskOption {
+  value: string
+  label: string
+  score: number
+}
+
+interface RiskQuestion {
   id: string
   name: string
   description: string
-  weight: number
-  score: number
+  group: "caracteristicas" | "zonas"
+  options: RiskOption[]
+  selectedValue: string
 }
 
 interface ExpedienteDetalle {
@@ -44,7 +51,7 @@ interface OperacionCliente {
 
 interface StoredEvaluation {
   rfc: string
-  riskFactors: RiskFactor[]
+  riskQuestions: RiskQuestion[]
   notes: string
   updatedAt: string
 }
@@ -53,49 +60,120 @@ const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
 const OPERACIONES_STORAGE_KEY = "actividades_vulnerables_operaciones"
 const EBR_STORAGE_KEY = "ebr_evaluaciones"
 
-const scoreOptions = [
-  { value: "1", label: "Bajo (1)" },
-  { value: "2", label: "Bajo-Medio (2)" },
-  { value: "3", label: "Medio (3)" },
-  { value: "4", label: "Medio-Alto (4)" },
-  { value: "5", label: "Alto (5)" },
-]
-
-const initialRiskFactors: RiskFactor[] = [
+const initialRiskQuestions: RiskQuestion[] = [
   {
-    id: "rf-01",
-    name: "Perfil del cliente",
-    description: "Actividad económica, jurisdicción, estructura accionaria y antecedentes.",
-    weight: 30,
-    score: 3,
+    id: "so-tipo",
+    name: "Tipo de SO",
+    description: "Figura legal y complejidad de la estructura del sujeto obligado.",
+    group: "caracteristicas",
+    options: [
+      { value: "fisica", label: "Persona física (1)", score: 1 },
+      { value: "moral-nacional", label: "Persona moral nacional (2)", score: 2 },
+      { value: "moral-extranjera", label: "Persona moral extranjera o fideicomiso (3)", score: 3 },
+    ],
+    selectedValue: "fisica",
   },
   {
-    id: "rf-02",
-    name: "Producto o servicio",
-    description: "Nivel de exposición, complejidad operativa y tipo de transacción.",
-    weight: 25,
-    score: 2,
+    id: "so-constitucion",
+    name: "Fecha de Constitución o Nacimiento",
+    description: "Antigüedad del sujeto obligado.",
+    group: "caracteristicas",
+    options: [
+      { value: "mas-5", label: "Más de 5 años (1)", score: 1 },
+      { value: "1-5", label: "Entre 1 y 5 años (2)", score: 2 },
+      { value: "menos-1", label: "Menos de 1 año (3)", score: 3 },
+    ],
+    selectedValue: "mas-5",
   },
   {
-    id: "rf-03",
-    name: "Canal de distribución",
-    description: "Presencial, digital, intermediarios y controles de autenticación.",
-    weight: 20,
-    score: 3,
+    id: "so-edad",
+    name: "Edad del SO, apoderado o representante legal",
+    description: "Rango etario del apoderado o representante legal.",
+    group: "caracteristicas",
+    options: [
+      { value: "mayor-30", label: "Mayor a 30 años (1)", score: 1 },
+      { value: "18-30", label: "Entre 18 y 30 años (2)", score: 2 },
+      { value: "menor-18", label: "Menor de 18 o sin validar (3)", score: 3 },
+    ],
+    selectedValue: "mayor-30",
   },
   {
-    id: "rf-04",
-    name: "Operación y volumen",
-    description: "Frecuencia, montos y señales de transacciones inusuales.",
-    weight: 15,
-    score: 4,
+    id: "so-sector",
+    name: "Sector Económico",
+    description: "Nivel de exposición del sector a riesgos LA/FT.",
+    group: "caracteristicas",
+    options: [
+      { value: "bajo", label: "Sector de bajo riesgo (1)", score: 1 },
+      { value: "medio", label: "Sector de riesgo medio (2)", score: 2 },
+      { value: "alto", label: "Sector de alto riesgo (3)", score: 3 },
+    ],
+    selectedValue: "bajo",
   },
   {
-    id: "rf-05",
-    name: "Historial de cumplimiento",
-    description: "Alertas previas, hallazgos de auditoría y observaciones regulatorias.",
-    weight: 10,
-    score: 2,
+    id: "so-domicilios",
+    name: "Domicilios Virtuales",
+    description: "Nivel de operación remota o digital del sujeto obligado.",
+    group: "caracteristicas",
+    options: [
+      { value: "sin", label: "Sin domicilios virtuales (1)", score: 1 },
+      { value: "parcial", label: "Uso parcial de domicilios virtuales (2)", score: 2 },
+      { value: "principal", label: "Operación principalmente virtual (3)", score: 3 },
+    ],
+    selectedValue: "sin",
+  },
+  {
+    id: "so-destino",
+    name: "Destino de los Recursos",
+    description: "Finalidad y destino operativo de los recursos.",
+    group: "caracteristicas",
+    options: [
+      { value: "propio", label: "Operación propia/local (1)", score: 1 },
+      { value: "mixto", label: "Destino mixto (2)", score: 2 },
+      { value: "terceros", label: "Transferencias a terceros o exterior (3)", score: 3 },
+    ],
+    selectedValue: "propio",
+  },
+  {
+    id: "so-pep",
+    name: "Persona Políticamente Expuesta",
+    description: "Condición PEP del sujeto obligado o su representante legal.",
+    group: "caracteristicas",
+    options: [
+      { value: "no", label: "No PEP (1)", score: 1 },
+      { value: "nacional", label: "PEP nacional (2)", score: 2 },
+      { value: "extranjera", label: "PEP extranjero o de alto perfil (3)", score: 3 },
+    ],
+    selectedValue: "no",
+  },
+  {
+    id: "so-nacionalidad",
+    name: "País de Nacionalidad",
+    description: "Jurisdicción de nacionalidad y riesgo geográfico.",
+    group: "zonas",
+    options: [
+      { value: "bajo", label: "México/OCDE de bajo riesgo (1)", score: 1 },
+      { value: "medio", label: "País de riesgo medio (2)", score: 2 },
+      { value: "alto", label: "País de riesgo alto (3)", score: 3 },
+      { value: "corea-norte", label: "Corea del Norte (4)", score: 4 },
+      { value: "iran", label: "Irán (4)", score: 4 },
+      { value: "myanmar", label: "Myanmar (4)", score: 4 },
+    ],
+    selectedValue: "bajo",
+  },
+  {
+    id: "so-residencia",
+    name: "País de Residencia",
+    description: "Residencia fiscal o habitual y riesgo geográfico.",
+    group: "zonas",
+    options: [
+      { value: "bajo", label: "México/OCDE de bajo riesgo (1)", score: 1 },
+      { value: "medio", label: "País de riesgo medio (2)", score: 2 },
+      { value: "alto", label: "País de riesgo alto (3)", score: 3 },
+      { value: "corea-norte", label: "Corea del Norte (4)", score: 4 },
+      { value: "iran", label: "Irán (4)", score: 4 },
+      { value: "myanmar", label: "Myanmar (4)", score: 4 },
+    ],
+    selectedValue: "bajo",
   },
 ]
 
@@ -118,36 +196,11 @@ const safeDate = (value?: string) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
-const buildRiskFactorsFromData = (operaciones: OperacionCliente[], expediente?: ExpedienteDetalle | null) => {
-  const totalMonto = operaciones.reduce((sum, operacion) => sum + (Number.isFinite(operacion.monto) ? operacion.monto : 0), 0)
-  const alertas = operaciones.filter((operacion) => Boolean(operacion.alerta) || operacion.umbralStatus === "aviso")
-  const tieneIdentificacion = operaciones.some((operacion) => operacion.umbralStatus === "identificacion")
-  const actividadesUnicas = new Set(operaciones.map((operacion) => operacion.actividadNombre)).size
-  const tipoCliente = expediente?.tipoCliente?.toLowerCase() ?? ""
+const getSelectedOption = (question: RiskQuestion) =>
+  question.options.find((option) => option.value === question.selectedValue) ?? question.options[0]
 
-  const perfilScore = tipoCliente.includes("moral") ? 3 : tipoCliente.includes("fideicomiso") ? 4 : 2
-  const productoScore = actividadesUnicas >= 3 ? 4 : actividadesUnicas === 2 ? 3 : 2
-  const canalScore = operaciones.length >= 6 ? 4 : operaciones.length >= 3 ? 3 : 2
-  const volumenScore = totalMonto >= 1000000 ? 5 : totalMonto >= 500000 ? 4 : totalMonto >= 100000 ? 3 : 2
-  const cumplimientoScore = alertas.length > 0 ? 4 : tieneIdentificacion ? 3 : 2
-
-  return initialRiskFactors.map((factor) => {
-    switch (factor.id) {
-      case "rf-01":
-        return { ...factor, score: perfilScore }
-      case "rf-02":
-        return { ...factor, score: productoScore }
-      case "rf-03":
-        return { ...factor, score: canalScore }
-      case "rf-04":
-        return { ...factor, score: volumenScore }
-      case "rf-05":
-        return { ...factor, score: cumplimientoScore }
-      default:
-        return factor
-    }
-  })
-}
+const getMaxScore = (question: RiskQuestion) =>
+  question.options.reduce((max, option) => (option.score > max ? option.score : max), 0)
 
 export default function EbrPage() {
   const { language } = useLanguage()
@@ -156,7 +209,7 @@ export default function EbrPage() {
   const [operaciones, setOperaciones] = useState<OperacionCliente[]>([])
   const [evaluacionesGuardadas, setEvaluacionesGuardadas] = useState<Record<string, StoredEvaluation>>({})
   const [clienteSeleccionado, setClienteSeleccionado] = useState("")
-  const [riskFactors, setRiskFactors] = useState<RiskFactor[]>(initialRiskFactors)
+  const [riskQuestions, setRiskQuestions] = useState<RiskQuestion[]>(initialRiskQuestions)
   const [notes, setNotes] = useState("")
 
   useEffect(() => {
@@ -243,29 +296,29 @@ export default function EbrPage() {
     if (!clienteSeleccionado) return
     const stored = evaluacionesGuardadas[clienteSeleccionado]
     if (stored) {
-      setRiskFactors(stored.riskFactors)
+      setRiskQuestions(stored.riskQuestions)
       setNotes(stored.notes)
       return
     }
 
-    setRiskFactors(buildRiskFactorsFromData(operacionesCliente, expedienteActual))
+    setRiskQuestions(initialRiskQuestions)
     setNotes("")
   }, [clienteSeleccionado, evaluacionesGuardadas, operacionesCliente, expedienteActual])
 
-  const totalWeight = useMemo(
-    () => riskFactors.reduce((sum, factor) => sum + factor.weight, 0),
-    [riskFactors],
+  const totalScore = useMemo(
+    () => riskQuestions.reduce((sum, question) => sum + getSelectedOption(question).score, 0),
+    [riskQuestions],
   )
 
-  const totalScore = useMemo(
-    () => riskFactors.reduce((sum, factor) => sum + factor.weight * factor.score, 0),
-    [riskFactors],
+  const maxScore = useMemo(
+    () => riskQuestions.reduce((sum, question) => sum + getMaxScore(question), 0),
+    [riskQuestions],
   )
 
   const scorePercent = useMemo(() => {
-    const maxScore = totalWeight * 5
+    if (!maxScore) return 0
     return Math.round((totalScore / maxScore) * 100)
-  }, [totalScore, totalWeight])
+  }, [totalScore, maxScore])
 
   const riskLevel = useMemo(() => {
     if (scorePercent < 35) return "Bajo"
@@ -280,8 +333,8 @@ export default function EbrPage() {
   }
 
   const updateRiskScore = (id: string, value: string) => {
-    setRiskFactors((prev) =>
-      prev.map((factor) => (factor.id === id ? { ...factor, score: Number(value) } : factor)),
+    setRiskQuestions((prev) =>
+      prev.map((question) => (question.id === id ? { ...question, selectedValue: value } : question)),
     )
   }
 
@@ -355,7 +408,7 @@ export default function EbrPage() {
     if (!clienteSeleccionado) return
     const updated: StoredEvaluation = {
       rfc: clienteSeleccionado,
-      riskFactors,
+      riskQuestions,
       notes,
       updatedAt: new Date().toISOString(),
     }
@@ -493,7 +546,7 @@ export default function EbrPage() {
 
       <Tabs defaultValue="matriz" className="space-y-6">
         <TabsList className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3">
-          <TabsTrigger value="matriz">Matriz de riesgo</TabsTrigger>
+          <TabsTrigger value="matriz">Perfil del sujeto obligado</TabsTrigger>
           <TabsTrigger value="mitigacion">Plan de mitigación</TabsTrigger>
           <TabsTrigger value="seguimiento">Seguimiento</TabsTrigger>
         </TabsList>
@@ -501,40 +554,111 @@ export default function EbrPage() {
         <TabsContent value="matriz" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Matriz de evaluación</CardTitle>
-              <CardDescription>Actualiza el puntaje de cada factor para recalcular el riesgo global.</CardDescription>
+              <CardTitle>Perfil de Riesgo del Sujeto Obligado</CardTitle>
+              <CardDescription>
+                Captura las preguntas clave del sujeto obligado con puntajes de 1 a 3; los países
+                Corea del Norte, Irán y Myanmar se califican con 4 puntos.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {riskFactors.map((factor) => (
-                <div
-                  key={factor.id}
-                  className="rounded-lg border border-border p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
-                >
-                  <div className="space-y-1">
-                    <p className="font-medium text-gray-900">{factor.name}</p>
-                    <p className="text-sm text-muted-foreground">{factor.description}</p>
+            <CardContent className="space-y-6">
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-sm text-muted-foreground">Nombre del Sujeto Obligado</p>
+                <p className="text-base font-medium text-gray-900">
+                  {expedienteActual?.nombre ?? "Sin expediente asociado"}
+                </p>
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Características del Sujeto Obligado</p>
+                    <p className="text-sm text-muted-foreground">
+                      Perfil operativo, legal y de cumplimiento del sujeto obligado.
+                    </p>
                   </div>
-                  <div className="flex flex-col gap-2 md:items-end">
-                    <span className="text-xs text-muted-foreground">Peso: {factor.weight}%</span>
-                    <Select value={String(factor.score)} onValueChange={(value) => updateRiskScore(factor.id, value)}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Selecciona" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {scoreOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {riskQuestions
+                    .filter((question) => question.group === "caracteristicas")
+                    .map((question) => (
+                      <div
+                        key={question.id}
+                        className="rounded-lg border border-border p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+                      >
+                        <div className="space-y-1">
+                          <p className="font-medium text-gray-900">{question.name}</p>
+                          <p className="text-sm text-muted-foreground">{question.description}</p>
+                        </div>
+                        <div className="flex flex-col gap-2 md:items-end">
+                          <span className="text-xs text-muted-foreground">
+                            Puntaje: {getSelectedOption(question).score}
+                          </span>
+                          <Select
+                            value={question.selectedValue}
+                            onValueChange={(value) => updateRiskScore(question.id, value)}
+                          >
+                            <SelectTrigger className="w-[220px]">
+                              <SelectValue placeholder="Selecciona" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {question.options.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ))}
                 </div>
-              ))}
+
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      Zonas y Áreas Geográficas en que opera el Sujeto Obligado
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Países de nacionalidad y residencia con mayor exposición geográfica.
+                    </p>
+                  </div>
+                  {riskQuestions
+                    .filter((question) => question.group === "zonas")
+                    .map((question) => (
+                      <div
+                        key={question.id}
+                        className="rounded-lg border border-border p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+                      >
+                        <div className="space-y-1">
+                          <p className="font-medium text-gray-900">{question.name}</p>
+                          <p className="text-sm text-muted-foreground">{question.description}</p>
+                        </div>
+                        <div className="flex flex-col gap-2 md:items-end">
+                          <span className="text-xs text-muted-foreground">
+                            Puntaje: {getSelectedOption(question).score}
+                          </span>
+                          <Select
+                            value={question.selectedValue}
+                            onValueChange={(value) => updateRiskScore(question.id, value)}
+                          >
+                            <SelectTrigger className="w-[220px]">
+                              <SelectValue placeholder="Selecciona" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {question.options.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
 
               <div className="rounded-lg bg-muted/50 p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Puntaje ponderado total</p>
+                  <p className="text-sm text-muted-foreground">Puntaje total</p>
                   <p className="text-2xl font-semibold text-gray-900">{scorePercent}%</p>
                 </div>
                 <Badge className={riskBadgeStyles[riskLevel as keyof typeof riskBadgeStyles]}>
