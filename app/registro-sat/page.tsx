@@ -1339,7 +1339,7 @@ export default function RegistroSATPage() {
 
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf")
     pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-      "pdfjs-dist/build/pdf.worker.min.mjs",
+      "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
       import.meta.url,
     ).toString()
     const buffer = await file.arrayBuffer()
