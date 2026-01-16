@@ -1341,7 +1341,7 @@ export default function RegistroSATPage() {
     const pdfjs = "default" in pdfjsModule ? pdfjsModule.default : pdfjsModule
     if (!pdfjs.GlobalWorkerOptions.workerSrc) {
       pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-        "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+        "pdfjs-dist/legacy/build/pdf.worker.min.js",
         import.meta.url,
       ).toString()
     }
