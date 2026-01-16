@@ -746,6 +746,9 @@ const extraerDatosRegistroDesdeTexto = (textoPlano: string) => {
   const denominacionMatch = texto.match(
     /Denominaci[oó]n o raz[oó]n social:\s*(.+?)\s*Fecha de constituci[oó]n/i,
   )
+  const denominacionAcuseMatch = texto.match(
+    /Denominaci[oó]n o raz[oó]n social:\s*([A-ZÁÉÍÓÚÑ0-9/.\s]+?)\s*(RFC:|FECHA|PA[IÍ]S|NACIONALIDAD|$)/i,
+  )
   const identificacionMatch = texto.match(
     /([A-ZÁÉÍÓÚÑ0-9/.\s]+?)\s+(\d{2}\/\d{2}\/\d{4})\s+([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})/i,
   )
@@ -753,7 +756,9 @@ const extraerDatosRegistroDesdeTexto = (textoPlano: string) => {
     /([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})\s+([A-ZÁÉÍÓÚÑ0-9/.\s]+?)\s+(\d{2}\/\d{2}\/\d{4})/i,
   )
   const rfcMatch = texto.match(/RFC:\s*([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})/i)
+  const rfcLibreMatch = texto.match(/[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}/)
   const fechaConstitucionMatch = texto.match(/Fecha de constituci[oó]n:\s*(\d{2}\/\d{2}\/\d{4})/i)
+  const fechaLibreMatch = texto.match(/\d{2}\/\d{2}\/\d{4}/)
   const nacionalidadMatch = texto.match(/Pa[ií]s de nacionalidad:\s*([A-ZÁÉÍÓÚÑ\s]+)/i)
   const paisConstitucionMatch = texto.match(
     /PA[IÍ]S DE CONSTITUCI[OÓ]N:\s*([A-ZÁÉÍÓÚÑ\s]+)\s+NACIONALIDAD:\s*([A-ZÁÉÍÓÚÑ\s]+)/i,
@@ -763,17 +768,22 @@ const extraerDatosRegistroDesdeTexto = (textoPlano: string) => {
 
   const nombreExtraido = normalizarEspacios(
     denominacionMatch?.[1]?.trim() ??
+      denominacionAcuseMatch?.[1]?.trim() ??
       identificacionMatch?.[1]?.trim() ??
       identificacionInvertidaMatch?.[2]?.trim() ??
       "",
   )
   const fechaExtraida = convertirFecha(
-    fechaConstitucionMatch?.[1] ?? identificacionMatch?.[2] ?? identificacionInvertidaMatch?.[3],
+    fechaConstitucionMatch?.[1] ??
+      identificacionMatch?.[2] ??
+      identificacionInvertidaMatch?.[3] ??
+      fechaLibreMatch?.[0],
   )
   const rfcExtraido =
     rfcMatch?.[1]?.trim() ??
     identificacionMatch?.[3]?.trim() ??
     identificacionInvertidaMatch?.[1]?.trim() ??
+    rfcLibreMatch?.[0]?.trim() ??
     ""
 
   datos.identificacion = {
@@ -1545,10 +1555,28 @@ export default function RegistroSATPage() {
           datosExtraidos = hayDatosExtraidos ? candidato : null
           if (datosExtraidos) {
             aplicarDatosExtraidos(datosExtraidos)
+          } else {
+            toast({
+              title: "No se detectaron campos automáticamente",
+              description:
+                "Se cargó el documento, pero el formato no coincidió. Puedes completar los datos manualmente.",
+            })
           }
+        } else {
+          toast({
+            title: "Documento sin texto detectable",
+            description:
+              "No se pudo leer contenido en el PDF. Si es un escaneo, intenta con el XML o captura manualmente.",
+          })
         }
       } catch (error) {
         console.error("No se pudo extraer texto del documento", error)
+        toast({
+          title: "No se pudo leer el documento",
+          description:
+            "El PDF puede estar escaneado o sin texto seleccionable. Considera cargar el XML o capturar manualmente.",
+          variant: "destructive",
+        })
       }
 
       const documento = await crearDocumentoDesdeArchivo(file, tipoDoc)
