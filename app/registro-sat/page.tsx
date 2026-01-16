@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { actividadesVulnerables } from "@/lib/data/actividades"
 import { findCodigoPostalInfo, registerCodigoPostalInfo, type CodigoPostalInfo } from "@/lib/data/codigos-postales"
-import { PAISES } from "@/lib/data/paises"
+import { PAISES, findPaisByNombre } from "@/lib/data/paises"
 import { readFileAsDataUrl } from "@/lib/storage/read-file"
 import { cn } from "@/lib/utils"
 import { Building2, ClipboardList, FileText, Paperclip, ShieldCheck, Upload, UserCog } from "lucide-react"
@@ -608,6 +608,261 @@ const ejemplosSujetosObligados: EjemploSujetoObligado[] = [
 ]
 
 const normalizarTexto = (valor: unknown) => (typeof valor === "string" ? valor : "")
+const normalizarEspacios = (texto: string) => texto.replace(/\s+/g, " ").trim()
+const normalizarBusqueda = (texto: string) =>
+  texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+
+const obtenerCodigoPais = (pais?: string) => {
+  if (!pais) return ""
+  const encontrado = findPaisByNombre(pais)?.code
+  if (encontrado) return encontrado
+  const normalizado = normalizarBusqueda(pais)
+  if (normalizado.includes("mexic")) return "MX"
+  if (normalizado.includes("estados unidos")) return "US"
+  return ""
+}
+
+const convertirFecha = (valor?: string) => {
+  if (!valor) return ""
+  const match = valor.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+  if (!match) return ""
+  const [, dia, mes, anio] = match
+  return `${anio}-${mes}-${dia}`
+}
+
+const encontrarActividadKey = (actividad: string) => {
+  if (!actividad) return ""
+  const actividadNormalizada = normalizarBusqueda(actividad)
+  return (
+    actividadesVulnerables.find((item) => {
+      const nombreNormalizado = normalizarBusqueda(item.nombre)
+      return (
+        actividadNormalizada.includes(nombreNormalizado) || nombreNormalizado.includes(actividadNormalizada)
+      )
+    })?.key ?? ""
+  )
+}
+
+const extraerContactosDesdeTexto = (textoPlano: string): ContactoSujeto[] => {
+  const texto = normalizarEspacios(textoPlano)
+  const contactos: ContactoSujeto[] = []
+
+  const detalleRegex =
+    /Clave lada:\s*([0-9]{2,3})\s*Número de teléfono:\s*([0-9]+)\s*Correo electrónico:\s*([^\s]+)\s*Celular:\s*([0-9]+)/gi
+  const acuseRegex =
+    /Clave Lada:\s*([0-9]{2,3})\s*Telef[oó]no:\s*([0-9]+)\s*Celular:\s*([0-9]+)\s*Correo electrónico:\s*([^\s]+)/gi
+
+  const capturar = (match: RegExpExecArray) => {
+    contactos.push({
+      nombreCompleto: "",
+      claveLada: match[1] ?? "",
+      telefonoFijo: match[2] ?? "",
+      extension: "",
+      telefonoMovil: match[4] ?? "",
+      correo: match[3] ?? "",
+    })
+  }
+
+  let match = detalleRegex.exec(texto)
+  while (match) {
+    capturar(match)
+    match = detalleRegex.exec(texto)
+  }
+
+  match = acuseRegex.exec(texto)
+  while (match) {
+    const contacto = {
+      nombreCompleto: "",
+      claveLada: match[1] ?? "",
+      telefonoFijo: match[2] ?? "",
+      extension: "",
+      telefonoMovil: match[3] ?? "",
+      correo: match[4] ?? "",
+    }
+    contactos.push(contacto)
+    match = acuseRegex.exec(texto)
+  }
+
+  const ladas = Array.from(texto.matchAll(/Clave Lada:\s*([0-9]{2,3})/gi)).map(
+    (item) => item[1] ?? "",
+  )
+  const telefonos = Array.from(texto.matchAll(/Telef[oó]no:\s*([0-9]+)/gi)).map(
+    (item) => item[1] ?? "",
+  )
+  const celulares = Array.from(texto.matchAll(/Celular:\s*([0-9]+)/gi)).map(
+    (item) => item[1] ?? "",
+  )
+  const correos = Array.from(texto.matchAll(/Correo electrónico:\s*([^\s]+)/gi)).map(
+    (item) => item[1] ?? "",
+  )
+
+  const maxRegistros = Math.max(ladas.length, telefonos.length, celulares.length, correos.length)
+  if (maxRegistros > 0) {
+    for (let index = 0; index < maxRegistros; index += 1) {
+      contactos.push({
+        nombreCompleto: "",
+        claveLada: ladas[index] ?? "",
+        telefonoFijo: telefonos[index] ?? "",
+        extension: "",
+        telefonoMovil: celulares[index] ?? "",
+        correo: correos[index] ?? "",
+      })
+    }
+  }
+
+  const unicos = new Map<string, ContactoSujeto>()
+  contactos.forEach((contacto) => {
+    const key = `${contacto.correo}-${contacto.telefonoFijo}-${contacto.telefonoMovil}`
+    if (!unicos.has(key)) {
+      unicos.set(key, contacto)
+    }
+  })
+
+  return Array.from(unicos.values())
+}
+
+const extraerDatosRegistroDesdeTexto = (textoPlano: string) => {
+  const texto = normalizarEspacios(textoPlano.replace(/\|/g, " "))
+  const datos: {
+    tipoSujeto?: SubjectType
+    identificacion?: Partial<IdentificacionSujeto>
+    contactos?: ContactoSujeto[]
+    actividad?: Partial<ActividadSujeto>
+    domicilio?: Partial<DomicilioActividad>
+    representante?: Partial<RepresentanteCumplimiento>
+  } = {}
+
+  if (/persona\s+f[ií]sica/i.test(texto)) {
+    datos.tipoSujeto = "fisica"
+  } else if (/persona\s+moral/i.test(texto)) {
+    datos.tipoSujeto = "moral"
+  } else if (/fideicomiso/i.test(texto)) {
+    datos.tipoSujeto = "fideicomiso"
+  }
+
+  const denominacionMatch = texto.match(
+    /Denominaci[oó]n o raz[oó]n social:\s*(.+?)\s*Fecha de constituci[oó]n/i,
+  )
+  const denominacionAcuseMatch = texto.match(
+    /Denominaci[oó]n o raz[oó]n social:\s*([A-ZÁÉÍÓÚÑ0-9/.\s]+?)\s*(RFC:|FECHA|PA[IÍ]S|NACIONALIDAD|$)/i,
+  )
+  const identificacionMatch = texto.match(
+    /([A-ZÁÉÍÓÚÑ0-9/.\s]+?)\s+(\d{2}\/\d{2}\/\d{4})\s+([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})/i,
+  )
+  const identificacionInvertidaMatch = texto.match(
+    /([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})\s+([A-ZÁÉÍÓÚÑ0-9/.\s]+?)\s+(\d{2}\/\d{2}\/\d{4})/i,
+  )
+  const rfcMatch = texto.match(/RFC:\s*([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})/i)
+  const rfcLibreMatch = texto.match(/[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}/)
+  const fechaConstitucionMatch = texto.match(/Fecha de constituci[oó]n:\s*(\d{2}\/\d{2}\/\d{4})/i)
+  const fechaLibreMatch = texto.match(/\d{2}\/\d{2}\/\d{4}/)
+  const nacionalidadMatch = texto.match(/Pa[ií]s de nacionalidad:\s*([A-ZÁÉÍÓÚÑ\s]+)/i)
+  const paisConstitucionMatch = texto.match(
+    /PA[IÍ]S DE CONSTITUCI[OÓ]N:\s*([A-ZÁÉÍÓÚÑ\s]+)\s+NACIONALIDAD:\s*([A-ZÁÉÍÓÚÑ\s]+)/i,
+  )
+
+  const paisNacionalidad = (nacionalidadMatch?.[1] ?? paisConstitucionMatch?.[2] ?? "").trim()
+
+  const nombreExtraido = normalizarEspacios(
+    denominacionMatch?.[1]?.trim() ??
+      denominacionAcuseMatch?.[1]?.trim() ??
+      identificacionMatch?.[1]?.trim() ??
+      identificacionInvertidaMatch?.[2]?.trim() ??
+      "",
+  )
+  const fechaExtraida = convertirFecha(
+    fechaConstitucionMatch?.[1] ??
+      identificacionMatch?.[2] ??
+      identificacionInvertidaMatch?.[3] ??
+      fechaLibreMatch?.[0],
+  )
+  const rfcExtraido =
+    rfcMatch?.[1]?.trim() ??
+    identificacionMatch?.[3]?.trim() ??
+    identificacionInvertidaMatch?.[1]?.trim() ??
+    rfcLibreMatch?.[0]?.trim() ??
+    ""
+
+  datos.identificacion = {
+    nombre: nombreExtraido,
+    rfc: rfcExtraido,
+    fecha: fechaExtraida,
+    paisNacionalidad: obtenerCodigoPais(paisNacionalidad),
+  }
+
+  if (!datos.identificacion.nombre && /FIDEICOMISO/i.test(texto)) {
+    const fallback = texto.match(/FIDEICOMISO\s+[0-9/ A-ZÁÉÍÓÚÑ]+/i)
+    if (fallback?.[0]) {
+      datos.identificacion.nombre = fallback[0].trim()
+    }
+  }
+
+  datos.contactos = extraerContactosDesdeTexto(texto)
+
+  const actividadMatch = texto.match(
+    /Actividad vulnerable:\s*Fecha inicial:\s*([A-ZÁÉÍÓÚÑ\s]+?)\s+(\d{2}\/\d{2}\/\d{4})\s*([A-ZÁÉÍÓÚÑ\s]+)?/i,
+  )
+  const actividadAcuseMatch = texto.match(
+    /ACTIVIDAD VULNERABLE REALIZADA\s*FECHA PRIMERA OPERACION\s*([A-ZÁÉÍÓÚÑ\s]+?)\s+(\d{2}\/\d{2}\/\d{4})/i,
+  )
+  const actividadNombre =
+    actividadMatch || actividadAcuseMatch
+      ? normalizarEspacios(
+          [actividadMatch?.[1], actividadMatch?.[3]].filter(Boolean).join(" ") ||
+            actividadAcuseMatch?.[1] ||
+            "",
+        )
+      : ""
+  const fechaActividad = actividadMatch?.[2] || actividadAcuseMatch?.[2] || ""
+
+  datos.actividad = {
+    actividadKey: encontrarActividadKey(actividadNombre),
+    fechaPrimera: convertirFecha(fechaActividad),
+  }
+
+  const codigoPostalMatch = texto.match(/C[oó]digo postal:\s*(\d{5})/i)
+  const calleMatch = texto.match(/Nombre de la calle o vialidad:\s*([A-ZÁÉÍÓÚÑ0-9\s.]+?)\s*C[oó]digo postal:/i)
+  const entidadMatch = texto.match(/Entidad federativa:\s*([A-ZÁÉÍÓÚÑ\s]+)/i)
+  const coloniaMatch = texto.match(/Colonia:\s*([A-ZÁÉÍÓÚÑ0-9\s]+)/i)
+  const numeroExteriorMatch = texto.match(/N[uú]mero exterior:\s*([A-Z0-9\s]+)/i)
+  const numeroInteriorMatch = texto.match(/N[uú]mero interior:\s*([A-Z0-9\s]+)/i)
+  const alcaldiaMatch = texto.match(/Delegaci[oó]n o municipio:\s*([A-ZÁÉÍÓÚÑ0-9\s]+)/i)
+  const tipoVialidadMatch = texto.match(/Tipo de vialidad:\s*([A-ZÁÉÍÓÚÑ\s]+)/i)
+
+  datos.domicilio = {
+    codigoPostal: codigoPostalMatch?.[1] ?? "",
+    nombreVialidad: calleMatch?.[1]?.trim() ?? "",
+    entidad: entidadMatch?.[1]?.trim() ?? "",
+    colonia: coloniaMatch?.[1]?.trim() ?? "",
+    numeroExterior: numeroExteriorMatch?.[1]?.trim() ?? "",
+    numeroInterior: numeroInteriorMatch?.[1]?.trim() ?? "",
+    alcaldia: alcaldiaMatch?.[1]?.trim() ?? "",
+    tipoVialidad: tipoVialidadMatch?.[1]?.trim() ?? "",
+    pais: "México",
+  }
+
+  const representanteMatch = texto.match(
+    /Nombre:\s*([A-ZÁÉÍÓÚÑ\s]+?)\s*Fecha de nacimiento:\s*(\d{2}\/\d{2}\/\d{4})\s*Pa[ií]s de nacionalidad:\s*([A-ZÁÉÍÓÚÑ\s]+?)\s*Apellido paterno:\s*([A-ZÁÉÍÓÚÑ\s]+?)\s*RFC:\s*([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})\s*Apellido materno:\s*([A-ZÁÉÍÓÚÑ\s]+?)\s*CURP:\s*([A-Z0-9]{18})\s*Fecha de designaci[oó]n:\s*(\d{2}\/\d{2}\/\d{4})/i,
+  )
+
+  if (representanteMatch) {
+    datos.representante = {
+      nombre: representanteMatch[1]?.trim() ?? "",
+      fechaNacimiento: convertirFecha(representanteMatch[2]),
+      paisNacionalidad: obtenerCodigoPais(representanteMatch[3]),
+      apellidoPaterno: representanteMatch[4]?.trim() ?? "",
+      rfc: representanteMatch[5]?.trim() ?? "",
+      apellidoMaterno: representanteMatch[6]?.trim() ?? "",
+      curp: representanteMatch[7]?.trim() ?? "",
+      fechaDesignacion: convertirFecha(representanteMatch[8]),
+    }
+  }
+
+  return datos
+}
 
 const construirNombreSujeto = (tipo: SubjectType, identificacion: IdentificacionSujeto) => {
   if (tipo === "fisica") {
@@ -1076,6 +1331,34 @@ export default function RegistroSATPage() {
     }
   }
 
+  const obtenerTextoDocumentoRegistro = async (file: File) => {
+    const esPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+    if (!esPdf) {
+      return file.text()
+    }
+
+    const pdfjsModule = await import("pdfjs-dist")
+    const pdfjs = "default" in pdfjsModule ? pdfjsModule.default : pdfjsModule
+    if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+      pdfjs.GlobalWorkerOptions.workerSrc =
+        "https://unpkg.com/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs"
+    }
+    const buffer = await file.arrayBuffer()
+    const pdf = await pdfjs.getDocument({ data: buffer, disableWorker: true }).promise
+    let textoCompleto = ""
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber)
+      const content = await page.getTextContent()
+      const items = content.items as Array<{ str?: string }>
+      const pageText = items.map((item) => item.str ?? "").join(" ")
+      textoCompleto += ` ${pageText}`
+    }
+
+    return textoCompleto
+  }
+
+
   const actualizarEstatusDatoChecklist = (id: string, completed: boolean) => {
     setDatosChecklistState((prev) => ({
       ...prev,
@@ -1260,6 +1543,47 @@ export default function RegistroSATPage() {
     if (!file) return
 
     try {
+      let datosExtraidos: ReturnType<typeof extraerDatosRegistroDesdeTexto> | null = null
+      try {
+        const texto = await obtenerTextoDocumentoRegistro(file)
+        if (texto.trim()) {
+          const candidato = extraerDatosRegistroDesdeTexto(texto)
+          const hayDatosExtraidos = Boolean(
+            candidato.tipoSujeto ||
+              candidato.identificacion?.nombre ||
+              candidato.identificacion?.rfc ||
+              candidato.contactos?.length ||
+              candidato.actividad?.actividadKey ||
+              candidato.domicilio?.codigoPostal ||
+              candidato.representante?.rfc,
+          )
+          datosExtraidos = hayDatosExtraidos ? candidato : null
+          if (datosExtraidos) {
+            aplicarDatosExtraidos(datosExtraidos)
+          } else {
+            toast({
+              title: "No se detectaron campos automáticamente",
+              description:
+                "Se cargó el documento, pero el formato no coincidió. Puedes completar los datos manualmente.",
+            })
+          }
+        } else {
+          toast({
+            title: "Documento sin texto detectable",
+            description:
+              "No se pudo leer contenido en el PDF. Si es un escaneo, intenta con el XML o captura manualmente.",
+          })
+        }
+      } catch (error) {
+        console.error("No se pudo extraer texto del documento", error)
+        toast({
+          title: "No se pudo leer el documento",
+          description:
+            "El PDF puede estar escaneado o sin texto seleccionable. Considera cargar el XML o capturar manualmente.",
+          variant: "destructive",
+        })
+      }
+
       const documento = await crearDocumentoDesdeArchivo(file, tipoDoc)
       setDocumentos((prev) => [documento, ...prev])
       setDocumentosRegistro((prev) => {
@@ -1270,7 +1594,9 @@ export default function RegistroSATPage() {
 
       toast({
         title: `Documento ${tipoDoc === "detalle" ? "detalle" : tipoDoc} cargado`,
-        description: `${file.name} se agregó a la carpeta de alta y registro.`,
+        description: `${file.name} se agregó a la carpeta de alta y registro.${
+          datosExtraidos ? " Se extrajeron datos automáticamente." : ""
+        }`,
       })
     } catch (error) {
       console.error("Error al guardar archivo", error)
@@ -1469,6 +1795,128 @@ export default function RegistroSATPage() {
       }
     },
     [hydrateCodigoPostalInfo],
+  )
+
+  const aplicarDatosExtraidos = useCallback(
+    (datos: ReturnType<typeof extraerDatosRegistroDesdeTexto>) => {
+      if (!datos) return
+      if (datos.tipoSujeto && (tipoSujeto === "none" || tipoSujeto === datos.tipoSujeto)) {
+        setTipoSujeto(datos.tipoSujeto)
+      }
+
+      if (datos.identificacion) {
+        setIdentificacion((prev) => ({
+          ...prev,
+          nombre: prev.nombre.trim() ? prev.nombre : datos.identificacion?.nombre ?? "",
+          rfc: prev.rfc.trim() ? prev.rfc : datos.identificacion?.rfc ?? "",
+          fecha: prev.fecha.trim() ? prev.fecha : datos.identificacion?.fecha ?? "",
+          paisNacionalidad: prev.paisNacionalidad.trim()
+            ? prev.paisNacionalidad
+            : datos.identificacion?.paisNacionalidad ?? "",
+        }))
+      }
+
+      if (datos.contactos && datos.contactos.length > 0) {
+        setContactos((prev) =>
+          prev.map((contacto, index) => {
+            const extraido = datos.contactos?.[index]
+            if (!extraido) return contacto
+            return {
+              ...contacto,
+              claveLada: contacto.claveLada.trim() ? contacto.claveLada : extraido.claveLada,
+              telefonoFijo: contacto.telefonoFijo.trim() ? contacto.telefonoFijo : extraido.telefonoFijo,
+              telefonoMovil: contacto.telefonoMovil.trim() ? contacto.telefonoMovil : extraido.telefonoMovil,
+              correo: contacto.correo.trim() ? contacto.correo : extraido.correo,
+            }
+          }),
+        )
+      }
+
+      if (datos.actividad || datos.domicilio) {
+        setActividades((prev) => {
+          const actuales = prev.length > 0 ? [...prev] : [createDefaultActividad()]
+          const primera = actuales[0] ?? createDefaultActividad()
+          actuales[0] = {
+            ...primera,
+            actividadKey: primera.actividadKey.trim()
+              ? primera.actividadKey
+              : datos.actividad?.actividadKey ?? "",
+            fechaPrimera: primera.fechaPrimera.trim()
+              ? primera.fechaPrimera
+              : datos.actividad?.fechaPrimera ?? "",
+            domicilio: {
+              ...primera.domicilio,
+              codigoPostal: primera.domicilio.codigoPostal.trim()
+                ? primera.domicilio.codigoPostal
+                : datos.domicilio?.codigoPostal ?? "",
+              tipoVialidad: primera.domicilio.tipoVialidad.trim()
+                ? primera.domicilio.tipoVialidad
+                : datos.domicilio?.tipoVialidad ?? "",
+              nombreVialidad: primera.domicilio.nombreVialidad.trim()
+                ? primera.domicilio.nombreVialidad
+                : datos.domicilio?.nombreVialidad ?? "",
+              numeroExterior: primera.domicilio.numeroExterior.trim()
+                ? primera.domicilio.numeroExterior
+                : datos.domicilio?.numeroExterior ?? "",
+              numeroInterior: primera.domicilio.numeroInterior.trim()
+                ? primera.domicilio.numeroInterior
+                : datos.domicilio?.numeroInterior ?? "",
+              colonia: primera.domicilio.colonia.trim()
+                ? primera.domicilio.colonia
+                : datos.domicilio?.colonia ?? "",
+              alcaldia: primera.domicilio.alcaldia.trim()
+                ? primera.domicilio.alcaldia
+                : datos.domicilio?.alcaldia ?? "",
+              entidad: primera.domicilio.entidad.trim()
+                ? primera.domicilio.entidad
+                : datos.domicilio?.entidad ?? "",
+              pais: primera.domicilio.pais.trim() ? primera.domicilio.pais : datos.domicilio?.pais ?? "",
+            },
+          }
+          return actuales
+        })
+
+        if (datos.domicilio?.codigoPostal) {
+          handleCodigoPostalChange(0, datos.domicilio.codigoPostal)
+          hydrateCodigoPostalInfo(0, datos.domicilio.codigoPostal)
+        }
+      }
+
+      const tipoAplicable = datos.tipoSujeto ?? tipoSujeto
+      if (datos.representante && (tipoAplicable === "moral" || tipoAplicable === "fideicomiso")) {
+        setRepresentante((prev) => ({
+          ...prev,
+          nombre: prev.nombre.trim() ? prev.nombre : datos.representante?.nombre ?? "",
+          apellidoPaterno: prev.apellidoPaterno.trim()
+            ? prev.apellidoPaterno
+            : datos.representante?.apellidoPaterno ?? "",
+          apellidoMaterno: prev.apellidoMaterno.trim()
+            ? prev.apellidoMaterno
+            : datos.representante?.apellidoMaterno ?? "",
+          fechaNacimiento: prev.fechaNacimiento.trim()
+            ? prev.fechaNacimiento
+            : datos.representante?.fechaNacimiento ?? "",
+          rfc: prev.rfc.trim() ? prev.rfc : datos.representante?.rfc ?? "",
+          curp: prev.curp.trim() ? prev.curp : datos.representante?.curp ?? "",
+          paisNacionalidad: prev.paisNacionalidad.trim()
+            ? prev.paisNacionalidad
+            : datos.representante?.paisNacionalidad ?? "",
+          fechaDesignacion: prev.fechaDesignacion.trim()
+            ? prev.fechaDesignacion
+            : datos.representante?.fechaDesignacion ?? "",
+        }))
+      }
+    },
+    [
+      handleCodigoPostalChange,
+      hydrateCodigoPostalInfo,
+      setActividades,
+      setContactos,
+      setIdentificacion,
+      setTipoSujeto,
+      setRepresentante,
+      tipoSujeto,
+    ],
   )
 
   const agregarActividad = () => {
