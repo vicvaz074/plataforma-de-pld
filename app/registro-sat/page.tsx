@@ -1338,12 +1338,11 @@ export default function RegistroSATPage() {
     }
 
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf")
-    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-      "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
-      import.meta.url,
-    ).toString()
+    if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`
+    }
     const buffer = await file.arrayBuffer()
-    const pdf = await pdfjs.getDocument({ data: buffer }).promise
+    const pdf = await pdfjs.getDocument({ data: buffer, disableWorker: true }).promise
     let textoCompleto = ""
 
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
