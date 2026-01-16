@@ -1338,9 +1338,10 @@ export default function RegistroSATPage() {
     }
 
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf")
-    if (pdfjs.GlobalWorkerOptions?.workerSrc === undefined) {
-      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`
-    }
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+      "pdfjs-dist/build/pdf.worker.min.mjs",
+      import.meta.url,
+    ).toString()
     const buffer = await file.arrayBuffer()
     const pdf = await pdfjs.getDocument({ data: buffer }).promise
     let textoCompleto = ""
