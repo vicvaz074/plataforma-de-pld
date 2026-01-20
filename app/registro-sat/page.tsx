@@ -861,6 +861,45 @@ const extraerDatosRegistroDesdeTexto = (textoPlano: string) => {
     }
   }
 
+  if (/ACEPTACI[OÓ]N DE DESIGNACI[OÓ]N/i.test(texto) || /DESIGNACI[OÓ]N DE RESPONSABLE DE CUMPLIMIENTO/i.test(texto)) {
+    const identidadMatch = texto.match(
+      /NOMBRE\(S\):\s*([A-ZÁÉÍÓÚÑ\s]+?)\s*PRIMER APELLIDO:\s*([A-ZÁÉÍÓÚÑ\s]+?)\s*SEGUNDO APELLIDO:\s*([A-ZÁÉÍÓÚÑ\s]+?)\s*FECHA DE NACIMIENTO:\s*(\d{2}\/\d{2}\/\d{4})\s*PA[IÍ]S DE NACIMIENTO:\s*([A-ZÁÉÍÓÚÑ\s]+?)\s*PA[IÍ]S DE NACIONALIDAD:\s*([A-ZÁÉÍÓÚÑ\s]+)/i,
+    )
+    const curpNombreMatch = texto.match(
+      /([A-Z]{4}\d{6}[A-Z0-9]{8})\s+([A-ZÁÉÍÓÚÑ]+)\s+([A-ZÁÉÍÓÚÑ]+)(?:\s+([A-ZÁÉÍÓÚÑ]+))?/,
+    )
+    const rfcAceptacionMatch = texto.match(/RFC:\s*([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})/i)
+    const curpMatch = texto.match(/[A-Z]{4}\d{6}[A-Z0-9]{8}/)
+    const fechasAceptacion = Array.from(texto.matchAll(/ACEPTAD[OA]\s*(\d{2}\/\d{2}\/\d{4})/gi)).map(
+      (match) => match[1] ?? "",
+    )
+    const contactoAceptacion = {
+      claveLada: texto.match(/Clave Lada:\s*([0-9]{2,3})/i)?.[1] ?? "",
+      telefonoFijo: texto.match(/Telef[oó]no:\s*([0-9]+)/i)?.[1] ?? "",
+      extension: "",
+      telefonoMovil: texto.match(/Celular:\s*([0-9]+)/i)?.[1] ?? "",
+      correo: texto.match(/Correo electr[oó]nico:\s*([^\s]+)/i)?.[1] ?? "",
+    }
+
+    datos.representante = {
+      ...datos.representante,
+      nombre: identidadMatch?.[1]?.trim() ?? curpNombreMatch?.[2]?.trim() ?? datos.representante?.nombre ?? "",
+      apellidoPaterno:
+        identidadMatch?.[2]?.trim() ?? curpNombreMatch?.[3]?.trim() ?? datos.representante?.apellidoPaterno ?? "",
+      apellidoMaterno:
+        identidadMatch?.[3]?.trim() ?? curpNombreMatch?.[4]?.trim() ?? datos.representante?.apellidoMaterno ?? "",
+      fechaNacimiento:
+        convertirFecha(identidadMatch?.[4] ?? "") ||
+        datos.representante?.fechaNacimiento ||
+        "",
+      paisNacionalidad: obtenerCodigoPais(identidadMatch?.[6] ?? "") || datos.representante?.paisNacionalidad || "",
+      rfc: rfcAceptacionMatch?.[1]?.trim() ?? datos.representante?.rfc ?? "",
+      curp: curpMatch?.[0]?.trim() ?? datos.representante?.curp ?? "",
+      fechaAceptacion: convertirFecha(fechasAceptacion[0] ?? ""),
+      contacto: contactoAceptacion,
+    }
+  }
+
   return datos
 }
 
@@ -1407,6 +1446,7 @@ export default function RegistroSATPage() {
     !!documentosRegistro.detalle && !!documentosRegistro.acuse && !!documentosRegistro.aceptacion
 
   const limpiarFormulario = () => {
+    setTipoSujeto("none")
     setIdentificacion(createDefaultIdentificacion())
     setContactos(Array.from({ length: 3 }, () => createDefaultContacto()))
     setActividades([createDefaultActividad()])
@@ -1414,6 +1454,7 @@ export default function RegistroSATPage() {
     setDocumentosRegistro({ detalle: null, acuse: null, aceptacion: null })
     setDatosChecklistState(createDefaultDatosChecklistState())
     setSujetoEnEdicionId(null)
+    setEjemploSeleccionado("")
   }
 
   const completarContactos = (contactosEjemplo: ContactoSujeto[]) =>
@@ -1527,12 +1568,10 @@ export default function RegistroSATPage() {
       return
     }
 
-    const registroCompleto = registrarSujeto(documentosRegistro, { permitirIncompleto: true })
+    registrarSujeto(documentosRegistro, { permitirIncompleto: true })
     setActiveTab("registrados")
 
-    if (registroCompleto) {
-      limpiarFormulario()
-    }
+    limpiarFormulario()
   }
 
   const manejarCargaDocumentoRegistro = async (
@@ -1635,6 +1674,11 @@ export default function RegistroSATPage() {
       title: "Edición en curso",
       description: "Actualiza los datos y vuelve a guardar para mantener los cambios.",
     })
+  }
+
+  const iniciarNuevoRegistro = () => {
+    limpiarFormulario()
+    setActiveTab("nuevo")
   }
 
   const cancelarEdicion = () => {
@@ -1904,6 +1948,24 @@ export default function RegistroSATPage() {
           fechaDesignacion: prev.fechaDesignacion.trim()
             ? prev.fechaDesignacion
             : datos.representante?.fechaDesignacion ?? "",
+          fechaAceptacion: prev.fechaAceptacion.trim()
+            ? prev.fechaAceptacion
+            : datos.representante?.fechaAceptacion ?? "",
+          contacto: {
+            ...prev.contacto,
+            claveLada: prev.contacto.claveLada.trim()
+              ? prev.contacto.claveLada
+              : datos.representante?.contacto?.claveLada ?? "",
+            telefonoFijo: prev.contacto.telefonoFijo.trim()
+              ? prev.contacto.telefonoFijo
+              : datos.representante?.contacto?.telefonoFijo ?? "",
+            telefonoMovil: prev.contacto.telefonoMovil.trim()
+              ? prev.contacto.telefonoMovil
+              : datos.representante?.contacto?.telefonoMovil ?? "",
+            correo: prev.contacto.correo.trim()
+              ? prev.contacto.correo
+              : datos.representante?.contacto?.correo ?? "",
+          },
         }))
       }
     },
@@ -2057,18 +2119,25 @@ export default function RegistroSATPage() {
 
         <TabsContent value="registrados" className="space-y-4">
           <Card>
-              <CardHeader className="space-y-1">
-                <CardTitle className="flex items-center gap-2">
-                  <ClipboardList className="h-5 w-5" />
-                  Sujetos obligados registrados
-                </CardTitle>
-                <CardDescription>
-                  Selecciona un registro para ver la información cargada y confirmar si el expediente está completo.
-                </CardDescription>
-                {sujetosRegistrados.length === 0 && (
-                  <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
-                    <span>No hay registros aún.</span>
-                  <Button size="sm" onClick={() => setActiveTab("nuevo")}>
+            <CardHeader className="space-y-2">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <CardTitle className="flex items-center gap-2">
+                    <ClipboardList className="h-5 w-5" />
+                    Sujetos obligados registrados
+                  </CardTitle>
+                  <CardDescription>
+                    Selecciona un registro para ver la información cargada y confirmar si el expediente está completo.
+                  </CardDescription>
+                </div>
+                <Button size="sm" onClick={iniciarNuevoRegistro}>
+                  Registrar nuevo sujeto obligado
+                </Button>
+              </div>
+              {sujetosRegistrados.length === 0 && (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+                  <span>No hay registros aún.</span>
+                  <Button size="sm" onClick={iniciarNuevoRegistro}>
                     Comenzar un registro
                   </Button>
                 </div>
