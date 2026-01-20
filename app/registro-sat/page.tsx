@@ -870,6 +870,7 @@ const extraerDatosRegistroDesdeTexto = (textoPlano: string) => {
     )
     const rfcAceptacionMatch = texto.match(/RFC:\s*([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})/i)
     const curpMatch = texto.match(/[A-Z]{4}\d{6}[A-Z0-9]{8}/)
+    const fechaEstadoMatch = texto.match(/Fecha de estado:\s*(\d{2}\/\d{2}\/\d{4})/i)
     const fechasAceptacion = Array.from(texto.matchAll(/ACEPTAD[OA]\s*(\d{2}\/\d{2}\/\d{4})/gi)).map(
       (match) => match[1] ?? "",
     )
@@ -895,6 +896,7 @@ const extraerDatosRegistroDesdeTexto = (textoPlano: string) => {
       paisNacionalidad: obtenerCodigoPais(identidadMatch?.[6] ?? "") || datos.representante?.paisNacionalidad || "",
       rfc: rfcAceptacionMatch?.[1]?.trim() ?? datos.representante?.rfc ?? "",
       curp: curpMatch?.[0]?.trim() ?? datos.representante?.curp ?? "",
+      fechaDesignacion: convertirFecha(fechaEstadoMatch?.[1] ?? "") || datos.representante?.fechaDesignacion || "",
       fechaAceptacion: convertirFecha(fechasAceptacion[0] ?? ""),
       contacto: contactoAceptacion,
     }
