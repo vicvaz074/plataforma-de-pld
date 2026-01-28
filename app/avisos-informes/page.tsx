@@ -43,7 +43,6 @@ import {
   ListChecks,
   RefreshCcw,
   Shield,
-  Upload,
   UserCheck,
   Users,
 } from "lucide-react"
@@ -364,7 +363,7 @@ const EBR_STORAGE_KEY = "ebr_evaluaciones"
 
 export default function AvisosInformesPage() {
   const { toast } = useToast()
-  const [selectedTab, setSelectedTab] = useState("overview")
+  const [selectedTab, setSelectedTab] = useState("aviso")
   const [selectedOperationType, setSelectedOperationType] = useState<OperationType>("relevante")
   const [noticeForm, setNoticeForm] = useState<NoticeFormState>(initialNoticeForm)
   const [checklistState, setChecklistState] = useState<Record<string, ChecklistState>>(() =>
@@ -937,7 +936,7 @@ export default function AvisosInformesPage() {
         detectionTime: toTimeInput(fechaOperacion),
       }))
     }
-    setSelectedTab("checklist")
+    setSelectedTab("aviso")
 
     setTraceabilityEntries((prev) => [
       {
@@ -979,116 +978,20 @@ export default function AvisosInformesPage() {
       </div>
 
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="overview" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" /> Resumen
-          </TabsTrigger>
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="integraciones" className="flex items-center gap-2">
             <Link2 className="h-4 w-4" /> Integraciones
           </TabsTrigger>
           <TabsTrigger value="reportes" className="flex items-center gap-2">
             <FileUp className="h-4 w-4" /> Reportes
           </TabsTrigger>
-          <TabsTrigger value="checklist" className="flex items-center gap-2">
-            <ListChecks className="h-4 w-4" /> Checklist
-          </TabsTrigger>
-          <TabsTrigger value="documentos" className="flex items-center gap-2">
-            <Upload className="h-4 w-4" /> Evidencias
+          <TabsTrigger value="aviso" className="flex items-center gap-2">
+            <ListChecks className="h-4 w-4" /> Aviso
           </TabsTrigger>
           <TabsTrigger value="trazabilidad" className="flex items-center gap-2">
             <History className="h-4 w-4" /> Trazabilidad
           </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="overview" className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-3">
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <CardTitle>Descripción general</CardTitle>
-                <CardDescription>
-                  Centraliza la preparación de avisos, valida plazos y concentra evidencia clave para envío ante UIF/SAT.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-3">
-                  {Object.entries(operationTypeLabels).map(([key, label]) => (
-                    <div
-                      key={key}
-                      className={`rounded-lg border p-4 transition ${
-                        selectedOperationType === key ? "border-primary bg-primary/5" : "border-border"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold">{label}</span>
-                        <Badge variant={selectedOperationType === key ? "default" : "outline"}>
-                          {selectedOperationType === key ? "Seleccionado" : "Disponible"}
-                        </Badge>
-                      </div>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {key === "relevante" && "Avisos por operaciones que superan los umbrales establecidos por la normativa."}
-                        {key === "inusual" && "Reportes de operaciones que se apartan del perfil transaccional del cliente."}
-                        {key === "interna" && "Alertas por operaciones detectadas en personal interno o sistemas."}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base">Avance del checklist</CardTitle>
-                      <CardDescription>
-                        {answeredChecklist} de {totalChecklist} preguntas respondidas.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <Progress value={(answeredChecklist / totalChecklist) * 100} className="h-2" />
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base">Evidencias registradas</CardTitle>
-                      <CardDescription>
-                        {evidenceCompletion}% de evidencias requeridas completadas para la operación actual.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <Progress value={evidenceCompletion} className="h-2" />
-                    </CardContent>
-                  </Card>
-                </div>
-
-              </CardContent>
-            </Card>
-
-            <div className="space-y-4">
-              {alerts.map((alert, index) => (
-                <Alert
-                  key={`${alert.title}-${index}`}
-                  variant={alert.type === "danger" ? "destructive" : "default"}
-                  className={alert.type === "warning" ? "border-amber-300 bg-amber-50" : undefined}
-                >
-                  {alert.type === "danger" && <AlertCircle className="h-4 w-4" />}
-                  {alert.type === "warning" && <AlertTriangle className="h-4 w-4" />}
-                  {alert.type === "info" && <Clock className="h-4 w-4" />}
-                  <AlertTitle>{alert.title}</AlertTitle>
-                  <AlertDescription>{alert.description}</AlertDescription>
-                </Alert>
-              ))}
-
-              {alerts.length === 0 && (
-                <Alert>
-                  <CheckCircle2 className="h-4 w-4" />
-                  <AlertTitle>Sin alertas críticas</AlertTitle>
-                  <AlertDescription>
-                    No hay vencimientos próximos ni validaciones pendientes para los datos registrados.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          </div>
-        </TabsContent>
 
         <TabsContent value="integraciones" className="space-y-6">
           <Card>
@@ -1469,12 +1372,98 @@ export default function AvisosInformesPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="checklist" className="space-y-6">
+        <TabsContent value="aviso" className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-3">
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle>Tipo de aviso</CardTitle>
+                <CardDescription>
+                  Selecciona el tipo de aviso y valida el avance operativo antes de enviar.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {Object.entries(operationTypeLabels).map(([key, label]) => (
+                    <div
+                      key={key}
+                      className={`rounded-lg border p-4 transition ${
+                        selectedOperationType === key ? "border-primary bg-primary/5" : "border-border"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold">{label}</span>
+                        <Badge variant={selectedOperationType === key ? "default" : "outline"}>
+                          {selectedOperationType === key ? "Seleccionado" : "Disponible"}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {key === "relevante" && "Avisos por operaciones que superan los umbrales establecidos por la normativa."}
+                        {key === "inusual" && "Reportes de operaciones que se apartan del perfil transaccional del cliente."}
+                        {key === "interna" && "Alertas por operaciones detectadas en personal interno o sistemas."}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">Avance del checklist</CardTitle>
+                      <CardDescription>
+                        {answeredChecklist} de {totalChecklist} preguntas respondidas.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Progress value={(answeredChecklist / totalChecklist) * 100} className="h-2" />
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">Evidencias registradas</CardTitle>
+                      <CardDescription>
+                        {evidenceCompletion}% de evidencias requeridas completadas para la operación actual.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Progress value={evidenceCompletion} className="h-2" />
+                    </CardContent>
+                  </Card>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="space-y-4">
+              {alerts.map((alert, index) => (
+                <Alert
+                  key={`${alert.title}-${index}`}
+                  variant={alert.type === "danger" ? "destructive" : "default"}
+                  className={alert.type === "warning" ? "border-amber-300 bg-amber-50" : undefined}
+                >
+                  {alert.type === "danger" && <AlertCircle className="h-4 w-4" />}
+                  {alert.type === "warning" && <AlertTriangle className="h-4 w-4" />}
+                  {alert.type === "info" && <Clock className="h-4 w-4" />}
+                  <AlertTitle>{alert.title}</AlertTitle>
+                  <AlertDescription>{alert.description}</AlertDescription>
+                </Alert>
+              ))}
+
+              {alerts.length === 0 && (
+                <Alert>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertTitle>Sin alertas críticas</AlertTitle>
+                  <AlertDescription>
+                    No hay vencimientos próximos ni validaciones pendientes para los datos registrados.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          </div>
           <Card>
             <CardHeader>
-              <CardTitle>Formulario dinámico de avisos</CardTitle>
+              <CardTitle>Formulario operativo de aviso</CardTitle>
               <CardDescription>
-                Selecciona el tipo de operación para habilitar los campos y evidencias requeridos por la normativa.
+                Completa fechas, folios y evidencia clave para enviar el aviso sin campos redundantes.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1635,6 +1624,46 @@ export default function AvisosInformesPage() {
                 </div>
               </div>
 
+              <div className="grid gap-4 md:grid-cols-2">
+                <UploadField label="Acuse SAT" onChange={(event) => handleFileUpload(event, "Acuse SAT")} />
+                <UploadField label="Dictamen del Oficial" onChange={(event) => handleFileUpload(event, "Dictamen Oficial")} />
+                <UploadField label="Comprobantes bancarios" onChange={(event) => handleFileUpload(event, "Comprobante bancario")} />
+                <UploadField label="Reporte de screening" onChange={(event) => handleFileUpload(event, "Reporte de screening")} />
+              </div>
+
+              <div className="space-y-3 rounded-lg border p-4">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="h-4 w-4 text-primary" />
+                  <h3 className="font-semibold">Documentos registrados</h3>
+                </div>
+                <div className="space-y-3 text-sm">
+                  {documentUploads.map((doc) => (
+                    <div key={doc.id} className="rounded-md border p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium">{doc.name}</p>
+                          <p className="text-xs text-muted-foreground">{doc.type}</p>
+                        </div>
+                        <Badge variant="outline">{doc.relatedNotice}</Badge>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Cargado por {doc.uploadedBy} el {formatDate(doc.uploadedAt)}.
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Alert className={folioAndSealValid ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}>
+                {folioAndSealValid ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <AlertTriangle className="h-4 w-4" />}
+                <AlertTitle>Validación de folio y sello digital</AlertTitle>
+                <AlertDescription>
+                  {folioAndSealValid
+                    ? "El aviso cuenta con folio UIF y sello digital registrado."
+                    : "Agrega el folio UIF y pega el sello digital del acuse SAT para completar la validación."}
+                </AlertDescription>
+              </Alert>
+
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <History className="h-4 w-4" />
@@ -1672,9 +1701,9 @@ export default function AvisosInformesPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Checklist con evidencias</CardTitle>
+              <CardTitle>Checklist mínimo</CardTitle>
               <CardDescription>
-                Documenta las respuestas a cada pregunta de control y adjunta notas o evidencias complementarias.
+                Responde únicamente los controles normativos clave para completar el envío.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1722,57 +1751,6 @@ export default function AvisosInformesPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="documentos" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Carga documental obligatoria</CardTitle>
-              <CardDescription>
-                Adjunta los documentos requeridos. El sistema valida automáticamente folios y sellos digitales.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
-                <UploadField label="Acuse SAT" onChange={(event) => handleFileUpload(event, "Acuse SAT")}/>
-                <UploadField label="Dictamen del Oficial" onChange={(event) => handleFileUpload(event, "Dictamen Oficial")}/>
-                <UploadField label="Comprobantes bancarios" onChange={(event) => handleFileUpload(event, "Comprobante bancario")}/>
-                <UploadField label="Reporte de screening" onChange={(event) => handleFileUpload(event, "Reporte de screening")}/>
-              </div>
-
-              <div className="space-y-3 rounded-lg border p-4">
-                <div className="flex items-center gap-2">
-                  <FileSpreadsheet className="h-4 w-4 text-primary" />
-                  <h3 className="font-semibold">Documentos registrados</h3>
-                </div>
-                <div className="space-y-3 text-sm">
-                  {documentUploads.map((doc) => (
-                    <div key={doc.id} className="rounded-md border p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="font-medium">{doc.name}</p>
-                          <p className="text-xs text-muted-foreground">{doc.type}</p>
-                        </div>
-                        <Badge variant="outline">{doc.relatedNotice}</Badge>
-                      </div>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Cargado por {doc.uploadedBy} el {formatDate(doc.uploadedAt)}.
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <Alert className={folioAndSealValid ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}>
-                {folioAndSealValid ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <AlertTriangle className="h-4 w-4" />}
-                <AlertTitle>Validación de folio y sello digital</AlertTitle>
-                <AlertDescription>
-                  {folioAndSealValid
-                    ? "El aviso cuenta con folio UIF y sello digital registrado."
-                    : "Agrega el folio UIF y pega el sello digital del acuse SAT para completar la validación."}
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         <TabsContent value="trazabilidad" className="space-y-6">
           <Card>
