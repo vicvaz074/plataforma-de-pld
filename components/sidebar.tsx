@@ -33,7 +33,7 @@ const navigationItems = [
   { key: "evidenciasTrazabilidad", icon: Database, href: "/evidencias-trazabilidad" },
   { key: "gobernanzaControl", icon: Settings, href: "/gobernanza-control" },
   { key: "compiladoLeyes", icon: Book, href: "/marco-normativo-aplicable" },
-  { key: "alicia", icon: Sparkles, href: "https://asistentelegal02.azurewebsites.net/", external: true },
+  { key: "alicia", icon: Sparkles, href: "/alicia" },
 ]
 
 export function Sidebar() {
@@ -62,21 +62,6 @@ export function Sidebar() {
           const isActive = pathname === item.href
           const Icon = item.icon
           const displayText = item.key === "alicia" ? aliciaT[item.key] : t[item.key]
-
-          if (item.external) {
-            return (
-              <a
-                key={item.key}
-                href={item.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 transition-colors py-3 px-3 rounded-lg text-sm text-white hover:text-white hover:bg-white/10"
-              >
-                <Icon className="w-5 h-5 flex-shrink-0" />
-                <span className="truncate">{displayText}</span>
-              </a>
-            )
-          }
 
           return (
             <Link
