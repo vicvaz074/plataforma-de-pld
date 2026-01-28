@@ -22,7 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
@@ -46,7 +45,6 @@ import {
   Shield,
   Upload,
   UserCheck,
-  UserCog,
   Users,
 } from "lucide-react"
 
@@ -375,7 +373,6 @@ export default function AvisosInformesPage() {
   const [evidenceState, setEvidenceState] = useState<Record<string, boolean>>({})
   const [documentUploads, setDocumentUploads] = useState<DocumentUpload[]>(initialDocuments)
   const [traceabilityEntries, setTraceabilityEntries] = useState<TraceabilityEntry[]>(initialTraceability)
-  const [moduleIXIntegration, setModuleIXIntegration] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [sujetosRegistro, setSujetosRegistro] = useState<RegistroSujetoResumen[]>([])
   const [expedientesEui, setExpedientesEui] = useState<ExpedienteResumen[]>([])
@@ -839,25 +836,6 @@ export default function AvisosInformesPage() {
     })
   }
 
-  const handleExport = (type: OperationType) => {
-    toast({
-      title: "Reporte generado",
-      description: `Se generó el reporte consolidado de avisos ${operationTypeLabels[type].toLowerCase()}.`,
-    })
-
-    setTraceabilityEntries((prev) => [
-      {
-        id: `export-${Date.now()}`,
-        action: `Exportación de reporte ${operationTypeLabels[type].toLowerCase()}`,
-        user: "Usuario actual",
-        timestamp: new Date(),
-        details: `Reporte descargado para conservación en Módulo IX.`,
-        noticeId: operationTypeLabels[type],
-      },
-      ...prev,
-    ])
-  }
-
   const downloadReport = (fileName: string, content: string, mimeType = "text/csv") => {
     const blob = new Blob([content], { type: mimeType })
     const url = window.URL.createObjectURL(blob)
@@ -1028,8 +1006,7 @@ export default function AvisosInformesPage() {
               <CardHeader>
                 <CardTitle>Descripción general</CardTitle>
                 <CardDescription>
-                  Alineado con los artículos 24 al 28 de las RCG, este módulo centraliza la elaboración y envío de avisos
-                  electrónicos a la UIF mediante el Portal del SAT.
+                  Centraliza la preparación de avisos, valida plazos y concentra evidencia clave para envío ante UIF/SAT.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1082,33 +1059,6 @@ export default function AvisosInformesPage() {
                   </Card>
                 </div>
 
-                <div className="rounded-lg border p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-semibold">Integración con Módulo de Evidencias y Trazabilidad</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Conservación de acuses y dictámenes por al menos 5 años en Evidencias y Trazabilidad.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={moduleIXIntegration}
-                        onCheckedChange={(checked) => {
-                          setModuleIXIntegration(checked)
-                          toast({
-                            title: checked ? "Integración activa" : "Integración desactivada",
-                            description: checked
-                              ? "Los avisos se conservarán automáticamente en el Módulo IX."
-                              : "Activa la integración para cumplir con los plazos de conservación.",
-                          })
-                        }}
-                      />
-                      <Badge variant={moduleIXIntegration ? "default" : "destructive"}>
-                        {moduleIXIntegration ? "Activa" : "Inactiva"}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
               </CardContent>
             </Card>
 
@@ -1136,28 +1086,6 @@ export default function AvisosInformesPage() {
                   </AlertDescription>
                 </Alert>
               )}
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Exportación de reportes</CardTitle>
-                  <CardDescription>
-                    Genera reportes por tipo de aviso para atender auditorías y conservar evidencia documental.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {(
-                    [
-                      ["relevante", "Descargar reporte de operaciones relevantes"],
-                      ["inusual", "Descargar reporte de operaciones inusuales"],
-                      ["interna", "Descargar reporte de operaciones internas preocupantes"],
-                    ] as [OperationType, string][]
-                  ).map(([type, label]) => (
-                    <Button key={type} variant="secondary" className="w-full justify-start gap-2" onClick={() => handleExport(type)}>
-                      <Download className="h-4 w-4" /> {label}
-                    </Button>
-                  ))}
-                </CardContent>
-              </Card>
             </div>
           </div>
         </TabsContent>
@@ -1167,8 +1095,7 @@ export default function AvisosInformesPage() {
             <CardHeader>
               <CardTitle>Vinculación con otros módulos</CardTitle>
               <CardDescription>
-                Conecta avisos con Alta y registro, Expediente único, Actos y operaciones y EBR para generar alertas y reportes
-                reales.
+                Sincroniza datos reales de Alta y registro, Expediente único, Actos y operaciones y EBR para preparar avisos.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1178,7 +1105,7 @@ export default function AvisosInformesPage() {
                   <div>
                     <p className="text-sm font-medium">Cliente / RFC en seguimiento</p>
                     <p className="text-xs text-muted-foreground">
-                      Selecciona un RFC para visualizar operaciones, expediente y evaluación EBR vinculada.
+                      Selecciona un RFC y revisa expediente, operaciones y riesgo.
                     </p>
                   </div>
                 </div>
@@ -1219,7 +1146,7 @@ export default function AvisosInformesPage() {
                     <SelectContent>
                       {sujetosDisponibles.map((sujeto) => (
                         <SelectItem key={sujeto.rfc} value={sujeto.rfc}>
-                          {sujeto.rfc} · {sujeto.nombre} ({sujeto.fuente})
+                          {sujeto.rfc} · {sujeto.nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1258,9 +1185,7 @@ export default function AvisosInformesPage() {
                   <ClipboardList className="h-5 w-5 text-primary" />
                   <CardTitle>Alta y registro</CardTitle>
                 </div>
-                <CardDescription>
-                  Información registrada del sujeto obligado y estatus documental.
-                </CardDescription>
+                <CardDescription>Datos base del sujeto obligado y estatus documental.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {sujetoRegistroSeleccionado ? (
@@ -1318,9 +1243,7 @@ export default function AvisosInformesPage() {
                   <FileText className="h-5 w-5 text-primary" />
                   <CardTitle>Expediente único de identificación</CardTitle>
                 </div>
-                <CardDescription>
-                  Validación de expediente y datos de actualización más recientes.
-                </CardDescription>
+                <CardDescription>Último expediente disponible y fecha de actualización.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {expedienteSeleccionado ? (
@@ -1365,9 +1288,7 @@ export default function AvisosInformesPage() {
                   <Activity className="h-5 w-5 text-primary" />
                   <CardTitle>Actos y operaciones</CardTitle>
                 </div>
-                <CardDescription>
-                  Operaciones del cliente con umbral y alertas para activar avisos.
-                </CardDescription>
+                <CardDescription>Operaciones con umbrales y alertas para activar avisos.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-3 rounded-lg border p-4 text-sm">
@@ -1449,9 +1370,7 @@ export default function AvisosInformesPage() {
                   <Shield className="h-5 w-5 text-primary" />
                   <CardTitle>Evaluación Basada en Riesgo (EBR)</CardTitle>
                 </div>
-                <CardDescription>
-                  Última evaluación disponible y nivel de riesgo para ajustar la narrativa del aviso.
-                </CardDescription>
+                <CardDescription>Consulta el último nivel de riesgo registrado.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {evaluacionSeleccionada ? (
@@ -1501,7 +1420,7 @@ export default function AvisosInformesPage() {
               <CardHeader>
                 <CardTitle>Reportes consolidados</CardTitle>
                 <CardDescription>
-                  Exporta información cruzada entre módulos para auditorías internas o revisiones regulatorias.
+                  Exporta información cruzada entre módulos para auditorías o revisiones regulatorias.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -1521,7 +1440,7 @@ export default function AvisosInformesPage() {
               <CardHeader>
                 <CardTitle>Indicadores de cumplimiento</CardTitle>
                 <CardDescription>
-                  Supervisa los elementos críticos antes de presentar un aviso o informe.
+                  Supervisa elementos críticos antes de presentar un aviso.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1545,12 +1464,6 @@ export default function AvisosInformesPage() {
                     <span className="font-semibold">{evaluacionesEbr.length}</span>
                   </div>
                 </div>
-                <Alert className="border-slate-200 bg-slate-50">
-                  <AlertTitle>Recomendación de cierre</AlertTitle>
-                  <AlertDescription>
-                    Antes de enviar avisos, valida que exista expediente, evaluación EBR vigente y evidencia documental completa.
-                  </AlertDescription>
-                </Alert>
               </CardContent>
             </Card>
           </div>
@@ -1866,7 +1779,7 @@ export default function AvisosInformesPage() {
             <CardHeader>
               <CardTitle>Registro cronológico del aviso</CardTitle>
               <CardDescription>
-                Visualiza las fechas clave desde la detección hasta el acuse de recepción y verifica la trazabilidad.
+                Visualiza fechas clave desde la detección hasta el acuse de recepción.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1928,43 +1841,6 @@ export default function AvisosInformesPage() {
                 </div>
               </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Acciones de auditoría</CardTitle>
-                  <CardDescription>
-                    Exporta evidencias y trazabilidad para revisiones internas o requerimientos de autoridad.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-wrap gap-3">
-                  <Button variant="outline" className="gap-2" onClick={() => handleExport(selectedOperationType)}>
-                    <Download className="h-4 w-4" /> Exportar reporte actual
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="gap-2"
-                    onClick={() =>
-                      toast({
-                        title: "Bitácora enviada",
-                        description: "Se remitió la bitácora completa al Módulo IX para conservación.",
-                      })
-                    }
-                  >
-                    <Upload className="h-4 w-4" /> Enviar a Evidencias y Trazabilidad
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="gap-2"
-                    onClick={() =>
-                      toast({
-                        title: "Auditoría programada",
-                        description: "Se registró la revisión mensual del módulo ante Auditoría Interna.",
-                      })
-                    }
-                  >
-                    <UserCog className="h-4 w-4" /> Programar revisión interna
-                  </Button>
-                </CardContent>
-              </Card>
             </CardContent>
           </Card>
         </TabsContent>
