@@ -1,7 +1,8 @@
 "use client"
 
 import type { ChangeEvent } from "react"
-import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Alert,
   AlertDescription,
@@ -31,16 +32,22 @@ import {
   AlertTriangle,
   BellRing,
   CheckCircle2,
+  ClipboardList,
   Clock,
+  Database,
   Download,
   FileSpreadsheet,
   FileText,
+  FileUp,
   History,
+  Link2,
   ListChecks,
+  RefreshCcw,
   Shield,
   Upload,
   UserCheck,
   UserCog,
+  Users,
 } from "lucide-react"
 
 interface ChecklistQuestion {
@@ -80,6 +87,52 @@ interface TraceabilityEntry {
   timestamp: Date
   details: string
   noticeId: string
+}
+
+interface RegistroSujetoResumen {
+  id: string
+  nombre: string
+  rfc: string
+  tipo: string
+  actividad: string
+  creadoEn: Date
+  registroCompleto: boolean
+  representante?: string | null
+}
+
+interface ExpedienteResumen {
+  rfc: string
+  nombre: string
+  tipoCliente?: string
+  actualizadoEn?: string
+}
+
+interface OperacionResumen {
+  id: string
+  rfc: string
+  cliente: string
+  actividadNombre: string
+  tipoOperacion: string
+  monto: number
+  fechaOperacion: string
+  umbralStatus?: "sin-obligacion" | "identificacion" | "aviso"
+  alerta?: string | null
+  avisoPresentado?: boolean
+}
+
+interface EvaluacionEbrResumen {
+  rfc: string
+  updatedAt: string
+  notes: string
+  riskQuestions?: Array<{
+    options: Array<{ value: string; score: number }>
+    selectedValue: string
+  }>
+  clientProfile?: {
+    tipoCliente?: string
+    paisResidencia?: string
+    sectorEconomico?: string
+  }
 }
 
 const checklistQuestions: ChecklistQuestion[] = [
@@ -306,6 +359,11 @@ const initialDocuments: DocumentUpload[] = [
   },
 ]
 
+const REGISTRO_STORAGE_KEY = "registro-sat-data"
+const EXPEDIENTE_STORAGE_KEY = "kyc_expedientes_detalle"
+const OPERACIONES_STORAGE_KEY = "actividades_vulnerables_operaciones"
+const EBR_STORAGE_KEY = "ebr_evaluaciones"
+
 export default function AvisosInformesPage() {
   const { toast } = useToast()
   const [selectedTab, setSelectedTab] = useState("overview")
@@ -319,17 +377,209 @@ export default function AvisosInformesPage() {
   const [traceabilityEntries, setTraceabilityEntries] = useState<TraceabilityEntry[]>(initialTraceability)
   const [moduleIXIntegration, setModuleIXIntegration] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [sujetosRegistro, setSujetosRegistro] = useState<RegistroSujetoResumen[]>([])
+  const [expedientesEui, setExpedientesEui] = useState<ExpedienteResumen[]>([])
+  const [operaciones, setOperaciones] = useState<OperacionResumen[]>([])
+  const [evaluacionesEbr, setEvaluacionesEbr] = useState<EvaluacionEbrResumen[]>([])
+  const [selectedRfc, setSelectedRfc] = useState<string>("")
+  const [selectedOperacionId, setSelectedOperacionId] = useState<string>("")
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 60000)
     return () => clearInterval(interval)
   }, [])
 
+  const loadIntegrationData = useCallback(() => {
+    if (typeof window === "undefined") return
+
+    const registroRaw = window.localStorage.getItem(REGISTRO_STORAGE_KEY)
+    if (registroRaw) {
+      try {
+        const parsed = JSON.parse(registroRaw) as Record<string, unknown>
+        const sujetos = Array.isArray(parsed.sujetosRegistrados)
+          ? parsed.sujetosRegistrados
+              .map((item) => {
+                if (!item || typeof item !== "object") return null
+                const record = item as Record<string, unknown>
+                const identificacion = (record.identificacion ?? {}) as Record<string, unknown>
+                const representante = record.representante as Record<string, unknown> | null | undefined
+                const nombreRepresentante = representante
+                  ? [representante.nombre, representante.apellidoPaterno, representante.apellidoMaterno]
+                      .filter((value) => typeof value === "string" && value.trim().length > 0)
+                      .join(" ")
+                  : null
+
+                return {
+                  id: typeof record.id === "string" ? record.id : crypto.randomUUID(),
+                  nombre: typeof record.nombre === "string" ? record.nombre : "",
+                  rfc: typeof identificacion.rfc === "string" ? identificacion.rfc : "",
+                  tipo: typeof record.tipo === "string" ? record.tipo : "",
+                  actividad: typeof record.actividad === "string" ? record.actividad : "",
+                  creadoEn: record.creadoEn ? new Date(record.creadoEn as string) : new Date(),
+                  registroCompleto: record.registroCompleto === true,
+                  representante: nombreRepresentante,
+                }
+              })
+              .filter((item): item is RegistroSujetoResumen => Boolean(item?.rfc))
+          : []
+        setSujetosRegistro(sujetos)
+      } catch (error) {
+        console.error("Error al leer alta y registro", error)
+        setSujetosRegistro([])
+      }
+    } else {
+      setSujetosRegistro([])
+    }
+
+    const expedientesRaw = window.localStorage.getItem(EXPEDIENTE_STORAGE_KEY)
+    if (expedientesRaw) {
+      try {
+        const parsed = JSON.parse(expedientesRaw)
+        const expedientes = Array.isArray(parsed)
+          ? parsed
+              .map((item) => {
+                if (!item || typeof item !== "object") return null
+                const record = item as Record<string, unknown>
+                return {
+                  rfc: typeof record.rfc === "string" ? record.rfc : "",
+                  nombre: typeof record.nombre === "string" ? record.nombre : "",
+                  tipoCliente: typeof record.tipoCliente === "string" ? record.tipoCliente : undefined,
+                  actualizadoEn: typeof record.actualizadoEn === "string" ? record.actualizadoEn : undefined,
+                }
+              })
+              .filter((item): item is ExpedienteResumen => Boolean(item?.rfc))
+          : []
+        setExpedientesEui(expedientes)
+      } catch (error) {
+        console.error("Error al leer expedientes", error)
+        setExpedientesEui([])
+      }
+    } else {
+      setExpedientesEui([])
+    }
+
+    const operacionesRaw = window.localStorage.getItem(OPERACIONES_STORAGE_KEY)
+    if (operacionesRaw) {
+      try {
+        const parsed = JSON.parse(operacionesRaw)
+        const operacionesParsed = Array.isArray(parsed)
+          ? parsed
+              .map((item) => {
+                if (!item || typeof item !== "object") return null
+                const record = item as Record<string, unknown>
+                return {
+                  id: typeof record.id === "string" ? record.id : crypto.randomUUID(),
+                  rfc: typeof record.rfc === "string" ? record.rfc : "",
+                  cliente: typeof record.cliente === "string" ? record.cliente : "",
+                  actividadNombre: typeof record.actividadNombre === "string" ? record.actividadNombre : "",
+                  tipoOperacion: typeof record.tipoOperacion === "string" ? record.tipoOperacion : "",
+                  monto: typeof record.monto === "number" ? record.monto : 0,
+                  fechaOperacion: typeof record.fechaOperacion === "string" ? record.fechaOperacion : "",
+                  umbralStatus:
+                    record.umbralStatus === "sin-obligacion" ||
+                    record.umbralStatus === "identificacion" ||
+                    record.umbralStatus === "aviso"
+                      ? record.umbralStatus
+                      : undefined,
+                  alerta: typeof record.alerta === "string" ? record.alerta : null,
+                  avisoPresentado: record.avisoPresentado === true,
+                }
+              })
+              .filter((item): item is OperacionResumen => Boolean(item?.rfc))
+          : []
+        setOperaciones(operacionesParsed)
+      } catch (error) {
+        console.error("Error al leer operaciones", error)
+        setOperaciones([])
+      }
+    } else {
+      setOperaciones([])
+    }
+
+    const ebrRaw = window.localStorage.getItem(EBR_STORAGE_KEY)
+    if (ebrRaw) {
+      try {
+        const parsed = JSON.parse(ebrRaw)
+        const evaluaciones = Array.isArray(parsed)
+          ? parsed
+              .map((item) => {
+                if (!item || typeof item !== "object") return null
+                const record = item as Record<string, unknown>
+                return {
+                  rfc: typeof record.rfc === "string" ? record.rfc : "",
+                  updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : "",
+                  notes: typeof record.notes === "string" ? record.notes : "",
+                  riskQuestions: Array.isArray(record.riskQuestions)
+                    ? (record.riskQuestions as EvaluacionEbrResumen["riskQuestions"])
+                    : undefined,
+                  clientProfile:
+                    record.clientProfile && typeof record.clientProfile === "object"
+                      ? (record.clientProfile as EvaluacionEbrResumen["clientProfile"])
+                      : undefined,
+                }
+              })
+              .filter((item): item is EvaluacionEbrResumen => Boolean(item?.rfc))
+          : []
+        setEvaluacionesEbr(evaluaciones)
+      } catch (error) {
+        console.error("Error al leer evaluaciones EBR", error)
+        setEvaluacionesEbr([])
+      }
+    } else {
+      setEvaluacionesEbr([])
+    }
+  }, [])
+
+  useEffect(() => {
+    loadIntegrationData()
+  }, [loadIntegrationData])
+
   const totalChecklist = checklistQuestions.length
   const answeredChecklist = useMemo(
     () => Object.values(checklistState).filter((state) => state.answer !== null).length,
     [checklistState],
   )
+
+  const sujetosDisponibles = useMemo(() => {
+    const map = new Map<string, { rfc: string; nombre: string; fuente: string }>()
+
+    sujetosRegistro.forEach((sujeto) => {
+      if (!sujeto.rfc) return
+      map.set(sujeto.rfc, { rfc: sujeto.rfc, nombre: sujeto.nombre, fuente: "Alta y registro" })
+    })
+
+    expedientesEui.forEach((expediente) => {
+      if (!expediente.rfc) return
+      if (!map.has(expediente.rfc)) {
+        map.set(expediente.rfc, {
+          rfc: expediente.rfc,
+          nombre: expediente.nombre,
+          fuente: "Expediente único",
+        })
+      }
+    })
+
+    operaciones.forEach((operacion) => {
+      if (!operacion.rfc) return
+      if (!map.has(operacion.rfc)) {
+        map.set(operacion.rfc, {
+          rfc: operacion.rfc,
+          nombre: operacion.cliente || "Cliente sin nombre",
+          fuente: "Actos y operaciones",
+        })
+      }
+    })
+
+    return Array.from(map.values())
+  }, [expedientesEui, operaciones, sujetosRegistro])
+
+  useEffect(() => {
+    if (selectedRfc) return
+    const primerRfc = sujetosDisponibles[0]?.rfc
+    if (primerRfc) {
+      setSelectedRfc(primerRfc)
+    }
+  }, [selectedRfc, sujetosDisponibles])
 
   const detectionDateTime = useMemo(() => buildDate(noticeForm.detectionDate, noticeForm.detectionTime), [
     noticeForm.detectionDate,
@@ -377,11 +627,74 @@ export default function AvisosInformesPage() {
     return [...generalEvidence, ...specifics]
   }, [selectedOperationType])
 
+  const operacionesFiltradas = useMemo(
+    () => operaciones.filter((operacion) => (selectedRfc ? operacion.rfc === selectedRfc : true)),
+    [operaciones, selectedRfc],
+  )
+
+  useEffect(() => {
+    if (!operacionesFiltradas.length) {
+      setSelectedOperacionId("")
+      return
+    }
+
+    if (!operacionesFiltradas.some((operacion) => operacion.id === selectedOperacionId)) {
+      setSelectedOperacionId(operacionesFiltradas[0].id)
+    }
+  }, [operacionesFiltradas, selectedOperacionId])
+
+  const evaluacionSeleccionada = useMemo(() => {
+    if (!selectedRfc) return null
+    const evaluations = evaluacionesEbr.filter((item) => item.rfc === selectedRfc)
+    if (evaluations.length === 0) return null
+    return evaluations
+      .slice()
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0]
+  }, [evaluacionesEbr, selectedRfc])
+
+  const sujetoRegistroSeleccionado = useMemo(
+    () => sujetosRegistro.find((sujeto) => sujeto.rfc === selectedRfc) ?? null,
+    [selectedRfc, sujetosRegistro],
+  )
+
+  const expedienteSeleccionado = useMemo(
+    () => expedientesEui.find((expediente) => expediente.rfc === selectedRfc) ?? null,
+    [expedientesEui, selectedRfc],
+  )
+
+  const operacionesStats = useMemo(() => {
+    const total = operacionesFiltradas.length
+    const avisos = operacionesFiltradas.filter((op) => op.umbralStatus === "aviso").length
+    const alertas = operacionesFiltradas.filter((op) => op.alerta).length
+    const pendientesAviso = operacionesFiltradas.filter((op) => op.umbralStatus === "aviso" && !op.avisoPresentado).length
+    return { total, avisos, alertas, pendientesAviso }
+  }, [operacionesFiltradas])
+
+  const cumplimientoRegistro = useMemo(() => {
+    if (!sujetoRegistroSeleccionado) return null
+    return sujetoRegistroSeleccionado.registroCompleto
+  }, [sujetoRegistroSeleccionado])
+
   const evidenceCompletion = useMemo(() => {
     const totalRequired = requiredEvidence.length
     const completed = requiredEvidence.filter((item) => evidenceState[item.id]).length
     return totalRequired > 0 ? Math.round((completed / totalRequired) * 100) : 0
   }, [evidenceState, requiredEvidence])
+
+  const riskScore = useMemo(() => {
+    if (!evaluacionSeleccionada?.riskQuestions) return null
+    return evaluacionSeleccionada.riskQuestions.reduce((acc, question) => {
+      const option = question.options.find((item) => item.value === question.selectedValue)
+      return acc + (option?.score ?? 0)
+    }, 0)
+  }, [evaluacionSeleccionada])
+
+  const riskLevel = useMemo(() => {
+    if (riskScore === null) return null
+    if (riskScore <= 12) return "Bajo"
+    if (riskScore <= 20) return "Medio"
+    return "Alto"
+  }, [riskScore])
 
   const alerts = useMemo(() => {
     const items: { type: "warning" | "danger" | "info"; title: string; description: string }[] = []
@@ -545,6 +858,127 @@ export default function AvisosInformesPage() {
     ])
   }
 
+  const downloadReport = (fileName: string, content: string, mimeType = "text/csv") => {
+    const blob = new Blob([content], { type: mimeType })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = fileName
+    link.click()
+    window.URL.revokeObjectURL(url)
+  }
+
+  const handleDownloadConsolidated = () => {
+    const rows = [
+      ["RFC", "Cliente", "Tipo cliente", "Registro completo", "Operaciones", "Alertas", "Avisos pendientes", "Riesgo EBR"],
+      ...sujetosDisponibles.map((sujeto) => {
+        const ops = operaciones.filter((op) => op.rfc === sujeto.rfc)
+        const alertas = ops.filter((op) => op.alerta).length
+        const pendientes = ops.filter((op) => op.umbralStatus === "aviso" && !op.avisoPresentado).length
+        const registro = sujetosRegistro.find((item) => item.rfc === sujeto.rfc)
+        const expediente = expedientesEui.find((item) => item.rfc === sujeto.rfc)
+        const ebr = evaluacionesEbr
+          .filter((item) => item.rfc === sujeto.rfc)
+          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0]
+        const score = ebr?.riskQuestions
+          ? ebr.riskQuestions.reduce((acc, question) => {
+              const option = question.options.find((item) => item.value === question.selectedValue)
+              return acc + (option?.score ?? 0)
+            }, 0)
+          : null
+
+        return [
+          sujeto.rfc,
+          sujeto.nombre,
+          registro?.tipo ?? expediente?.tipoCliente ?? "",
+          registro?.registroCompleto ? "Sí" : "No",
+          String(ops.length),
+          String(alertas),
+          String(pendientes),
+          score === null ? "Sin evaluación" : `${score}`,
+        ]
+      }),
+    ]
+
+    const content = rows.map((row) => row.map((value) => `"${value}"`).join(",")).join("\n")
+    downloadReport(`reporte-consolidado-avisos-${new Date().toISOString().slice(0, 10)}.csv`, content)
+    toast({ title: "Reporte generado", description: "Se descargó el reporte consolidado de avisos y operaciones." })
+  }
+
+  const handleDownloadOperacionesAviso = () => {
+    const rows = [
+      ["RFC", "Cliente", "Actividad", "Tipo operación", "Monto", "Fecha", "Umbral", "Alerta"],
+      ...operaciones
+        .filter((op) => op.umbralStatus === "aviso")
+        .map((op) => [
+          op.rfc,
+          op.cliente,
+          op.actividadNombre,
+          op.tipoOperacion,
+          formatCurrency(op.monto),
+          op.fechaOperacion,
+          op.umbralStatus ?? "",
+          op.alerta ?? "",
+        ]),
+    ]
+
+    const content = rows.map((row) => row.map((value) => `"${value}"`).join(",")).join("\n")
+    downloadReport(`reporte-operaciones-aviso-${new Date().toISOString().slice(0, 10)}.csv`, content)
+    toast({ title: "Reporte generado", description: "Se descargó el reporte de operaciones con obligación de aviso." })
+  }
+
+  const handleDownloadBitacora = () => {
+    const rows = [
+      ["Acción", "Usuario", "Fecha", "Detalle", "Aviso"],
+      ...traceabilityEntries.map((entry) => [
+        entry.action,
+        entry.user,
+        formatDate(entry.timestamp),
+        entry.details,
+        entry.noticeId,
+      ]),
+    ]
+
+    const content = rows.map((row) => row.map((value) => `"${value}"`).join(",")).join("\n")
+    downloadReport(`bitacora-avisos-${new Date().toISOString().slice(0, 10)}.csv`, content)
+    toast({ title: "Bitácora exportada", description: "Se descargó la bitácora completa de avisos." })
+  }
+
+  const handlePrefillFromOperacion = () => {
+    const operacion = operacionesFiltradas.find((item) => item.id === selectedOperacionId)
+    if (!operacion) return
+
+    const tipo = mapOperationToNoticeType(operacion)
+    const fechaOperacion = parseLocalDate(operacion.fechaOperacion)
+
+    setSelectedOperationType(tipo)
+    if (fechaOperacion) {
+      setNoticeForm((prev) => ({
+        ...prev,
+        detectionDate: toDateInput(fechaOperacion),
+        detectionTime: toTimeInput(fechaOperacion),
+      }))
+    }
+    setSelectedTab("checklist")
+
+    setTraceabilityEntries((prev) => [
+      {
+        id: `prefill-${Date.now()}`,
+        action: "Aviso precargado desde operación",
+        user: "Usuario actual",
+        timestamp: new Date(),
+        details: `Se generó aviso desde la operación ${operacion.tipoOperacion} (${operacion.id}).`,
+        noticeId: operationTypeLabels[tipo],
+      },
+      ...prev,
+    ])
+
+    toast({
+      title: "Aviso precargado",
+      description: `Se sincronizó la operación para iniciar el aviso ${operationTypeLabels[tipo].toLowerCase()}.`,
+    })
+  }
+
   const resetNoticeForm = () => {
     setNoticeForm(initialNoticeForm)
     setEvidenceState({})
@@ -567,9 +1001,15 @@ export default function AvisosInformesPage() {
       </div>
 
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <FileText className="h-4 w-4" /> Resumen
+          </TabsTrigger>
+          <TabsTrigger value="integraciones" className="flex items-center gap-2">
+            <Link2 className="h-4 w-4" /> Integraciones
+          </TabsTrigger>
+          <TabsTrigger value="reportes" className="flex items-center gap-2">
+            <FileUp className="h-4 w-4" /> Reportes
           </TabsTrigger>
           <TabsTrigger value="checklist" className="flex items-center gap-2">
             <ListChecks className="h-4 w-4" /> Checklist
@@ -719,6 +1159,400 @@ export default function AvisosInformesPage() {
                 </CardContent>
               </Card>
             </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="integraciones" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Vinculación con otros módulos</CardTitle>
+              <CardDescription>
+                Conecta avisos con Alta y registro, Expediente único, Actos y operaciones y EBR para generar alertas y reportes
+                reales.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <Users className="h-5 w-5 text-primary" />
+                  <div>
+                    <p className="text-sm font-medium">Cliente / RFC en seguimiento</p>
+                    <p className="text-xs text-muted-foreground">
+                      Selecciona un RFC para visualizar operaciones, expediente y evaluación EBR vinculada.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => {
+                      loadIntegrationData()
+                      toast({
+                        title: "Datos actualizados",
+                        description: "Se recargó la información desde los demás módulos.",
+                      })
+                    }}
+                  >
+                    <RefreshCcw className="h-4 w-4" /> Actualizar datos
+                  </Button>
+                </div>
+              </div>
+
+              {sujetosDisponibles.length === 0 && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>No hay datos vinculados</AlertTitle>
+                  <AlertDescription>
+                    Carga información en Alta y registro, Expediente único o Actos y operaciones para habilitar la sincronización.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="cliente-rfc">Selecciona un cliente</Label>
+                  <Select value={selectedRfc} onValueChange={setSelectedRfc}>
+                    <SelectTrigger id="cliente-rfc">
+                      <SelectValue placeholder="Selecciona un RFC" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sujetosDisponibles.map((sujeto) => (
+                        <SelectItem key={sujeto.rfc} value={sujeto.rfc}>
+                          {sujeto.rfc} · {sujeto.nombre} ({sujeto.fuente})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-3 rounded-lg border p-4 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Sujeto en Alta y registro</span>
+                    <Badge variant={cumplimientoRegistro ? "default" : "outline"}>
+                      {cumplimientoRegistro ? "Registro completo" : "Pendiente"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Expediente único</span>
+                    <Badge variant={expedienteSeleccionado ? "default" : "outline"}>
+                      {expedienteSeleccionado ? "Disponible" : "Sin expediente"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Operaciones registradas</span>
+                    <span className="font-semibold">{operacionesStats.total}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Alertas activas</span>
+                    <span className="font-semibold">{operacionesStats.alertas}</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5 text-primary" />
+                  <CardTitle>Alta y registro</CardTitle>
+                </div>
+                <CardDescription>
+                  Información registrada del sujeto obligado y estatus documental.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {sujetoRegistroSeleccionado ? (
+                  <div className="space-y-3 rounded-lg border p-4 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">{sujetoRegistroSeleccionado.nombre}</span>
+                      <Badge variant={sujetoRegistroSeleccionado.registroCompleto ? "default" : "outline"}>
+                        {sujetoRegistroSeleccionado.registroCompleto ? "Completo" : "En progreso"}
+                      </Badge>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">RFC</p>
+                        <p>{sujetoRegistroSeleccionado.rfc}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Tipo de sujeto</p>
+                        <p className="capitalize">{sujetoRegistroSeleccionado.tipo}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Actividad vulnerable</p>
+                        <p>{sujetoRegistroSeleccionado.actividad || "Sin actividad"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Fecha de alta</p>
+                        <p>{formatDate(sujetoRegistroSeleccionado.creadoEn)}</p>
+                      </div>
+                    </div>
+                    {sujetoRegistroSeleccionado.representante && (
+                      <p className="text-xs text-muted-foreground">
+                        Representante: {sujetoRegistroSeleccionado.representante}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Sin datos de alta</AlertTitle>
+                    <AlertDescription>
+                      No se encontró registro en Alta y registro para este RFC.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <Button asChild variant="outline" className="w-full justify-center gap-2">
+                  <Link href="/registro-sat">
+                    <Database className="h-4 w-4" /> Ir a Alta y registro
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary" />
+                  <CardTitle>Expediente único de identificación</CardTitle>
+                </div>
+                <CardDescription>
+                  Validación de expediente y datos de actualización más recientes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {expedienteSeleccionado ? (
+                  <div className="space-y-3 rounded-lg border p-4 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">{expedienteSeleccionado.nombre}</span>
+                      <Badge variant="outline">{expedienteSeleccionado.tipoCliente ?? "Sin tipo"}</Badge>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">RFC</p>
+                        <p>{expedienteSeleccionado.rfc}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Actualizado en</p>
+                        <p>{expedienteSeleccionado.actualizadoEn ? formatDate(new Date(expedienteSeleccionado.actualizadoEn)) : "Sin fecha"}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Expediente pendiente</AlertTitle>
+                    <AlertDescription>
+                      El expediente único no se encuentra disponible para este RFC.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <Button asChild variant="outline" className="w-full justify-center gap-2">
+                  <Link href="/kyc-expediente">
+                    <FileText className="h-4 w-4" /> Ir a Expediente único
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-primary" />
+                  <CardTitle>Actos y operaciones</CardTitle>
+                </div>
+                <CardDescription>
+                  Operaciones del cliente con umbral y alertas para activar avisos.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 rounded-lg border p-4 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Operaciones con aviso</span>
+                    <span className="font-semibold">{operacionesStats.avisos}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Avisos pendientes</span>
+                    <span className="font-semibold">{operacionesStats.pendientesAviso}</span>
+                  </div>
+                </div>
+
+                {operacionesFiltradas.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="operacion-select">Selecciona operación</Label>
+                      <Select value={selectedOperacionId} onValueChange={setSelectedOperacionId}>
+                        <SelectTrigger id="operacion-select">
+                          <SelectValue placeholder="Selecciona operación" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {operacionesFiltradas.map((operacion) => (
+                            <SelectItem key={operacion.id} value={operacion.id}>
+                              {operacion.tipoOperacion} · {formatCurrency(operacion.monto)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-3">
+                      {operacionesFiltradas.slice(0, 3).map((operacion) => (
+                        <div key={operacion.id} className="rounded-md border p-3 text-sm">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium">{operacion.tipoOperacion}</span>
+                            <Badge variant={operacion.umbralStatus === "aviso" ? "destructive" : "outline"}>
+                              {operacion.umbralStatus ?? "Sin umbral"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{operacion.actividadNombre}</p>
+                          <div className="mt-2 flex items-center justify-between text-xs">
+                            <span>{formatCurrency(operacion.monto)}</span>
+                            <span>{operacion.fechaOperacion}</span>
+                          </div>
+                          {operacion.alerta && (
+                            <p className="mt-2 text-xs text-amber-600">Alerta: {operacion.alerta}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Sin operaciones vinculadas</AlertTitle>
+                    <AlertDescription>
+                      Registra operaciones en el módulo de Actos y operaciones para habilitar avisos automáticos.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button variant="default" className="w-full gap-2" onClick={handlePrefillFromOperacion}>
+                    <BellRing className="h-4 w-4" /> Generar aviso
+                  </Button>
+                  <Button asChild variant="outline" className="w-full gap-2">
+                    <Link href="/actividades-vulnerables">
+                      <Activity className="h-4 w-4" /> Ir a Actos y operaciones
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  <CardTitle>Evaluación Basada en Riesgo (EBR)</CardTitle>
+                </div>
+                <CardDescription>
+                  Última evaluación disponible y nivel de riesgo para ajustar la narrativa del aviso.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {evaluacionSeleccionada ? (
+                  <div className="space-y-3 rounded-lg border p-4 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Riesgo {riskLevel ?? ""}</span>
+                      <Badge variant={riskLevel === "Alto" ? "destructive" : riskLevel === "Medio" ? "secondary" : "outline"}>
+                        {riskScore ?? "Sin score"}
+                      </Badge>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Última actualización</p>
+                        <p>{evaluacionSeleccionada.updatedAt ? formatDate(new Date(evaluacionSeleccionada.updatedAt)) : "Sin fecha"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Sector económico</p>
+                        <p className="capitalize">{evaluacionSeleccionada.clientProfile?.sectorEconomico ?? "Sin definir"}</p>
+                      </div>
+                    </div>
+                    {evaluacionSeleccionada.notes && (
+                      <p className="text-xs text-muted-foreground">Notas: {evaluacionSeleccionada.notes}</p>
+                    )}
+                  </div>
+                ) : (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>EBR pendiente</AlertTitle>
+                    <AlertDescription>
+                      Realiza la evaluación EBR para este RFC y obtén el nivel de riesgo integrado.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <Button asChild variant="outline" className="w-full justify-center gap-2">
+                  <Link href="/ebr">
+                    <Shield className="h-4 w-4" /> Ir a evaluación EBR
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="reportes" className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Reportes consolidados</CardTitle>
+                <CardDescription>
+                  Exporta información cruzada entre módulos para auditorías internas o revisiones regulatorias.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button className="w-full justify-start gap-2" onClick={handleDownloadConsolidated}>
+                  <Download className="h-4 w-4" /> Reporte consolidado por cliente
+                </Button>
+                <Button variant="secondary" className="w-full justify-start gap-2" onClick={handleDownloadOperacionesAviso}>
+                  <Download className="h-4 w-4" /> Operaciones con obligación de aviso
+                </Button>
+                <Button variant="outline" className="w-full justify-start gap-2" onClick={handleDownloadBitacora}>
+                  <Download className="h-4 w-4" /> Bitácora completa de avisos
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Indicadores de cumplimiento</CardTitle>
+                <CardDescription>
+                  Supervisa los elementos críticos antes de presentar un aviso o informe.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 rounded-lg border p-4 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Clientes con registro completo</span>
+                    <span className="font-semibold">
+                      {sujetosRegistro.filter((sujeto) => sujeto.registroCompleto).length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Clientes con expediente actualizado</span>
+                    <span className="font-semibold">{expedientesEui.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Operaciones con alerta</span>
+                    <span className="font-semibold">{operaciones.filter((op) => op.alerta).length}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Evaluaciones EBR capturadas</span>
+                    <span className="font-semibold">{evaluacionesEbr.length}</span>
+                  </div>
+                </div>
+                <Alert className="border-slate-200 bg-slate-50">
+                  <AlertTitle>Recomendación de cierre</AlertTitle>
+                  <AlertDescription>
+                    Antes de enviar avisos, valida que exista expediente, evaluación EBR vigente y evidencia documental completa.
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
 
@@ -1143,6 +1977,36 @@ function buildDate(date?: string, time?: string) {
   if (!date || !time) return null
   const combined = new Date(`${date}T${time}`)
   return Number.isNaN(combined.getTime()) ? null : combined
+}
+
+function parseLocalDate(raw: string) {
+  if (!raw) return null
+  const date = new Date(raw)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function toDateInput(date: Date) {
+  return date.toISOString().split("T")[0]
+}
+
+function toTimeInput(date: Date) {
+  return date.toTimeString().slice(0, 5)
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: 2,
+  }).format(value)
+}
+
+function mapOperationToNoticeType(operacion: OperacionResumen): OperationType {
+  const tipoOperacion = operacion.tipoOperacion.toLowerCase()
+  if (tipoOperacion.includes("inusual")) return "inusual"
+  if (tipoOperacion.includes("interna")) return "interna"
+  if (operacion.umbralStatus === "aviso") return "relevante"
+  return "relevante"
 }
 
 function formatDate(date: Date) {
