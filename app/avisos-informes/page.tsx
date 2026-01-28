@@ -14,7 +14,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Progress } from "@/components/ui/progress"
 import {
   Select,
   SelectContent,
@@ -35,7 +34,6 @@ import {
   Clock,
   Database,
   Download,
-  FileSpreadsheet,
   FileText,
   FileUp,
   History,
@@ -66,15 +64,6 @@ interface EvidenceItem {
   label: string
   description: string
   mandatory?: boolean
-}
-
-interface DocumentUpload {
-  id: string
-  name: string
-  type: string
-  uploadedBy: string
-  uploadedAt: Date
-  relatedNotice: string
 }
 
 interface TraceabilityEntry {
@@ -329,33 +318,6 @@ const initialTraceability: TraceabilityEntry[] = [
   },
 ]
 
-const initialDocuments: DocumentUpload[] = [
-  {
-    id: "d1",
-    name: "Acuse_AR-2024-0315.pdf",
-    type: "Acuse SAT",
-    uploadedBy: "María Fernández",
-    uploadedAt: new Date("2024-03-15T11:30:00"),
-    relatedNotice: "AR-2024-0315",
-  },
-  {
-    id: "d2",
-    name: "Dictamen_OI-2024-0402.pdf",
-    type: "Dictamen Oficial",
-    uploadedBy: "Oficial de Cumplimiento",
-    uploadedAt: new Date("2024-04-02T09:12:00"),
-    relatedNotice: "OI-2024-0402",
-  },
-  {
-    id: "d3",
-    name: "Reporte_Screening_OI-2024-0402.pdf",
-    type: "Reporte de screening",
-    uploadedBy: "María Fernández",
-    uploadedAt: new Date("2024-04-02T09:20:00"),
-    relatedNotice: "OI-2024-0402",
-  },
-]
-
 const REGISTRO_STORAGE_KEY = "registro-sat-data"
 const EXPEDIENTE_STORAGE_KEY = "kyc_expedientes_detalle"
 const OPERACIONES_STORAGE_KEY = "actividades_vulnerables_operaciones"
@@ -370,7 +332,6 @@ export default function AvisosInformesPage() {
     Object.fromEntries(checklistQuestions.map((question) => [question.id, { answer: null, notes: "" }])),
   )
   const [evidenceState, setEvidenceState] = useState<Record<string, boolean>>({})
-  const [documentUploads, setDocumentUploads] = useState<DocumentUpload[]>(initialDocuments)
   const [traceabilityEntries, setTraceabilityEntries] = useState<TraceabilityEntry[]>(initialTraceability)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [sujetosRegistro, setSujetosRegistro] = useState<RegistroSujetoResumen[]>([])
@@ -530,12 +491,6 @@ export default function AvisosInformesPage() {
     loadIntegrationData()
   }, [loadIntegrationData])
 
-  const totalChecklist = checklistQuestions.length
-  const answeredChecklist = useMemo(
-    () => Object.values(checklistState).filter((state) => state.answer !== null).length,
-    [checklistState],
-  )
-
   const sujetosDisponibles = useMemo(() => {
     const map = new Map<string, { rfc: string; nombre: string; fuente: string }>()
 
@@ -671,12 +626,6 @@ export default function AvisosInformesPage() {
     return sujetoRegistroSeleccionado.registroCompleto
   }, [sujetoRegistroSeleccionado])
 
-  const evidenceCompletion = useMemo(() => {
-    const totalRequired = requiredEvidence.length
-    const completed = requiredEvidence.filter((item) => evidenceState[item.id]).length
-    return totalRequired > 0 ? Math.round((completed / totalRequired) * 100) : 0
-  }, [evidenceState, requiredEvidence])
-
   const riskScore = useMemo(() => {
     if (!evaluacionSeleccionada?.riskQuestions) return null
     return evaluacionSeleccionada.riskQuestions.reduce((acc, question) => {
@@ -807,16 +756,6 @@ export default function AvisosInformesPage() {
     const file = event.target.files?.[0]
     if (!file) return
 
-    const newDocument: DocumentUpload = {
-      id: `doc-${Date.now()}`,
-      name: file.name,
-      type,
-      uploadedBy: "Usuario actual",
-      uploadedAt: new Date(),
-      relatedNotice: operationTypeLabels[selectedOperationType],
-    }
-
-    setDocumentUploads((prev) => [newDocument, ...prev])
     setTraceabilityEntries((prev) => [
       {
         id: `trace-${Date.now()}`,
@@ -1373,97 +1312,11 @@ export default function AvisosInformesPage() {
         </TabsContent>
 
         <TabsContent value="aviso" className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-3">
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <CardTitle>Tipo de aviso</CardTitle>
-                <CardDescription>
-                  Selecciona el tipo de aviso y valida el avance operativo antes de enviar.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-3">
-                  {Object.entries(operationTypeLabels).map(([key, label]) => (
-                    <div
-                      key={key}
-                      className={`rounded-lg border p-4 transition ${
-                        selectedOperationType === key ? "border-primary bg-primary/5" : "border-border"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold">{label}</span>
-                        <Badge variant={selectedOperationType === key ? "default" : "outline"}>
-                          {selectedOperationType === key ? "Seleccionado" : "Disponible"}
-                        </Badge>
-                      </div>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {key === "relevante" && "Avisos por operaciones que superan los umbrales establecidos por la normativa."}
-                        {key === "inusual" && "Reportes de operaciones que se apartan del perfil transaccional del cliente."}
-                        {key === "interna" && "Alertas por operaciones detectadas en personal interno o sistemas."}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base">Avance del checklist</CardTitle>
-                      <CardDescription>
-                        {answeredChecklist} de {totalChecklist} preguntas respondidas.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <Progress value={(answeredChecklist / totalChecklist) * 100} className="h-2" />
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base">Evidencias registradas</CardTitle>
-                      <CardDescription>
-                        {evidenceCompletion}% de evidencias requeridas completadas para la operación actual.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <Progress value={evidenceCompletion} className="h-2" />
-                    </CardContent>
-                  </Card>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="space-y-4">
-              {alerts.map((alert, index) => (
-                <Alert
-                  key={`${alert.title}-${index}`}
-                  variant={alert.type === "danger" ? "destructive" : "default"}
-                  className={alert.type === "warning" ? "border-amber-300 bg-amber-50" : undefined}
-                >
-                  {alert.type === "danger" && <AlertCircle className="h-4 w-4" />}
-                  {alert.type === "warning" && <AlertTriangle className="h-4 w-4" />}
-                  {alert.type === "info" && <Clock className="h-4 w-4" />}
-                  <AlertTitle>{alert.title}</AlertTitle>
-                  <AlertDescription>{alert.description}</AlertDescription>
-                </Alert>
-              ))}
-
-              {alerts.length === 0 && (
-                <Alert>
-                  <CheckCircle2 className="h-4 w-4" />
-                  <AlertTitle>Sin alertas críticas</AlertTitle>
-                  <AlertDescription>
-                    No hay vencimientos próximos ni validaciones pendientes para los datos registrados.
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          </div>
           <Card>
             <CardHeader>
-              <CardTitle>Formulario operativo de aviso</CardTitle>
+              <CardTitle>Aviso</CardTitle>
               <CardDescription>
-                Completa fechas, folios y evidencia clave para enviar el aviso sin campos redundantes.
+                Registra el tipo de aviso, fechas clave y evidencia mínima para cumplir con la presentación.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1543,6 +1396,32 @@ export default function AvisosInformesPage() {
                     </p>
                   )}
                 </div>
+              </div>
+
+              <div className="space-y-3">
+                {alerts.map((alert, index) => (
+                  <Alert
+                    key={`${alert.title}-${index}`}
+                    variant={alert.type === "danger" ? "destructive" : "default"}
+                    className={alert.type === "warning" ? "border-amber-300 bg-amber-50" : undefined}
+                  >
+                    {alert.type === "danger" && <AlertCircle className="h-4 w-4" />}
+                    {alert.type === "warning" && <AlertTriangle className="h-4 w-4" />}
+                    {alert.type === "info" && <Clock className="h-4 w-4" />}
+                    <AlertTitle>{alert.title}</AlertTitle>
+                    <AlertDescription>{alert.description}</AlertDescription>
+                  </Alert>
+                ))}
+
+                {alerts.length === 0 && (
+                  <Alert>
+                    <CheckCircle2 className="h-4 w-4" />
+                    <AlertTitle>Sin alertas críticas</AlertTitle>
+                    <AlertDescription>
+                      No hay vencimientos próximos ni validaciones pendientes para los datos registrados.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -1629,29 +1508,6 @@ export default function AvisosInformesPage() {
                 <UploadField label="Dictamen del Oficial" onChange={(event) => handleFileUpload(event, "Dictamen Oficial")} />
                 <UploadField label="Comprobantes bancarios" onChange={(event) => handleFileUpload(event, "Comprobante bancario")} />
                 <UploadField label="Reporte de screening" onChange={(event) => handleFileUpload(event, "Reporte de screening")} />
-              </div>
-
-              <div className="space-y-3 rounded-lg border p-4">
-                <div className="flex items-center gap-2">
-                  <FileSpreadsheet className="h-4 w-4 text-primary" />
-                  <h3 className="font-semibold">Documentos registrados</h3>
-                </div>
-                <div className="space-y-3 text-sm">
-                  {documentUploads.map((doc) => (
-                    <div key={doc.id} className="rounded-md border p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="font-medium">{doc.name}</p>
-                          <p className="text-xs text-muted-foreground">{doc.type}</p>
-                        </div>
-                        <Badge variant="outline">{doc.relatedNotice}</Badge>
-                      </div>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Cargado por {doc.uploadedBy} el {formatDate(doc.uploadedAt)}.
-                      </p>
-                    </div>
-                  ))}
-                </div>
               </div>
 
               <Alert className={folioAndSealValid ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}>
