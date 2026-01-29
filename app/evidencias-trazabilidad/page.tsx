@@ -32,6 +32,7 @@ import { useToast } from "@/components/ui/use-toast"
 type ModuleKey =
   | "kyc"
   | "beneficiario"
+  | "gobernanza"
   | "monitoreo"
   | "reportes"
   | "capacitacion"
@@ -73,10 +74,12 @@ interface EvidenceDocument {
   fileName: string
   fileSize: number
   fileType: string
-  fileData: string
+  fileData?: string
   version: number
   versionHistory: VersionEntry[]
   archived: boolean
+  source?: "manual" | "gobernanza" | "beneficiario" | "capacitacion"
+  sourceId?: string
 }
 
 interface TraceLogEntry {
@@ -145,6 +148,17 @@ const MODULES: EvidenceModule[] = [
     ],
   },
   {
+    id: "gobernanza",
+    title: "Gobernanza",
+    description: "Oficial de cumplimiento, comité y manuales.",
+    submodules: [
+      { id: "oficial", label: "Oficial de Cumplimiento" },
+      { id: "manuales", label: "Manuales" },
+      { id: "comite", label: "Comité" },
+    ],
+    requirements: [],
+  },
+  {
     id: "monitoreo",
     title: "Monitoreo de Operaciones",
     description: "Evidencias de reportes de acumulación y dictámenes de operaciones.",
@@ -207,9 +221,30 @@ const RETENTION_ALERT_MONTHS = 6
 const STORAGE_KEYS = {
   documents: "pld-evidences-documents",
   logs: "pld-evidences-logs",
+  snapshot: "evidencias-trazabilidad-data",
 }
 
 const randomId = () => crypto.randomUUID()
+
+const normalizeText = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+
+const findRequirementIdByLabel = (module: EvidenceModule, label: string) => {
+  const normalized = normalizeText(label)
+  return (
+    module.requirements.find((req) => normalizeText(req.label) === normalized)?.id ||
+    module.requirements.find((req) => normalizeText(label).includes(normalizeText(req.label)))?.id
+  )
+}
+
+const mapCapacitacionRequirement = (category: string) => {
+  if (category === "plan") return "plan-capacitacion"
+  return "constancias"
+}
 
 export default function EvidenciasTrazabilidadPage() {
   const { toast } = useToast()
@@ -230,12 +265,20 @@ export default function EvidenciasTrazabilidadPage() {
   const [selectedExpediente, setSelectedExpediente] = useState<string>("")
   const [showOnlyAlerts, setShowOnlyAlerts] = useState(false)
   const [sessionOperator, setSessionOperator] = useState("")
+  const [lastSync, setLastSync] = useState<string>("")
 
   useEffect(() => {
     const storedDocs = localStorage.getItem(STORAGE_KEYS.documents)
     const storedLogs = localStorage.getItem(STORAGE_KEYS.logs)
     if (storedDocs) {
-      setDocuments(JSON.parse(storedDocs))
+      const parsed = JSON.parse(storedDocs) as EvidenceDocument[]
+      setDocuments(
+        parsed.map((doc) => ({
+          ...doc,
+          source: doc.source ?? "manual",
+          sourceId: doc.sourceId ?? doc.id,
+        })),
+      )
     }
     if (storedLogs) {
       setLogs(JSON.parse(storedLogs))
@@ -244,11 +287,157 @@ export default function EvidenciasTrazabilidadPage() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.documents, JSON.stringify(documents))
+    localStorage.setItem(STORAGE_KEYS.snapshot, JSON.stringify({ documentos: documents, logs }))
   }, [documents])
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.logs, JSON.stringify(logs))
+    localStorage.setItem(STORAGE_KEYS.snapshot, JSON.stringify({ documentos: documents, logs }))
   }, [logs])
+
+  const syncExternalEvidence = () => {
+    const externalDocs: EvidenceDocument[] = []
+
+    const gobernanzaRaw = localStorage.getItem("gobernanza-control-data")
+    if (gobernanzaRaw) {
+      try {
+        const gobernanzaParsed = JSON.parse(gobernanzaRaw)
+        if (Array.isArray(gobernanzaParsed.documents)) {
+          gobernanzaParsed.documents.forEach((doc: any) => {
+            if (!doc) return
+            const moduleConfig = MODULES.find((module) => module.id === "gobernanza")
+            const submodule = doc.relatedModules?.[0] || doc.documentType || "Gobernanza"
+            externalDocs.push({
+              id: `gobernanza-${doc.id}`,
+              expedienteId: doc.relatedQuestionId || "Gobernanza",
+              module: "gobernanza",
+              submodule,
+              documentType:
+                (moduleConfig
+                  ? findRequirementIdByLabel(moduleConfig, doc.documentType || doc.name || "") || doc.documentType
+                  : doc.documentType) || "documento",
+              title: doc.name || doc.fileName || "Documento",
+              notes: doc.notes,
+              uploadDate: doc.uploadDate || new Date().toISOString(),
+              documentDate: doc.issueDate || doc.uploadDate || new Date().toISOString(),
+              user: doc.signedBy || "Gobernanza",
+              fileName: doc.fileName || doc.name || "documento",
+              fileSize: doc.size || 0,
+              fileType: doc.mimeType || "application/pdf",
+              fileData: doc.base64 ? `data:${doc.mimeType};base64,${doc.base64}` : undefined,
+              version: 1,
+              versionHistory: [],
+              archived: false,
+              source: "gobernanza",
+              sourceId: doc.id,
+            })
+          })
+        }
+      } catch (error) {
+        console.error("Error al sincronizar gobernanza", error)
+      }
+    }
+
+    const beneficiarioRaw = localStorage.getItem("beneficiario-controlador-data")
+    if (beneficiarioRaw) {
+      try {
+        const beneficiarioParsed = JSON.parse(beneficiarioRaw)
+        if (Array.isArray(beneficiarioParsed.documentos)) {
+          const moduleConfig = MODULES.find((module) => module.id === "beneficiario")
+          beneficiarioParsed.documentos.forEach((doc: any) => {
+            if (!doc) return
+            const mappedType =
+              moduleConfig && typeof doc.type === "string"
+                ? findRequirementIdByLabel(moduleConfig, doc.type) || doc.type
+                : doc.type || "documento"
+            externalDocs.push({
+              id: `beneficiario-${doc.id}`,
+              expedienteId: doc.category || "Beneficiario",
+              module: "beneficiario",
+              submodule: doc.category || "General",
+              documentType: mappedType,
+              title: doc.name || doc.type || "Documento",
+              notes: doc.notes,
+              uploadDate: doc.uploadDate ? new Date(doc.uploadDate).toISOString() : new Date().toISOString(),
+              documentDate: doc.uploadDate ? new Date(doc.uploadDate).toISOString() : new Date().toISOString(),
+              user: "Beneficiario Controlador",
+              fileName: doc.name || doc.type || "documento",
+              fileSize: 0,
+              fileType: "application/pdf",
+              fileData: doc.url,
+              version: 1,
+              versionHistory: [],
+              archived: false,
+              source: "beneficiario",
+              sourceId: doc.id,
+            })
+          })
+        }
+      } catch (error) {
+        console.error("Error al sincronizar beneficiario controlador", error)
+      }
+    }
+
+    const capacitacionRaw =
+      localStorage.getItem("pld-training-module") || localStorage.getItem("capacitacion-control-data")
+    if (capacitacionRaw) {
+      try {
+        const capacitacionParsed = JSON.parse(capacitacionRaw)
+        if (Array.isArray(capacitacionParsed.documents)) {
+          capacitacionParsed.documents.forEach((doc: any) => {
+            if (!doc) return
+            const mappedType = mapCapacitacionRequirement(doc.category || "")
+            externalDocs.push({
+              id: `capacitacion-${doc.id}`,
+              expedienteId: doc.sessionId || doc.employeeId || "Capacitación",
+              module: "capacitacion",
+              submodule: doc.category || "Capacitación",
+              documentType: mappedType,
+              title: doc.name || "Documento",
+              notes: doc.notes,
+              uploadDate: doc.uploadedAt || new Date().toISOString(),
+              documentDate: doc.uploadedAt || new Date().toISOString(),
+              user: doc.uploadedBy || "Capacitación",
+              fileName: doc.name || "documento",
+              fileSize: doc.size || 0,
+              fileType: doc.fileType || "application/pdf",
+              fileData: doc.dataUrl,
+              version: 1,
+              versionHistory: [],
+              archived: false,
+              source: "capacitacion",
+              sourceId: doc.id,
+            })
+          })
+        }
+      } catch (error) {
+        console.error("Error al sincronizar capacitación", error)
+      }
+    }
+
+    setDocuments((prev) => {
+      const manualDocs = prev.filter((doc) => doc.source === "manual" || !doc.source)
+      return [...externalDocs, ...manualDocs]
+    })
+    setLastSync(new Date().toISOString())
+  }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    syncExternalEvidence()
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key) return
+      if (
+        ["gobernanza-control-data", "beneficiario-controlador-data", "pld-training-module", "capacitacion-control-data"].includes(
+          event.key,
+        )
+      ) {
+        syncExternalEvidence()
+      }
+    }
+    window.addEventListener("storage", handleStorage)
+    return () => window.removeEventListener("storage", handleStorage)
+  }, [])
 
   const expedienteMap = useMemo(() => {
     const map = new Map<string, EvidenceDocument[]>()
@@ -387,13 +576,16 @@ export default function EvidenciasTrazabilidadPage() {
           user: formState.user,
           version,
           versionHistory: [newVersionEntry, ...existingDoc.versionHistory],
+          source: existingDoc.source ?? "manual",
+          sourceId: existingDoc.sourceId ?? existingDoc.id,
         }
 
         setDocuments((prev) => [updatedDoc, ...prev.filter((doc) => doc.id !== existingDoc.id)])
         registerLog(updatedDoc.id, "upload", updatedDoc, "Actualización de documento existente", formState.user)
       } else {
+        const newDocId = randomId()
         const newDoc: EvidenceDocument = {
-          id: randomId(),
+          id: newDocId,
           expedienteId: formState.expedienteId,
           module: selectedModule,
           submodule: formState.submodule,
@@ -410,6 +602,8 @@ export default function EvidenciasTrazabilidadPage() {
           version: 1,
           versionHistory: [],
           archived: false,
+          source: "manual",
+          sourceId: newDocId,
         }
 
         setDocuments((prev) => [newDoc, ...prev])
@@ -457,6 +651,14 @@ export default function EvidenciasTrazabilidadPage() {
   }
 
   const handleDownload = (doc: EvidenceDocument) => {
+    if (!doc.fileData) {
+      toast({
+        title: "Archivo no disponible",
+        description: "Esta evidencia proviene de otro módulo. Adjunta el archivo para habilitar descarga.",
+        variant: "destructive",
+      })
+      return
+    }
     const link = document.createElement("a")
     link.href = doc.fileData
     link.download = doc.fileName
@@ -646,6 +848,20 @@ export default function EvidenciasTrazabilidadPage() {
 
   const uniqueExpedientes = useMemo(() => Array.from(expedienteMap.keys()), [expedienteMap])
 
+  const integrationSummary = useMemo(() => {
+    const summary = documents.reduce(
+      (acc, doc) => {
+        if (doc.source && doc.source !== "manual") {
+          acc[doc.source] = (acc[doc.source] || 0) + 1
+        }
+        return acc
+      },
+      {} as Record<string, number>,
+    )
+    const totalExternal = Object.values(summary).reduce((total, count) => total + count, 0)
+    return { summary, totalExternal }
+  }, [documents])
+
   return (
     <div className="space-y-6 pb-10">
       <div className="grid gap-4 md:grid-cols-3">
@@ -655,23 +871,10 @@ export default function EvidenciasTrazabilidadPage() {
               <Layers className="h-6 w-6" /> Evidencias y Trazabilidad
             </CardTitle>
             <CardDescription>
-              Repositorio centralizado con sellos de tiempo, control de versiones y trazabilidad completa
-              conforme al art. 25 de la LFPIORPI.
+              Repositorio centralizado con sellos de tiempo y trazabilidad.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
-            <div className="space-y-3 text-muted-foreground">
-              <p>
-                Objetivo: asegurar disponibilidad, integridad y trazabilidad de la documentación requerida
-                para acreditar cumplimiento y facilitar auditorías internas, visitas SAT/UIF y verificaciones
-                externas.
-              </p>
-              <ul className="list-disc space-y-1 pl-5">
-                <li>Centraliza evidencias de todos los módulos normativos con conservación mínima de 5 años.</li>
-                <li>Control técnico mediante sellos de tiempo, versiones y logs de accesos certificados.</li>
-                <li>Dashboard de alertas y exportaciones para carpetas digitales por cliente o módulo.</li>
-              </ul>
-            </div>
             <div className="grid gap-2">
               <Label htmlFor="session-operator" className="text-xs font-semibold uppercase tracking-wide">
                 Responsable en sesión
@@ -683,7 +886,7 @@ export default function EvidenciasTrazabilidadPage() {
                 onChange={(event) => setSessionOperator(event.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Se utilizará para sellar bitácoras de descarga, consulta y exportación dentro del módulo.
+                Se usa para bitácoras de descarga, consulta y exportación.
               </p>
             </div>
           </CardContent>
@@ -691,7 +894,7 @@ export default function EvidenciasTrazabilidadPage() {
         <Card>
           <CardHeader className="space-y-2">
             <CardTitle>Dashboard normativo</CardTitle>
-            <CardDescription>Indicadores en tiempo real del repositorio documental.</CardDescription>
+            <CardDescription>Indicadores clave y sincronización.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
@@ -714,6 +917,32 @@ export default function EvidenciasTrazabilidadPage() {
             <div className="flex items-center justify-between">
               <span className="font-medium">Documentos activos</span>
               <span>{dashboardStats.totalDocuments}</span>
+            </div>
+            <div className="rounded-lg border p-3 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between">
+                <span>Evidencias sincronizadas</span>
+                <span className="font-semibold text-foreground">{integrationSummary.totalExternal}</span>
+              </div>
+              <div className="mt-2 grid gap-1">
+                {Object.entries(integrationSummary.summary).length === 0 ? (
+                  <span>Sin integraciones activas.</span>
+                ) : (
+                  Object.entries(integrationSummary.summary).map(([source, count]) => (
+                    <div key={source} className="flex items-center justify-between">
+                      <span className="capitalize">{source}</span>
+                      <span>{count}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              <Button size="sm" variant="outline" className="mt-3 w-full" onClick={syncExternalEvidence}>
+                Sincronizar evidencias
+              </Button>
+              {lastSync && (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Última sync: {format(new Date(lastSync), "dd/MM/yyyy HH:mm")}
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -878,7 +1107,7 @@ export default function EvidenciasTrazabilidadPage() {
                   <CardTitle className="flex items-center gap-2 text-lg">
                     <FileText className="h-5 w-5" /> Evidencias registradas
                   </CardTitle>
-                  <CardDescription>Control técnico de seguridad y trazabilidad documental.</CardDescription>
+                  <CardDescription>Documentos activos y conectados.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <ScrollArea className="h-[360px] pr-4">
@@ -908,6 +1137,10 @@ export default function EvidenciasTrazabilidadPage() {
                                 <p>Fecha carga: {format(new Date(doc.uploadDate), "dd/MM/yyyy HH:mm")}</p>
                                 <p>Versión activa: {doc.version}</p>
                                 <p>Último acceso: {lastAccessForDocument(doc.id)}</p>
+                                {doc.source && doc.source !== "manual" && (
+                                  <p>Origen: {doc.source}</p>
+                                )}
+                                {!doc.fileData && <p className="text-amber-600">Archivo pendiente</p>}
                               </div>
                               <div className="flex flex-wrap items-center gap-2 pt-2">
                                 <Button size="sm" variant="outline" onClick={() => handleDownload(doc)}>
