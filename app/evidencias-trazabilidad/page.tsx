@@ -267,6 +267,30 @@ export default function EvidenciasTrazabilidadPage() {
   const [sessionOperator, setSessionOperator] = useState("")
   const [lastSync, setLastSync] = useState<string>("")
 
+  const getMonthsToRetentionLimit = (documentDate: string) => {
+    const creationDate = new Date(documentDate)
+    const limitDate = addYears(creationDate, RETENTION_YEARS)
+    const now = new Date()
+    return Math.floor(differenceInMonths(limitDate, now))
+  }
+
+  const getRetentionStatus = (doc: EvidenceDocument) => {
+    const months = getMonthsToRetentionLimit(doc.documentDate)
+    if (months < 0) {
+      return { label: "Vencido", variant: "destructive" as const, className: "" }
+    }
+    if (months <= RETENTION_ALERT_MONTHS) {
+      return {
+        label: `Por vencer (${months} meses)`,
+        variant: "outline" as const,
+        className: "border-amber-500 text-amber-600 bg-amber-100",
+      }
+    }
+    return { label: "Vigente", variant: "default" as const, className: "" }
+  }
+
+  const getModuleName = (key: ModuleKey) => MODULES.find((module) => module.id === key)?.title || key
+
   useEffect(() => {
     const storedDocs = localStorage.getItem(STORAGE_KEYS.documents)
     const storedLogs = localStorage.getItem(STORAGE_KEYS.logs)
@@ -680,28 +704,6 @@ export default function EvidenciasTrazabilidadPage() {
     )
   }
 
-  const getMonthsToRetentionLimit = (documentDate: string) => {
-    const creationDate = new Date(documentDate)
-    const limitDate = addYears(creationDate, RETENTION_YEARS)
-    const now = new Date()
-    return Math.floor(differenceInMonths(limitDate, now))
-  }
-
-  const getRetentionStatus = (doc: EvidenceDocument) => {
-    const months = getMonthsToRetentionLimit(doc.documentDate)
-    if (months < 0) {
-      return { label: "Vencido", variant: "destructive" as const, className: "" }
-    }
-    if (months <= RETENTION_ALERT_MONTHS) {
-      return {
-        label: `Por vencer (${months} meses)`,
-        variant: "outline" as const,
-        className: "border-amber-500 text-amber-600 bg-amber-100",
-      }
-    }
-    return { label: "Vigente", variant: "default" as const, className: "" }
-  }
-
   const exportExpedienteAsCSV = (expedienteId: string) => {
     const docs = expedienteMap.get(expedienteId) || []
     if (docs.length === 0) {
@@ -803,8 +805,6 @@ export default function EvidenciasTrazabilidadPage() {
     doc.save(`expediente-${expedienteId}.pdf`)
     registerLog(docs[0].id, "download", docs[0], "Exportación PDF expediente", sessionOperator)
   }
-
-  const getModuleName = (key: ModuleKey) => MODULES.find((module) => module.id === key)?.title || key
 
   const getExpedienteProgress = (expedienteId: string) => {
     const docs = expedienteMap.get(expedienteId) || []
