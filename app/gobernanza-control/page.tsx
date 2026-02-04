@@ -972,7 +972,7 @@ export default function GobernanzaControlPage() {
 
   return (
     <div className="space-y-8">
-      <section className="grid gap-6 lg:grid-cols-4">
+      <section className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
             <CardTitle>Gobernanza y Control Interno</CardTitle>
@@ -1020,29 +1020,33 @@ export default function GobernanzaControlPage() {
             <CardTitle>Alertas próximas</CardTitle>
             <CardDescription>Gestión automática de vencimientos y sesiones pendientes.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent>
             {pendingAlerts.length === 0 ? (
               <p className="text-sm text-muted-foreground">No hay alertas próximas a vencer.</p>
             ) : (
-              pendingAlerts.map((alert) => (
-                <div key={alert.id} className="rounded-lg border p-3 text-xs space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm flex items-center gap-1">
-                      <BellRing className="h-4 w-4" /> {alert.title}
-                    </span>
-                    <Badge variant="outline" className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> {formatDate(alert.targetDate)}
-                    </Badge>
-                  </div>
-                  <p className="text-muted-foreground">{alert.description}</p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Responsable: {alert.responsible}</span>
-                    <Button size="sm" variant="secondary" onClick={() => handleSendReminder(alert)}>
-                      Enviar recordatorio
-                    </Button>
-                  </div>
+              <ScrollArea className="h-72 pr-2">
+                <div className="space-y-3">
+                  {pendingAlerts.map((alert) => (
+                    <div key={alert.id} className="rounded-lg border p-3 text-xs space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-sm flex items-center gap-1">
+                          <BellRing className="h-4 w-4" /> {alert.title}
+                        </span>
+                        <Badge variant="outline" className="flex items-center gap-1 shrink-0">
+                          <Clock className="h-3 w-3" /> {formatDate(alert.targetDate)}
+                        </Badge>
+                      </div>
+                      <p className="text-muted-foreground">{alert.description}</p>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-muted-foreground">Responsable: {alert.responsible}</span>
+                        <Button size="sm" variant="secondary" onClick={() => handleSendReminder(alert)}>
+                          Enviar recordatorio
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))
+              </ScrollArea>
             )}
           </CardContent>
         </Card>
