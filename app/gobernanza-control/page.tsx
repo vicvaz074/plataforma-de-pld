@@ -48,7 +48,7 @@ type AnswerValue = "si" | "no" | "no-aplica"
 
 interface GovernanceQuestion {
   id: string
-  submodule: "oficial" | "manuales" | "comite"
+  submodule: "oficial" | "manuales"
   category: string
   question: string
   legalReference: string
@@ -161,17 +161,8 @@ const defaultAlerts: AlertSetting[] = [
     title: "Actualización anual del manual",
     description: "Verifica revisión y aprobación de políticas conforme a reformas vigentes.",
     targetDate: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 45).toISOString(),
-    responsible: "Comité de Comunicación y Control",
+    responsible: "Alta Dirección",
     channelEmail: false,
-    channelInApp: true,
-  },
-  {
-    id: "alert-comite",
-    title: "Sesión trimestral del Comité",
-    description: "Programa y documenta la sesión ordinaria del Comité de Comunicación y Control.",
-    targetDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 10).toISOString(),
-    responsible: "Secretaría Técnica",
-    channelEmail: true,
     channelInApp: true,
   },
 ]
@@ -336,69 +327,6 @@ const questionBank: GovernanceQuestion[] = [
     relatedDocuments: [],
     required: true,
   },
-  {
-    id: "comite-1",
-    submodule: "comite",
-    category: "Integración del Comité",
-    question: "¿La sociedad está obligada a integrar un Comité de Comunicación y Control?",
-    legalReference: "Normativa sectorial (≥ 25 empleados)",
-    helperText: "Adjunta acta de integración y listado de miembros si aplica.",
-    answer: null,
-    evidenceHints: ["Acta de integración", "Lista oficial de miembros"],
-    relatedDocuments: [],
-    required: true,
-  },
-  {
-    id: "comite-2",
-    submodule: "comite",
-    category: "Integración del Comité",
-    question:
-      "¿El Comité está conformado por al menos tres integrantes con cargos directivos y representatividad en áreas clave?",
-    legalReference: "Normativa sectorial",
-    helperText: "Incluye acta constitutiva o nombramientos que acrediten los cargos.",
-    answer: null,
-    evidenceHints: ["Acta constitutiva del Comité", "Nombramientos"],
-    relatedDocuments: [],
-    required: true,
-  },
-  {
-    id: "comite-3",
-    submodule: "comite",
-    category: "Funcionamiento",
-    question:
-      "¿El Comité celebra sesiones periódicas (al menos trimestrales) para seguimiento de operaciones y reportes?",
-    legalReference: "Buenas prácticas UIF",
-    helperText: "Carga calendario de sesiones y actas celebradas.",
-    answer: null,
-    evidenceHints: ["Calendario de sesiones", "Actas de reunión"],
-    relatedDocuments: [],
-    required: true,
-  },
-  {
-    id: "comite-4",
-    submodule: "comite",
-    category: "Funcionamiento",
-    question: "¿Se documentan formalmente las actas, minutas y lista de asistentes?",
-    legalReference: "Normativa sectorial",
-    helperText: "Integra actas firmadas, minutas y listas de asistencia digitalizadas.",
-    answer: null,
-    evidenceHints: ["Actas firmadas", "Listas de asistencia"],
-    relatedDocuments: [],
-    required: true,
-  },
-  {
-    id: "comite-5",
-    submodule: "comite",
-    category: "Seguimiento",
-    question:
-      "¿El Comité emite acuerdos vinculantes y seguimiento documentado a observaciones del Oficial y autoridades?",
-    legalReference: "Buenas prácticas UIF",
-    helperText: "Adjunta minutas con acuerdos, responsables y plan de acción.",
-    answer: null,
-    evidenceHints: ["Minutas con acuerdos", "Planes de acción"],
-    relatedDocuments: [],
-    required: true,
-  },
 ]
 
 const answerOptions: { value: AnswerValue; label: string }[] = [
@@ -429,12 +357,6 @@ const submoduleConfig = [
     title: "Políticas y Manuales",
     description:
       "Repositorio con control de versiones, aprobaciones y difusión de políticas internas en materia de PLD-FT.",
-  },
-  {
-    id: "comite" as const,
-    title: "Comité de Comunicación y Control",
-    description:
-      "Gestión integral del Comité: integración, sesiones, actas, acuerdos y seguimiento documentado.",
   },
 ]
 
@@ -977,8 +899,7 @@ export default function GobernanzaControlPage() {
           <CardHeader className="pb-3">
             <CardTitle>Gobernanza y Control Interno</CardTitle>
             <CardDescription>
-              Repositorio integral para acreditar Oficial de Cumplimiento, manuales internos y Comité de Comunicación y
-              Control conforme a LFPIORPI y RCG.
+              Repositorio integral para acreditar Oficial de Cumplimiento y manuales internos conforme a LFPIORPI y RCG.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1094,7 +1015,7 @@ export default function GobernanzaControlPage() {
       </section>
 
       <Tabs defaultValue="oficial" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           {submoduleConfig.map((submodule) => (
             <TabsTrigger key={submodule.id} value={submodule.id} className="flex items-center gap-2">
               <Layers className="h-4 w-4" />
@@ -1339,170 +1260,6 @@ export default function GobernanzaControlPage() {
         </Card>
       </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Registro digital de sesiones del Comité</CardTitle>
-          <CardDescription>Captura número de sesión, asistentes, acuerdos y responsables.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-3">
-              <div className="grid gap-2">
-                <Label>Número de sesión</Label>
-                <Input
-                  value={newSessionDraft.sessionNumber}
-                  onChange={(event) => setNewSessionDraft((prev) => ({ ...prev, sessionNumber: event.target.value }))}
-                  placeholder="Ej. Ordinaria 01/2024"
-                  disabled={expedienteCerrado}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Fecha de sesión</Label>
-                <Input
-                  type="date"
-                  value={newSessionDraft.sessionDate}
-                  onChange={(event) => setNewSessionDraft((prev) => ({ ...prev, sessionDate: event.target.value }))}
-                  disabled={expedienteCerrado}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Notas generales</Label>
-                <Textarea
-                  value={newSessionDraft.notes || ""}
-                  onChange={(event) => setNewSessionDraft((prev) => ({ ...prev, notes: event.target.value }))}
-                  placeholder="Observaciones relevantes de la sesión"
-                  disabled={expedienteCerrado}
-                />
-              </div>
-            </div>
-            <div className="space-y-3">
-              <div className="grid gap-2">
-                <Label>Integrantes asistentes</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={newAttendee}
-                    onChange={(event) => setNewAttendee(event.target.value)}
-                    placeholder="Nombre y cargo"
-                    disabled={expedienteCerrado}
-                  />
-                  <Button
-                    type="button"
-                    onClick={addAttendee}
-                    disabled={expedienteCerrado || !newAttendee.trim()}
-                    className="flex items-center gap-2"
-                  >
-                    <Plus className="h-4 w-4" /> Agregar
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {newSessionDraft.attendees.map((attendee) => (
-                    <Badge key={attendee} variant="secondary" className="flex items-center gap-2">
-                      <Users className="h-3 w-3" /> {attendee}
-                      {!expedienteCerrado && (
-                        <button
-                          type="button"
-                          onClick={() => removeAttendee(attendee)}
-                          className="text-xs text-muted-foreground"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label>Acuerdos</Label>
-                <div className="grid gap-2">
-                  <Input
-                    value={newAgreementDraft.agreement}
-                    onChange={(event) => setNewAgreementDraft((prev) => ({ ...prev, agreement: event.target.value }))}
-                    placeholder="Descripción del acuerdo"
-                    disabled={expedienteCerrado}
-                  />
-                  <Input
-                    value={newAgreementDraft.responsible}
-                    onChange={(event) => setNewAgreementDraft((prev) => ({ ...prev, responsible: event.target.value }))}
-                    placeholder="Responsable"
-                    disabled={expedienteCerrado}
-                  />
-                  <Input
-                    type="date"
-                    value={newAgreementDraft.deadline}
-                    onChange={(event) => setNewAgreementDraft((prev) => ({ ...prev, deadline: event.target.value }))}
-                    disabled={expedienteCerrado}
-                  />
-                  <Button type="button" onClick={addAgreement} disabled={expedienteCerrado} className="flex items-center gap-2">
-                    <Plus className="h-4 w-4" /> Agregar acuerdo
-                  </Button>
-                </div>
-                <div className="space-y-2 text-sm">
-                  {newSessionDraft.agreements.map((agreement, index) => (
-                    <div key={`${agreement.agreement}-${index}`} className="rounded border p-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{agreement.agreement}</span>
-                        {!expedienteCerrado && (
-                          <button
-                            type="button"
-                            onClick={() => removeAgreement(index)}
-                            className="text-xs text-muted-foreground"
-                          >
-                            Eliminar
-                          </button>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">Responsable: {agreement.responsible}</p>
-                      <p className="text-xs text-muted-foreground">Plazo: {formatDate(agreement.deadline)}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-end">
-            <Button type="button" onClick={saveCommitteeSession} disabled={expedienteCerrado}>
-              Guardar sesión
-            </Button>
-          </div>
-
-          <div className="space-y-3">
-            <h4 className="font-semibold text-sm">Sesiones registradas ({totalSessions})</h4>
-            {committeeSessions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aún no se ha documentado ninguna sesión.</p>
-            ) : (
-              <ScrollArea className="h-60 pr-4">
-                <div className="space-y-3 text-sm">
-                  {committeeSessions.map((session) => (
-                    <div key={session.id} className="rounded border p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold">Sesión {session.sessionNumber}</span>
-                        <Badge variant="outline">{formatDate(session.sessionDate)}</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Asistentes: {session.attendees.join(", ")}
-                      </p>
-                      {session.agreements.length > 0 && (
-                        <div className="text-xs text-muted-foreground space-y-1">
-                          <p className="font-medium">Acuerdos:</p>
-                          {session.agreements.map((agreement, index) => (
-                            <div key={`${agreement.agreement}-${index}`} className="rounded bg-muted p-2">
-                              <p>{agreement.agreement}</p>
-                              <p>Responsable: {agreement.responsible}</p>
-                              <p>Plazo: {formatDate(agreement.deadline)}</p>
-                              <p>Estatus: {agreement.status}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {session.notes && <p className="text-xs text-muted-foreground">Notas: {session.notes}</p>}
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
