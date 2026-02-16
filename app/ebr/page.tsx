@@ -33,13 +33,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useLanguage } from "@/lib/LanguageContext";
+import { PAISES } from "@/lib/data/paises";
 import { translations } from "@/lib/translations";
 
 interface ExpedienteDetalle {
   rfc: string;
   nombre: string;
   tipoCliente?: string;
-  actualizadoEn?: string;
 }
 
 interface OperacionCliente {
@@ -67,7 +67,8 @@ type IncomeSourceId =
   | "estudiante";
 
 interface EvaluationAnswers {
-  nationality: string;
+  nationalityRisk: string;
+  nationalityCountryCode: string;
   pep: string;
   bankInstitution: string;
   suspiciousBehaviors: string[];
@@ -79,7 +80,8 @@ interface EvaluationAnswers {
 
 interface StoredEvaluation {
   rfc: string;
-  answers: EvaluationAnswers;
+  clientAnswers: EvaluationAnswers;
+  subjectAnswers: EvaluationAnswers;
   hasBeneficiaryController: boolean;
   beneficiaryAnswers: EvaluationAnswers;
   notes: string;
@@ -105,22 +107,22 @@ const NATIONALITY_OPTIONS = [
   { value: "gray_sat", label: "Lista gris o régimen preferente SAT", score: 3 },
   {
     value: "corruption",
-    label: "Alto nivel de corrupción (Top 80 final TI)",
+    label: "Alto nivel de corrupción (ranking TI, últimos 80)",
     score: 2,
   },
-  { value: "other", label: "Otros países", score: 1 },
+  { value: "other", label: "Todos los demás países", score: 1 },
 ];
 
 const PEP_OPTIONS = [
   { value: "pep", label: "Es Persona Políticamente Expuesta", score: 4 },
   {
     value: "first_degree",
-    label: "Cónyuge o familiar en primer grado",
+    label: "Cónyuge o familiar de primer grado",
     score: 3,
   },
   {
     value: "second_degree",
-    label: "Familiar de consanguinidad/afinidad segundo grado",
+    label: "Familiar de consanguinidad/afinidad hasta segundo grado",
     score: 2,
   },
   { value: "none", label: "No aplica", score: 1 },
@@ -136,38 +138,38 @@ const SUSPICIOUS_BEHAVIORS = [
   { value: "pld_process", label: "Pregunta por proceso interno PLD", score: 2 },
   {
     value: "disinterest",
-    label: "Compra directa sin interés en el producto",
+    label: "Compra directa sin interés en el producto o servicio",
     score: 3,
   },
   {
     value: "split_cash",
-    label: "Solicita fragmentación y pago en efectivo",
+    label: "Solicita fragmentación y parte en efectivo bajo umbral",
     score: 3,
   },
   { value: "urgent_close", label: "Muestra urgencia injustificada", score: 2 },
   {
     value: "report_threshold",
-    label: "Solicita conocer umbrales de reporte",
+    label: "Solicita conocer límites de reporte",
     score: 2,
   },
   {
     value: "narrative_inconsistency",
-    label: "Inconsistencias ligeras en narrativa",
+    label: "Ligeras inconsistencias en narrativa (aclaradas)",
     score: 2,
   },
   {
     value: "avoid_id",
-    label: "Evita identificación/documentación obligatoria",
+    label: "Evita entregar identificación/documentación obligatoria",
     score: 3,
   },
   {
     value: "avoid_ubf",
-    label: "Evita información de Beneficiario Final",
+    label: "Evita información para identificar Beneficiario Final",
     score: 3,
   },
   {
     value: "invoice_change",
-    label: "Solicita modificar facturación sin causa",
+    label: "Solicita modificar facturación sin causa razonable",
     score: 3,
   },
 ];
@@ -200,9 +202,9 @@ const NGO_OPTIONS = [
 ];
 
 const INSTITUTION_AGE_OPTIONS = [
-  { value: "private_lt_2", label: "Privada con menos de 2 años", score: 4 },
-  { value: "private_lt_5", label: "Privada con menos de 5 años", score: 3 },
-  { value: "private_lt_10", label: "Privada con menos de 10 años", score: 2 },
+  { value: "private_lt_2", label: "Privada menor de 2 años", score: 4 },
+  { value: "private_lt_5", label: "Privada menor de 5 años", score: 3 },
+  { value: "private_lt_10", label: "Privada menor de 10 años", score: 2 },
   {
     value: "public_or_mature",
     label: "Pública o privada mayor a 10 años / N/A",
@@ -211,7 +213,8 @@ const INSTITUTION_AGE_OPTIONS = [
 ];
 
 const initialAnswers: EvaluationAnswers = {
-  nationality: "other",
+  nationalityRisk: "other",
+  nationalityCountryCode: "MX",
   pep: "none",
   bankInstitution: "national_only",
   suspiciousBehaviors: [],
@@ -225,6 +228,11 @@ const getOptionScore = (
   value: string,
   options: Array<{ value: string; score: number }>,
 ) => options.find((option) => option.value === value)?.score ?? 1;
+
+const getLabel = (
+  value: string,
+  options: Array<{ value: string; label: string }>,
+) => options.find((option) => option.value === value)?.label ?? "N/A";
 
 const getIncomeRiskScore = (
   incomeSources: IncomeSourceId[],
@@ -261,42 +269,37 @@ const getIncomeRiskScore = (
 const calculateRisk = (
   answers: EvaluationAnswers,
   includeBankAndBehavior: boolean,
+  questionnaireName: string,
 ): ScoredResult => {
+  const countryLabel =
+    PAISES.find((pais) => pais.code === answers.nationalityCountryCode)
+      ?.label ?? "N/A";
+
   const details: ScoredResult["details"] = [
     {
-      question: "Nacionalidad del cliente",
-      score: getOptionScore(answers.nationality, NATIONALITY_OPTIONS),
-      answer:
-        NATIONALITY_OPTIONS.find(
-          (option) => option.value === answers.nationality,
-        )?.label ?? "N/A",
+      question: `Nacionalidad (${questionnaireName})`,
+      score: getOptionScore(answers.nationalityRisk, NATIONALITY_OPTIONS),
+      answer: `${countryLabel} / ${getLabel(answers.nationalityRisk, NATIONALITY_OPTIONS)}`,
     },
     {
-      question: "PEP o relación con PEP",
+      question: `PEP o relación con PEP (${questionnaireName})`,
       score: getOptionScore(answers.pep, PEP_OPTIONS),
-      answer:
-        PEP_OPTIONS.find((option) => option.value === answers.pep)?.label ??
-        "N/A",
+      answer: getLabel(answers.pep, PEP_OPTIONS),
     },
     {
-      question: "Fuentes de ingresos + giro",
+      question: `Fuentes de ingreso + giro (${questionnaireName})`,
       score: getIncomeRiskScore(answers.incomeSources, answers.cashExposure),
       answer: `${answers.incomeSources.length || 0} fuente(s), giro ${answers.cashExposure}`,
     },
     {
-      question: "ONG/beneficencia no regulada",
+      question: `ONG/beneficencia no regulada (${questionnaireName})`,
       score: getOptionScore(answers.ngoNonRegulated, NGO_OPTIONS),
-      answer:
-        NGO_OPTIONS.find((option) => option.value === answers.ngoNonRegulated)
-          ?.label ?? "N/A",
+      answer: getLabel(answers.ngoNonRegulated, NGO_OPTIONS),
     },
     {
-      question: "Antigüedad de institución",
+      question: `Antigüedad de institución (${questionnaireName})`,
       score: getOptionScore(answers.institutionAge, INSTITUTION_AGE_OPTIONS),
-      answer:
-        INSTITUTION_AGE_OPTIONS.find(
-          (option) => option.value === answers.institutionAge,
-        )?.label ?? "N/A",
+      answer: getLabel(answers.institutionAge, INSTITUTION_AGE_OPTIONS),
     },
   ];
 
@@ -305,15 +308,12 @@ const calculateRisk = (
       2,
       0,
       {
-        question: "Institución bancaria",
+        question: `Institución bancaria (${questionnaireName})`,
         score: getOptionScore(answers.bankInstitution, BANK_OPTIONS),
-        answer:
-          BANK_OPTIONS.find(
-            (option) => option.value === answers.bankInstitution,
-          )?.label ?? "N/A",
+        answer: getLabel(answers.bankInstitution, BANK_OPTIONS),
       },
       {
-        question: "Acciones observadas del cliente",
+        question: `Acciones observadas (${questionnaireName})`,
         score: Math.max(
           1,
           ...answers.suspiciousBehaviors.map((value) =>
@@ -373,7 +373,10 @@ export default function EbrPage() {
   >({});
   const [clienteSeleccionado, setClienteSeleccionado] = useState("");
 
-  const [answers, setAnswers] = useState<EvaluationAnswers>(initialAnswers);
+  const [clientAnswers, setClientAnswers] =
+    useState<EvaluationAnswers>(initialAnswers);
+  const [subjectAnswers, setSubjectAnswers] =
+    useState<EvaluationAnswers>(initialAnswers);
   const [hasBeneficiaryController, setHasBeneficiaryController] =
     useState(false);
   const [beneficiaryAnswers, setBeneficiaryAnswers] =
@@ -384,12 +387,8 @@ export default function EbrPage() {
     if (typeof window === "undefined") return;
 
     try {
-      const storedExpedientes = window.localStorage.getItem(
-        EXPEDIENTE_DETALLE_STORAGE_KEY,
-      );
-      const parsed = storedExpedientes
-        ? (JSON.parse(storedExpedientes) as ExpedienteDetalle[])
-        : [];
+      const raw = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as ExpedienteDetalle[]) : [];
       setExpedientes(
         Array.isArray(parsed) ? parsed.filter((item) => item?.rfc) : [],
       );
@@ -398,12 +397,8 @@ export default function EbrPage() {
     }
 
     try {
-      const storedOperaciones = window.localStorage.getItem(
-        OPERACIONES_STORAGE_KEY,
-      );
-      const parsed = storedOperaciones
-        ? (JSON.parse(storedOperaciones) as OperacionCliente[])
-        : [];
+      const raw = window.localStorage.getItem(OPERACIONES_STORAGE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as OperacionCliente[]) : [];
       setOperaciones(
         Array.isArray(parsed)
           ? parsed.filter((item) => item?.id && item?.rfc)
@@ -414,9 +409,9 @@ export default function EbrPage() {
     }
 
     try {
-      const storedEvaluaciones = window.localStorage.getItem(EBR_STORAGE_KEY);
-      const parsed = storedEvaluaciones
-        ? (JSON.parse(storedEvaluaciones) as Record<string, StoredEvaluation>)
+      const raw = window.localStorage.getItem(EBR_STORAGE_KEY);
+      const parsed = raw
+        ? (JSON.parse(raw) as Record<string, StoredEvaluation>)
         : {};
       setEvaluacionesGuardadas(parsed);
     } catch (_error) {
@@ -425,22 +420,16 @@ export default function EbrPage() {
   }, []);
 
   const clientesDisponibles = useMemo(() => {
-    const mapa = new Map<string, { rfc: string; nombre: string }>();
-    expedientes.forEach((expediente) =>
-      mapa.set(expediente.rfc, {
-        rfc: expediente.rfc,
-        nombre: expediente.nombre,
-      }),
+    const map = new Map<string, { rfc: string; nombre: string }>();
+    expedientes.forEach((item) =>
+      map.set(item.rfc, { rfc: item.rfc, nombre: item.nombre }),
     );
-    operaciones.forEach((operacion) => {
-      if (!mapa.has(operacion.rfc)) {
-        mapa.set(operacion.rfc, {
-          rfc: operacion.rfc,
-          nombre: operacion.cliente || operacion.rfc,
-        });
+    operaciones.forEach((item) => {
+      if (!map.has(item.rfc)) {
+        map.set(item.rfc, { rfc: item.rfc, nombre: item.cliente || item.rfc });
       }
     });
-    return Array.from(mapa.values());
+    return Array.from(map.values());
   }, [expedientes, operaciones]);
 
   useEffect(() => {
@@ -452,51 +441,58 @@ export default function EbrPage() {
     if (!clienteSeleccionado) return;
     const stored = evaluacionesGuardadas[clienteSeleccionado];
     if (!stored) {
-      setAnswers(initialAnswers);
+      setClientAnswers(initialAnswers);
+      setSubjectAnswers(initialAnswers);
       setHasBeneficiaryController(false);
       setBeneficiaryAnswers(initialAnswers);
       setNotes("");
       return;
     }
 
-    setAnswers(stored.answers);
+    setClientAnswers(stored.clientAnswers ?? initialAnswers);
+    setSubjectAnswers(stored.subjectAnswers ?? initialAnswers);
     setHasBeneficiaryController(stored.hasBeneficiaryController);
     setBeneficiaryAnswers(stored.beneficiaryAnswers ?? initialAnswers);
     setNotes(stored.notes);
   }, [clienteSeleccionado, evaluacionesGuardadas]);
 
   const expedienteActual = useMemo(
-    () =>
-      expedientes.find(
-        (expediente) => expediente.rfc === clienteSeleccionado,
-      ) ?? null,
+    () => expedientes.find((item) => item.rfc === clienteSeleccionado) ?? null,
     [expedientes, clienteSeleccionado],
   );
 
   const operacionesCliente = useMemo(
-    () =>
-      operaciones.filter((operacion) => operacion.rfc === clienteSeleccionado),
+    () => operaciones.filter((item) => item.rfc === clienteSeleccionado),
     [operaciones, clienteSeleccionado],
   );
 
-  const mainResult = useMemo(() => calculateRisk(answers, true), [answers]);
+  const clientResult = useMemo(
+    () => calculateRisk(clientAnswers, true, "Cliente"),
+    [clientAnswers],
+  );
+  const subjectResult = useMemo(
+    () => calculateRisk(subjectAnswers, true, "Sujeto obligado"),
+    [subjectAnswers],
+  );
   const beneficiaryResult = useMemo(
     () =>
       hasBeneficiaryController
-        ? calculateRisk(beneficiaryAnswers, false)
+        ? calculateRisk(beneficiaryAnswers, false, "Beneficiario controlador")
         : null,
     [hasBeneficiaryController, beneficiaryAnswers],
   );
 
   const finalLevel = useMemo(() => {
-    const levels = [mainResult.level, beneficiaryResult?.level].filter(
-      Boolean,
-    ) as ScoredResult["level"][];
+    const levels = [
+      clientResult.level,
+      subjectResult.level,
+      beneficiaryResult?.level,
+    ].filter(Boolean) as ScoredResult["level"][];
     if (levels.includes("Reforzado")) return "Reforzado";
     if (levels.includes("Alto")) return "Alto";
     if (levels.includes("Medio")) return "Medio";
     return "Bajo";
-  }, [mainResult, beneficiaryResult]);
+  }, [clientResult.level, subjectResult.level, beneficiaryResult?.level]);
 
   const riskBadgeStyles = {
     Bajo: "bg-emerald-100 text-emerald-700",
@@ -504,6 +500,8 @@ export default function EbrPage() {
     Alto: "bg-orange-100 text-orange-700",
     Reforzado: "bg-rose-100 text-rose-700",
   };
+
+  const savedEvaluation = evaluacionesGuardadas[clienteSeleccionado];
 
   const toggleMultiValue = (
     current: string[],
@@ -519,7 +517,8 @@ export default function EbrPage() {
     if (!clienteSeleccionado || typeof window === "undefined") return;
     const updated: StoredEvaluation = {
       rfc: clienteSeleccionado,
-      answers,
+      clientAnswers,
+      subjectAnswers,
       hasBeneficiaryController,
       beneficiaryAnswers,
       notes,
@@ -536,7 +535,8 @@ export default function EbrPage() {
     delete next[clienteSeleccionado];
     setEvaluacionesGuardadas(next);
     window.localStorage.setItem(EBR_STORAGE_KEY, JSON.stringify(next));
-    setAnswers(initialAnswers);
+    setClientAnswers(initialAnswers);
+    setSubjectAnswers(initialAnswers);
     setHasBeneficiaryController(false);
     setBeneficiaryAnswers(initialAnswers);
     setNotes("");
@@ -569,7 +569,7 @@ export default function EbrPage() {
     doc.rect(0, 0, doc.internal.pageSize.getWidth(), 68, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(16);
-    doc.text("Reporte EBR - Evaluación Basada en Riesgo", margin, 34);
+    doc.text("Reporte EBR - Cliente y Sujeto Obligado", margin, 34);
     doc.setFontSize(10);
     doc.text(
       `Cliente: ${expedienteActual?.nombre ?? "Sin nombre"} | RFC: ${clienteSeleccionado || "N/A"}`,
@@ -579,40 +579,36 @@ export default function EbrPage() {
 
     y = 90;
     doc.setTextColor(31, 41, 55);
-
     addLine(`Resumen ejecutivo: Riesgo final ${finalLevel}.`);
     addLine(
-      `Perfil principal: ${mainResult.level} (${mainResult.percent}%). Regla: ${mainResult.reason}.`,
+      `Cliente: ${clientResult.level} (${clientResult.percent}%). Regla: ${clientResult.reason}.`,
+    );
+    addLine(
+      `Sujeto obligado: ${subjectResult.level} (${subjectResult.percent}%). Regla: ${subjectResult.reason}.`,
     );
     if (beneficiaryResult) {
       addLine(
-        `Perfil beneficiario controlador: ${beneficiaryResult.level} (${beneficiaryResult.percent}%). Regla: ${beneficiaryResult.reason}.`,
+        `Beneficiario controlador: ${beneficiaryResult.level} (${beneficiaryResult.percent}%). Regla: ${beneficiaryResult.reason}.`,
       );
     }
 
-    addLine("\nDetalle del perfil principal", 12);
-    mainResult.details.forEach((detail) =>
-      addLine(
-        `- ${detail.question}: ${detail.answer}. Puntaje ${detail.score}.`,
-      ),
+    addLine("\nDetalle por cuestionario", 12);
+    clientResult.details.forEach((item) =>
+      addLine(`- ${item.question}: ${item.answer}. Puntaje ${item.score}.`),
     );
-
+    subjectResult.details.forEach((item) =>
+      addLine(`- ${item.question}: ${item.answer}. Puntaje ${item.score}.`),
+    );
     if (beneficiaryResult) {
-      addLine("\nDetalle del beneficiario controlador", 12);
-      beneficiaryResult.details.forEach((detail) =>
-        addLine(
-          `- ${detail.question}: ${detail.answer}. Puntaje ${detail.score}.`,
-        ),
+      beneficiaryResult.details.forEach((item) =>
+        addLine(`- ${item.question}: ${item.answer}. Puntaje ${item.score}.`),
       );
     }
 
     addLine("\nObservaciones", 12);
     addLine(notes || "Sin observaciones");
-
     doc.save(`ebr-${clienteSeleccionado || "cliente"}.pdf`);
   };
-
-  const savedEvaluation = evaluacionesGuardadas[clienteSeleccionado];
 
   return (
     <div className="space-y-8">
@@ -620,8 +616,8 @@ export default function EbrPage() {
         <div>
           <h1 className="text-3xl font-semibold text-gray-900">{t.ebrTitle}</h1>
           <p className="text-muted-foreground mt-2 max-w-3xl">
-            Metodología EBR fortalecida con reglas automáticas, orientación paso
-            a paso y reporte ejecutivo del perfil.
+            Evaluación integrada con cuestionarios separados para Cliente y
+            Sujeto Obligado, lista de países y consolidación del perfil.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -655,23 +651,22 @@ export default function EbrPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-blue-900">
             <CircleHelp className="h-5 w-5" />
-            Guía rápida de metodología
+            Metodología y reglas automáticas
           </CardTitle>
           <CardDescription className="text-blue-800">
-            Regla general: si existe una respuesta con 4 puntos el riesgo es
-            automático Alto; con dos o más respuestas de 4 puntos, el nivel pasa
-            a Reforzado.
+            Si hay 1 respuesta de 4 puntos =&gt; Alto. Si hay 2 o más respuestas
+            de 4 puntos =&gt; Reforzado.
           </CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-blue-900 space-y-1">
-          <p>1) Completa las 8 preguntas del perfil principal.</p>
+          <p>1) Contesta cuestionario de Cliente.</p>
+          <p>2) Contesta cuestionario de Sujeto Obligado.</p>
           <p>
-            2) Si existe beneficiario controlador, activa la segunda parte y
-            responde preguntas 1, 2, 5, 6, 7 y 8.
+            3) Si existe Beneficiario Controlador, activa su sección y completa
+            preguntas 1,2,5,6,7,8.
           </p>
           <p>
-            3) El reporte resume nivel, motivos automáticos, detalle por
-            pregunta y observaciones.
+            4) El reporte integra los tres perfiles con conclusión consolidada.
           </p>
           <a
             href="https://www.gob.mx/cms/uploads/attachment/file/1035629/Listas_de_reg_menes_fiscales_preferentes.pdf"
@@ -734,42 +729,38 @@ export default function EbrPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>Riesgo final</CardDescription>
+            <CardDescription>Riesgo final consolidado</CardDescription>
             <CardTitle className="flex items-center gap-2 text-2xl">
               {finalLevel}
               <Badge className={riskBadgeStyles[finalLevel]}>
-                {mainResult.percent}%
+                {Math.max(clientResult.percent, subjectResult.percent)}%
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            {mainResult.reason}
+            Integra Cliente, Sujeto Obligado y Beneficiario Controlador.
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>Perfil principal</CardDescription>
+            <CardDescription>Cliente</CardDescription>
             <CardTitle className="text-2xl">
-              {mainResult.total}/{mainResult.max}
+              {clientResult.total}/{clientResult.max}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Progress value={mainResult.percent} className="h-2" />
+            <Progress value={clientResult.percent} className="h-2" />
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>Reglas automáticas</CardDescription>
+            <CardDescription>Sujeto obligado</CardDescription>
             <CardTitle className="text-2xl">
-              {mainResult.fours} respuesta(s) de 4
+              {subjectResult.total}/{subjectResult.max}
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            {mainResult.fours >= 2
-              ? "Aplicó reforzado"
-              : mainResult.fours === 1
-                ? "Aplicó alto automático"
-                : "Sin automático"}
+          <CardContent>
+            <Progress value={subjectResult.percent} className="h-2" />
           </CardContent>
         </Card>
         <Card>
@@ -789,159 +780,48 @@ export default function EbrPage() {
         </Card>
       </div>
 
-      <Tabs defaultValue="cuestionario" className="space-y-4">
+      <Tabs defaultValue="cuestionarios" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="cuestionario">Cuestionario EBR</TabsTrigger>
+          <TabsTrigger value="cuestionarios">Cuestionarios</TabsTrigger>
           <TabsTrigger value="reporte">Reporte y resumen</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="cuestionario" className="space-y-6">
+        <TabsContent value="cuestionarios" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Primera parte: perfil principal</CardTitle>
-              <CardDescription>
-                Completa cada pregunta según la metodología definida.
-              </CardDescription>
+              <CardTitle>Cuestionario del Cliente</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-5">
-              <QuestionSelect
-                label="1) Nacionalidad del cliente"
-                value={answers.nationality}
-                options={NATIONALITY_OPTIONS}
-                onChange={(value) =>
-                  setAnswers((prev) => ({ ...prev, nationality: value }))
-                }
-              />
-              <QuestionSelect
-                label="2) PEP o relación con PEP"
-                value={answers.pep}
-                options={PEP_OPTIONS}
-                onChange={(value) =>
-                  setAnswers((prev) => ({ ...prev, pep: value }))
-                }
-              />
-              <QuestionSelect
-                label="3) Institución bancaria que utiliza"
-                value={answers.bankInstitution}
-                options={BANK_OPTIONS}
-                onChange={(value) =>
-                  setAnswers((prev) => ({ ...prev, bankInstitution: value }))
-                }
-              />
-
-              <div className="space-y-2">
-                <Label>
-                  4) Acciones observadas del cliente (puedes seleccionar varias)
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  El puntaje de esta pregunta toma la alerta de mayor gravedad
-                  seleccionada.
-                </p>
-                <div className="grid gap-2 rounded-md border p-3">
-                  {SUSPICIOUS_BEHAVIORS.map((behavior) => (
-                    <label
-                      key={behavior.value}
-                      className="flex items-start gap-2 text-sm"
-                    >
-                      <Checkbox
-                        checked={answers.suspiciousBehaviors.includes(
-                          behavior.value,
-                        )}
-                        onCheckedChange={() =>
-                          toggleMultiValue(
-                            answers.suspiciousBehaviors,
-                            behavior.value,
-                            (next) =>
-                              setAnswers((prev) => ({
-                                ...prev,
-                                suspiciousBehaviors: next,
-                              })),
-                          )
-                        }
-                      />
-                      <span>{behavior.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>5) Fuentes de ingresos (selección múltiple)</Label>
-                <div className="grid gap-2 rounded-md border p-3 md:grid-cols-2">
-                  {INCOME_SOURCES.map((source) => (
-                    <label
-                      key={source.value}
-                      className="flex items-start gap-2 text-sm"
-                    >
-                      <Checkbox
-                        checked={answers.incomeSources.includes(source.value)}
-                        onCheckedChange={() =>
-                          toggleMultiValue(
-                            answers.incomeSources,
-                            source.value,
-                            (next) =>
-                              setAnswers((prev) => ({
-                                ...prev,
-                                incomeSources: next as IncomeSourceId[],
-                              })),
-                          )
-                        }
-                      />
-                      <span>{source.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>6) Giro de negocio por nivel de uso de efectivo</Label>
-                <Select
-                  value={answers.cashExposure}
-                  onValueChange={(value: CashExposure) =>
-                    setAnswers((prev) => ({ ...prev, cashExposure: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona nivel" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CASH_EXPOSURE_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  La puntuación se calcula automáticamente combinando fuente de
-                  ingresos y nivel de uso de efectivo.
-                </p>
-              </div>
-
-              <QuestionSelect
-                label="7) ONG/beneficencia no regulada"
-                value={answers.ngoNonRegulated}
-                options={NGO_OPTIONS}
-                onChange={(value) =>
-                  setAnswers((prev) => ({ ...prev, ngoNonRegulated: value }))
-                }
-              />
-              <QuestionSelect
-                label="8) Fecha de creación de la institución"
-                value={answers.institutionAge}
-                options={INSTITUTION_AGE_OPTIONS}
-                onChange={(value) =>
-                  setAnswers((prev) => ({ ...prev, institutionAge: value }))
-                }
+            <CardContent>
+              <QuestionnaireForm
+                answers={clientAnswers}
+                setAnswers={setClientAnswers}
+                includeBankAndBehavior
+                titlePrefix="Cliente"
+                toggleMultiValue={toggleMultiValue}
               />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Segunda parte: beneficiario controlador</CardTitle>
+              <CardTitle>Cuestionario del Sujeto Obligado</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <QuestionnaireForm
+                answers={subjectAnswers}
+                setAnswers={setSubjectAnswers}
+                includeBankAndBehavior
+                titlePrefix="Sujeto obligado"
+                toggleMultiValue={toggleMultiValue}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Beneficiario Controlador</CardTitle>
               <CardDescription>
-                Si no existe, el cuestionario termina aquí.
+                Si no existe, aquí concluye el flujo adicional.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -952,105 +832,17 @@ export default function EbrPage() {
                     setHasBeneficiaryController(Boolean(checked))
                   }
                 />
-                <p className="text-sm">Existe un beneficiario controlador</p>
+                <p className="text-sm">Existe Beneficiario Controlador</p>
               </div>
 
               {hasBeneficiaryController ? (
-                <div className="grid gap-4 rounded-lg border border-dashed p-4">
-                  <QuestionSelect
-                    label="1) Nacionalidad del beneficiario"
-                    value={beneficiaryAnswers.nationality}
-                    options={NATIONALITY_OPTIONS}
-                    onChange={(value) =>
-                      setBeneficiaryAnswers((prev) => ({
-                        ...prev,
-                        nationality: value,
-                      }))
-                    }
-                  />
-                  <QuestionSelect
-                    label="2) PEP o relación con PEP"
-                    value={beneficiaryAnswers.pep}
-                    options={PEP_OPTIONS}
-                    onChange={(value) =>
-                      setBeneficiaryAnswers((prev) => ({ ...prev, pep: value }))
-                    }
-                  />
-                  <div className="space-y-2">
-                    <Label>5) Fuentes de ingresos</Label>
-                    <div className="grid gap-2 rounded-md border p-3 md:grid-cols-2">
-                      {INCOME_SOURCES.map((source) => (
-                        <label
-                          key={source.value}
-                          className="flex items-start gap-2 text-sm"
-                        >
-                          <Checkbox
-                            checked={beneficiaryAnswers.incomeSources.includes(
-                              source.value,
-                            )}
-                            onCheckedChange={() =>
-                              toggleMultiValue(
-                                beneficiaryAnswers.incomeSources,
-                                source.value,
-                                (next) =>
-                                  setBeneficiaryAnswers((prev) => ({
-                                    ...prev,
-                                    incomeSources: next as IncomeSourceId[],
-                                  })),
-                              )
-                            }
-                          />
-                          <span>{source.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>6) Giro por uso de efectivo</Label>
-                    <Select
-                      value={beneficiaryAnswers.cashExposure}
-                      onValueChange={(value: CashExposure) =>
-                        setBeneficiaryAnswers((prev) => ({
-                          ...prev,
-                          cashExposure: value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona nivel" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CASH_EXPOSURE_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <QuestionSelect
-                    label="7) ONG/beneficencia no regulada"
-                    value={beneficiaryAnswers.ngoNonRegulated}
-                    options={NGO_OPTIONS}
-                    onChange={(value) =>
-                      setBeneficiaryAnswers((prev) => ({
-                        ...prev,
-                        ngoNonRegulated: value,
-                      }))
-                    }
-                  />
-                  <QuestionSelect
-                    label="8) Fecha de creación de la institución"
-                    value={beneficiaryAnswers.institutionAge}
-                    options={INSTITUTION_AGE_OPTIONS}
-                    onChange={(value) =>
-                      setBeneficiaryAnswers((prev) => ({
-                        ...prev,
-                        institutionAge: value,
-                      }))
-                    }
-                  />
-                </div>
+                <QuestionnaireForm
+                  answers={beneficiaryAnswers}
+                  setAnswers={setBeneficiaryAnswers}
+                  includeBankAndBehavior={false}
+                  titlePrefix="Beneficiario controlador"
+                  toggleMultiValue={toggleMultiValue}
+                />
               ) : null}
             </CardContent>
           </Card>
@@ -1062,7 +854,7 @@ export default function EbrPage() {
             <CardContent>
               <Textarea
                 className="min-h-[120px]"
-                placeholder="Documenta sustento, fuentes externas y decisiones de mitigación."
+                placeholder="Documenta evidencia, fuentes y medidas de mitigación."
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
               />
@@ -1073,62 +865,36 @@ export default function EbrPage() {
         <TabsContent value="reporte" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Resumen del perfil</CardTitle>
+              <CardTitle>Resumen del perfil consolidado</CardTitle>
               <CardDescription>
-                Visión ejecutiva para auditoría y toma de decisiones.
+                Resultado por cliente, sujeto obligado y beneficiario
+                controlador.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs uppercase text-muted-foreground">
-                    Perfil principal
-                  </p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <Badge className={riskBadgeStyles[mainResult.level]}>
-                      {mainResult.level}
-                    </Badge>
-                    <p className="font-semibold">
-                      {mainResult.total}/{mainResult.max}
-                    </p>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    {mainResult.reason}
-                  </p>
-                </div>
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs uppercase text-muted-foreground">
-                    Beneficiario controlador
-                  </p>
-                  {beneficiaryResult ? (
-                    <>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Badge
-                          className={riskBadgeStyles[beneficiaryResult.level]}
-                        >
-                          {beneficiaryResult.level}
-                        </Badge>
-                        <p className="font-semibold">
-                          {beneficiaryResult.total}/{beneficiaryResult.max}
-                        </p>
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {beneficiaryResult.reason}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      No aplica
-                    </p>
-                  )}
-                </div>
-              </div>
+              <ResultCard
+                title="Cliente"
+                result={clientResult}
+                riskBadgeStyles={riskBadgeStyles}
+              />
+              <ResultCard
+                title="Sujeto obligado"
+                result={subjectResult}
+                riskBadgeStyles={riskBadgeStyles}
+              />
+              {beneficiaryResult ? (
+                <ResultCard
+                  title="Beneficiario controlador"
+                  result={beneficiaryResult}
+                  riskBadgeStyles={riskBadgeStyles}
+                />
+              ) : null}
 
               <div className="rounded-lg border border-dashed p-4">
-                <p className="text-sm font-medium">Conclusión consolidada</p>
+                <p className="text-sm font-medium">Conclusión</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  El nivel final del expediente es <strong>{finalLevel}</strong>{" "}
-                  considerando la regla automática y ambos cuestionarios.
+                  Nivel final del expediente: <strong>{finalLevel}</strong>.
+                  Aplicar controles de acuerdo con el nivel más alto detectado.
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {notes || "Sin observaciones registradas."}
@@ -1137,10 +903,9 @@ export default function EbrPage() {
 
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
                 <div>
-                  <p className="font-medium">Exportación del reporte</p>
+                  <p className="font-medium">Exportación</p>
                   <p className="text-sm text-muted-foreground">
-                    Incluye resumen del perfil, reglas activadas y detalle de
-                    respuestas.
+                    Incluye detalle por cuestionario y resumen ejecutivo.
                   </p>
                 </div>
                 <Button variant="outline" onClick={exportPdfReport}>
@@ -1149,12 +914,14 @@ export default function EbrPage() {
                 </Button>
               </div>
 
-              {mainResult.fours > 0 || (beneficiaryResult?.fours ?? 0) > 0 ? (
+              {clientResult.fours > 0 ||
+              subjectResult.fours > 0 ||
+              (beneficiaryResult?.fours ?? 0) > 0 ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-600" />
                   <p className="text-sm text-amber-800">
-                    Se detectaron respuestas de nivel 4. Verifica aplicación de
-                    debida diligencia reforzada y monitoreo incrementado.
+                    Se detectaron respuestas con 4 puntos. Revisar debida
+                    diligencia reforzada.
                   </p>
                 </div>
               ) : null}
@@ -1162,6 +929,203 @@ export default function EbrPage() {
           </Card>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function QuestionnaireForm({
+  answers,
+  setAnswers,
+  includeBankAndBehavior,
+  titlePrefix,
+  toggleMultiValue,
+}: {
+  answers: EvaluationAnswers;
+  setAnswers: (updater: (prev: EvaluationAnswers) => EvaluationAnswers) => void;
+  includeBankAndBehavior: boolean;
+  titlePrefix: string;
+  toggleMultiValue: (
+    current: string[],
+    value: string,
+    onChange: (next: string[]) => void,
+  ) => void;
+}) {
+  return (
+    <div className="grid gap-5">
+      <div className="grid gap-4 md:grid-cols-2">
+        <QuestionSelect
+          label={`1) Nivel de riesgo de nacionalidad (${titlePrefix})`}
+          value={answers.nationalityRisk}
+          options={NATIONALITY_OPTIONS}
+          onChange={(value) =>
+            setAnswers((prev) => ({ ...prev, nationalityRisk: value }))
+          }
+        />
+        <div className="space-y-2">
+          <Label>País de nacionalidad ({titlePrefix})</Label>
+          <Select
+            value={answers.nationalityCountryCode}
+            onValueChange={(value) =>
+              setAnswers((prev) => ({ ...prev, nationalityCountryCode: value }))
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecciona país" />
+            </SelectTrigger>
+            <SelectContent>
+              {PAISES.map((pais) => (
+                <SelectItem key={pais.code} value={pais.code}>
+                  {pais.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Lista de países para documentar nacionalidad específica.
+          </p>
+        </div>
+      </div>
+
+      <QuestionSelect
+        label={`2) PEP o relación con PEP (${titlePrefix})`}
+        value={answers.pep}
+        options={PEP_OPTIONS}
+        onChange={(value) => setAnswers((prev) => ({ ...prev, pep: value }))}
+      />
+
+      {includeBankAndBehavior ? (
+        <>
+          <QuestionSelect
+            label={`3) Institución bancaria (${titlePrefix})`}
+            value={answers.bankInstitution}
+            options={BANK_OPTIONS}
+            onChange={(value) =>
+              setAnswers((prev) => ({ ...prev, bankInstitution: value }))
+            }
+          />
+          <div className="space-y-2">
+            <Label>4) Acciones observadas ({titlePrefix})</Label>
+            <div className="grid gap-2 rounded-md border p-3">
+              {SUSPICIOUS_BEHAVIORS.map((behavior) => (
+                <label
+                  key={behavior.value}
+                  className="flex items-start gap-2 text-sm"
+                >
+                  <Checkbox
+                    checked={answers.suspiciousBehaviors.includes(
+                      behavior.value,
+                    )}
+                    onCheckedChange={() =>
+                      toggleMultiValue(
+                        answers.suspiciousBehaviors,
+                        behavior.value,
+                        (next) =>
+                          setAnswers((prev) => ({
+                            ...prev,
+                            suspiciousBehaviors: next,
+                          })),
+                      )
+                    }
+                  />
+                  <span>{behavior.label}</span>
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              El puntaje toma la alerta de mayor severidad seleccionada.
+            </p>
+          </div>
+        </>
+      ) : null}
+
+      <div className="space-y-2">
+        <Label>5) Fuentes de ingresos ({titlePrefix})</Label>
+        <div className="grid gap-2 rounded-md border p-3 md:grid-cols-2">
+          {INCOME_SOURCES.map((source) => (
+            <label
+              key={source.value}
+              className="flex items-start gap-2 text-sm"
+            >
+              <Checkbox
+                checked={answers.incomeSources.includes(source.value)}
+                onCheckedChange={() =>
+                  toggleMultiValue(
+                    answers.incomeSources,
+                    source.value,
+                    (next) =>
+                      setAnswers((prev) => ({
+                        ...prev,
+                        incomeSources: next as IncomeSourceId[],
+                      })),
+                  )
+                }
+              />
+              <span>{source.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>6) Giro por uso de efectivo ({titlePrefix})</Label>
+        <Select
+          value={answers.cashExposure}
+          onValueChange={(value: CashExposure) =>
+            setAnswers((prev) => ({ ...prev, cashExposure: value }))
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Selecciona nivel" />
+          </SelectTrigger>
+          <SelectContent>
+            {CASH_EXPOSURE_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <QuestionSelect
+        label={`7) ONG/beneficencia no regulada (${titlePrefix})`}
+        value={answers.ngoNonRegulated}
+        options={NGO_OPTIONS}
+        onChange={(value) =>
+          setAnswers((prev) => ({ ...prev, ngoNonRegulated: value }))
+        }
+      />
+      <QuestionSelect
+        label={`8) Fecha de creación de la institución (${titlePrefix})`}
+        value={answers.institutionAge}
+        options={INSTITUTION_AGE_OPTIONS}
+        onChange={(value) =>
+          setAnswers((prev) => ({ ...prev, institutionAge: value }))
+        }
+      />
+    </div>
+  );
+}
+
+function ResultCard({
+  title,
+  result,
+  riskBadgeStyles,
+}: {
+  title: string;
+  result: ScoredResult;
+  riskBadgeStyles: Record<string, string>;
+}) {
+  return (
+    <div className="rounded-lg border p-4">
+      <p className="text-xs uppercase text-muted-foreground">{title}</p>
+      <div className="mt-2 flex items-center gap-2">
+        <Badge className={riskBadgeStyles[result.level]}>{result.level}</Badge>
+        <p className="font-semibold">
+          {result.total}/{result.max}
+        </p>
+      </div>
+      <p className="text-sm text-muted-foreground mt-2">{result.reason}</p>
     </div>
   );
 }
