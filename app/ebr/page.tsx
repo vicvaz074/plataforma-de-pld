@@ -240,6 +240,7 @@ const normalizeCountryName = (value: string) =>
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .replace(/['`´]/g, "")
+    .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
@@ -1104,8 +1105,17 @@ function QuestionnaireForm({
   const filteredCountries = useMemo(() => {
     const query = normalizeCountryName(countrySearch);
     if (!query) return PAISES;
+    const queryTerms = query.split(" ");
+
     return PAISES.filter((pais) =>
-      normalizeCountryName(pais.label).includes(query),
+      queryTerms.every((term) => {
+        const normalizedLabel = normalizeCountryName(pais.label);
+        const normalizedCode = normalizeCountryName(pais.code);
+
+        return (
+          normalizedLabel.includes(term) || normalizedCode.includes(term)
+        );
+      }),
     );
   }, [countrySearch]);
 
@@ -1149,12 +1159,20 @@ function QuestionnaireForm({
             <SelectTrigger>
               <SelectValue placeholder="Selecciona país" />
             </SelectTrigger>
-            <SelectContent>
-              {filteredCountries.map((pais) => (
-                <SelectItem key={pais.code} value={pais.code}>
-                  {pais.label}
-                </SelectItem>
-              ))}
+            <SelectContent className="max-h-72">
+              <div className="max-h-72 overflow-y-auto">
+                {filteredCountries.length > 0 ? (
+                  filteredCountries.map((pais) => (
+                    <SelectItem key={pais.code} value={pais.code}>
+                      {pais.label}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="px-2 py-2 text-sm text-muted-foreground">
+                    No se encontraron países
+                  </div>
+                )}
+              </div>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
