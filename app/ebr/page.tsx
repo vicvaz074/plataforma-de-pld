@@ -21,6 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -1098,6 +1099,27 @@ function QuestionnaireForm({
     onChange: (next: string[]) => void,
   ) => void;
 }) {
+  const [countrySearch, setCountrySearch] = useState("");
+
+  const filteredCountries = useMemo(() => {
+    const query = normalizeCountryName(countrySearch);
+    if (!query) return PAISES;
+    return PAISES.filter((pais) =>
+      normalizeCountryName(pais.label).includes(query),
+    );
+  }, [countrySearch]);
+
+  useEffect(() => {
+    const countryName =
+      PAISES.find((pais) => pais.code === answers.nationalityCountryCode)?.label ??
+      "";
+    const automaticRisk = getNationalityRiskByCountry(countryName);
+
+    if (answers.nationalityRisk !== automaticRisk) {
+      setAnswers((prev) => ({ ...prev, nationalityRisk: automaticRisk }));
+    }
+  }, [answers.nationalityCountryCode, answers.nationalityRisk, setAnswers]);
+
   return (
     <div className="grid gap-5">
       <div className="grid gap-4 md:grid-cols-2">
@@ -1105,31 +1127,30 @@ function QuestionnaireForm({
           label={`1) Nivel de riesgo de nacionalidad (${titlePrefix})`}
           value={answers.nationalityRisk}
           options={NATIONALITY_OPTIONS}
-          onChange={(value) =>
-            setAnswers((prev) => ({ ...prev, nationalityRisk: value }))
-          }
+          onChange={() => undefined}
+          disabled
         />
         <div className="space-y-2">
           <Label>País de nacionalidad ({titlePrefix})</Label>
+          <Input
+            value={countrySearch}
+            onChange={(event) => setCountrySearch(event.target.value)}
+            placeholder="Buscar país"
+          />
           <Select
             value={answers.nationalityCountryCode}
-            onValueChange={(value) => {
-              const countryName =
-                PAISES.find((pais) => pais.code === value)?.label ?? "";
-              const nationalityRisk = getNationalityRiskByCountry(countryName);
-
+            onValueChange={(value) =>
               setAnswers((prev) => ({
                 ...prev,
                 nationalityCountryCode: value,
-                nationalityRisk,
-              }));
-            }}
+              }))
+            }
           >
             <SelectTrigger>
               <SelectValue placeholder="Selecciona país" />
             </SelectTrigger>
             <SelectContent>
-              {PAISES.map((pais) => (
+              {filteredCountries.map((pais) => (
                 <SelectItem key={pais.code} value={pais.code}>
                   {pais.label}
                 </SelectItem>
@@ -1138,7 +1159,8 @@ function QuestionnaireForm({
           </Select>
           <p className="text-xs text-muted-foreground">
             El nivel de riesgo se asigna automáticamente según el país
-            seleccionado.
+            seleccionado. Si el país no pertenece a una lista especial, se
+            clasifica como "Todos los demás países".
           </p>
         </div>
       </div>
@@ -1292,16 +1314,18 @@ function QuestionSelect({
   value,
   options,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: string;
   options: Array<{ value: string; label: string }>;
   onChange: (value: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
-      <Select value={value} onValueChange={onChange}>
+      <Select value={value} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger>
           <SelectValue placeholder="Selecciona" />
         </SelectTrigger>
