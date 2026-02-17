@@ -310,7 +310,7 @@ const INFO_MODAL_CONTENT: Record<InfoModalKey, { title: string; body: string[] }
   "uma-validacion": {
     title: "Validación de UMAs por año",
     body: [
-      "El valor diario de la UMA para 2025 es de $113.14 MXN conforme al decreto publicado por el INEGI el 10 de enero de 2025. Los montos en pesos del módulo se calculan automáticamente a partir del año y mes seleccionados.",
+      "Del 1 de febrero de 2026 al 31 de enero de 2027, la UMA vigente es de $117.31 MXN diarios y $3,566.22 MXN mensuales. Los montos en pesos del módulo se calculan automáticamente a partir del año y mes seleccionados.",
       "Selecciona un año diferente para verificar cómo cambian los umbrales con base en la UMA vigente de cada ciclo (1.º de febrero al 31 de enero). Así puedes validar obligaciones históricas y proyectar escenarios futuros con información consistente.",
     ],
   },

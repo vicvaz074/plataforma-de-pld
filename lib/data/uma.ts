@@ -87,6 +87,19 @@ export const UMA_PERIODS: UmaPeriod[] = [
       return { month: start.getMonth() + 1, year: start.getFullYear() }
     }),
   },
+  {
+    cycle: "2026",
+    validFrom: "2026-02-01",
+    validTo: "2027-01-31",
+    daily: 117.31,
+    monthly: 3566.22,
+    annual: 42818.15,
+    months: Array.from({ length: 12 }).map((_, index) => {
+      const start = new Date(2026, 1, 1)
+      start.setMonth(start.getMonth() + index)
+      return { month: start.getMonth() + 1, year: start.getFullYear() }
+    }),
+  },
 ]
 
 export const UMA_MONTHS = UMA_PERIODS.flatMap((period) =>
