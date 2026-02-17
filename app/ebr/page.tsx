@@ -234,6 +234,154 @@ const getLabel = (
   options: Array<{ value: string; label: string }>,
 ) => options.find((option) => option.value === value)?.label ?? "N/A";
 
+const normalizeCountryName = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/['`´]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+const COUNTRY_BLACKLIST = new Set(
+  ["Corea del Norte", "Irán", "Myanmar"].map(normalizeCountryName),
+);
+
+const COUNTRY_GREYLIST = new Set(
+  [
+    "Argelia",
+    "Angola",
+    "Bolivia",
+    "Bulgaria",
+    "Camerún",
+    "Costa de Marfil",
+    "República Democrática del Congo",
+    "Haití",
+    "Kenia",
+    "Kuwait",
+    "República Democrática Popular Lao",
+    "Líbano",
+    "Mónaco",
+    "Namibia",
+    "Nepal",
+    "Papúa Nueva Guinea",
+    "Sudán del Sur",
+    "Siria",
+    "Venezuela",
+    "Vietnam",
+    "Islas Vírgenes (Reino Unido)",
+    "Yemen",
+  ].map(normalizeCountryName),
+);
+
+const COUNTRY_HIGH_CORRUPTION = new Set(
+  [
+    "Anguila",
+    "Antigua y Barbuda",
+    "Antillas Neerlandesas",
+    "Archipiélago de Svalbard",
+    "Aruba",
+    "Ascensión",
+    "Barbados",
+    "Belice",
+    "Bermudas",
+    "Brunei Darussalam",
+    "Campione D Italia",
+    "Commonwealth de Dominica",
+    "Commonwealth de las Bahamas",
+    "Emiratos Árabes Unidos",
+    "Estado de Bahrein",
+    "Estado de Kuwait",
+    "Estado de Qatar",
+    "Estado Independiente de Samoa Occidental",
+    "Estado Libre Asociado de Puerto Rico",
+    "Gibraltar",
+    "Granada",
+    "Groenlandia",
+    "Guam",
+    "Hong Kong",
+    "Isla Caimán",
+    "Isla de Christmas",
+    "Isla de Norfolk",
+    "Isla de San Pedro y Miguelón",
+    "Isla del Hombre",
+    "Isla Qeshm",
+    "Islas Azores",
+    "Islas Canarias",
+    "Islas Cook",
+    "Islas de Cocos o Kelling",
+    "Islas de Guernesey, Jersey, Alderney, Isla Great Sark, Herm, Little Sark, Brechou, Jethou",
+    "Lihou (Islas del Canal)",
+    "Islas Malvinas",
+    "Islas Pacífico",
+    "Islas Salomón",
+    "Islas Turcas y Caicos",
+    "Islas Vírgenes Británicas",
+    "Islas Vírgenes de Estados Unidos de América",
+    "Kiribati",
+    "Labuán",
+    "Macao",
+    "Madeira",
+    "Malta",
+    "Montserrat",
+    "Nevis",
+    "Niue",
+    "Patau",
+    "Pitcairn",
+    "Polinesia Francesa",
+    "Principado de Andorra",
+    "Principado de Liechtenstein",
+    "Principado de Mónaco",
+    "Reino de Swazilandia",
+    "Reino de Tonga",
+    "Reino Hachemita de Jordania",
+    "República de Albania",
+    "República de Angola",
+    "República de Cabo Verde",
+    "República de Costa Rica",
+    "República de Chipre",
+    "República de Djibouti",
+    "República de Guyana",
+    "República de Honduras",
+    "República de las Islas Marshall",
+    "República de Liberia",
+    "República de Maldivas",
+    "República de Mauricio",
+    "República de Nauru",
+    "República de Panamá",
+    "República de Seychelles",
+    "República de Trinidad y Tobago",
+    "República de Túnez",
+    "República de Vanuatu",
+    "República del Yemen",
+    "República Oriental del Uruguay",
+    "República Socialista Democrática de Sri Lanka",
+    "Samoa Americana",
+    "San Kitts",
+    "San Vicente y las Granadinas",
+    "Santa Elena",
+    "Santa Lucía",
+    "Serenísima República de San Marino",
+    "Sultanía de Omán",
+    "Tokelau",
+    "Trieste",
+    "Tristán de Cunha",
+    "Tuvalu",
+    "Zona Especial Canaria",
+    "Zona Libre Ostrava",
+  ].map(normalizeCountryName),
+);
+
+const getNationalityRiskByCountry = (countryName?: string) => {
+  const normalizedCountry = normalizeCountryName(countryName ?? "");
+
+  if (!normalizedCountry) return "other";
+  if (COUNTRY_BLACKLIST.has(normalizedCountry)) return "black";
+  if (COUNTRY_GREYLIST.has(normalizedCountry)) return "gray_sat";
+  if (COUNTRY_HIGH_CORRUPTION.has(normalizedCountry)) return "corruption";
+  return "other";
+};
+
 const getIncomeRiskScore = (
   incomeSources: IncomeSourceId[],
   cashExposure: CashExposure,
@@ -965,9 +1113,17 @@ function QuestionnaireForm({
           <Label>País de nacionalidad ({titlePrefix})</Label>
           <Select
             value={answers.nationalityCountryCode}
-            onValueChange={(value) =>
-              setAnswers((prev) => ({ ...prev, nationalityCountryCode: value }))
-            }
+            onValueChange={(value) => {
+              const countryName =
+                PAISES.find((pais) => pais.code === value)?.label ?? "";
+              const nationalityRisk = getNationalityRiskByCountry(countryName);
+
+              setAnswers((prev) => ({
+                ...prev,
+                nationalityCountryCode: value,
+                nationalityRisk,
+              }));
+            }}
           >
             <SelectTrigger>
               <SelectValue placeholder="Selecciona país" />
@@ -981,7 +1137,8 @@ function QuestionnaireForm({
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Lista de países para documentar nacionalidad específica.
+            El nivel de riesgo se asigna automáticamente según el país
+            seleccionado.
           </p>
         </div>
       </div>
