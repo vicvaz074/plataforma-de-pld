@@ -25,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
-import { Download, FileCheck, FileWarning, ShieldAlert, UploadCloud } from "lucide-react"
+import { CheckCircle2, CircleDashed, Download, FileCheck, FileWarning, Info, ShieldAlert, UploadCloud } from "lucide-react"
 import jsPDF from "jspdf"
 
 interface EvidenceFile {
@@ -92,6 +92,16 @@ interface ActionPlan {
   progress: number
 }
 
+interface CrossModuleContext {
+  sujetoObligado: string
+  rfc: string
+  actividadVulnerable: string
+  periodoRevision: string
+  totalOperaciones: number
+  montoOperado: number
+  ultimaActualizacion: Date | null
+}
+
 const controlQuestions: ControlQuestion[] = [
   {
     id: "lineamientos-90-dias",
@@ -151,6 +161,85 @@ const controlQuestions: ControlQuestion[] = [
 ]
 
 const acceptedMimeTypes = ["application/pdf", "image/jpeg"]
+
+const reportHeaderFields = [
+  "Actividad Vulnerable / Entidad auditada",
+  "RFC del sujeto obligado",
+  "Periodo de revisión y fecha de emisión",
+  "Auditor responsable y certificado CNBV",
+  "Persona moral o firma de auditoría",
+  "Tipo de auditoría (interna/externa)",
+]
+
+const auditMethodologySections = [
+  {
+    id: "planeacion",
+    linkedTab: "lineamientos",
+    title: "1. Planeación de la auditoría",
+    summary: "Conoce al sujeto obligado y define el alcance en función del riesgo.",
+    checkpoints: [
+      "Identificación conforme al Art. 17 LFPIORPI",
+      "Descripción de actividad vulnerable y umbral de aviso",
+      "Registro SAT-PLD, universo de clientes y monto operado",
+      "Matriz EBR: riesgo inherente, mitigantes y riesgo residual",
+    ],
+  },
+  {
+    id: "programa",
+    linkedTab: "auditorias",
+    title: "2. Programa de trabajo",
+    summary: "Define calendario, recursos y temas incluidos en la revisión.",
+    checkpoints: [
+      "Fechas de campo, duración y modalidad de ejecución",
+      "Equipo auditor y roles",
+      "Cobertura de obligaciones (identificación, avisos, PCI, OC, capacitación)",
+      "Justificación de exclusiones y tratamiento de N/A",
+    ],
+  },
+  {
+    id: "resultados",
+    linkedTab: "observaciones",
+    title: "3 y 4. Resultados y resumen ejecutivo",
+    summary: "Evalúa cumplimiento por obligación y genera visión consolidada.",
+    checkpoints: [
+      "Escala de 5 niveles: Cumple a No cumple / No aplica",
+      "Evaluación por bloques: clientes, avisos, PCI, OC, capacitación, conservación, PPE, tecnología",
+      "Hallazgos y recomendaciones por cada reactivo evaluado",
+      "Cuadro ejecutivo con tendencia vs. año anterior",
+    ],
+  },
+  {
+    id: "hallazgos",
+    linkedTab: "planes",
+    title: "5 y 6. Asuntos clave y hallazgos",
+    summary: "Documenta riesgos relevantes y acciones correctivas trazables.",
+    checkpoints: [
+      "Registro de asuntos clave conforme a Lineamientos CNBV",
+      "Ficha por hallazgo (ID, evidencia, acción, responsable y plazo)",
+      "Seguimiento a hallazgos del informe anterior",
+      "Validación de posibles supuestos penales (139 Quáter / 400 Bis CPF)",
+    ],
+  },
+  {
+    id: "emision",
+    linkedTab: "lineamientos",
+    title: "7 y 8. Emisión, checklist final y firmas",
+    summary: "Verifica requisitos formales antes del envío a SAT/CNBV.",
+    checkpoints: [
+      "Conclusión del auditor, limitaciones y fechas de conocimiento",
+      "Lista formal: estructura, soporte documental, carta bajo protesta",
+      "Validación de certificado CNBV vigente",
+      "Firma de auditor y OC/representante y remisión por SIAVAP/SITI",
+    ],
+  },
+]
+
+type AuditTab = "metodologia" | "lineamientos" | "auditorias" | "observaciones" | "planes"
+
+const CROSS_MODULE_KEYS = {
+  registroSat: "registro-sat-data",
+  operaciones: "actividades_vulnerables_operaciones",
+} as const
 
 const formatBytes = (bytes: number) => {
   if (bytes === 0) return "0 B"
@@ -321,6 +410,16 @@ const parseStoredActionPlans = (raw: unknown): ActionPlan[] => {
 
 export default function AuditoriaVerificacionPage() {
   const { toast } = useToast()
+  const [activeTab, setActiveTab] = useState<AuditTab>("metodologia")
+  const [crossModuleContext, setCrossModuleContext] = useState<CrossModuleContext>({
+    sujetoObligado: "Sin datos",
+    rfc: "Sin datos",
+    actividadVulnerable: "Sin datos",
+    periodoRevision: "Sin datos",
+    totalOperaciones: 0,
+    montoOperado: 0,
+    ultimaActualizacion: null,
+  })
   const [responses, setResponses] = useState<Record<string, ControlResponse>>(() =>
     Object.fromEntries(
       controlQuestions.map((question) => [question.id, { answer: "", evidences: [] }])
@@ -358,6 +457,69 @@ export default function AuditoriaVerificacionPage() {
 
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
   const [actionPlansInitialized, setActionPlansInitialized] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const safeParse = <T,>(raw: string | null): T | null => {
+      if (!raw) return null
+      try {
+        return JSON.parse(raw) as T
+      } catch {
+        return null
+      }
+    }
+
+    const registro = safeParse<Record<string, unknown>>(window.localStorage.getItem(CROSS_MODULE_KEYS.registroSat))
+    const operaciones = safeParse<Array<Record<string, unknown>>>(window.localStorage.getItem(CROSS_MODULE_KEYS.operaciones)) || []
+
+    const identificacion = (registro?.identificacion as Record<string, unknown> | undefined) || {}
+    const actividades = Array.isArray(registro?.actividades) ? (registro?.actividades as Array<Record<string, unknown>>) : []
+
+    const periodos = operaciones
+      .map((operacion) => (typeof operacion.periodo === "string" ? operacion.periodo : ""))
+      .filter(Boolean)
+
+    const periodosOrdenados = [...periodos].sort()
+    const periodoRevision = periodosOrdenados.length
+      ? `${periodosOrdenados[0]} al ${periodosOrdenados[periodosOrdenados.length - 1]}`
+      : "Sin datos"
+
+    const totalOperaciones = operaciones.length
+    const montoOperado = operaciones.reduce((acc, operacion) => {
+      const monto = typeof operacion.monto === "number" ? operacion.monto : Number(operacion.monto)
+      return acc + (Number.isFinite(monto) ? monto : 0)
+    }, 0)
+
+    const ultimaOperacion = operaciones
+      .map((operacion) => (typeof operacion.fechaOperacion === "string" ? new Date(operacion.fechaOperacion) : null))
+      .filter((date): date is Date => Boolean(date && !Number.isNaN(date.getTime())))
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null
+
+    const actividadVulnerable = actividades
+      .map((actividad) => {
+        const actividadKey = typeof actividad.actividadKey === "string" ? actividad.actividadKey : ""
+        return actividadKey || ""
+      })
+      .filter(Boolean)
+      .join(", ") ||
+      (typeof operaciones[0]?.actividadNombre === "string" ? String(operaciones[0].actividadNombre) : "Sin datos")
+
+    setCrossModuleContext({
+      sujetoObligado:
+        (typeof identificacion.razonSocial === "string" && identificacion.razonSocial) ||
+        (typeof identificacion.nombre === "string" && identificacion.nombre) ||
+        "Sin datos",
+      rfc:
+        (typeof identificacion.rfc === "string" && identificacion.rfc) ||
+        (typeof operaciones[0]?.rfc === "string" ? String(operaciones[0].rfc) : "Sin datos"),
+      actividadVulnerable,
+      periodoRevision,
+      totalOperaciones,
+      montoOperado,
+      ultimaActualizacion: ultimaOperacion,
+    })
+  }, [])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -509,6 +671,43 @@ export default function AuditoriaVerificacionPage() {
         response.evidences.map((evidence) => ({ ...evidence, questionId }))
       ),
     [responses]
+  )
+
+  const methodologyProgressBySection = useMemo(() => {
+    const answeredByCategory = {
+      lineamientos: controlQuestions
+        .filter((question) => question.category === "lineamientos")
+        .filter((question) => responses[question.id]?.answer).length,
+      auditorias: controlQuestions
+        .filter((question) => question.category === "auditorias")
+        .filter((question) => responses[question.id]?.answer).length,
+      observaciones: controlQuestions
+        .filter((question) => question.category === "observaciones")
+        .filter((question) => responses[question.id]?.answer).length,
+      planes: controlQuestions
+        .filter((question) => question.category === "planes")
+        .filter((question) => responses[question.id]?.answer).length,
+    }
+
+    return {
+      planeacion: lineamientosVersions.length > 0 ? 100 : answeredByCategory.lineamientos * 50,
+      programa: auditLog.length > 0 ? 100 : answeredByCategory.auditorias * 50,
+      resultados: authorityRequests.length > 0 ? 100 : answeredByCategory.observaciones * 50,
+      hallazgos: actionPlans.length > 0 ? 100 : answeredByCategory.planes * 50,
+      emision:
+        progressValue >= 75 && allEvidences.length > 0
+          ? 100
+          : Math.min(Math.round((progressValue + Math.min(allEvidences.length * 10, 30)) / 1.3), 99),
+    }
+  }, [responses, lineamientosVersions.length, auditLog.length, authorityRequests.length, actionPlans.length, progressValue, allEvidences.length])
+
+  const methodologyCompletion = useMemo(
+    () =>
+      Math.round(
+        Object.values(methodologyProgressBySection).reduce((acc, value) => acc + value, 0) /
+          Object.values(methodologyProgressBySection).length
+      ),
+    [methodologyProgressBySection]
   )
 
   const handleAnswerChange = (questionId: string, answer: ControlAnswer) => {
@@ -942,13 +1141,158 @@ export default function AuditoriaVerificacionPage() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="lineamientos" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AuditTab)} className="space-y-6">
         <TabsList className="flex flex-wrap justify-start gap-2">
+          <TabsTrigger value="metodologia">Informe PLD/FT (CNBV)</TabsTrigger>
           <TabsTrigger value="lineamientos">Lineamientos internos</TabsTrigger>
           <TabsTrigger value="auditorias">Auditorías internas</TabsTrigger>
           <TabsTrigger value="observaciones">Observaciones SAT/UIF</TabsTrigger>
           <TabsTrigger value="planes">Planes de acción</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="metodologia" className="space-y-6">
+          <Card className="border-primary/30">
+            <CardHeader>
+              <CardTitle>Metodología práctica del informe de auditoría PLD/FT</CardTitle>
+              <CardDescription>
+                Guía visual y minimalista para estructurar tu informe conforme a LFPIORPI, su Reglamento y
+                Lineamientos CNBV (DOF 18/10/2021).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-md border border-border/60 bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Madurez de la metodología</p>
+                  <p className="text-2xl font-semibold">{methodologyCompletion}%</p>
+                  <Progress value={methodologyCompletion} className="mt-2 h-2" />
+                </div>
+                <div className="rounded-md border border-border/60 bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Evidencias cargadas</p>
+                  <p className="text-2xl font-semibold">{allEvidences.length}</p>
+                  <p className="text-xs text-muted-foreground">Con sello de tiempo y descarga directa.</p>
+                </div>
+                <div className="rounded-md border border-border/60 bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Cumplimiento operativo</p>
+                  <p className="text-2xl font-semibold">{progressValue}%</p>
+                  <p className="text-xs text-muted-foreground">Basado en checklist activo del módulo.</p>
+                </div>
+              </div>
+
+              <Card className="border-border/60 bg-muted/20">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Datos conectados con otros módulos</CardTitle>
+                  <CardDescription>
+                    Se sincroniza automáticamente con Registro SAT y Actividades Vulnerables para precargar el contexto del informe.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-md border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Sujeto obligado</p>
+                    <p className="text-sm font-semibold">{crossModuleContext.sujetoObligado}</p>
+                  </div>
+                  <div className="rounded-md border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">RFC</p>
+                    <p className="text-sm font-semibold">{crossModuleContext.rfc}</p>
+                  </div>
+                  <div className="rounded-md border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Actividad vulnerable</p>
+                    <p className="text-sm font-semibold">{crossModuleContext.actividadVulnerable}</p>
+                  </div>
+                  <div className="rounded-md border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Periodo de revisión sugerido</p>
+                    <p className="text-sm font-semibold">{crossModuleContext.periodoRevision}</p>
+                  </div>
+                  <div className="rounded-md border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Operaciones en periodo</p>
+                    <p className="text-sm font-semibold">{crossModuleContext.totalOperaciones}</p>
+                  </div>
+                  <div className="rounded-md border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Monto total operado</p>
+                    <p className="text-sm font-semibold">
+                      {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 2 }).format(crossModuleContext.montoOperado)}
+                    </p>
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <p className="text-xs text-muted-foreground">
+                    {crossModuleContext.ultimaActualizacion
+                      ? `Última operación detectada: ${format(crossModuleContext.ultimaActualizacion, "dd/MM/yyyy", { locale: es })}`
+                      : "Aún no hay operaciones registradas para enriquecer el informe automáticamente."}
+                  </p>
+                </CardFooter>
+              </Card>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                {reportHeaderFields.map((field) => (
+                  <div key={field} className="rounded-md border border-border/60 bg-muted/30 p-3">
+                    <p className="text-sm font-medium">{field}</p>
+                  </div>
+                ))}
+              </div>
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>Tip de usabilidad</AlertTitle>
+                <AlertDescription>
+                  Usa los desplegables de cada etapa para capturar solo lo necesario al inicio. Puedes detallar
+                  fundamentos legales y evidencia conforme avances en el proceso.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {auditMethodologySections.map((section) => (
+              <Card key={section.id}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <CardTitle className="text-lg">{section.title}</CardTitle>
+                    <Badge variant={methodologyProgressBySection[section.id as keyof typeof methodologyProgressBySection] >= 100 ? "default" : "secondary"}>
+                      {methodologyProgressBySection[section.id as keyof typeof methodologyProgressBySection] >= 100 ? "Completo" : "En progreso"}
+                    </Badge>
+                  </div>
+                  <CardDescription>{section.summary}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Progreso de etapa</span>
+                      <span>{methodologyProgressBySection[section.id as keyof typeof methodologyProgressBySection]}%</span>
+                    </div>
+                    <Progress value={methodologyProgressBySection[section.id as keyof typeof methodologyProgressBySection]} className="h-1.5" />
+                  </div>
+                  <details className="group rounded-md border border-dashed border-border/80 p-3">
+                    <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium">
+                      Ver puntos de control
+                      <span className="rounded-md border px-2 py-1 text-xs text-muted-foreground">
+                        Desplegar
+                      </span>
+                    </summary>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      {section.checkpoints.map((checkpoint) => (
+                        <li key={checkpoint} className="flex items-center gap-2 rounded-md bg-muted/30 px-3 py-2">
+                          {methodologyProgressBySection[section.id as keyof typeof methodologyProgressBySection] >= 100 ? (
+                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                          ) : (
+                            <CircleDashed className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          {checkpoint}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveTab(section.linkedTab as AuditTab)}
+                  >
+                    Completar esta etapa
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
 
         <TabsContent value="lineamientos" className="space-y-6">
           {renderQuestions("lineamientos")}
