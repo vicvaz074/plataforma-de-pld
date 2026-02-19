@@ -109,6 +109,27 @@ interface FinalChecklistItem {
   completed: boolean
 }
 
+type ScopeSelection = "si" | "no" | "na"
+type ComplianceRating = "cumple" | "cumple-mayor" | "cumple-parcial" | "no-cumple" | "no-aplica" | ""
+
+interface ScopeItem {
+  id: string
+  label: string
+}
+
+interface ReviewQuestionItem {
+  id: string
+  text: string
+  ref: string
+}
+
+interface ReviewSection {
+  id: string
+  title: string
+  foundation: string
+  questions: ReviewQuestionItem[]
+}
+
 const controlQuestions: ControlQuestion[] = [
   {
     id: "lineamientos-90-dias",
@@ -263,6 +284,62 @@ const FINAL_CHECKLIST_LABELS = [
   { id: "remision", label: "Escrito de remisión firmado por responsable" },
   { id: "carta", label: "Carta bajo protesta del auditor adjunta" },
   { id: "envio", label: "Envío por SITI PLD/FT o SIAVAP" },
+]
+
+const SCOPE_ITEMS: ScopeItem[] = [
+  { id: "alcance-1", label: "Identificación de clientes — obligación de recabar datos (Art. 18 LFPIORPI)" },
+  { id: "alcance-2", label: "Uso de Medidas de Diligencia Debida (MDD) ordinaria, simplificada y reforzada" },
+  { id: "alcance-3", label: "Presentación de avisos al SAT en tiempo y forma (Arts. 17 y 24 LFPIORPI)" },
+  { id: "alcance-4", label: "Revisión del Programa de Cumplimiento Interno (PCI)" },
+  { id: "alcance-5", label: "Designación y funciones del Oficial de Cumplimiento" },
+  { id: "alcance-6", label: "Capacitación al personal (Art. 20 LFPIORPI y Art. 28 Reglamento)" },
+  { id: "alcance-7", label: "Conservación de información y documentación (Art. 22 LFPIORPI)" },
+  { id: "alcance-8", label: "Revisión de sistemas automatizados / herramientas tecnológicas" },
+  { id: "alcance-9", label: "Identificación de Personas Políticamente Expuestas (PPE)" },
+  { id: "alcance-10", label: "Consulta y aplicación de Listas de Personas Bloqueadas (OFAC, ONU, SAT)" },
+  { id: "alcance-11", label: "Identificación de Propietarios Reales (Beneficial Owners)" },
+  { id: "alcance-12", label: "Revisión de operaciones en efectivo y umbrales de aviso" },
+  { id: "alcance-13", label: "Seguimiento a observaciones de auditorías anteriores" },
+  { id: "alcance-14", label: "Verificación de comisionistas / agentes / terceros" },
+]
+
+const REVIEW_SECTIONS: ReviewSection[] = [
+  {
+    id: "3-1",
+    title: "3.1 Identificación de Clientes y Diligencia Debida",
+    foundation: "Arts. 18, 19 LFPIORPI; Arts. 12-22 Reglamento",
+    questions: [
+      { id: "q-3-1-1", text: "Recaba datos mínimos de identificación de personas físicas", ref: "Art. 18 LFPIORPI / Art. 12 Reglamento" },
+      { id: "q-3-1-2", text: "Recaba datos mínimos de identificación de personas morales", ref: "Art. 18 LFPIORPI / Art. 13 Reglamento" },
+      { id: "q-3-1-3", text: "Aplica diligencia debida simplificada cuando el riesgo lo justifica", ref: "Art. 19 LFPIORPI / Art. 17 Reglamento" },
+      { id: "q-3-1-4", text: "Aplica diligencia debida reforzada para clientes de alto riesgo (PPE / países alto riesgo)", ref: "Art. 19 LFPIORPI / Art. 18 Reglamento" },
+      { id: "q-3-1-5", text: "Identifica propietario real / beneficiario de operaciones", ref: "Art. 18 Fracc. IV LFPIORPI / Art. 14 Reglamento" },
+    ],
+  },
+  {
+    id: "3-2",
+    title: "3.2 Presentación de Avisos al SAT",
+    foundation: "Arts. 17, 24, 25 LFPIORPI; Arts. 23-31 Reglamento",
+    questions: [
+      { id: "q-3-2-1", text: "Identifica correctamente cuándo una operación supera umbral de aviso", ref: "Art. 17 LFPIORPI" },
+      { id: "q-3-2-2", text: "Presenta avisos en tiempo (antes del día 17 del mes siguiente)", ref: "Art. 24 LFPIORPI / Art. 29 Reglamento" },
+      { id: "q-3-2-3", text: "Avisos contienen información requerida por formato oficial", ref: "Reglas de Carácter General SAT-PLD" },
+      { id: "q-3-2-4", text: "No existen operaciones omitidas no reportadas", ref: "Art. 54 LFPIORPI" },
+      { id: "q-3-2-5", text: "Conserva acuse de recibo SAT y controles de monitoreo de umbrales", ref: "Art. 22 y 20 LFPIORPI" },
+    ],
+  },
+  {
+    id: "3-3",
+    title: "3.3 Programa de Cumplimiento Interno (PCI)",
+    foundation: "Art. 20 LFPIORPI; Arts. 24-28 Reglamento",
+    questions: [
+      { id: "q-3-3-1", text: "Cuenta con PCI formalmente documentado", ref: "Art. 20 LFPIORPI / Art. 24 Reglamento" },
+      { id: "q-3-3-2", text: "Incluye políticas y procedimientos de identificación y conocimiento del cliente", ref: "Art. 20 Fracc. I LFPIORPI" },
+      { id: "q-3-3-3", text: "Incluye metodología EBR y actualización periódica", ref: "Art. 20 Fracc. II LFPIORPI" },
+      { id: "q-3-3-4", text: "Fue aprobado por órgano de administración", ref: "Art. 20 LFPIORPI / Art. 24 Reglamento" },
+      { id: "q-3-3-5", text: "Incluye procedimientos para avisos SAT y capacitación", ref: "Art. 20 Fracc. IV y V LFPIORPI" },
+    ],
+  },
 ]
 
 const formatBytes = (bytes: number) => {
@@ -447,6 +524,17 @@ export default function AuditoriaVerificacionPage() {
   const [finalChecklist, setFinalChecklist] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(FINAL_CHECKLIST_LABELS.map((item) => [item.id, false]))
   )
+  const [scopeAnswers, setScopeAnswers] = useState<Record<string, ScopeSelection>>(() =>
+    Object.fromEntries(SCOPE_ITEMS.map((item) => [item.id, "si"]))
+  )
+  const [scopeExclusions, setScopeExclusions] = useState("")
+  const [reviewAnswers, setReviewAnswers] = useState<Record<string, { rating: ComplianceRating; findings: string; recommendations: string }>>(() =>
+    Object.fromEntries(
+      REVIEW_SECTIONS.flatMap((section) =>
+        section.questions.map((question) => [question.id, { rating: "", findings: "", recommendations: "" }])
+      )
+    )
+  )
   const [responses, setResponses] = useState<Record<string, ControlResponse>>(() =>
     Object.fromEntries(
       controlQuestions.map((question) => [question.id, { answer: "", evidences: [] }])
@@ -501,6 +589,10 @@ export default function AuditoriaVerificacionPage() {
     const operaciones = safeParse<Array<Record<string, unknown>>>(window.localStorage.getItem(CROSS_MODULE_KEYS.operaciones)) || []
 
     const identificacion = (registro?.identificacion as Record<string, unknown> | undefined) || {}
+    const sujetosRegistrados = Array.isArray(registro?.sujetosRegistrados)
+      ? (registro?.sujetosRegistrados as Array<Record<string, unknown>>)
+      : []
+    const primerSujeto = sujetosRegistrados[0] || {}
     const actividades = Array.isArray(registro?.actividades) ? (registro?.actividades as Array<Record<string, unknown>>) : []
 
     const periodos = operaciones
@@ -543,10 +635,12 @@ export default function AuditoriaVerificacionPage() {
     setCrossModuleContext({
       sujetoObligado:
         nombreCompleto ||
+        (typeof primerSujeto.nombre === "string" ? primerSujeto.nombre : "") ||
         (typeof (registro as Record<string, unknown> | null)?.nombre === "string" ? String((registro as Record<string, unknown>).nombre) : "") ||
         "Sin datos",
       rfc:
         (typeof identificacion.rfc === "string" && identificacion.rfc) ||
+        (typeof primerSujeto.rfc === "string" ? primerSujeto.rfc : "") ||
         (typeof operaciones[0]?.rfc === "string" ? String(operaciones[0].rfc) : "Sin datos"),
       actividadVulnerable,
       periodoRevision,
@@ -566,69 +660,6 @@ export default function AuditoriaVerificacionPage() {
       window.removeEventListener("storage", refresh)
     }
   }, [loadCrossModuleContext])
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
-
-    const safeParse = <T,>(raw: string | null): T | null => {
-      if (!raw) return null
-      try {
-        return JSON.parse(raw) as T
-      } catch {
-        return null
-      }
-    }
-
-    const registro = safeParse<Record<string, unknown>>(window.localStorage.getItem(CROSS_MODULE_KEYS.registroSat))
-    const operaciones = safeParse<Array<Record<string, unknown>>>(window.localStorage.getItem(CROSS_MODULE_KEYS.operaciones)) || []
-
-    const identificacion = (registro?.identificacion as Record<string, unknown> | undefined) || {}
-    const actividades = Array.isArray(registro?.actividades) ? (registro?.actividades as Array<Record<string, unknown>>) : []
-
-    const periodos = operaciones
-      .map((operacion) => (typeof operacion.periodo === "string" ? operacion.periodo : ""))
-      .filter(Boolean)
-
-    const periodosOrdenados = [...periodos].sort()
-    const periodoRevision = periodosOrdenados.length
-      ? `${periodosOrdenados[0]} al ${periodosOrdenados[periodosOrdenados.length - 1]}`
-      : "Sin datos"
-
-    const totalOperaciones = operaciones.length
-    const montoOperado = operaciones.reduce((acc, operacion) => {
-      const monto = typeof operacion.monto === "number" ? operacion.monto : Number(operacion.monto)
-      return acc + (Number.isFinite(monto) ? monto : 0)
-    }, 0)
-
-    const ultimaOperacion = operaciones
-      .map((operacion) => (typeof operacion.fechaOperacion === "string" ? new Date(operacion.fechaOperacion) : null))
-      .filter((date): date is Date => Boolean(date && !Number.isNaN(date.getTime())))
-      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null
-
-    const actividadVulnerable = actividades
-      .map((actividad) => {
-        const actividadKey = typeof actividad.actividadKey === "string" ? actividad.actividadKey : ""
-        return actividadKey || ""
-      })
-      .filter(Boolean)
-      .join(", ") ||
-      (typeof operaciones[0]?.actividadNombre === "string" ? String(operaciones[0].actividadNombre) : "Sin datos")
-
-    setCrossModuleContext({
-      sujetoObligado:
-        (typeof identificacion.razonSocial === "string" && identificacion.razonSocial) ||
-        (typeof identificacion.nombre === "string" && identificacion.nombre) ||
-        "Sin datos",
-      rfc:
-        (typeof identificacion.rfc === "string" && identificacion.rfc) ||
-        (typeof operaciones[0]?.rfc === "string" ? String(operaciones[0].rfc) : "Sin datos"),
-      actividadVulnerable,
-      periodoRevision,
-      totalOperaciones,
-      montoOperado,
-      ultimaActualizacion: ultimaOperacion,
-    })
-  }, [])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -850,6 +881,20 @@ export default function AuditoriaVerificacionPage() {
     [finalChecklist]
   )
 
+  const scopeCompletion = useMemo(() => {
+    const values = Object.values(scopeAnswers)
+    if (!values.length) return 0
+    const completed = values.filter((value) => value !== "").length
+    return Math.round((completed / values.length) * 100)
+  }, [scopeAnswers])
+
+  const reviewCompletion = useMemo(() => {
+    const values = Object.values(reviewAnswers)
+    if (!values.length) return 0
+    const completed = values.filter((value) => value.rating !== "").length
+    return Math.round((completed / values.length) * 100)
+  }, [reviewAnswers])
+
   useEffect(() => {
     const computedChecklist = {
       idioma: true,
@@ -887,6 +932,24 @@ export default function AuditoriaVerificacionPage() {
 
   const handleAnswerChange = (questionId: string, answer: ControlAnswer) => {
     setResponses((prev) => ({ ...prev, [questionId]: { ...prev[questionId], answer } }))
+  }
+
+  const handleScopeChange = (scopeId: string, value: ScopeSelection) => {
+    setScopeAnswers((prev) => ({ ...prev, [scopeId]: value }))
+  }
+
+  const handleReviewAnswerChange = (
+    questionId: string,
+    field: "rating" | "findings" | "recommendations",
+    value: string
+  ) => {
+    setReviewAnswers((prev) => ({
+      ...prev,
+      [questionId]: {
+        ...prev[questionId],
+        [field]: value,
+      },
+    }))
   }
 
   const handleEvidenceUpload = (questionId: string, fileList: FileList | null) => {
@@ -1401,25 +1464,33 @@ export default function AuditoriaVerificacionPage() {
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Semáforos de control</CardTitle>
-                    <CardDescription>Estado rápido de detección de datos y cumplimiento de captura.</CardDescription>
+                    <CardDescription>
+                      Indicadores automáticos de solo lectura (referencia visual, no interactiva).
+                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {semaforos.map((item) => {
                       const isGreen = item.status === "verde"
                       const isYellow = item.status === "amarillo"
                       return (
-                        <div key={item.id} className="flex items-center justify-between rounded-md border p-2">
+                        <div key={item.id} className="flex cursor-default items-center justify-between rounded-md border bg-muted/20 p-2">
                           <span className="text-sm">{item.label}</span>
-                          <span
-                            className={`inline-flex h-3 w-3 rounded-full ${
+                          <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                            <span
+                              className={`inline-flex h-3 w-3 rounded-full ${
                               isGreen ? "bg-emerald-500" : isYellow ? "bg-amber-400" : "bg-red-500"
-                            }`}
-                            aria-label={`Semáforo ${item.status}`}
-                          />
+                              }`}
+                              aria-label={`Semáforo ${item.status}`}
+                            />
+                            {item.status === "verde" ? "Óptimo" : item.status === "amarillo" ? "Atención" : "Crítico"}
+                          </span>
                         </div>
                       )
                     })}
                   </CardContent>
+                  <CardFooter className="text-xs text-muted-foreground">
+                    Se actualizan con información del módulo; no requieren captura manual.
+                  </CardFooter>
                 </Card>
 
                 <Card>
@@ -1446,6 +1517,111 @@ export default function AuditoriaVerificacionPage() {
                   </CardFooter>
                 </Card>
               </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">2.2 Temas y Alcance de la Revisión</CardTitle>
+                  <CardDescription>
+                    Marca con ✓ los temas incluidos en el programa de trabajo y justifica exclusiones.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2 text-sm">
+                    <span>Progreso de captura de alcance</span>
+                    <span className="font-semibold">{scopeCompletion}%</span>
+                  </div>
+                  <div className="space-y-2">
+                    {SCOPE_ITEMS.map((item, index) => (
+                      <div key={item.id} className="grid gap-2 rounded-md border p-3 lg:grid-cols-[1fr_220px]">
+                        <p className="text-sm">{index + 1}. {item.label}</p>
+                        <Select value={scopeAnswers[item.id]} onValueChange={(value) => handleScopeChange(item.id, value as ScopeSelection)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecciona" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="si">✓ Sí</SelectItem>
+                            <SelectItem value="no">✗ No</SelectItem>
+                            <SelectItem value="na">N/A</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                  <Textarea
+                    placeholder="Justificación de temas excluidos (si aplica)"
+                    value={scopeExclusions}
+                    onChange={(event) => setScopeExclusions(event.target.value)}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">3. Resultados de la Revisión — Obligaciones LFPIORPI</CardTitle>
+                  <CardDescription>
+                    Evaluación por obligación con calificación, hallazgos y recomendaciones.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2 text-sm">
+                    <span>Avance de calificaciones</span>
+                    <span className="font-semibold">{reviewCompletion}%</span>
+                  </div>
+                  <Alert>
+                    <Info className="h-4 w-4" />
+                    <AlertTitle>Escala de cumplimiento</AlertTitle>
+                    <AlertDescription>
+                      Cumple · Cumple mayoritariamente · Cumple parcialmente · No cumple · No aplica.
+                    </AlertDescription>
+                  </Alert>
+
+                  {REVIEW_SECTIONS.map((section) => (
+                    <details key={section.id} className="rounded-md border border-dashed p-3">
+                      <summary className="cursor-pointer text-sm font-semibold">{section.title}</summary>
+                      <p className="mt-1 text-xs text-muted-foreground">📌 Fundamento: {section.foundation}</p>
+                      <div className="mt-3 space-y-3">
+                        {section.questions.map((question) => (
+                          <div key={question.id} className="space-y-2 rounded-md border bg-muted/20 p-3">
+                            <p className="text-sm font-medium">{question.text}</p>
+                            <p className="text-xs text-muted-foreground">Ref: {question.ref}</p>
+                            <div className="grid gap-2 lg:grid-cols-3">
+                              <Select
+                                value={reviewAnswers[question.id]?.rating || ""}
+                                onValueChange={(value) => handleReviewAnswerChange(question.id, "rating", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Calificación" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="cumple">Cumple</SelectItem>
+                                  <SelectItem value="cumple-mayor">Cumple mayoritariamente</SelectItem>
+                                  <SelectItem value="cumple-parcial">Cumple parcialmente</SelectItem>
+                                  <SelectItem value="no-cumple">No cumple</SelectItem>
+                                  <SelectItem value="no-aplica">No aplica</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                placeholder="Hallazgos (#)"
+                                value={reviewAnswers[question.id]?.findings || ""}
+                                onChange={(event) =>
+                                  handleReviewAnswerChange(question.id, "findings", event.target.value)
+                                }
+                              />
+                              <Input
+                                placeholder="Recomendaciones (#)"
+                                value={reviewAnswers[question.id]?.recommendations || ""}
+                                onChange={(event) =>
+                                  handleReviewAnswerChange(question.id, "recommendations", event.target.value)
+                                }
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+                </CardContent>
+              </Card>
 
               <div className="grid gap-3 md:grid-cols-2">
                 {reportHeaderFields.map((field) => (
