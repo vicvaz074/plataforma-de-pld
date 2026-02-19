@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { addBusinessDays, differenceInBusinessDays, differenceInCalendarDays, format, formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 import {
@@ -24,8 +24,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/components/ui/use-toast"
-import { CheckCircle2, CircleDashed, Download, FileCheck, FileWarning, Info, ShieldAlert, UploadCloud } from "lucide-react"
+import { AlertTriangle, CheckCircle2, CircleDashed, Download, FileCheck, FileWarning, Info, ShieldAlert, UploadCloud } from "lucide-react"
 import jsPDF from "jspdf"
 
 interface EvidenceFile {
@@ -100,6 +101,12 @@ interface CrossModuleContext {
   totalOperaciones: number
   montoOperado: number
   ultimaActualizacion: Date | null
+}
+
+interface FinalChecklistItem {
+  id: string
+  label: string
+  completed: boolean
 }
 
 const controlQuestions: ControlQuestion[] = [
@@ -240,6 +247,23 @@ const CROSS_MODULE_KEYS = {
   registroSat: "registro-sat-data",
   operaciones: "actividades_vulnerables_operaciones",
 } as const
+
+const FINAL_CHECKLIST_LABELS = [
+  { id: "idioma", label: "Informe redactado en español" },
+  { id: "tipografia", label: "Tipografía mínima de 10 puntos" },
+  { id: "seccion-a", label: "Incluye Sección A: Resultados de la revisión" },
+  { id: "seccion-b", label: "Incluye Sección B: Cumplimiento regulatorio" },
+  { id: "seccion-c", label: "Incluye Sección C: Asuntos clave (o N/A)" },
+  { id: "seccion-d", label: "Incluye Sección D: Hallazgos y recomendaciones" },
+  { id: "seguimiento", label: "Seguimiento a hallazgos del informe anterior" },
+  { id: "acciones", label: "Cada hallazgo contiene acción, responsable y plazo" },
+  { id: "evidencia", label: "Manifestaciones sustentadas con evidencia documental" },
+  { id: "certificado", label: "Auditor con certificado CNBV vigente" },
+  { id: "pdf", label: "Informe final en PDF con accesibilidad" },
+  { id: "remision", label: "Escrito de remisión firmado por responsable" },
+  { id: "carta", label: "Carta bajo protesta del auditor adjunta" },
+  { id: "envio", label: "Envío por SITI PLD/FT o SIAVAP" },
+]
 
 const formatBytes = (bytes: number) => {
   if (bytes === 0) return "0 B"
@@ -420,6 +444,9 @@ export default function AuditoriaVerificacionPage() {
     montoOperado: 0,
     ultimaActualizacion: null,
   })
+  const [finalChecklist, setFinalChecklist] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(FINAL_CHECKLIST_LABELS.map((item) => [item.id, false]))
+  )
   const [responses, setResponses] = useState<Record<string, ControlResponse>>(() =>
     Object.fromEntries(
       controlQuestions.map((question) => [question.id, { answer: "", evidences: [] }])
@@ -457,6 +484,88 @@ export default function AuditoriaVerificacionPage() {
 
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
   const [actionPlansInitialized, setActionPlansInitialized] = useState(false)
+
+  const loadCrossModuleContext = useCallback(() => {
+    if (typeof window === "undefined") return
+
+    const safeParse = <T,>(raw: string | null): T | null => {
+      if (!raw) return null
+      try {
+        return JSON.parse(raw) as T
+      } catch {
+        return null
+      }
+    }
+
+    const registro = safeParse<Record<string, unknown>>(window.localStorage.getItem(CROSS_MODULE_KEYS.registroSat))
+    const operaciones = safeParse<Array<Record<string, unknown>>>(window.localStorage.getItem(CROSS_MODULE_KEYS.operaciones)) || []
+
+    const identificacion = (registro?.identificacion as Record<string, unknown> | undefined) || {}
+    const actividades = Array.isArray(registro?.actividades) ? (registro?.actividades as Array<Record<string, unknown>>) : []
+
+    const periodos = operaciones
+      .map((operacion) => (typeof operacion.periodo === "string" ? operacion.periodo : ""))
+      .filter(Boolean)
+
+    const periodosOrdenados = [...periodos].sort()
+    const periodoRevision = periodosOrdenados.length
+      ? `${periodosOrdenados[0]} al ${periodosOrdenados[periodosOrdenados.length - 1]}`
+      : "Sin datos"
+
+    const totalOperaciones = operaciones.length
+    const montoOperado = operaciones.reduce((acc, operacion) => {
+      const monto = typeof operacion.monto === "number" ? operacion.monto : Number(operacion.monto)
+      return acc + (Number.isFinite(monto) ? monto : 0)
+    }, 0)
+
+    const ultimaOperacion = operaciones
+      .map((operacion) => (typeof operacion.fechaOperacion === "string" ? new Date(operacion.fechaOperacion) : null))
+      .filter((date): date is Date => Boolean(date && !Number.isNaN(date.getTime())))
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null
+
+    const actividadVulnerable = actividades
+      .map((actividad) => {
+        const actividadKey = typeof actividad.actividadKey === "string" ? actividad.actividadKey : ""
+        return actividadKey || ""
+      })
+      .filter(Boolean)
+      .join(", ") ||
+      (typeof operaciones[0]?.actividadNombre === "string" ? String(operaciones[0].actividadNombre) : "Sin datos")
+
+    const nombreCompleto = [
+      typeof identificacion.nombre === "string" ? identificacion.nombre : "",
+      typeof identificacion.apellidoPaterno === "string" ? identificacion.apellidoPaterno : "",
+    ]
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .join(" ")
+
+    setCrossModuleContext({
+      sujetoObligado:
+        nombreCompleto ||
+        (typeof (registro as Record<string, unknown> | null)?.nombre === "string" ? String((registro as Record<string, unknown>).nombre) : "") ||
+        "Sin datos",
+      rfc:
+        (typeof identificacion.rfc === "string" && identificacion.rfc) ||
+        (typeof operaciones[0]?.rfc === "string" ? String(operaciones[0].rfc) : "Sin datos"),
+      actividadVulnerable,
+      periodoRevision,
+      totalOperaciones,
+      montoOperado,
+      ultimaActualizacion: ultimaOperacion,
+    })
+  }, [])
+
+  useEffect(() => {
+    loadCrossModuleContext()
+
+    const refresh = () => loadCrossModuleContext()
+    window.addEventListener("storage", refresh)
+
+    return () => {
+      window.removeEventListener("storage", refresh)
+    }
+  }, [loadCrossModuleContext])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -709,6 +818,72 @@ export default function AuditoriaVerificacionPage() {
       ),
     [methodologyProgressBySection]
   )
+
+  const semaforos = useMemo(
+    () => [
+      {
+        id: "sujeto",
+        label: "Sujeto obligado detectado",
+        status: crossModuleContext.sujetoObligado !== "Sin datos" && crossModuleContext.rfc !== "Sin datos" ? "verde" : "rojo",
+      },
+      {
+        id: "operaciones",
+        label: "Operaciones vinculadas",
+        status: crossModuleContext.totalOperaciones > 0 ? "verde" : "amarillo",
+      },
+      {
+        id: "evidencia",
+        label: "Evidencia documental",
+        status: allEvidences.length > 0 ? "verde" : "amarillo",
+      },
+      {
+        id: "cumplimiento",
+        label: "Checklist normativo",
+        status: methodologyCompletion >= 75 ? "verde" : methodologyCompletion >= 40 ? "amarillo" : "rojo",
+      },
+    ],
+    [crossModuleContext.sujetoObligado, crossModuleContext.rfc, crossModuleContext.totalOperaciones, allEvidences.length, methodologyCompletion]
+  )
+
+  const finalChecklistItems = useMemo<FinalChecklistItem[]>(
+    () => FINAL_CHECKLIST_LABELS.map((item) => ({ ...item, completed: Boolean(finalChecklist[item.id]) })),
+    [finalChecklist]
+  )
+
+  useEffect(() => {
+    const computedChecklist = {
+      idioma: true,
+      tipografia: true,
+      "seccion-a": answeredQuestions > 0,
+      "seccion-b": progressValue >= 50,
+      "seccion-c": actionPlans.length > 0 || authorityRequests.length > 0,
+      "seccion-d": actionPlans.length > 0,
+      seguimiento: auditLog.length > 0,
+      acciones: actionPlans.some((plan) => Boolean(plan.responsible && plan.deadline)),
+      evidencia: allEvidences.length > 0,
+      certificado: Boolean(crossModuleContext.sujetoObligado !== "Sin datos"),
+      pdf: auditLog.length > 0,
+      remision: authorityRequests.length > 0,
+      carta: lineamientosVersions.length > 0,
+      envio: authorityRequests.some((request) => request.status === "Cerrado"),
+    }
+    setFinalChecklist(computedChecklist)
+  }, [
+    answeredQuestions,
+    progressValue,
+    actionPlans,
+    authorityRequests,
+    auditLog,
+    allEvidences.length,
+    crossModuleContext.sujetoObligado,
+    lineamientosVersions.length,
+  ])
+
+  useEffect(() => {
+    if (activeTab === "metodologia") {
+      loadCrossModuleContext()
+    }
+  }, [activeTab, loadCrossModuleContext])
 
   const handleAnswerChange = (questionId: string, answer: ControlAnswer) => {
     setResponses((prev) => ({ ...prev, [questionId]: { ...prev[questionId], answer } }))
@@ -1221,6 +1396,56 @@ export default function AuditoriaVerificacionPage() {
                   </p>
                 </CardFooter>
               </Card>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Semáforos de control</CardTitle>
+                    <CardDescription>Estado rápido de detección de datos y cumplimiento de captura.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {semaforos.map((item) => {
+                      const isGreen = item.status === "verde"
+                      const isYellow = item.status === "amarillo"
+                      return (
+                        <div key={item.id} className="flex items-center justify-between rounded-md border p-2">
+                          <span className="text-sm">{item.label}</span>
+                          <span
+                            className={`inline-flex h-3 w-3 rounded-full ${
+                              isGreen ? "bg-emerald-500" : isYellow ? "bg-amber-400" : "bg-red-500"
+                            }`}
+                            aria-label={`Semáforo ${item.status}`}
+                          />
+                        </div>
+                      )
+                    })}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Lista de verificación final</CardTitle>
+                    <CardDescription>Requisitos formales CNBV previos a la remisión del informe.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <details className="rounded-md border border-dashed p-3">
+                      <summary className="cursor-pointer text-sm font-medium">Mostrar checklist completo</summary>
+                      <div className="mt-3 space-y-2">
+                        {finalChecklistItems.map((item) => (
+                          <label key={item.id} className="flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-2">
+                            <Checkbox checked={item.completed} aria-label={item.label} disabled />
+                            <span className="text-sm">{item.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </details>
+                  </CardContent>
+                  <CardFooter className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Verifica manualmente cada requisito antes de envío por SIAVAP/SITI.
+                  </CardFooter>
+                </Card>
+              </div>
 
               <div className="grid gap-3 md:grid-cols-2">
                 {reportHeaderFields.map((field) => (
