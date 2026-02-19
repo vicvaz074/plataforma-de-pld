@@ -569,6 +569,69 @@ export default function AuditoriaVerificacionPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
+
+    const safeParse = <T,>(raw: string | null): T | null => {
+      if (!raw) return null
+      try {
+        return JSON.parse(raw) as T
+      } catch {
+        return null
+      }
+    }
+
+    const registro = safeParse<Record<string, unknown>>(window.localStorage.getItem(CROSS_MODULE_KEYS.registroSat))
+    const operaciones = safeParse<Array<Record<string, unknown>>>(window.localStorage.getItem(CROSS_MODULE_KEYS.operaciones)) || []
+
+    const identificacion = (registro?.identificacion as Record<string, unknown> | undefined) || {}
+    const actividades = Array.isArray(registro?.actividades) ? (registro?.actividades as Array<Record<string, unknown>>) : []
+
+    const periodos = operaciones
+      .map((operacion) => (typeof operacion.periodo === "string" ? operacion.periodo : ""))
+      .filter(Boolean)
+
+    const periodosOrdenados = [...periodos].sort()
+    const periodoRevision = periodosOrdenados.length
+      ? `${periodosOrdenados[0]} al ${periodosOrdenados[periodosOrdenados.length - 1]}`
+      : "Sin datos"
+
+    const totalOperaciones = operaciones.length
+    const montoOperado = operaciones.reduce((acc, operacion) => {
+      const monto = typeof operacion.monto === "number" ? operacion.monto : Number(operacion.monto)
+      return acc + (Number.isFinite(monto) ? monto : 0)
+    }, 0)
+
+    const ultimaOperacion = operaciones
+      .map((operacion) => (typeof operacion.fechaOperacion === "string" ? new Date(operacion.fechaOperacion) : null))
+      .filter((date): date is Date => Boolean(date && !Number.isNaN(date.getTime())))
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null
+
+    const actividadVulnerable = actividades
+      .map((actividad) => {
+        const actividadKey = typeof actividad.actividadKey === "string" ? actividad.actividadKey : ""
+        return actividadKey || ""
+      })
+      .filter(Boolean)
+      .join(", ") ||
+      (typeof operaciones[0]?.actividadNombre === "string" ? String(operaciones[0].actividadNombre) : "Sin datos")
+
+    setCrossModuleContext({
+      sujetoObligado:
+        (typeof identificacion.razonSocial === "string" && identificacion.razonSocial) ||
+        (typeof identificacion.nombre === "string" && identificacion.nombre) ||
+        "Sin datos",
+      rfc:
+        (typeof identificacion.rfc === "string" && identificacion.rfc) ||
+        (typeof operaciones[0]?.rfc === "string" ? String(operaciones[0].rfc) : "Sin datos"),
+      actividadVulnerable,
+      periodoRevision,
+      totalOperaciones,
+      montoOperado,
+      ultimaActualizacion: ultimaOperacion,
+    })
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
     try {
       const stored = window.localStorage.getItem(STORAGE_KEYS.lineamientos)
       if (stored) {
