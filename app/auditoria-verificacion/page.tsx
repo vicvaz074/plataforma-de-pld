@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { addBusinessDays, differenceInBusinessDays, differenceInCalendarDays, format, formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 import {
@@ -24,8 +24,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/components/ui/use-toast"
-import { Download, FileCheck, FileWarning, ShieldAlert, UploadCloud } from "lucide-react"
+import { AlertTriangle, CheckCircle2, CircleDashed, Download, FileCheck, FileWarning, Info, ShieldAlert, UploadCloud } from "lucide-react"
 import jsPDF from "jspdf"
 
 interface EvidenceFile {
@@ -92,6 +93,43 @@ interface ActionPlan {
   progress: number
 }
 
+interface CrossModuleContext {
+  sujetoObligado: string
+  rfc: string
+  actividadVulnerable: string
+  periodoRevision: string
+  totalOperaciones: number
+  montoOperado: number
+  ultimaActualizacion: Date | null
+}
+
+interface FinalChecklistItem {
+  id: string
+  label: string
+  completed: boolean
+}
+
+type ScopeSelection = "si" | "no" | "na"
+type ComplianceRating = "cumple" | "cumple-mayor" | "cumple-parcial" | "no-cumple" | "no-aplica" | ""
+
+interface ScopeItem {
+  id: string
+  label: string
+}
+
+interface ReviewQuestionItem {
+  id: string
+  text: string
+  ref: string
+}
+
+interface ReviewSection {
+  id: string
+  title: string
+  foundation: string
+  questions: ReviewQuestionItem[]
+}
+
 const controlQuestions: ControlQuestion[] = [
   {
     id: "lineamientos-90-dias",
@@ -151,6 +189,158 @@ const controlQuestions: ControlQuestion[] = [
 ]
 
 const acceptedMimeTypes = ["application/pdf", "image/jpeg"]
+
+const reportHeaderFields = [
+  "Actividad Vulnerable / Entidad auditada",
+  "RFC del sujeto obligado",
+  "Periodo de revisión y fecha de emisión",
+  "Auditor responsable y certificado CNBV",
+  "Persona moral o firma de auditoría",
+  "Tipo de auditoría (interna/externa)",
+]
+
+const auditMethodologySections = [
+  {
+    id: "planeacion",
+    linkedTab: "lineamientos",
+    title: "1. Planeación de la auditoría",
+    summary: "Conoce al sujeto obligado y define el alcance en función del riesgo.",
+    checkpoints: [
+      "Identificación conforme al Art. 17 LFPIORPI",
+      "Descripción de actividad vulnerable y umbral de aviso",
+      "Registro SAT-PLD, universo de clientes y monto operado",
+      "Matriz EBR: riesgo inherente, mitigantes y riesgo residual",
+    ],
+  },
+  {
+    id: "programa",
+    linkedTab: "auditorias",
+    title: "2. Programa de trabajo",
+    summary: "Define calendario, recursos y temas incluidos en la revisión.",
+    checkpoints: [
+      "Fechas de campo, duración y modalidad de ejecución",
+      "Equipo auditor y roles",
+      "Cobertura de obligaciones (identificación, avisos, PCI, OC, capacitación)",
+      "Justificación de exclusiones y tratamiento de N/A",
+    ],
+  },
+  {
+    id: "resultados",
+    linkedTab: "observaciones",
+    title: "3 y 4. Resultados y resumen ejecutivo",
+    summary: "Evalúa cumplimiento por obligación y genera visión consolidada.",
+    checkpoints: [
+      "Escala de 5 niveles: Cumple a No cumple / No aplica",
+      "Evaluación por bloques: clientes, avisos, PCI, OC, capacitación, conservación, PPE, tecnología",
+      "Hallazgos y recomendaciones por cada reactivo evaluado",
+      "Cuadro ejecutivo con tendencia vs. año anterior",
+    ],
+  },
+  {
+    id: "hallazgos",
+    linkedTab: "planes",
+    title: "5 y 6. Asuntos clave y hallazgos",
+    summary: "Documenta riesgos relevantes y acciones correctivas trazables.",
+    checkpoints: [
+      "Registro de asuntos clave conforme a Lineamientos CNBV",
+      "Ficha por hallazgo (ID, evidencia, acción, responsable y plazo)",
+      "Seguimiento a hallazgos del informe anterior",
+      "Validación de posibles supuestos penales (139 Quáter / 400 Bis CPF)",
+    ],
+  },
+  {
+    id: "emision",
+    linkedTab: "lineamientos",
+    title: "7 y 8. Emisión, checklist final y firmas",
+    summary: "Verifica requisitos formales antes del envío a SAT/CNBV.",
+    checkpoints: [
+      "Conclusión del auditor, limitaciones y fechas de conocimiento",
+      "Lista formal: estructura, soporte documental, carta bajo protesta",
+      "Validación de certificado CNBV vigente",
+      "Firma de auditor y OC/representante y remisión por SIAVAP/SITI",
+    ],
+  },
+]
+
+type AuditTab = "metodologia" | "lineamientos" | "auditorias" | "observaciones" | "planes"
+
+const CROSS_MODULE_KEYS = {
+  registroSat: "registro-sat-data",
+  operaciones: "actividades_vulnerables_operaciones",
+} as const
+
+const FINAL_CHECKLIST_LABELS = [
+  { id: "idioma", label: "Informe redactado en español" },
+  { id: "tipografia", label: "Tipografía mínima de 10 puntos" },
+  { id: "seccion-a", label: "Incluye Sección A: Resultados de la revisión" },
+  { id: "seccion-b", label: "Incluye Sección B: Cumplimiento regulatorio" },
+  { id: "seccion-c", label: "Incluye Sección C: Asuntos clave (o N/A)" },
+  { id: "seccion-d", label: "Incluye Sección D: Hallazgos y recomendaciones" },
+  { id: "seguimiento", label: "Seguimiento a hallazgos del informe anterior" },
+  { id: "acciones", label: "Cada hallazgo contiene acción, responsable y plazo" },
+  { id: "evidencia", label: "Manifestaciones sustentadas con evidencia documental" },
+  { id: "certificado", label: "Auditor con certificado CNBV vigente" },
+  { id: "pdf", label: "Informe final en PDF con accesibilidad" },
+  { id: "remision", label: "Escrito de remisión firmado por responsable" },
+  { id: "carta", label: "Carta bajo protesta del auditor adjunta" },
+  { id: "envio", label: "Envío por SITI PLD/FT o SIAVAP" },
+]
+
+const SCOPE_ITEMS: ScopeItem[] = [
+  { id: "alcance-1", label: "Identificación de clientes — obligación de recabar datos (Art. 18 LFPIORPI)" },
+  { id: "alcance-2", label: "Uso de Medidas de Diligencia Debida (MDD) ordinaria, simplificada y reforzada" },
+  { id: "alcance-3", label: "Presentación de avisos al SAT en tiempo y forma (Arts. 17 y 24 LFPIORPI)" },
+  { id: "alcance-4", label: "Revisión del Programa de Cumplimiento Interno (PCI)" },
+  { id: "alcance-5", label: "Designación y funciones del Oficial de Cumplimiento" },
+  { id: "alcance-6", label: "Capacitación al personal (Art. 20 LFPIORPI y Art. 28 Reglamento)" },
+  { id: "alcance-7", label: "Conservación de información y documentación (Art. 22 LFPIORPI)" },
+  { id: "alcance-8", label: "Revisión de sistemas automatizados / herramientas tecnológicas" },
+  { id: "alcance-9", label: "Identificación de Personas Políticamente Expuestas (PPE)" },
+  { id: "alcance-10", label: "Consulta y aplicación de Listas de Personas Bloqueadas (OFAC, ONU, SAT)" },
+  { id: "alcance-11", label: "Identificación de Propietarios Reales (Beneficial Owners)" },
+  { id: "alcance-12", label: "Revisión de operaciones en efectivo y umbrales de aviso" },
+  { id: "alcance-13", label: "Seguimiento a observaciones de auditorías anteriores" },
+  { id: "alcance-14", label: "Verificación de comisionistas / agentes / terceros" },
+]
+
+const REVIEW_SECTIONS: ReviewSection[] = [
+  {
+    id: "3-1",
+    title: "3.1 Identificación de Clientes y Diligencia Debida",
+    foundation: "Arts. 18, 19 LFPIORPI; Arts. 12-22 Reglamento",
+    questions: [
+      { id: "q-3-1-1", text: "Recaba datos mínimos de identificación de personas físicas", ref: "Art. 18 LFPIORPI / Art. 12 Reglamento" },
+      { id: "q-3-1-2", text: "Recaba datos mínimos de identificación de personas morales", ref: "Art. 18 LFPIORPI / Art. 13 Reglamento" },
+      { id: "q-3-1-3", text: "Aplica diligencia debida simplificada cuando el riesgo lo justifica", ref: "Art. 19 LFPIORPI / Art. 17 Reglamento" },
+      { id: "q-3-1-4", text: "Aplica diligencia debida reforzada para clientes de alto riesgo (PPE / países alto riesgo)", ref: "Art. 19 LFPIORPI / Art. 18 Reglamento" },
+      { id: "q-3-1-5", text: "Identifica propietario real / beneficiario de operaciones", ref: "Art. 18 Fracc. IV LFPIORPI / Art. 14 Reglamento" },
+    ],
+  },
+  {
+    id: "3-2",
+    title: "3.2 Presentación de Avisos al SAT",
+    foundation: "Arts. 17, 24, 25 LFPIORPI; Arts. 23-31 Reglamento",
+    questions: [
+      { id: "q-3-2-1", text: "Identifica correctamente cuándo una operación supera umbral de aviso", ref: "Art. 17 LFPIORPI" },
+      { id: "q-3-2-2", text: "Presenta avisos en tiempo (antes del día 17 del mes siguiente)", ref: "Art. 24 LFPIORPI / Art. 29 Reglamento" },
+      { id: "q-3-2-3", text: "Avisos contienen información requerida por formato oficial", ref: "Reglas de Carácter General SAT-PLD" },
+      { id: "q-3-2-4", text: "No existen operaciones omitidas no reportadas", ref: "Art. 54 LFPIORPI" },
+      { id: "q-3-2-5", text: "Conserva acuse de recibo SAT y controles de monitoreo de umbrales", ref: "Art. 22 y 20 LFPIORPI" },
+    ],
+  },
+  {
+    id: "3-3",
+    title: "3.3 Programa de Cumplimiento Interno (PCI)",
+    foundation: "Art. 20 LFPIORPI; Arts. 24-28 Reglamento",
+    questions: [
+      { id: "q-3-3-1", text: "Cuenta con PCI formalmente documentado", ref: "Art. 20 LFPIORPI / Art. 24 Reglamento" },
+      { id: "q-3-3-2", text: "Incluye políticas y procedimientos de identificación y conocimiento del cliente", ref: "Art. 20 Fracc. I LFPIORPI" },
+      { id: "q-3-3-3", text: "Incluye metodología EBR y actualización periódica", ref: "Art. 20 Fracc. II LFPIORPI" },
+      { id: "q-3-3-4", text: "Fue aprobado por órgano de administración", ref: "Art. 20 LFPIORPI / Art. 24 Reglamento" },
+      { id: "q-3-3-5", text: "Incluye procedimientos para avisos SAT y capacitación", ref: "Art. 20 Fracc. IV y V LFPIORPI" },
+    ],
+  },
+]
 
 const formatBytes = (bytes: number) => {
   if (bytes === 0) return "0 B"
@@ -321,6 +511,30 @@ const parseStoredActionPlans = (raw: unknown): ActionPlan[] => {
 
 export default function AuditoriaVerificacionPage() {
   const { toast } = useToast()
+  const [activeTab, setActiveTab] = useState<AuditTab>("metodologia")
+  const [crossModuleContext, setCrossModuleContext] = useState<CrossModuleContext>({
+    sujetoObligado: "Sin datos",
+    rfc: "Sin datos",
+    actividadVulnerable: "Sin datos",
+    periodoRevision: "Sin datos",
+    totalOperaciones: 0,
+    montoOperado: 0,
+    ultimaActualizacion: null,
+  })
+  const [finalChecklist, setFinalChecklist] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(FINAL_CHECKLIST_LABELS.map((item) => [item.id, false]))
+  )
+  const [scopeAnswers, setScopeAnswers] = useState<Record<string, ScopeSelection>>(() =>
+    Object.fromEntries(SCOPE_ITEMS.map((item) => [item.id, "si"]))
+  )
+  const [scopeExclusions, setScopeExclusions] = useState("")
+  const [reviewAnswers, setReviewAnswers] = useState<Record<string, { rating: ComplianceRating; findings: string; recommendations: string }>>(() =>
+    Object.fromEntries(
+      REVIEW_SECTIONS.flatMap((section) =>
+        section.questions.map((question) => [question.id, { rating: "", findings: "", recommendations: "" }])
+      )
+    )
+  )
   const [responses, setResponses] = useState<Record<string, ControlResponse>>(() =>
     Object.fromEntries(
       controlQuestions.map((question) => [question.id, { answer: "", evidences: [] }])
@@ -358,6 +572,94 @@ export default function AuditoriaVerificacionPage() {
 
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
   const [actionPlansInitialized, setActionPlansInitialized] = useState(false)
+
+  const loadCrossModuleContext = useCallback(() => {
+    if (typeof window === "undefined") return
+
+    const safeParse = <T,>(raw: string | null): T | null => {
+      if (!raw) return null
+      try {
+        return JSON.parse(raw) as T
+      } catch {
+        return null
+      }
+    }
+
+    const registro = safeParse<Record<string, unknown>>(window.localStorage.getItem(CROSS_MODULE_KEYS.registroSat))
+    const operaciones = safeParse<Array<Record<string, unknown>>>(window.localStorage.getItem(CROSS_MODULE_KEYS.operaciones)) || []
+
+    const identificacion = (registro?.identificacion as Record<string, unknown> | undefined) || {}
+    const sujetosRegistrados = Array.isArray(registro?.sujetosRegistrados)
+      ? (registro?.sujetosRegistrados as Array<Record<string, unknown>>)
+      : []
+    const primerSujeto = sujetosRegistrados[0] || {}
+    const actividades = Array.isArray(registro?.actividades) ? (registro?.actividades as Array<Record<string, unknown>>) : []
+
+    const periodos = operaciones
+      .map((operacion) => (typeof operacion.periodo === "string" ? operacion.periodo : ""))
+      .filter(Boolean)
+
+    const periodosOrdenados = [...periodos].sort()
+    const periodoRevision = periodosOrdenados.length
+      ? `${periodosOrdenados[0]} al ${periodosOrdenados[periodosOrdenados.length - 1]}`
+      : "Sin datos"
+
+    const totalOperaciones = operaciones.length
+    const montoOperado = operaciones.reduce((acc, operacion) => {
+      const monto = typeof operacion.monto === "number" ? operacion.monto : Number(operacion.monto)
+      return acc + (Number.isFinite(monto) ? monto : 0)
+    }, 0)
+
+    const ultimaOperacion = operaciones
+      .map((operacion) => (typeof operacion.fechaOperacion === "string" ? new Date(operacion.fechaOperacion) : null))
+      .filter((date): date is Date => Boolean(date && !Number.isNaN(date.getTime())))
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null
+
+    const actividadVulnerable = actividades
+      .map((actividad) => {
+        const actividadKey = typeof actividad.actividadKey === "string" ? actividad.actividadKey : ""
+        return actividadKey || ""
+      })
+      .filter(Boolean)
+      .join(", ") ||
+      (typeof operaciones[0]?.actividadNombre === "string" ? String(operaciones[0].actividadNombre) : "Sin datos")
+
+    const nombreCompleto = [
+      typeof identificacion.nombre === "string" ? identificacion.nombre : "",
+      typeof identificacion.apellidoPaterno === "string" ? identificacion.apellidoPaterno : "",
+    ]
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .join(" ")
+
+    setCrossModuleContext({
+      sujetoObligado:
+        nombreCompleto ||
+        (typeof primerSujeto.nombre === "string" ? primerSujeto.nombre : "") ||
+        (typeof (registro as Record<string, unknown> | null)?.nombre === "string" ? String((registro as Record<string, unknown>).nombre) : "") ||
+        "Sin datos",
+      rfc:
+        (typeof identificacion.rfc === "string" && identificacion.rfc) ||
+        (typeof primerSujeto.rfc === "string" ? primerSujeto.rfc : "") ||
+        (typeof operaciones[0]?.rfc === "string" ? String(operaciones[0].rfc) : "Sin datos"),
+      actividadVulnerable,
+      periodoRevision,
+      totalOperaciones,
+      montoOperado,
+      ultimaActualizacion: ultimaOperacion,
+    })
+  }, [])
+
+  useEffect(() => {
+    loadCrossModuleContext()
+
+    const refresh = () => loadCrossModuleContext()
+    window.addEventListener("storage", refresh)
+
+    return () => {
+      window.removeEventListener("storage", refresh)
+    }
+  }, [loadCrossModuleContext])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -511,8 +813,143 @@ export default function AuditoriaVerificacionPage() {
     [responses]
   )
 
+  const methodologyProgressBySection = useMemo(() => {
+    const answeredByCategory = {
+      lineamientos: controlQuestions
+        .filter((question) => question.category === "lineamientos")
+        .filter((question) => responses[question.id]?.answer).length,
+      auditorias: controlQuestions
+        .filter((question) => question.category === "auditorias")
+        .filter((question) => responses[question.id]?.answer).length,
+      observaciones: controlQuestions
+        .filter((question) => question.category === "observaciones")
+        .filter((question) => responses[question.id]?.answer).length,
+      planes: controlQuestions
+        .filter((question) => question.category === "planes")
+        .filter((question) => responses[question.id]?.answer).length,
+    }
+
+    return {
+      planeacion: lineamientosVersions.length > 0 ? 100 : answeredByCategory.lineamientos * 50,
+      programa: auditLog.length > 0 ? 100 : answeredByCategory.auditorias * 50,
+      resultados: authorityRequests.length > 0 ? 100 : answeredByCategory.observaciones * 50,
+      hallazgos: actionPlans.length > 0 ? 100 : answeredByCategory.planes * 50,
+      emision:
+        progressValue >= 75 && allEvidences.length > 0
+          ? 100
+          : Math.min(Math.round((progressValue + Math.min(allEvidences.length * 10, 30)) / 1.3), 99),
+    }
+  }, [responses, lineamientosVersions.length, auditLog.length, authorityRequests.length, actionPlans.length, progressValue, allEvidences.length])
+
+  const methodologyCompletion = useMemo(
+    () =>
+      Math.round(
+        Object.values(methodologyProgressBySection).reduce((acc, value) => acc + value, 0) /
+          Object.values(methodologyProgressBySection).length
+      ),
+    [methodologyProgressBySection]
+  )
+
+  const semaforos = useMemo(
+    () => [
+      {
+        id: "sujeto",
+        label: "Sujeto obligado detectado",
+        status: crossModuleContext.sujetoObligado !== "Sin datos" && crossModuleContext.rfc !== "Sin datos" ? "verde" : "rojo",
+      },
+      {
+        id: "operaciones",
+        label: "Operaciones vinculadas",
+        status: crossModuleContext.totalOperaciones > 0 ? "verde" : "amarillo",
+      },
+      {
+        id: "evidencia",
+        label: "Evidencia documental",
+        status: allEvidences.length > 0 ? "verde" : "amarillo",
+      },
+      {
+        id: "cumplimiento",
+        label: "Checklist normativo",
+        status: methodologyCompletion >= 75 ? "verde" : methodologyCompletion >= 40 ? "amarillo" : "rojo",
+      },
+    ],
+    [crossModuleContext.sujetoObligado, crossModuleContext.rfc, crossModuleContext.totalOperaciones, allEvidences.length, methodologyCompletion]
+  )
+
+  const finalChecklistItems = useMemo<FinalChecklistItem[]>(
+    () => FINAL_CHECKLIST_LABELS.map((item) => ({ ...item, completed: Boolean(finalChecklist[item.id]) })),
+    [finalChecklist]
+  )
+
+  const scopeCompletion = useMemo(() => {
+    const values = Object.values(scopeAnswers)
+    if (!values.length) return 0
+    const completed = values.filter((value) => value !== "").length
+    return Math.round((completed / values.length) * 100)
+  }, [scopeAnswers])
+
+  const reviewCompletion = useMemo(() => {
+    const values = Object.values(reviewAnswers)
+    if (!values.length) return 0
+    const completed = values.filter((value) => value.rating !== "").length
+    return Math.round((completed / values.length) * 100)
+  }, [reviewAnswers])
+
+  useEffect(() => {
+    const computedChecklist = {
+      idioma: true,
+      tipografia: true,
+      "seccion-a": answeredQuestions > 0,
+      "seccion-b": progressValue >= 50,
+      "seccion-c": actionPlans.length > 0 || authorityRequests.length > 0,
+      "seccion-d": actionPlans.length > 0,
+      seguimiento: auditLog.length > 0,
+      acciones: actionPlans.some((plan) => Boolean(plan.responsible && plan.deadline)),
+      evidencia: allEvidences.length > 0,
+      certificado: Boolean(crossModuleContext.sujetoObligado !== "Sin datos"),
+      pdf: auditLog.length > 0,
+      remision: authorityRequests.length > 0,
+      carta: lineamientosVersions.length > 0,
+      envio: authorityRequests.some((request) => request.status === "Cerrado"),
+    }
+    setFinalChecklist(computedChecklist)
+  }, [
+    answeredQuestions,
+    progressValue,
+    actionPlans,
+    authorityRequests,
+    auditLog,
+    allEvidences.length,
+    crossModuleContext.sujetoObligado,
+    lineamientosVersions.length,
+  ])
+
+  useEffect(() => {
+    if (activeTab === "metodologia") {
+      loadCrossModuleContext()
+    }
+  }, [activeTab, loadCrossModuleContext])
+
   const handleAnswerChange = (questionId: string, answer: ControlAnswer) => {
     setResponses((prev) => ({ ...prev, [questionId]: { ...prev[questionId], answer } }))
+  }
+
+  const handleScopeChange = (scopeId: string, value: ScopeSelection) => {
+    setScopeAnswers((prev) => ({ ...prev, [scopeId]: value }))
+  }
+
+  const handleReviewAnswerChange = (
+    questionId: string,
+    field: "rating" | "findings" | "recommendations",
+    value: string
+  ) => {
+    setReviewAnswers((prev) => ({
+      ...prev,
+      [questionId]: {
+        ...prev[questionId],
+        [field]: value,
+      },
+    }))
   }
 
   const handleEvidenceUpload = (questionId: string, fileList: FileList | null) => {
@@ -942,13 +1379,321 @@ export default function AuditoriaVerificacionPage() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="lineamientos" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AuditTab)} className="space-y-6">
         <TabsList className="flex flex-wrap justify-start gap-2">
+          <TabsTrigger value="metodologia">Informe PLD/FT (CNBV)</TabsTrigger>
           <TabsTrigger value="lineamientos">Lineamientos internos</TabsTrigger>
           <TabsTrigger value="auditorias">Auditorías internas</TabsTrigger>
           <TabsTrigger value="observaciones">Observaciones SAT/UIF</TabsTrigger>
           <TabsTrigger value="planes">Planes de acción</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="metodologia" className="space-y-6">
+          <Card className="border-primary/30">
+            <CardHeader>
+              <CardTitle>Metodología práctica del informe de auditoría PLD/FT</CardTitle>
+              <CardDescription>
+                Guía visual y minimalista para estructurar tu informe conforme a LFPIORPI, su Reglamento y
+                Lineamientos CNBV (DOF 18/10/2021).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-md border border-border/60 bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Madurez de la metodología</p>
+                  <p className="text-2xl font-semibold">{methodologyCompletion}%</p>
+                  <Progress value={methodologyCompletion} className="mt-2 h-2" />
+                </div>
+                <div className="rounded-md border border-border/60 bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Evidencias cargadas</p>
+                  <p className="text-2xl font-semibold">{allEvidences.length}</p>
+                  <p className="text-xs text-muted-foreground">Con sello de tiempo y descarga directa.</p>
+                </div>
+                <div className="rounded-md border border-border/60 bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Cumplimiento operativo</p>
+                  <p className="text-2xl font-semibold">{progressValue}%</p>
+                  <p className="text-xs text-muted-foreground">Basado en checklist activo del módulo.</p>
+                </div>
+              </div>
+
+              <Card className="border-border/60 bg-muted/20">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Datos conectados con otros módulos</CardTitle>
+                  <CardDescription>
+                    Se sincroniza automáticamente con Registro SAT y Actividades Vulnerables para precargar el contexto del informe.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-md border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Sujeto obligado</p>
+                    <p className="text-sm font-semibold">{crossModuleContext.sujetoObligado}</p>
+                  </div>
+                  <div className="rounded-md border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">RFC</p>
+                    <p className="text-sm font-semibold">{crossModuleContext.rfc}</p>
+                  </div>
+                  <div className="rounded-md border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Actividad vulnerable</p>
+                    <p className="text-sm font-semibold">{crossModuleContext.actividadVulnerable}</p>
+                  </div>
+                  <div className="rounded-md border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Periodo de revisión sugerido</p>
+                    <p className="text-sm font-semibold">{crossModuleContext.periodoRevision}</p>
+                  </div>
+                  <div className="rounded-md border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Operaciones en periodo</p>
+                    <p className="text-sm font-semibold">{crossModuleContext.totalOperaciones}</p>
+                  </div>
+                  <div className="rounded-md border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">Monto total operado</p>
+                    <p className="text-sm font-semibold">
+                      {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 2 }).format(crossModuleContext.montoOperado)}
+                    </p>
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <p className="text-xs text-muted-foreground">
+                    {crossModuleContext.ultimaActualizacion
+                      ? `Última operación detectada: ${format(crossModuleContext.ultimaActualizacion, "dd/MM/yyyy", { locale: es })}`
+                      : "Aún no hay operaciones registradas para enriquecer el informe automáticamente."}
+                  </p>
+                </CardFooter>
+              </Card>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Semáforos de control</CardTitle>
+                    <CardDescription>
+                      Indicadores automáticos de solo lectura (referencia visual, no interactiva).
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {semaforos.map((item) => {
+                      const isGreen = item.status === "verde"
+                      const isYellow = item.status === "amarillo"
+                      return (
+                        <div key={item.id} className="flex cursor-default items-center justify-between rounded-md border bg-muted/20 p-2">
+                          <span className="text-sm">{item.label}</span>
+                          <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                            <span
+                              className={`inline-flex h-3 w-3 rounded-full ${
+                              isGreen ? "bg-emerald-500" : isYellow ? "bg-amber-400" : "bg-red-500"
+                              }`}
+                              aria-label={`Semáforo ${item.status}`}
+                            />
+                            {item.status === "verde" ? "Óptimo" : item.status === "amarillo" ? "Atención" : "Crítico"}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </CardContent>
+                  <CardFooter className="text-xs text-muted-foreground">
+                    Se actualizan con información del módulo; no requieren captura manual.
+                  </CardFooter>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Lista de verificación final</CardTitle>
+                    <CardDescription>Requisitos formales CNBV previos a la remisión del informe.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <details className="rounded-md border border-dashed p-3">
+                      <summary className="cursor-pointer text-sm font-medium">Mostrar checklist completo</summary>
+                      <div className="mt-3 space-y-2">
+                        {finalChecklistItems.map((item) => (
+                          <label key={item.id} className="flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-2">
+                            <Checkbox checked={item.completed} aria-label={item.label} disabled />
+                            <span className="text-sm">{item.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </details>
+                  </CardContent>
+                  <CardFooter className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Verifica manualmente cada requisito antes de envío por SIAVAP/SITI.
+                  </CardFooter>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">2.2 Temas y Alcance de la Revisión</CardTitle>
+                  <CardDescription>
+                    Marca con ✓ los temas incluidos en el programa de trabajo y justifica exclusiones.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2 text-sm">
+                    <span>Progreso de captura de alcance</span>
+                    <span className="font-semibold">{scopeCompletion}%</span>
+                  </div>
+                  <div className="space-y-2">
+                    {SCOPE_ITEMS.map((item, index) => (
+                      <div key={item.id} className="grid gap-2 rounded-md border p-3 lg:grid-cols-[1fr_220px]">
+                        <p className="text-sm">{index + 1}. {item.label}</p>
+                        <Select value={scopeAnswers[item.id]} onValueChange={(value) => handleScopeChange(item.id, value as ScopeSelection)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecciona" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="si">✓ Sí</SelectItem>
+                            <SelectItem value="no">✗ No</SelectItem>
+                            <SelectItem value="na">N/A</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                  <Textarea
+                    placeholder="Justificación de temas excluidos (si aplica)"
+                    value={scopeExclusions}
+                    onChange={(event) => setScopeExclusions(event.target.value)}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">3. Resultados de la Revisión — Obligaciones LFPIORPI</CardTitle>
+                  <CardDescription>
+                    Evaluación por obligación con calificación, hallazgos y recomendaciones.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2 text-sm">
+                    <span>Avance de calificaciones</span>
+                    <span className="font-semibold">{reviewCompletion}%</span>
+                  </div>
+                  <Alert>
+                    <Info className="h-4 w-4" />
+                    <AlertTitle>Escala de cumplimiento</AlertTitle>
+                    <AlertDescription>
+                      Cumple · Cumple mayoritariamente · Cumple parcialmente · No cumple · No aplica.
+                    </AlertDescription>
+                  </Alert>
+
+                  {REVIEW_SECTIONS.map((section) => (
+                    <details key={section.id} className="rounded-md border border-dashed p-3">
+                      <summary className="cursor-pointer text-sm font-semibold">{section.title}</summary>
+                      <p className="mt-1 text-xs text-muted-foreground">📌 Fundamento: {section.foundation}</p>
+                      <div className="mt-3 space-y-3">
+                        {section.questions.map((question) => (
+                          <div key={question.id} className="space-y-2 rounded-md border bg-muted/20 p-3">
+                            <p className="text-sm font-medium">{question.text}</p>
+                            <p className="text-xs text-muted-foreground">Ref: {question.ref}</p>
+                            <div className="grid gap-2 lg:grid-cols-3">
+                              <Select
+                                value={reviewAnswers[question.id]?.rating || ""}
+                                onValueChange={(value) => handleReviewAnswerChange(question.id, "rating", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Calificación" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="cumple">Cumple</SelectItem>
+                                  <SelectItem value="cumple-mayor">Cumple mayoritariamente</SelectItem>
+                                  <SelectItem value="cumple-parcial">Cumple parcialmente</SelectItem>
+                                  <SelectItem value="no-cumple">No cumple</SelectItem>
+                                  <SelectItem value="no-aplica">No aplica</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                placeholder="Hallazgos (#)"
+                                value={reviewAnswers[question.id]?.findings || ""}
+                                onChange={(event) =>
+                                  handleReviewAnswerChange(question.id, "findings", event.target.value)
+                                }
+                              />
+                              <Input
+                                placeholder="Recomendaciones (#)"
+                                value={reviewAnswers[question.id]?.recommendations || ""}
+                                onChange={(event) =>
+                                  handleReviewAnswerChange(question.id, "recommendations", event.target.value)
+                                }
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                {reportHeaderFields.map((field) => (
+                  <div key={field} className="rounded-md border border-border/60 bg-muted/30 p-3">
+                    <p className="text-sm font-medium">{field}</p>
+                  </div>
+                ))}
+              </div>
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>Tip de usabilidad</AlertTitle>
+                <AlertDescription>
+                  Usa los desplegables de cada etapa para capturar solo lo necesario al inicio. Puedes detallar
+                  fundamentos legales y evidencia conforme avances en el proceso.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {auditMethodologySections.map((section) => (
+              <Card key={section.id}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <CardTitle className="text-lg">{section.title}</CardTitle>
+                    <Badge variant={methodologyProgressBySection[section.id as keyof typeof methodologyProgressBySection] >= 100 ? "default" : "secondary"}>
+                      {methodologyProgressBySection[section.id as keyof typeof methodologyProgressBySection] >= 100 ? "Completo" : "En progreso"}
+                    </Badge>
+                  </div>
+                  <CardDescription>{section.summary}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Progreso de etapa</span>
+                      <span>{methodologyProgressBySection[section.id as keyof typeof methodologyProgressBySection]}%</span>
+                    </div>
+                    <Progress value={methodologyProgressBySection[section.id as keyof typeof methodologyProgressBySection]} className="h-1.5" />
+                  </div>
+                  <details className="group rounded-md border border-dashed border-border/80 p-3">
+                    <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium">
+                      Ver puntos de control
+                      <span className="rounded-md border px-2 py-1 text-xs text-muted-foreground">
+                        Desplegar
+                      </span>
+                    </summary>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      {section.checkpoints.map((checkpoint) => (
+                        <li key={checkpoint} className="flex items-center gap-2 rounded-md bg-muted/30 px-3 py-2">
+                          {methodologyProgressBySection[section.id as keyof typeof methodologyProgressBySection] >= 100 ? (
+                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                          ) : (
+                            <CircleDashed className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          {checkpoint}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActiveTab(section.linkedTab as AuditTab)}
+                  >
+                    Completar esta etapa
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
 
         <TabsContent value="lineamientos" className="space-y-6">
           {renderQuestions("lineamientos")}
