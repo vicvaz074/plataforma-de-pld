@@ -22,7 +22,7 @@ export default function AliciaPage() {
             <Sparkles className="h-4 w-4 text-primary" />
             {aliciaT.alicia}
           </div>
-          <h1 className="mt-6 text-4xl font-semibold leading-tight md:text-5xl" style={{ fontFamily: "Futura PT Medium, sans-serif" }}>
+          <h1 className="mt-6 text-4xl font-semibold leading-tight md:text-5xl" style={{ fontFamily: "Futura Std, sans-serif" }}>
             {aliciaT.aliciaTitle}
           </h1>
           <p className="mt-4 text-lg text-slate-600">{aliciaT.aliciaDescription}</p>

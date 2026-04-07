@@ -346,7 +346,7 @@ export default function MarcoNormativoAplicablePage() {
 
   return (
     <div className="container mx-auto py-10 space-y-8">
-      <h1 className="text-3xl font-bold" style={{ fontFamily: "Futura PT Medium, sans-serif" }}>
+      <h1 className="text-3xl font-bold" style={{ fontFamily: "Futura Std, sans-serif" }}>
         {t.compiladoLeyes}
       </h1>
 

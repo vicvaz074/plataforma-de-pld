@@ -1,3 +1,4 @@
+@import url("https://fonts.cdnfonts.com/css/futura-std-4");
 @import url("https://cdn.jsdelivr.net/npm/remixicon@3.2.0/fonts/remixicon.css");
 
 @tailwind base;
@@ -6,7 +7,7 @@
 
 /* Configuración base de tipografía */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Futura Std", sans-serif;
   font-weight: 400;
 }
 
@@ -76,22 +77,22 @@ body {
 
   h1,
   .h1 {
-    @apply text-4xl md:text-5xl font-semibold;
+    @apply text-4xl md:text-5xl font-normal;
   }
 
   h2,
   .h2 {
-    @apply text-3xl md:text-4xl font-semibold;
+    @apply text-3xl md:text-4xl font-normal;
   }
 
   h3,
   .h3 {
-    @apply text-2xl md:text-3xl font-medium;
+    @apply text-2xl md:text-3xl font-normal;
   }
 
   h4,
   .h4 {
-    @apply text-xl md:text-2xl font-medium;
+    @apply text-xl md:text-2xl font-normal;
   }
 
   p,
@@ -101,6 +102,31 @@ body {
 
   * {
     @apply border-border;
+  }
+
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  input,
+  textarea,
+  select,
+  button,
+  label {
+    font-family: "Futura Std", sans-serif;
+    font-weight: 400;
+  }
+
+  .font-bold,
+  .font-semibold,
+  .font-medium,
+  .font-extrabold,
+  .font-black {
+    font-weight: 400 !important;
   }
 }
 

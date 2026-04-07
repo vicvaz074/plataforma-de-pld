@@ -39,19 +39,19 @@ export function Header() {
     <motion.header
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="fixed top-0 right-0 left-64 lg:left-72 border-b bg-white dark:bg-gray-950 z-30"
+      className="fixed top-0 right-0 left-64 lg:left-72 border-b bg-white text-black z-30"
     >
       <div className="flex h-16 items-center px-6 justify-between">
         <div className="flex items-center gap-2">
           <div className="flex items-center">
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+            <h1 className="text-lg font-normal text-black">
               Programa de Prevención en Lavado de Dinero
             </h1>
           </div>
         </div>
         <div className="flex items-center gap-4">
           <Select value={language} onValueChange={(value: "es" | "en") => setLanguage(value)}>
-            <SelectTrigger className="w-[100px]">
+            <SelectTrigger className="w-[100px] text-black">
               <Globe className="mr-2 h-4 w-4" />
               <SelectValue placeholder={language.toUpperCase()} />
             </SelectTrigger>
@@ -64,14 +64,14 @@ export function Header() {
             </SelectContent>
           </Select>
 
-          <Button variant="outline" className="gap-2 bg-transparent" onClick={() => router.push("/")}>
+          <Button variant="outline" className="gap-2 bg-transparent text-black" onClick={() => router.push("/")}>
             <LayoutDashboard className="h-4 w-4" />
             <span className="hidden md:inline-block">Inicio</span>
           </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="gap-2">
+              <Button variant="ghost" className="gap-2 text-black">
                 <User className="h-4 w-4" />
                 <span className="hidden md:inline-block">{userName || "Administrador"}</span>
                 <ChevronDown className="h-4 w-4" />
@@ -94,7 +94,7 @@ export function Header() {
               animate={{ rotate: theme === "light" ? 0 : 180 }}
               transition={{ duration: 0.3 }}
             >
-              {theme === "light" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+              {theme === "light" ? <Moon className="h-5 w-5 text-black" /> : <Sun className="h-5 w-5 text-black" />}
             </motion.div>
           </Button>
         </div>

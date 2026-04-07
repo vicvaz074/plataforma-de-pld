@@ -1,3 +1,4 @@
+@import url("https://fonts.cdnfonts.com/css/futura-std-4");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -90,5 +91,31 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: "Futura Std", sans-serif;
+    font-weight: 400;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  input,
+  textarea,
+  select,
+  button,
+  label {
+    font-family: "Futura Std", sans-serif;
+    font-weight: 400;
+  }
+
+  .font-bold,
+  .font-semibold,
+  .font-medium,
+  .font-extrabold,
+  .font-black {
+    font-weight: 400 !important;
   }
 }
