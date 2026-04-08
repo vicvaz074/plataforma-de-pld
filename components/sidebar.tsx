@@ -97,8 +97,14 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   )}
                 </Link>
 
-                {collapsed && isActive && (
-                  <span className="absolute right-[-12px] top-1/2 -translate-y-1/2 h-0 w-0 border-y-[10px] border-y-transparent border-l-[10px] border-l-white" />
+                {isActive && (
+                  <span
+                    className={`absolute top-1/2 -translate-y-1/2 h-0 w-0 border-y-transparent border-l-white ${
+                      collapsed
+                        ? "right-[-12px] border-y-[10px] border-l-[10px]"
+                        : "right-[-14px] border-y-[12px] border-l-[12px]"
+                    }`}
+                  />
                 )}
               </li>
             )
