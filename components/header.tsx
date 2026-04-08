@@ -12,7 +12,11 @@ import { motion } from "framer-motion"
 import { useState, useEffect } from "react"
 import { Moon, Sun, Globe, User, ChevronDown, LogOut, LayoutDashboard } from "lucide-react"
 
-export function Header() {
+type HeaderProps = {
+  sidebarOffset: string
+}
+
+export function Header({ sidebarOffset }: HeaderProps) {
   const { theme, setTheme } = useTheme()
   const { language, setLanguage } = useLanguage()
   const router = useRouter()
@@ -39,14 +43,13 @@ export function Header() {
     <motion.header
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="fixed top-0 right-0 left-64 lg:left-72 border-b bg-white text-black z-30"
+      className="fixed top-0 right-0 border-b bg-white text-black z-30"
+      style={{ left: sidebarOffset }}
     >
       <div className="flex h-16 items-center px-6 justify-between">
         <div className="flex items-center gap-2">
           <div className="flex items-center">
-            <h1 className="text-lg font-normal text-black">
-              Programa de Prevención en Lavado de Dinero
-            </h1>
+            <h1 className="text-lg font-normal text-black">Programa de Prevención en Lavado de Dinero</h1>
           </div>
         </div>
         <div className="flex items-center gap-4">

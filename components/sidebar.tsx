@@ -4,20 +4,7 @@ import Link from "next/link"
 import { useLanguage } from "@/lib/LanguageContext"
 import { usePathname } from "next/navigation"
 import Image from "next/image"
-import {
-  LayoutDashboard,
-  Shield,
-  FileCheck,
-  Users,
-  FileText,
-  GraduationCap,
-  Search,
-  Database,
-  Settings,
-  Sparkles,
-  Book,
-  ClipboardCheck,
-} from "lucide-react"
+import { ChevronLeft, LayoutDashboard, Shield, FileCheck, Users, FileText, GraduationCap, Search, Database, Settings, Sparkles, Book, ClipboardCheck } from "lucide-react"
 import { translations } from "@/lib/translations"
 import { aliciaTranslations } from "@/lib/alicia-translations"
 
@@ -36,60 +23,86 @@ const navigationItems = [
   { key: "alicia", icon: Sparkles, href: "/alicia" },
 ]
 
-export function Sidebar() {
+type SidebarProps = {
+  collapsed: boolean
+  onToggle: () => void
+}
+
+export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { language } = useLanguage()
   const pathname = usePathname()
   const t = translations[language]
   const aliciaT = aliciaTranslations[language]
 
   return (
-    <div className="fixed left-0 top-0 w-64 lg:w-72 h-screen bg-sidebar text-sidebar-foreground p-4 flex flex-col flex-shrink-0 z-40">
-      <div className="mb-8 h-[100px]">
-        <Link href="/" className="flex items-center gap-2">
+    <aside
+      className="fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground px-3 py-4 flex flex-col flex-shrink-0 z-40 transition-[width] duration-300"
+      style={{ width: collapsed ? "5rem" : "17.1rem" }}
+    >
+      <div className="mb-4 h-16 flex items-center justify-between gap-2">
+        <Link href="/" className="flex items-center justify-center flex-1 min-w-0">
           <Image
             src="/images/design-mode/image.png"
             alt="Davara Governance"
-            width={280}
-            height={100}
-            style={{ objectFit: "contain", filter: "brightness(0) invert(1)" }}
+            width={collapsed ? 42 : 180}
+            height={44}
+            className="h-11 w-auto object-contain transition-all duration-300"
+            style={{ filter: "brightness(0) invert(1)" }}
             priority
           />
         </Link>
+
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={collapsed ? "Expandir sidebar" : "Colapsar sidebar"}
+          className="h-9 w-9 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 flex items-center justify-center shrink-0"
+        >
+          <ChevronLeft className={`h-5 w-5 transition-transform ${collapsed ? "rotate-180" : "rotate-0"}`} />
+        </button>
       </div>
 
-      <nav className="space-y-2 flex-grow overflow-y-auto">
-        {navigationItems.map((item) => {
-          const isActive = pathname === item.href
-          const Icon = item.icon
-          const displayText = item.key === "alicia" ? aliciaT[item.key] : t[item.key]
+      <nav className="flex-1 overflow-y-auto">
+        <ul className="h-full flex flex-col justify-evenly gap-1 py-1">
+          {navigationItems.map((item) => {
+            const isActive = pathname === item.href
+            const Icon = item.icon
+            const displayText = item.key === "alicia" ? aliciaT[item.key] : t[item.key]
 
-          return (
-            <Link
-              key={item.key}
-              href={item.href}
-              className={`flex items-center gap-3 transition-colors py-3 px-3 rounded-lg text-sm ${
-                isActive ? "bg-white text-gray-900" : "text-white hover:text-white hover:bg-white/10"
-              } ${item.key === "alicia" ? "justify-center" : ""}`}
-            >
-              {item.key === "alicia" ? (
-                <Image
-                  src="/Alicia_Sin_Despachos.png"
-                  alt="Alicia"
-                  width={98}
-                  height={30}
-                  className={`object-contain transition-all ${isActive ? "brightness-0 contrast-200" : ""}`}
-                  unoptimized
-                />
-              ) : (
-                <>
-                  <Icon className="w-5 h-5 flex-shrink-0" />
-                  <span className="truncate">{displayText}</span>
-                </>
-              )}
-            </Link>
-          )
-        })}
+            return (
+              <li key={item.key} className="relative">
+                <Link
+                  href={item.href}
+                  className={`relative flex items-center transition-colors rounded-xl text-sm ${
+                    collapsed ? "justify-center px-2 py-3" : "gap-3 px-3 py-3"
+                  } ${isActive ? "bg-white text-gray-900" : "text-white hover:text-white hover:bg-white/10"}`}
+                  title={collapsed ? displayText : undefined}
+                >
+                  {item.key === "alicia" && !collapsed ? (
+                    <Image
+                      src="/Alicia_Sin_Despachos.png"
+                      alt="Alicia"
+                      width={98}
+                      height={30}
+                      className={`object-contain transition-all ${isActive ? "brightness-0 contrast-200" : ""}`}
+                      unoptimized
+                    />
+                  ) : (
+                    <>
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {!collapsed && <span className="truncate">{displayText}</span>}
+                    </>
+                  )}
+                </Link>
+
+                {collapsed && isActive && (
+                  <span className="absolute right-[-12px] top-1/2 -translate-y-1/2 h-0 w-0 border-y-[10px] border-y-transparent border-l-[10px] border-l-white" />
+                )}
+              </li>
+            )
+          })}
+        </ul>
       </nav>
-    </div>
+    </aside>
   )
 }
