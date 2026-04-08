@@ -17,10 +17,11 @@ import {
   Book,
   ClipboardCheck,
 } from "lucide-react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { translations } from "@/lib/translations"
 import { aliciaTranslations } from "@/lib/alicia-translations"
 import Image from "next/image"
+import { Button } from "@/components/ui/button"
 
 const options = [
   { name: "registroSat", icon: FileCheck, href: "/registro-sat" },
@@ -45,23 +46,88 @@ export default function Home() {
   const { language } = useLanguage()
   const t = translations[language]
   const aliciaT = aliciaTranslations[language]
-  const [userName, setUserName] = useState<string | null>(null)
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
+  const [showWelcome, setShowWelcome] = useState(false)
 
   useEffect(() => {
-    const storedUserName = localStorage.getItem("userName")
-    setUserName(storedUserName)
+    const shouldShowWelcome = localStorage.getItem("showPostLoginWelcome") === "true"
+    setShowWelcome(shouldShowWelcome)
   }, [])
 
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-screen bg-white dark:bg-[#18181b]">
+      <AnimatePresence>
+        {showWelcome && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.8, ease: "easeInOut" }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-sidebar text-white"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 1, ease: "easeOut" }}
+              className="flex flex-col items-center max-w-3xl text-center px-6"
+            >
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6, duration: 1.5 }}
+                className="mb-14"
+              >
+                <Image
+                  src="/images/logo_davaragovernance.png"
+                  alt="DavaraGovernance Logo"
+                  width={180}
+                  height={60}
+                  unoptimized
+                  priority
+                  className="opacity-90 brightness-0 invert"
+                />
+              </motion.div>
+
+              <h1 className="text-2xl md:text-3xl font-light tracking-[0.05em] mb-2 text-white/90">
+                Bienvenido a la Plataforma de Prevención en Lavado de Dinero
+              </h1>
+
+              <motion.div
+                initial={{ scaleX: 0, opacity: 0 }}
+                animate={{ scaleX: 1, opacity: 1 }}
+                transition={{ delay: 1.0, duration: 1, ease: "easeInOut" }}
+                className="w-16 h-[1px] bg-white/40 my-10 mx-auto transform origin-center"
+              />
+
+              <p className="text-base md:text-lg text-white/70 mb-16 max-w-2xl font-light leading-loose tracking-wide">
+                Gestiona, protege y audita la información de manera segura, en estricto cumplimiento normativo.
+              </p>
+
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.4, duration: 0.8 }}
+              >
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => {
+                    setShowWelcome(false)
+                    localStorage.removeItem("showPostLoginWelcome")
+                  }}
+                  className="bg-transparent border border-white/30 text-white/90 hover:bg-white hover:text-sidebar transition-all duration-500 rounded-sm px-14 py-6 text-xs tracking-[0.2em] font-light uppercase"
+                >
+                  Continuar
+                </Button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
 
       <div className="container mx-auto py-8">
-        <h1 className="text-4xl font-medium text-center mb-12" style={{ fontFamily: "Futura Std, sans-serif" }}>
-          {userName ? `${t.welcomeMessage}, ${userName}` : t.welcomeMessage}
-        </h1>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
           {options.map((option) => {
             const CardContent = (

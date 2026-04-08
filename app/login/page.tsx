@@ -50,6 +50,7 @@ export default function LoginPage() {
         localStorage.setItem("userRole", user.role || "user")
         localStorage.setItem("userName", user.name)
         localStorage.setItem("userEmail", user.email)
+        localStorage.setItem("showPostLoginWelcome", "true")
         router.push("/")
       } else {
         setAlert({ type: "error", message: t.invalidCredentials })
