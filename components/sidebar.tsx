@@ -36,7 +36,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   return (
     <aside
-      className="fixed left-0 top-0 h-screen overflow-x-hidden bg-sidebar text-sidebar-foreground px-3 pt-0 pb-4 flex flex-col flex-shrink-0 z-40 transition-[width] duration-300"
+      className="fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground px-3 pt-0 pb-4 flex flex-col flex-shrink-0 z-40 transition-[width] duration-300"
       style={{ width: collapsed ? "5rem" : "16.42rem" }}
     >
       <div className="mb-3 h-16 flex items-center justify-end">
@@ -101,8 +101,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   <span
                     className={`absolute top-1/2 -translate-y-1/2 h-0 w-0 border-y-transparent border-r-white ${
                       collapsed
-                        ? "right-0 border-y-[10px] border-r-[10px]"
-                        : "right-0 border-y-[12px] border-r-[12px]"
+                        ? "right-[-10px] border-y-[10px] border-r-[10px]"
+                        : "right-[-12px] border-y-[12px] border-r-[12px]"
                     }`}
                   />
                 )}
