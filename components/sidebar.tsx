@@ -75,9 +75,9 @@ export function Sidebar() {
                 <Image
                   src="/Alicia_Sin_Despachos.png"
                   alt="Alicia"
-                  width={130}
-                  height={40}
-                  className="object-contain"
+                  width={98}
+                  height={30}
+                  className={`object-contain transition-all ${isActive ? "brightness-0 contrast-200" : ""}`}
                   unoptimized
                 />
               ) : (
