@@ -37,7 +37,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className="fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground px-3 py-4 flex flex-col flex-shrink-0 z-40 transition-[width] duration-300"
-      style={{ width: collapsed ? "5rem" : "16.75rem" }}
+      style={{ width: collapsed ? "5rem" : "16.42rem" }}
     >
       <div className="mb-4 h-16 flex items-center justify-end">
         {!collapsed && (

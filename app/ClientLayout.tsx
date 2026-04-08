@@ -11,7 +11,7 @@ import { AppProvider } from "@/lib/AppContext"
 import { DEFAULT_USERS } from "@/lib/default-users"
 import { Toaster } from "@/components/ui/toaster"
 
-const SIDEBAR_EXPANDED_WIDTH = "16.75rem"
+const SIDEBAR_EXPANDED_WIDTH = "16.42rem"
 const SIDEBAR_COLLAPSED_WIDTH = "5rem"
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
