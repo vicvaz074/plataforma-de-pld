@@ -37,20 +37,22 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className="fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground px-3 py-4 flex flex-col flex-shrink-0 z-40 transition-[width] duration-300"
-      style={{ width: collapsed ? "5rem" : "17.1rem" }}
+      style={{ width: collapsed ? "5rem" : "16.75rem" }}
     >
-      <div className="mb-4 h-16 flex items-center justify-between gap-2">
-        <Link href="/" className="flex items-center justify-center flex-1 min-w-0">
-          <Image
-            src="/images/design-mode/image.png"
-            alt="Davara Governance"
-            width={collapsed ? 42 : 180}
-            height={44}
-            className="h-11 w-auto object-contain transition-all duration-300"
-            style={{ filter: "brightness(0) invert(1)" }}
-            priority
-          />
-        </Link>
+      <div className="mb-4 h-16 flex items-center justify-end">
+        {!collapsed && (
+          <Link href="/" className="flex items-center justify-center flex-1 min-w-0 mr-2">
+            <Image
+              src="/images/design-mode/image.png"
+              alt="Davara Governance"
+              width={180}
+              height={44}
+              className="h-11 w-auto object-contain"
+              style={{ filter: "brightness(0) invert(1)" }}
+              priority
+            />
+          </Link>
+        )}
 
         <button
           type="button"
@@ -74,16 +76,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 <Link
                   href={item.href}
                   className={`relative flex items-center transition-colors rounded-xl text-sm ${
-                    collapsed ? "justify-center px-2 py-3" : "gap-3 px-3 py-3"
+                    item.key === "alicia" ? "justify-center px-2 py-3" : collapsed ? "justify-center px-2 py-3" : "gap-3 px-3 py-3"
                   } ${isActive ? "bg-white text-gray-900" : "text-white hover:text-white hover:bg-white/10"}`}
                   title={collapsed ? displayText : undefined}
                 >
-                  {item.key === "alicia" && !collapsed ? (
+                  {item.key === "alicia" ? (
                     <Image
                       src="/Alicia_Sin_Despachos.png"
                       alt="Alicia"
-                      width={98}
-                      height={30}
+                      width={collapsed ? 74 : 98}
+                      height={collapsed ? 22 : 30}
                       className={`object-contain transition-all ${isActive ? "brightness-0 contrast-200" : ""}`}
                       unoptimized
                     />

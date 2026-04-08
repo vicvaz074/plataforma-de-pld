@@ -11,12 +11,14 @@ import { sortAlphabetically } from "@/lib/utils"
 import { motion } from "framer-motion"
 import { useState, useEffect } from "react"
 import { Moon, Sun, Globe, User, ChevronDown, LogOut, LayoutDashboard } from "lucide-react"
+import Image from "next/image"
 
 type HeaderProps = {
   sidebarOffset: string
+  showSidebarLogo: boolean
 }
 
-export function Header({ sidebarOffset }: HeaderProps) {
+export function Header({ sidebarOffset, showSidebarLogo }: HeaderProps) {
   const { theme, setTheme } = useTheme()
   const { language, setLanguage } = useLanguage()
   const router = useRouter()
@@ -48,7 +50,17 @@ export function Header({ sidebarOffset }: HeaderProps) {
     >
       <div className="flex h-16 items-center px-6 justify-between">
         <div className="flex items-center gap-2">
-          <div className="flex items-center">
+          <div className="flex items-center gap-3">
+            {showSidebarLogo && (
+              <Image
+                src="/images/design-mode/image.png"
+                alt="Davara Governance"
+                width={140}
+                height={36}
+                className="h-9 w-auto object-contain"
+                priority
+              />
+            )}
             <h1 className="text-lg font-normal text-black">Programa de Prevención en Lavado de Dinero</h1>
           </div>
         </div>

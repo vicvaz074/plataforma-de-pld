@@ -11,7 +11,7 @@ import { AppProvider } from "@/lib/AppContext"
 import { DEFAULT_USERS } from "@/lib/default-users"
 import { Toaster } from "@/components/ui/toaster"
 
-const SIDEBAR_EXPANDED_WIDTH = "17.1rem"
+const SIDEBAR_EXPANDED_WIDTH = "16.75rem"
 const SIDEBAR_COLLAPSED_WIDTH = "5rem"
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -76,7 +76,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             <div className="flex min-h-screen">
               {isAuthenticated && <Sidebar collapsed={isSidebarCollapsed} onToggle={handleSidebarToggle} />}
               <div className="flex-1 flex flex-col transition-[margin] duration-300" style={{ marginLeft: isAuthenticated ? sidebarOffset : 0 }}>
-                {isAuthenticated && <Header sidebarOffset={sidebarOffset} />}
+                {isAuthenticated && <Header sidebarOffset={sidebarOffset} showSidebarLogo={isSidebarCollapsed} />}
                 <main className={`flex-1 p-8 bg-background ${isAuthenticated ? "mt-16" : ""}`}>{children}</main>
               </div>
             </div>
