@@ -69,10 +69,23 @@ export function Sidebar() {
               href={item.href}
               className={`flex items-center gap-3 transition-colors py-3 px-3 rounded-lg text-sm ${
                 isActive ? "bg-white text-gray-900" : "text-white hover:text-white hover:bg-white/10"
-              }`}
+              } ${item.key === "alicia" ? "justify-center" : ""}`}
             >
-              <Icon className="w-5 h-5 flex-shrink-0" />
-              <span className="truncate">{displayText}</span>
+              {item.key === "alicia" ? (
+                <Image
+                  src="/Alicia_Sin_Despachos.png"
+                  alt="Alicia"
+                  width={130}
+                  height={40}
+                  className="object-contain"
+                  unoptimized
+                />
+              ) : (
+                <>
+                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  <span className="truncate">{displayText}</span>
+                </>
+              )}
             </Link>
           )
         })}

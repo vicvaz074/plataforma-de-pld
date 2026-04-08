@@ -91,7 +91,16 @@ export default function Home() {
                   }`}
                   style={{ fontFamily: "Futura Std, sans-serif" }}
                 >
-                  {option.name === "alicia" ? aliciaT.alicia : t[option.name]}
+                  {option.name === "alicia" ? (
+                    <Image
+                      src="/Alicia_Sin_Despachos.png"
+                      alt="Alicia"
+                      width={130}
+                      height={40}
+                      className="object-contain relative z-10"
+                      unoptimized
+                    />
+                  ) : t[option.name]}
                 </span>
                 <motion.div
                   className="absolute inset-0 bg-white bg-opacity-90 p-4 flex items-center justify-center text-sm text-gray-700 text-center"
