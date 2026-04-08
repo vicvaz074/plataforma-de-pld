@@ -9,6 +9,7 @@
 body {
   font-family: "Futura Std", sans-serif;
   font-weight: 400;
+  overflow-x: hidden;
 }
 
 @layer base {
