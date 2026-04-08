@@ -39,7 +39,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       className="fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground px-3 pt-0 pb-4 flex flex-col flex-shrink-0 z-40 transition-[width] duration-300"
       style={{ width: collapsed ? "5rem" : "16.42rem" }}
     >
-      <div className="mb-3 h-16 flex items-center justify-end border-b border-white/20">
+      <div className="mb-3 h-16 flex items-center justify-end">
         {!collapsed && (
           <Link href="/" className="flex items-center justify-center flex-1 min-w-0 mr-2 h-full">
             <Image
