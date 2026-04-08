@@ -36,16 +36,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   return (
     <aside
-      className="fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground px-3 py-4 flex flex-col flex-shrink-0 z-40 transition-[width] duration-300"
+      className="fixed left-0 top-0 h-screen bg-sidebar text-sidebar-foreground px-3 pt-0 pb-4 flex flex-col flex-shrink-0 z-40 transition-[width] duration-300"
       style={{ width: collapsed ? "5rem" : "16.42rem" }}
     >
-      <div className="mb-4 h-16 flex items-center justify-end">
+      <div className="mb-3 h-16 flex items-center justify-end border-b border-white/20">
         {!collapsed && (
-          <Link href="/" className="flex items-center justify-center flex-1 min-w-0 mr-2">
+          <Link href="/" className="flex items-center justify-center flex-1 min-w-0 mr-2 h-full">
             <Image
               src="/images/design-mode/image.png"
               alt="Davara Governance"
-              width={180}
+              width={170}
               height={44}
               className="h-11 w-auto object-contain"
               style={{ filter: "brightness(0) invert(1)" }}
@@ -92,7 +92,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   ) : (
                     <>
                       <Icon className="w-5 h-5 flex-shrink-0" />
-                      {!collapsed && <span className="truncate">{displayText}</span>}
+                      {!collapsed && <span className="text-[13px] leading-tight whitespace-normal">{displayText}</span>}
                     </>
                   )}
                 </Link>
