@@ -17,8 +17,8 @@
     --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
-    /* Cambiando color primario a #F7941C (33 93% 54%) */
-    --primary: 33 93% 54%;
+    /* Cambiando color primario a #F7941D (32.75 93.16% 54.12%) */
+    --primary: 32.75 93.16% 54.12%;
     --primary-foreground: 0 0% 98%;
     --secondary: 0 0% 96.1%;
     --secondary-foreground: 0 0% 9%;
@@ -39,8 +39,8 @@
     --radius: 0.5rem;
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
-    /* Cambiando color primario del sidebar a #F7941C (33 93% 54%) */
-    --sidebar-primary: 33 93% 54%;
+    /* Cambiando color primario del sidebar a #F7941D (32.75 93.16% 54.12%) */
+    --sidebar-primary: 32.75 93.16% 54.12%;
     --sidebar-primary-foreground: 0 0% 98%;
     --sidebar-accent: 240 4.8% 95.9%;
     --sidebar-accent-foreground: 240 5.9% 10%;
@@ -54,8 +54,8 @@
     --card-foreground: 0 0% 98%;
     --popover: 0 0% 3.9%;
     --popover-foreground: 0 0% 98%;
-    /* Cambiando color primario en modo oscuro a #F7941C (33 93% 54%) */
-    --primary: 33 93% 54%;
+    /* Cambiando color primario en modo oscuro a #F7941D (32.75 93.16% 54.12%) */
+    --primary: 32.75 93.16% 54.12%;
     --primary-foreground: 0 0% 9%;
     --secondary: 0 0% 14.9%;
     --secondary-foreground: 0 0% 98%;
@@ -75,8 +75,8 @@
     --chart-5: 340 75% 55%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
-    /* Cambiando color primario del sidebar en modo oscuro a #F7941C (33 93% 54%) */
-    --sidebar-primary: 33 93% 54%;
+    /* Cambiando color primario del sidebar en modo oscuro a #F7941D (32.75 93.16% 54.12%) */
+    --sidebar-primary: 32.75 93.16% 54.12%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 3.7% 15.9%;
     --sidebar-accent-foreground: 240 4.8% 95.9%;

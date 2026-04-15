@@ -24,8 +24,8 @@ body {
     --card-foreground: 222.2 84% 4.9%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    /* Cambiando color primario a #F7941C (33 93% 54%) */
-    --primary: 33 93% 54%;
+    /* Cambiando color primario a #F7941D (32.75 93.16% 54.12%) */
+    --primary: 32.75 93.16% 54.12%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
@@ -35,8 +35,8 @@ body {
     --destructive-foreground: 210 40% 98%;
     --ring: 215 20.2% 65.1%;
     --radius: 0.5rem;
-    /* Cambiando color del sidebar a #F7941C (33 93% 54%) */
-    --sidebar: 33 93% 54%;
+    /* Cambiando color del sidebar a #F7941D (32.75 93.16% 54.12%) */
+    --sidebar: 32.75 93.16% 54.12%;
     --sidebar-foreground: 210 40% 98%;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
@@ -56,8 +56,8 @@ body {
     --card-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    /* Cambiando color primario en modo oscuro a #F7941C (33 93% 54%) */
-    --primary: 33 93% 54%;
+    /* Cambiando color primario en modo oscuro a #F7941D (32.75 93.16% 54.12%) */
+    --primary: 32.75 93.16% 54.12%;
     --primary-foreground: 222.2 47.4% 11.2%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
@@ -66,8 +66,8 @@ body {
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 85.7% 97.3%;
     --ring: 217.2 32.6% 17.5%;
-    /* Cambiando color del sidebar en modo oscuro a #F7941C (33 93% 54%) */
-    --sidebar: 33 93% 54%;
+    /* Cambiando color del sidebar en modo oscuro a #F7941D (32.75 93.16% 54.12%) */
+    --sidebar: 32.75 93.16% 54.12%;
     --sidebar-foreground: 210 40% 98%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
