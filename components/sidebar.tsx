@@ -43,7 +43,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {!collapsed && (
           <Link href="/" className="flex items-center justify-center flex-1 min-w-0 mr-2 h-full">
             <Image
-              src="/images/design-mode/image.png"
+              src="/logo-davara-governance/logo-davara-governance-white.png"
               alt="Davara Governance"
               width={170}
               height={44}

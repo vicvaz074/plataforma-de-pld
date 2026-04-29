@@ -87,8 +87,8 @@ export default function LoginPage() {
             <Image
               src={
                 theme === "dark"
-                  ? "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/logo_davara-KcaOVhCtK3W2FgCpstE1O8Fhwhn96V.png"
-                  : "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-kjXWUOCHXzNyL5405gToF9AVq2ODJI.png"
+                  ? "/logo-davara-governance/logo-davara-governance-white.png"
+                  : "/logo-davara-governance/logo-davara-governance-black.png"
               }
               alt="Davara Abogados"
               width={theme === "dark" ? 180 : 252}

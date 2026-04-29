@@ -53,7 +53,7 @@ export function Header({ sidebarOffset, showSidebarLogo }: HeaderProps) {
           <div className="flex items-center gap-3">
             {showSidebarLogo && (
               <Image
-                src="/images/design-mode/image.png"
+                src="/logo-davara-governance/logo-davara-governance-black.png"
                 alt="Davara Governance"
                 width={140}
                 height={36}

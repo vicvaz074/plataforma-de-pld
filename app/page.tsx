@@ -78,7 +78,7 @@ export default function Home() {
                 className="mb-14"
               >
                 <Image
-                  src="/images/design-mode/image.png"
+                  src="/logo-davara-governance/logo-davara-governance-white.png"
                   alt="DavaraGovernance Logo"
                   width={180}
                   height={60}
