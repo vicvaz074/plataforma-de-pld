@@ -1625,6 +1625,8 @@ function KycExpedienteContent() {
 
   return (
     <div className="space-y-6">
+      {tipoExpediente === "persona_moral" && (
+        <>
       <Card className="border-slate-200">
         <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
@@ -4313,6 +4315,7 @@ function KycExpedienteContent() {
           ))}
         </CardContent>
       </Card>
+        </>
       )}
     </div>
   )

@@ -62,6 +62,11 @@ import { CLIENTE_TIPOS, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
 import { CIUDADES_MEXICO, findCodigoPostalInfo } from "@/lib/data/codigos-postales"
 import { demoFraccionXV } from "@/lib/demo/fraccion-xv"
 import { PAISES, findPaisByCodigo, findPaisByNombre } from "@/lib/data/paises"
+import {
+  evaluarOperacionVulnerable,
+  matchPepCargo,
+  type PepScreeningResult,
+} from "@/lib/pld"
 
 const MONTHS = [
   "Enero",
@@ -253,18 +258,28 @@ const INSTRUMENTO_FORM_DEFAULT: InstrumentoPublicoFormState = {
 const STEPS = [
   {
     id: 0,
-    titulo: "Actividad y periodo",
-    descripcion: "Selecciona la fracción aplicable y el mes de análisis (UMAs oficiales desde septiembre 2020).",
+    titulo: "Contexto",
+    descripcion: "Actividad vulnerable, sujeto obligado, UMA y periodo.",
   },
   {
     id: 1,
-    titulo: "Cliente y operación",
-    descripcion: "Captura datos del cliente, clasifica el tipo y determina el monto a validar contra el umbral.",
+    titulo: "Cliente",
+    descripcion: "Expediente, RFC, relación y datos base.",
   },
   {
     id: 2,
-    titulo: "Resultado y obligaciones",
-    descripcion: "Visualiza automáticamente las obligaciones aplicables, genera avisos o informe 27 Bis.",
+    titulo: "Perfil",
+    descripcion: "Beneficiario controlador, PEP y señales de riesgo.",
+  },
+  {
+    id: 3,
+    titulo: "Operación",
+    descripcion: "Monto, pago, acumulación SAT y evidencia.",
+  },
+  {
+    id: 4,
+    titulo: "Resultado",
+    descripcion: "Obligaciones, aviso, informe 27 Bis y trazabilidad.",
   },
 ]
 
@@ -286,7 +301,7 @@ const CONTROLES_ARTICULO_17: Record<UmbralStatus, string[]> = {
     "Aplicar medidas reforzadas de debida diligencia y validar beneficiario final.",
   ],
   aviso: [
-    "Generar aviso ante la Unidad de Inteligencia Financiera dentro de los 17 días hábiles.",
+    "Preparar aviso ante la Secretaría a más tardar el día 17 del mes inmediato siguiente.",
     "Adjuntar soportes documentales y conservar acuse de envío o informe 27 Bis.",
     "Suspender el cómputo de acumulación hasta confirmar atención del aviso.",
   ],
@@ -304,7 +319,7 @@ const INFO_MODAL_CONTENT: Record<InfoModalKey, { title: string; body: string[] }
     title: "¿Cuándo se genera el umbral de aviso?",
     body: [
       "Quienes realizan Actividades Vulnerables deben presentar avisos ante la Secretaría de Hacienda y Crédito Público cuando las operaciones de sus clientes superan los montos que establece la LFPIORPI.",
-      "En algunas fracciones el aviso procede por la simple realización de la actividad, mientras que en otras se activa cuando el monto acumulado rebasa el umbral correspondiente. El aviso debe enviarse dentro de los 17 días posteriores, incluyendo detalle del acto, participantes y soportes documentales.",
+      "En algunas fracciones el aviso procede por la simple realización de la actividad, mientras que en otras se activa cuando el monto individual o acumulado rebasa el umbral correspondiente. El aviso ordinario debe presentarse a más tardar el día 17 del mes inmediato siguiente, incluyendo detalle del acto, participantes y soportes documentales.",
     ],
   },
   "uma-validacion": {
@@ -508,6 +523,7 @@ interface ExpedienteDetalle {
 }
 
 interface OperacionCliente {
+  schemaVersion?: number
   id: string
   actividadKey: string
   actividadNombre: string
@@ -552,6 +568,9 @@ interface OperacionCliente {
   instrumento?: InstrumentoPublicoOperacion | null
   figuraCliente?: string
   figuraSujetoObligado?: string
+  pepCargo?: string
+  pepDependencia?: string
+  pepScreening?: PepScreeningResult
 }
 
 interface ClienteGuardado {
@@ -702,7 +721,7 @@ function buildChecklist(
 
 function obtenerAlertaPorStatus(status: UmbralStatus) {
   if (status === "aviso") {
-    return "Supera el umbral de aviso. Preparar aviso en 17 días y suspender acumulación."
+    return "Supera el umbral de aviso. Preparar aviso para el día 17 del mes inmediato siguiente y cerrar la ventana de acumulación."
   }
   if (status === "identificacion") {
     return "Supera el umbral de identificación. Integrar expediente y vigilar acumulación por 6 meses."
@@ -711,12 +730,9 @@ function obtenerAlertaPorStatus(status: UmbralStatus) {
 }
 
 function recalcularOperaciones(lista: OperacionCliente[]) {
-  const acumulados = new Map<string, number>()
+  const procesadas: OperacionCliente[] = []
 
   return lista.map((operacion) => {
-    const key = `${operacion.actividadKey}-${operacion.periodo}-${operacion.rfc}`
-    const acumuladoPrevio = acumulados.get(key) ?? 0
-
     if (operacion.avisoPresentado) {
       const statusPresentado: UmbralStatus =
         operacion.monto >= operacion.avisoUmbralPesos
@@ -725,7 +741,7 @@ function recalcularOperaciones(lista: OperacionCliente[]) {
             ? "identificacion"
             : "sin-obligacion"
 
-      acumulados.set(key, 0)
+      procesadas.push(operacion)
 
       return {
         ...operacion,
@@ -736,16 +752,33 @@ function recalcularOperaciones(lista: OperacionCliente[]) {
       }
     }
 
-    const nuevoAcumulado = acumuladoPrevio + operacion.monto
-
     let status: UmbralStatus = "sin-obligacion"
-    if (nuevoAcumulado >= operacion.avisoUmbralPesos) {
-      status = "aviso"
-    } else if (nuevoAcumulado >= operacion.identificacionUmbralPesos) {
-      status = "identificacion"
+    let nuevoAcumulado = operacion.monto
+    try {
+      const resultado = evaluarOperacionVulnerable({
+        actividadKey: operacion.actividadKey,
+        clienteKey: operacion.rfc.toUpperCase(),
+        fechaOperacion: operacion.fechaOperacion,
+        montoMxn: operacion.monto,
+        operacionesHistoricas: procesadas
+          .filter((item) => !item.avisoPresentado)
+          .map((item) => ({
+            id: item.id,
+            actividadKey: item.actividadKey,
+            clienteKey: item.rfc.toUpperCase(),
+            fechaOperacion: item.fechaOperacion,
+            montoMxn: item.monto,
+          })),
+      })
+      status = resultado.status
+      nuevoAcumulado = resultado.acumulacion.montoAcumuladoMxn
+    } catch (_error) {
+      if (operacion.monto >= operacion.avisoUmbralPesos) {
+        status = "aviso"
+      } else if (operacion.monto >= operacion.identificacionUmbralPesos) {
+        status = "identificacion"
+      }
     }
-
-    acumulados.set(key, nuevoAcumulado)
 
     const alertaCalculada = obtenerAlertaPorStatus(status)
     let alertaResuelta = operacion.alertaResuelta
@@ -756,13 +789,15 @@ function recalcularOperaciones(lista: OperacionCliente[]) {
       alertaResuelta = false
     }
 
-    return {
+    const recalculada = {
       ...operacion,
       acumuladoCliente: nuevoAcumulado,
       umbralStatus: status,
       alerta: alertaCalculada,
       alertaResuelta,
     }
+    procesadas.push(recalculada)
+    return recalculada
   })
 }
 
@@ -1402,6 +1437,9 @@ export default function ActividadesVulnerablesPage() {
   const [sujetoConsulta, setSujetoConsulta] = useState<string>("")
   const [relacionNegocios, setRelacionNegocios] = useState(false)
   const [relacionNegociosOpen, setRelacionNegociosOpen] = useState(false)
+  const [pepCargoCliente, setPepCargoCliente] = useState("")
+  const [pepDependenciaCliente, setPepDependenciaCliente] = useState("")
+  const [pepRelacionCliente, setPepRelacionCliente] = useState("cliente")
   const [sujetoObligadoOperacion, setSujetoObligadoOperacion] = useState<string>("")
   const [clienteOperacionSeleccionado, setClienteOperacionSeleccionado] = useState<string>("")
   const [actividadOperacionSeleccionada, setActividadOperacionSeleccionada] = useState<string>("")
@@ -2154,40 +2192,65 @@ export default function ActividadesVulnerablesPage() {
 
   const operacionesRelacionadas = useMemo(() => {
     if (!actividadSeleccionada) return []
-    const periodo = buildPeriodo(anioSeleccionado, mesSeleccionado)
     return operaciones.filter(
       (operacion) =>
         operacion.actividadKey === actividadSeleccionada.key &&
-        operacion.periodo === periodo &&
         operacion.rfc.toUpperCase() === rfc.trim().toUpperCase() &&
         !operacion.avisoPresentado,
     )
-  }, [actividadSeleccionada, anioSeleccionado, mesSeleccionado, operaciones, rfc])
+  }, [actividadSeleccionada, operaciones, rfc])
+
+  const pepScreeningCliente = useMemo(() => {
+    if (!pepCargoCliente.trim() && !pepDependenciaCliente.trim()) return null
+
+    return matchPepCargo({
+      nombre: clienteNombre,
+      cargo: pepCargoCliente,
+      dependencia: pepDependenciaCliente,
+      relacion: pepRelacionCliente as "cliente" | "beneficiario-controlador" | "representante" | "familiar" | "socio" | "otro",
+    })
+  }, [clienteNombre, pepCargoCliente, pepDependenciaCliente, pepRelacionCliente])
 
   const evaluacionActual = useMemo(() => {
     if (!actividadSeleccionada || !umaSeleccionada || !umbralPesos) return null
     const monto = Number(montoOperacion)
     if (!monto || Number.isNaN(monto) || monto <= 0) return null
-    const acumuladoPrevio = operacionesRelacionadas.reduce((acc, operacion) => acc + operacion.monto, 0)
-    const acumulado = acumuladoPrevio + monto
-    let status: UmbralStatus = "sin-obligacion"
-
-    if (acumulado >= umbralPesos.aviso) {
-      status = "aviso"
-    } else if (acumulado >= umbralPesos.identificacion) {
-      status = "identificacion"
-    }
-
-    const alerta = obtenerAlertaPorStatus(status)
+    const resultado = evaluarOperacionVulnerable({
+      actividadKey: actividadSeleccionada.key,
+      clienteKey: rfc.trim().toUpperCase(),
+      fechaOperacion,
+      montoMxn: monto,
+      operacionesHistoricas: operacionesRelacionadas.map((operacion) => ({
+        id: operacion.id,
+        actividadKey: operacion.actividadKey,
+        clienteKey: operacion.rfc.toUpperCase(),
+        fechaOperacion: operacion.fechaOperacion,
+        montoMxn: operacion.monto,
+      })),
+    })
+    const alerta = obtenerAlertaPorStatus(resultado.status)
 
     return {
-      status,
+      status: resultado.status,
       alerta,
-      acumulado,
+      acumulado: resultado.acumulacion.montoAcumuladoMxn,
       monto,
       periodo: buildPeriodo(anioSeleccionado, mesSeleccionado),
+      fechaLimiteAviso: resultado.fechaLimiteAviso,
+      operacionesConsideradas: resultado.acumulacion.operacionesConsideradas.length,
+      obligaciones: resultado.obligaciones,
     }
-  }, [actividadSeleccionada, umaSeleccionada, umbralPesos, montoOperacion, operacionesRelacionadas, anioSeleccionado, mesSeleccionado])
+  }, [
+    actividadSeleccionada,
+    umaSeleccionada,
+    umbralPesos,
+    montoOperacion,
+    operacionesRelacionadas,
+    anioSeleccionado,
+    mesSeleccionado,
+    fechaOperacion,
+    rfc,
+  ])
 
   const controlesEvaluacion = useMemo(() => {
     if (!evaluacionActual) return []
@@ -2374,7 +2437,7 @@ const pasoValido = useMemo(() => {
   if (pasoActual === 0) {
     return Boolean(actividadKey && umaSeleccionada)
   }
-  if (pasoActual === 1) {
+  if (pasoActual === 1 || pasoActual === 2 || pasoActual === 3) {
     const baseCompleto =
       Boolean(clienteNombre.trim()) &&
       Boolean(rfc.trim()) &&
@@ -2413,7 +2476,7 @@ const pasoValido = useMemo(() => {
 
     return true
   }
-  if (pasoActual === 2) {
+  if (pasoActual === 4) {
     return Boolean(evaluacionActual)
   }
   return false
@@ -2445,6 +2508,9 @@ const limpiarClienteSeleccionado = () => {
   setClienteNombre("")
   setRfc("")
   setDetalleTipoCliente("")
+  setPepCargoCliente("")
+  setPepDependenciaCliente("")
+  setPepRelacionCliente("cliente")
 }
 
 const limpiarFormulario = () => {
@@ -2771,29 +2837,13 @@ const agregarOperacion = () => {
     }
   }
 
-  const operacionesPrevias = operaciones.filter(
-    (operacion) =>
-      operacion.actividadKey === actividadSeleccionada.key &&
-      operacion.periodo === periodo &&
-      operacion.rfc.toUpperCase() === rfc.trim().toUpperCase() &&
-      !operacion.avisoPresentado,
-  )
-
-  const acumuladoPrevio = operacionesPrevias.reduce((acc, operacion) => acc + operacion.monto, 0)
-  const acumuladoCliente = acumuladoPrevio + monto
-
-  let status: UmbralStatus = "sin-obligacion"
-
-  if (acumuladoCliente >= umbralPesos.aviso) {
-    status = "aviso"
-  } else if (acumuladoCliente >= umbralPesos.identificacion) {
-    status = "identificacion"
-  }
-
+  const status: UmbralStatus = evaluacionActual?.status ?? "sin-obligacion"
+  const acumuladoCliente = evaluacionActual?.acumulado ?? monto
   const alerta = obtenerAlertaPorStatus(status)
   const omitirToast = demoCargaRef.current
 
   const nuevaOperacion: OperacionCliente = {
+    schemaVersion: 2,
     id: crypto.randomUUID(),
     actividadKey: actividadSeleccionada.key,
     actividadNombre: `${actividadSeleccionada.fraccion} – ${actividadSeleccionada.nombre}`,
@@ -2841,6 +2891,9 @@ const agregarOperacion = () => {
     instrumento: instrumentoOperacion,
     figuraCliente: esActividadInmuebles ? figuraClienteInmueble : undefined,
     figuraSujetoObligado: esActividadInmuebles ? figuraSujetoObligadoInmueble : undefined,
+    pepCargo: pepCargoCliente.trim() || undefined,
+    pepDependencia: pepDependenciaCliente.trim() || undefined,
+    pepScreening: pepScreeningCliente ?? undefined,
   }
 
   actualizarOperaciones((prev) => [...prev, nuevaOperacion])
@@ -3635,7 +3688,7 @@ const cambiarMesCalendario = (delta: number) => {
                 <div className="rounded-xl border bg-rose-50 p-4 text-center">
                   <p className="text-xs font-semibold uppercase text-rose-600">Aviso SAT</p>
                   <p className="mt-2 text-2xl font-bold text-rose-700">{resumenUmbrales.aviso}</p>
-                  <p className="text-xs text-muted-foreground">Aviso en 17 días o informe 27 Bis.</p>
+                  <p className="text-xs text-muted-foreground">Aviso al día 17 del mes siguiente o informe 27 Bis.</p>
                 </div>
               </CardContent>
             </Card>
@@ -5466,10 +5519,10 @@ const cambiarMesCalendario = (delta: number) => {
                       <div className="space-y-2 text-xs text-slate-600">
                         <p>
                           {evaluacionActual.status === "sin-obligacion"
-                            ? "La operación no supera umbrales, monitorear acumulado mensual."
+                            ? "La operación no supera umbrales, monitorear acumulado por cliente y ventana SAT."
                             : evaluacionActual.status === "identificacion"
                               ? "Integra expediente completo, valida listas y conserva evidencia."
-                              : "Prepara aviso ante el SAT o informe 27 Bis según el grupo empresarial."}
+                              : `Prepara aviso ante el SAT${evaluacionActual.fechaLimiteAviso ? ` antes del ${formatDateDisplay(evaluacionActual.fechaLimiteAviso)}` : ""} o informe 27 Bis según el grupo empresarial.`}
                         </p>
                         <Button
                           size="sm"
@@ -5585,7 +5638,153 @@ const cambiarMesCalendario = (delta: number) => {
             <Card className="border-slate-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <PlayCircle className="h-5 w-5 text-slate-600" /> Paso 3. Resultado del umbral y obligaciones aplicables
+                  <ShieldAlert className="h-5 w-5 text-slate-600" /> Paso 3. Perfil transaccional, BC y PEP
+                </CardTitle>
+                <CardDescription>
+                  Documenta señales mínimas de riesgo antes de confirmar la operación. La validación PEP se basa en cargos públicos SHCP/UIF y requiere revisión humana.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>Cargo público declarado o detectado</Label>
+                    <Input
+                      value={pepCargoCliente}
+                      onChange={(event) => setPepCargoCliente(event.target.value)}
+                      placeholder="Ej. Director General"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Dependencia o entidad pública</Label>
+                    <Input
+                      value={pepDependenciaCliente}
+                      onChange={(event) => setPepDependenciaCliente(event.target.value)}
+                      placeholder="Ej. Secretaría de Comunicaciones"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Relación con la operación</Label>
+                    <Select value={pepRelacionCliente} onValueChange={setPepRelacionCliente}>
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Selecciona relación" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cliente">Cliente o usuario</SelectItem>
+                        <SelectItem value="beneficiario-controlador">Beneficiario controlador</SelectItem>
+                        <SelectItem value="representante">Representante</SelectItem>
+                        <SelectItem value="familiar">Familiar</SelectItem>
+                        <SelectItem value="socio">Socio o asociado</SelectItem>
+                        <SelectItem value="otro">Otro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded border bg-slate-50 p-4 text-sm text-slate-700">
+                    <p className="font-semibold">Perfil declarado</p>
+                    <dl className="mt-3 space-y-2 text-xs">
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-slate-500">Cliente</dt>
+                        <dd className="text-right font-medium">{clienteNombre || "Sin capturar"}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-slate-500">Tipo</dt>
+                        <dd className="text-right font-medium">{formatTipoClienteLabel(tipoCliente, detalleTipoCliente)}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-slate-500">Relación de negocios</dt>
+                        <dd className="text-right font-medium">{relacionNegocios ? "Sí" : "No documentada"}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-slate-500">Mismo grupo</dt>
+                        <dd className="text-right font-medium">{mismoGrupo === "si" ? "Sí" : "No"}</dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <div className="rounded border bg-white p-4 text-sm text-slate-700">
+                    <p className="font-semibold">Resultado PEP asistido</p>
+                    {pepScreeningCliente ? (
+                      <div className="mt-3 space-y-2">
+                        <Badge
+                          variant="outline"
+                          className={
+                            pepScreeningCliente.status === "coincidencia-cargo"
+                              ? "border-rose-200 bg-rose-50 text-rose-700"
+                              : pepScreeningCliente.status === "posible-pep"
+                                ? "border-amber-200 bg-amber-50 text-amber-700"
+                                : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          }
+                        >
+                          {pepScreeningCliente.status}
+                        </Badge>
+                        <p className="text-xs text-muted-foreground">{pepScreeningCliente.note}</p>
+                        {pepScreeningCliente.matches.slice(0, 3).map((match) => (
+                          <div key={`${match.dependencia}-${match.cargo}`} className="rounded border bg-slate-50 p-2 text-xs">
+                            <p className="font-semibold">{match.cargo}</p>
+                            <p>{match.dependencia}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Sin cargo capturado. Conserva la declaración PEP del cliente o beneficiario controlador como evidencia.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {pasoActual === 3 && (
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-slate-600" /> Paso 4. Operación, acumulación y obligación
+                </CardTitle>
+                <CardDescription>
+                  Revisa el cálculo con ventana de acumulación SAT de hasta seis meses antes de guardar.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-3">
+                <div className="rounded border bg-white p-4 text-sm">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Monto actual</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-800">
+                    {montoOperacion ? formatCurrency(Number(montoOperacion), moneda === "OTRA" ? monedaPersonalizadaCodigo || "MXN" : moneda) : "$0.00"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{tipoOperacion || "Tipo de operación pendiente"}</p>
+                </div>
+                <div className="rounded border bg-white p-4 text-sm">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Acumulación SAT</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-800">
+                    {evaluacionActual ? formatCurrency(evaluacionActual.acumulado) : "$0.00"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {evaluacionActual?.operacionesConsideradas ?? 0} operación(es) consideradas en seis meses.
+                  </p>
+                </div>
+                <div className="rounded border bg-white p-4 text-sm">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Semáforo</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-800">
+                    {evaluacionActual ? getStatusLabel(evaluacionActual.status) : "Sin evaluación"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {evaluacionActual?.fechaLimiteAviso
+                      ? `Aviso ordinario: ${formatDateDisplay(evaluacionActual.fechaLimiteAviso)}`
+                      : "Sin fecha de aviso ordinario."}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {pasoActual === 4 && (
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PlayCircle className="h-5 w-5 text-slate-600" /> Paso 5. Resultado del umbral y obligaciones aplicables
                 </CardTitle>
                 <CardDescription>
                   Confirma el resultado de la evaluación, genera avisos preliminares y exporta XML para revisión interna.

@@ -79,8 +79,8 @@ export const UMA_PERIODS: UmaPeriod[] = [
     validFrom: "2025-02-01",
     validTo: "2026-01-31",
     daily: 113.14,
-    monthly: 3433.46,
-    annual: 41296.1,
+    monthly: 3439.46,
+    annual: 41273.52,
     months: Array.from({ length: 12 }).map((_, index) => {
       const start = new Date(2025, 1, 1)
       start.setMonth(start.getMonth() + index)
@@ -93,7 +93,7 @@ export const UMA_PERIODS: UmaPeriod[] = [
     validTo: "2027-01-31",
     daily: 117.31,
     monthly: 3566.22,
-    annual: 42818.15,
+    annual: 42794.64,
     months: Array.from({ length: 12 }).map((_, index) => {
       const start = new Date(2026, 1, 1)
       start.setMonth(start.getMonth() + index)

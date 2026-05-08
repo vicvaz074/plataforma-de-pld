@@ -28,6 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/components/ui/use-toast"
 import { AlertTriangle, CheckCircle2, CircleDashed, Download, FileCheck, FileWarning, Info, ShieldAlert, UploadCloud } from "lucide-react"
 import jsPDF from "jspdf"
+import { KYC_FORM_TEMPLATES, type KycFormType } from "@/lib/pld"
 
 interface EvidenceFile {
   id: string
@@ -1211,6 +1212,146 @@ export default function AuditoriaVerificacionPage() {
     doc.save("auditorias-internas.pdf")
   }
 
+  const exportFormalAuditReport = () => {
+    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" })
+    const margin = 54
+    const width = doc.internal.pageSize.getWidth()
+    const height = doc.internal.pageSize.getHeight()
+    let y = 58
+
+    const ensureSpace = (needed = 44) => {
+      if (y + needed > height - margin) {
+        doc.addPage()
+        y = margin
+      }
+    }
+    const addText = (text: string, fontSize = 10, style: "normal" | "bold" = "normal") => {
+      doc.setFont("helvetica", style)
+      doc.setFontSize(fontSize)
+      const lines = doc.splitTextToSize(text, width - margin * 2)
+      ensureSpace(lines.length * 13 + 8)
+      doc.text(lines, margin, y)
+      y += lines.length * 13 + 8
+    }
+    const addHeading = (text: string) => {
+      ensureSpace(42)
+      doc.setFillColor(15, 23, 42)
+      doc.rect(margin, y, width - margin * 2, 22, "F")
+      doc.setTextColor(255, 255, 255)
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(11)
+      doc.text(text, margin + 10, y + 15)
+      doc.setTextColor(30, 41, 59)
+      y += 34
+    }
+
+    doc.setFillColor(15, 23, 42)
+    doc.rect(0, 0, width, 82, "F")
+    doc.setTextColor(255, 255, 255)
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(15)
+    doc.text("Informe de Auditoria PLD - Actividades Vulnerables", margin, 35)
+    doc.setFontSize(9)
+    doc.text(`${crossModuleContext.sujetoObligado} | RFC ${crossModuleContext.rfc}`, margin, 54)
+    doc.text(`Periodo: ${crossModuleContext.periodoRevision}`, margin, 69)
+    doc.setTextColor(30, 41, 59)
+    y = 112
+
+    addText(
+      `A quien corresponda: se emite el presente informe con base en la informacion capturada en la plataforma, la LFPIORPI, su Reglamento, Reglas de Caracter General, guias SAT/SPPLD y metodologia de auditoria documentada por el sujeto obligado.`,
+      10,
+    )
+    addText(
+      "El alcance comprende una revision documental y operativa de controles PLD aplicables a Actividades Vulnerables, sin constituir opinion legal definitiva ni sustitucion de avisos en portales oficiales.",
+      10,
+    )
+
+    addHeading("Capitulo I. Sintesis ejecutiva")
+    addText(`Sujeto obligado: ${crossModuleContext.sujetoObligado}. Actividad vulnerable principal: ${crossModuleContext.actividadVulnerable}.`)
+    addText(`Operaciones detectadas: ${crossModuleContext.totalOperaciones}. Monto total operado: ${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(crossModuleContext.montoOperado)}.`)
+    addText(`Cumplimiento operativo registrado: ${progressValue}%. Madurez metodologica: ${methodologyCompletion}%.`)
+
+    addHeading("Capitulo II. Marco normativo")
+    ;[
+      "LFPIORPI vigente y articulo 17 sobre Actividades Vulnerables.",
+      "Reglamento de la LFPIORPI y reglas de acumulacion para avisos.",
+      "Reglas de Caracter General, portal SAT/SPPLD y formatos oficiales aplicables.",
+      "Obligaciones de identificacion, beneficiario controlador, PEP, EBR, monitoreo, capacitacion y auditoria.",
+    ].forEach((line) => addText(`• ${line}`))
+
+    addHeading("Capitulo III. Informe detallado")
+    REVIEW_SECTIONS.forEach((section) => {
+      addText(section.title, 10, "bold")
+      section.questions.slice(0, 4).forEach((question) => {
+        const answer = reviewAnswers[question.id]
+        addText(
+          `${question.text} Resultado: ${answer?.rating || "No evaluado"}. Hallazgos: ${answer?.findings || "Sin hallazgos capturados"}. Recomendacion: ${answer?.recommendations || "Completar evidencia y criterio de cumplimiento."}`,
+          8,
+        )
+      })
+    })
+
+    addHeading("Capitulo IV. Acciones correctivas")
+    if (actionPlans.length === 0) {
+      addText("No existen planes de accion capturados. Se recomienda documentar responsables, fechas compromiso y evidencia de cierre.")
+    } else {
+      actionPlans.forEach((plan) => {
+        addText(`${plan.action} | Responsable: ${plan.responsible} | Fecha compromiso: ${format(plan.deadline, "dd/MM/yyyy")} | Avance: ${plan.progress}% | Estado: ${plan.status}`)
+      })
+    }
+
+    addHeading("Anexo I. Matriz de cumplimiento")
+    controlQuestions.forEach((question) => {
+      const response = responses[question.id]
+      addText(`${question.question} | Respuesta: ${response?.answer || "Sin respuesta"} | Evidencias: ${response?.evidences?.length ?? 0}`, 8)
+    })
+
+    doc.save(`informe-auditoria-pld-${format(new Date(), "yyyyMMdd")}.pdf`)
+  }
+
+  const exportKycFormTemplate = (type: KycFormType) => {
+    const template = KYC_FORM_TEMPLATES[type]
+    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" })
+    const margin = 42
+    const width = doc.internal.pageSize.getWidth()
+    const height = doc.internal.pageSize.getHeight()
+    let y = 44
+
+    const addLine = (text: string, size = 9, bold = false) => {
+      if (y > height - 54) {
+        doc.addPage()
+        y = margin
+      }
+      doc.setFont("helvetica", bold ? "bold" : "normal")
+      doc.setFontSize(size)
+      const lines = doc.splitTextToSize(text, width - margin * 2)
+      doc.text(lines, margin, y)
+      y += lines.length * 12 + 5
+    }
+
+    doc.setFillColor(127, 29, 29)
+    doc.rect(0, 0, width, 62, "F")
+    doc.setTextColor(255, 255, 255)
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(13)
+    doc.text(template.title, margin, 30)
+    doc.setFontSize(9)
+    doc.text(`${template.code} | Version operativa PLD Mexico`, margin, 48)
+    doc.setTextColor(30, 41, 59)
+    y = 86
+
+    template.sections.forEach((section) => {
+      addLine(section.title, 10, true)
+      section.fields.forEach((field) => addLine(`□ ${field}: ______________________________________________________________`, 8))
+      y += 4
+    })
+
+    addLine("Declaracion: la persona cliente o usuaria manifiesta bajo protesta de decir verdad que la informacion proporcionada es completa y veraz, y autoriza su uso para fines de cumplimiento PLD.", 8)
+    addLine("Nombre y firma: ________________________________    Fecha: ____ / ____ / ______", 8)
+
+    doc.save(`${template.code.toLowerCase()}-${format(new Date(), "yyyyMMdd")}.pdf`)
+  }
+
   const renderQuestions = (category: ControlCategory) => (
     <div className="space-y-6">
       {controlQuestions
@@ -1458,9 +1599,36 @@ export default function AuditoriaVerificacionPage() {
                       : "Aún no hay operaciones registradas para enriquecer el informe automáticamente."}
                   </p>
                 </CardFooter>
-              </Card>
+	              </Card>
 
-              <div className="grid gap-3 md:grid-cols-2">
+	              <Card className="border-border/60">
+	                <CardHeader className="pb-3">
+	                  <CardTitle className="text-base">Generación documental PLD</CardTitle>
+	                  <CardDescription>
+	                    Exporta un informe formal con capítulos y anexos, además de formularios compactos de identificación por tipo de cliente.
+	                  </CardDescription>
+	                </CardHeader>
+	                <CardContent className="flex flex-wrap gap-2">
+	                  <Button type="button" onClick={exportFormalAuditReport}>
+	                    <FileCheck className="mr-2 h-4 w-4" />
+	                    Informe formal PDF
+	                  </Button>
+	                  <Button type="button" variant="outline" onClick={() => exportKycFormTemplate("persona-fisica")}>
+	                    FI-PLD-FIS
+	                  </Button>
+	                  <Button type="button" variant="outline" onClick={() => exportKycFormTemplate("persona-moral")}>
+	                    FI-PLD-MOR
+	                  </Button>
+	                  <Button type="button" variant="outline" onClick={() => exportKycFormTemplate("persona-moral-derecho-publico")}>
+	                    FI-PLD-PUB
+	                  </Button>
+	                  <Button type="button" variant="outline" onClick={() => exportKycFormTemplate("persona-moral-extranjera")}>
+	                    FI-PLD-PMEX
+	                  </Button>
+	                </CardContent>
+	              </Card>
+
+	              <div className="grid gap-3 md:grid-cols-2">
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Semáforos de control</CardTitle>
