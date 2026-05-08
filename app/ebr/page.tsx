@@ -35,6 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useLanguage } from "@/lib/LanguageContext";
 import { PAISES } from "@/lib/data/paises";
+import { matchPepCargo, type PepScreeningResult } from "@/lib/pld";
 import { translations } from "@/lib/translations";
 
 interface ExpedienteDetalle {
@@ -80,11 +81,15 @@ interface EvaluationAnswers {
 }
 
 interface StoredEvaluation {
+  schemaVersion?: number;
   rfc: string;
   clientAnswers: EvaluationAnswers;
   subjectAnswers: EvaluationAnswers;
   hasBeneficiaryController: boolean;
   beneficiaryAnswers: EvaluationAnswers;
+  pepCargo?: string;
+  pepDependencia?: string;
+  pepScreening?: PepScreeningResult;
   notes: string;
   updatedAt: string;
 }
@@ -531,6 +536,8 @@ export default function EbrPage() {
     useState(false);
   const [beneficiaryAnswers, setBeneficiaryAnswers] =
     useState<EvaluationAnswers>(initialAnswers);
+  const [pepCargo, setPepCargo] = useState("");
+  const [pepDependencia, setPepDependencia] = useState("");
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -595,6 +602,8 @@ export default function EbrPage() {
       setSubjectAnswers(initialAnswers);
       setHasBeneficiaryController(false);
       setBeneficiaryAnswers(initialAnswers);
+      setPepCargo("");
+      setPepDependencia("");
       setNotes("");
       return;
     }
@@ -603,6 +612,8 @@ export default function EbrPage() {
     setSubjectAnswers(stored.subjectAnswers ?? initialAnswers);
     setHasBeneficiaryController(stored.hasBeneficiaryController);
     setBeneficiaryAnswers(stored.beneficiaryAnswers ?? initialAnswers);
+    setPepCargo(stored.pepCargo ?? "");
+    setPepDependencia(stored.pepDependencia ?? "");
     setNotes(stored.notes);
   }, [clienteSeleccionado, evaluacionesGuardadas]);
 
@@ -632,7 +643,19 @@ export default function EbrPage() {
     [hasBeneficiaryController, beneficiaryAnswers],
   );
 
+  const pepScreening = useMemo(() => {
+    if (!pepCargo.trim() && !pepDependencia.trim()) return null;
+    return matchPepCargo({
+      nombre: expedienteActual?.nombre,
+      cargo: pepCargo,
+      dependencia: pepDependencia,
+      relacion: hasBeneficiaryController ? "beneficiario-controlador" : "cliente",
+    });
+  }, [expedienteActual?.nombre, hasBeneficiaryController, pepCargo, pepDependencia]);
+
   const finalLevel = useMemo(() => {
+    if (pepScreening?.status === "coincidencia-cargo") return "Reforzado";
+    if (pepScreening?.status === "posible-pep") return "Alto";
     const levels = [
       clientResult.level,
       subjectResult.level,
@@ -642,7 +665,7 @@ export default function EbrPage() {
     if (levels.includes("Alto")) return "Alto";
     if (levels.includes("Medio")) return "Medio";
     return "Bajo";
-  }, [clientResult.level, subjectResult.level, beneficiaryResult?.level]);
+  }, [clientResult.level, subjectResult.level, beneficiaryResult?.level, pepScreening?.status]);
 
   const riskBadgeStyles = {
     Bajo: "bg-emerald-100 text-emerald-700",
@@ -666,11 +689,15 @@ export default function EbrPage() {
   const saveEvaluation = () => {
     if (!clienteSeleccionado || typeof window === "undefined") return;
     const updated: StoredEvaluation = {
+      schemaVersion: 2,
       rfc: clienteSeleccionado,
       clientAnswers,
       subjectAnswers,
       hasBeneficiaryController,
       beneficiaryAnswers,
+      pepCargo,
+      pepDependencia,
+      pepScreening: pepScreening ?? undefined,
       notes,
       updatedAt: new Date().toISOString(),
     };
@@ -689,6 +716,8 @@ export default function EbrPage() {
     setSubjectAnswers(initialAnswers);
     setHasBeneficiaryController(false);
     setBeneficiaryAnswers(initialAnswers);
+    setPepCargo("");
+    setPepDependencia("");
     setNotes("");
   };
 
@@ -740,6 +769,12 @@ export default function EbrPage() {
       addLine(
         `Beneficiario controlador: ${beneficiaryResult.level} (${beneficiaryResult.percent}%). Regla: ${beneficiaryResult.reason}.`,
       );
+    }
+    if (pepScreening) {
+      addLine(`Validacion PEP por cargos SHCP/UIF: ${pepScreening.status}. ${pepScreening.note}`);
+      pepScreening.matches.slice(0, 3).forEach((match) => {
+        addLine(`- ${match.cargo} | ${match.dependencia}`, 8);
+      });
     }
 
     addLine("\nDetalle por cuestionario", 12);
@@ -967,9 +1002,9 @@ export default function EbrPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Beneficiario Controlador</CardTitle>
+	          <Card>
+	            <CardHeader>
+	              <CardTitle>Beneficiario Controlador</CardTitle>
               <CardDescription>
                 Si no existe, aquí concluye el flujo adicional.
               </CardDescription>
@@ -994,10 +1029,72 @@ export default function EbrPage() {
                   toggleMultiValue={toggleMultiValue}
                 />
               ) : null}
-            </CardContent>
-          </Card>
+	            </CardContent>
+	          </Card>
 
-          <Card>
+	          <Card>
+	            <CardHeader>
+	              <CardTitle>Validación PEP por cargos oficiales</CardTitle>
+	              <CardDescription>
+	                Consulta asistida contra el catálogo público SHCP/UIF de cargos políticamente expuestos. No sustituye la revisión humana ni la consulta formal UIF cuando aplique.
+	              </CardDescription>
+	            </CardHeader>
+	            <CardContent className="space-y-4">
+	              <div className="grid gap-4 md:grid-cols-2">
+	                <div className="space-y-2">
+	                  <Label>Cargo público</Label>
+	                  <Input
+	                    value={pepCargo}
+	                    onChange={(event) => setPepCargo(event.target.value)}
+	                    placeholder="Ej. Director General"
+	                  />
+	                </div>
+	                <div className="space-y-2">
+	                  <Label>Dependencia o entidad</Label>
+	                  <Input
+	                    value={pepDependencia}
+	                    onChange={(event) => setPepDependencia(event.target.value)}
+	                    placeholder="Ej. Secretaría de Comunicaciones y Transportes"
+	                  />
+	                </div>
+	              </div>
+	              {pepScreening ? (
+	                <div className="rounded-lg border bg-slate-50 p-4 text-sm">
+	                  <div className="flex flex-wrap items-center gap-2">
+	                    <Badge
+	                      className={
+	                        pepScreening.status === "coincidencia-cargo"
+	                          ? "bg-rose-100 text-rose-700"
+	                          : pepScreening.status === "posible-pep"
+	                            ? "bg-amber-100 text-amber-700"
+	                            : "bg-emerald-100 text-emerald-700"
+	                      }
+	                    >
+	                      {pepScreening.status}
+	                    </Badge>
+	                    <span className="text-xs text-muted-foreground">
+	                      Requiere revisión humana: {pepScreening.requiresHumanReview ? "sí" : "no"}
+	                    </span>
+	                  </div>
+	                  <p className="mt-2 text-muted-foreground">{pepScreening.note}</p>
+	                  <div className="mt-3 grid gap-2">
+	                    {pepScreening.matches.slice(0, 3).map((match) => (
+	                      <div key={`${match.dependencia}-${match.cargo}`} className="rounded border bg-white p-2 text-xs">
+	                        <p className="font-semibold">{match.cargo}</p>
+	                        <p>{match.dependencia}</p>
+	                      </div>
+	                    ))}
+	                  </div>
+	                </div>
+	              ) : (
+	                <p className="text-sm text-muted-foreground">
+	                  Captura cargo y dependencia cuando el cliente, representante o beneficiario controlador declare o sugiera vínculo con servicio público.
+	                </p>
+	              )}
+	            </CardContent>
+	          </Card>
+
+	          <Card>
             <CardHeader>
               <CardTitle>Observaciones clave</CardTitle>
             </CardHeader>
@@ -1032,15 +1129,24 @@ export default function EbrPage() {
                 result={subjectResult}
                 riskBadgeStyles={riskBadgeStyles}
               />
-              {beneficiaryResult ? (
-                <ResultCard
-                  title="Beneficiario controlador"
+	              {beneficiaryResult ? (
+	                <ResultCard
+	                  title="Beneficiario controlador"
                   result={beneficiaryResult}
                   riskBadgeStyles={riskBadgeStyles}
-                />
-              ) : null}
+	                />
+	              ) : null}
 
-              <div className="rounded-lg border border-dashed p-4">
+	              {pepScreening ? (
+	                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+	                  <p className="text-sm font-medium">PEP por cargo oficial SHCP/UIF</p>
+	                  <p className="mt-1 text-sm text-muted-foreground">
+	                    Estado: <strong>{pepScreening.status}</strong>. {pepScreening.note}
+	                  </p>
+	                </div>
+	              ) : null}
+
+	              <div className="rounded-lg border border-dashed p-4">
                 <p className="text-sm font-medium">Conclusión</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Nivel final del expediente: <strong>{finalLevel}</strong>.

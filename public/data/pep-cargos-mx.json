@@ -1,0 +1,1987 @@
+{
+  "sourceUrl": "https://www.secciones.hacienda.gob.mx/work/models/SHCP/UIF/cargos_publicos_politicamente_expuestos.csv",
+  "syncedAt": "2026-05-08T16:25:05.692Z",
+  "count": 330,
+  "cargos": [
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE AGRICULTURA, GANADERÍA, DESARROLLO RURAL, PESCA Y ALIMENTACIÓN",
+      "cargo": "COMISIONADO NACIONAL DE ACUACULTURA Y PESCA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE AGRICULTURA, GANADERÍA, DESARROLLO RURAL, PESCA Y ALIMENTACIÓN",
+      "cargo": "DIRECTOR EN JEFE DE APOYOS Y SERVICIOS A LA COMERCIALIZACIÓN AGROPECUARIA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE AGRICULTURA, GANADERÍA, DESARROLLO RURAL, PESCA Y ALIMENTACIÓN",
+      "cargo": "TITULAR DEL SERVICIO NACIONAL DE SANIDAD, INOCUIDAD Y CALIDAD AGROALIMENTARIA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE AGRICULTURA, GANADERÍA, DESARROLLO RURAL, PESCA Y ALIMENTACIÓN",
+      "cargo": "DIRECTOR GENERAL DEL SERVICIO DE INFORMACIÓN AGROALIMENTARIA Y PESQUERA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE AGRICULTURA, GANADERÍA, DESARROLLO RURAL, PESCA Y ALIMENTACIÓN",
+      "cargo": "DIRECTOR GENERAL ADJUNTO DEL SERVICIO NACIONAL DE INSPECCIÓN Y CERTIFICACIÓN"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE AGRICULTURA, GANADERÍA, DESARROLLO RURAL, PESCA Y ALIMENTACIÓN",
+      "cargo": "DIRECTOR EN JEFE DEL INSTITUTO NACIONAL DE PESCA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE AGRICULTURA, GANADERÍA, DESARROLLO RURAL, PESCA Y ALIMENTACIÓN",
+      "cargo": "DIRECTOR DEL COLEGIO SUPERIOR AGROPECUARIO DEL ESTADO DE GUERRERO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE COMUNICACIONES Y TRANSPORTES",
+      "cargo": "MIEMBROS DEL PLENO DE LA COMISIÓN FEDERAL DE TELECOMUNICACIONES"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE COMUNICACIONES Y TRANSPORTES",
+      "cargo": "DIRECTOR GENERAL DEL INSTITUTO MEXICANO DEL TRANSPORTE"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE COMUNICACIONES Y TRANSPORTES",
+      "cargo": "TITULAR DE SERVICIOS A LA NAVEGACIÓN EN EL ESPACIO AÉREO MEXICANO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE DESARROLLO SOCIAL",
+      "cargo": "DIRECTOR GENERAL DEL INSTITUTO NACIONAL DE DESARROLLO SOCIAL"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE DESARROLLO SOCIAL",
+      "cargo": "JEFE DE COORDINACIÓN NACIONAL DEL PROGRAMA DE DESARROLLO HUMANO OPORTUNIDADES"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE ECONOMÍA",
+      "cargo": "MIEMBROS DEL PLENO DE LA COMISIÓN FEDERAL DE COMPETENCIA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE ECONOMÍA",
+      "cargo": "DIRECTOR GENERAL DE LA COMISIÓN FEDERAL DE MEJORA REGULATORIA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE ECONOMÍA",
+      "cargo": "COORDINADOR GENERAL DEL PROGRAMA NACIONAL DE APOYO PARA LAS EMPRESAS DE SOLIDARIDAD"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE EDUCACIÓN PÚBLICA",
+      "cargo": "ADMINISTRADOR FEDERAL DE SERVICIOS EDUCATIVOS EN EL DISTRITO FEDERAL"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE EDUCACIÓN PÚBLICA",
+      "cargo": "PRESIDENTE DE LA COMISIÓN DE APELACIÓN Y ARBITRAJE DEL DEPORTE"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE EDUCACIÓN PÚBLICA",
+      "cargo": "PRESIDENTE DEL CONSEJO NACIONAL PARA LA CULTURA Y LAS ARTES"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE EDUCACIÓN PÚBLICA",
+      "cargo": "DIRECTOR GENERAL DEL INSTITUTO NACIONAL DE ANTROPOLOGÍA E HISTORIA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE EDUCACIÓN PÚBLICA",
+      "cargo": "DIRECTOR GENERAL DEL INSTITUTO NACIONAL DE BELLAS ARTES Y LITERATURA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE EDUCACIÓN PÚBLICA",
+      "cargo": "DIRECTOR GENERAL DEL INSTITUTO NACIONAL DEL DERECHO DE AUTOR"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE EDUCACIÓN PÚBLICA",
+      "cargo": "DIRECTOR GENERAL DEL INSTITUTO POLITÉCNICO NACIONAL"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE EDUCACIÓN PÚBLICA",
+      "cargo": "DIRECTOR GENERAL DE RADIO EDUCACIÓN"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE EDUCACIÓN PÚBLICA",
+      "cargo": "RECTOR DE LA UNIVERSIDAD PEDAGÓGICA NACIONAL"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE EDUCACIÓN PÚBLICA",
+      "cargo": "DIRECTOR GENERAL DEL INSTITUTO NACIONAL DE ESTUDIOS HISTÓRICOS DE LAS REVOLUCIONES DE MÉXICO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE ENERGÍA",
+      "cargo": "COMISIONADOS DE LA COMISIÓN REGULADORA DE ENERGÍA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE ENERGÍA",
+      "cargo": "DIRECTOR GENERAL DE LA COMISIÓN NACIONAL DE SEGURIDAD NUCLEAR Y SALVAGUARDIAS"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE ENERGÍA",
+      "cargo": "DIRECTOR GENERAL DE LA COMISIÓN NACIONAL PARA EL AHORRO DE ENERGÍA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE GOBERNACIÓN",
+      "cargo": "DIRECTOR GENERAL DEL CENTRO DE INVESTIGACIÓN Y SEGURIDAD NACIONAL"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE GOBERNACIÓN",
+      "cargo": "COORDINADOR DEL INSTITUTO NACIONAL PARA EL FEDERALISMO Y EL DESARROLLO MUNICIPAL"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE GOBERNACIÓN",
+      "cargo": "DIRECTOR GENERAL DEL ARCHIVO GENERAL DE LA NACIÓN"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE GOBERNACIÓN",
+      "cargo": "COMISIONADO DEL INSTITUTO NACIONAL DE MIGRACIÓN"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE GOBERNACIÓN",
+      "cargo": "TITULAR DE LA SECRETARÍA GENERAL DEL CONSEJO NACIONAL DE POBLACIÓN"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE GOBERNACIÓN",
+      "cargo": "COORDINADOR GENERAL DE LA COMISIÓN MEXICANA DE AYUDA A REFUGIADOS"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE GOBERNACIÓN",
+      "cargo": "TITULAR DE LA SECRETARÍA TÉCNICA DE LA COMISIÓN CALIFICADORA DE PUBLICACIONES Y REVISTAS ILUSTRADAS"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE GOBERNACIÓN",
+      "cargo": "DIRECTOR DEL CENTRO DE PRODUCCIÓN DE PROGRAMAS INFORMATIVOS Y ESPECIALES"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE GOBERNACIÓN",
+      "cargo": "DIRECTOR GENERAL DEL CENTRO NACIONAL DE PREVENCIÓN DE DESASTRES"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE GOBERNACIÓN",
+      "cargo": "TITULAR DE LA COORDINACIÓN PARA EL DIÁLOGO Y LA NEGOCIACIÓN EN CHIAPAS"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE HACIENDA Y CRÉDITO PÚBLICO",
+      "cargo": "JEFE DEL SERVICIO DE ADMINISTRACIÓN TRIBUTARIA, ADMINISTRADORES GENERALES, ADMINISTRADORESCENTRALES, ADMINISTRADORES LOCALES Y ADMINISTRADORES DE ADUANAS."
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE HACIENDA Y CRÉDITO PÚBLICO",
+      "cargo": "PRESIDENTE DE LA COMISIÓN NACIONAL BANCARIA Y DE VALORES"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE HACIENDA Y CRÉDITO PÚBLICO",
+      "cargo": "PRESIDENTE DE LA COMISIÓN NACIONAL DE SEGUROS Y FIANZAS"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE HACIENDA Y CRÉDITO PÚBLICO",
+      "cargo": "PRESIDENTE DE LA COMISIÓN NACIONAL DEL SISTEMA DE AHORRO PARA EL RETIRO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE LA DEFENSA NACIONAL",
+      "cargo": "TITULAR DE INSPECCIÓN Y CONTRALORÍA GENERAL, JEFE Y SUBJEFES DEL ESTADO MAYOR, COMANDANTE DE LA FUERZA AÉREA, GENERALES DE DIVISIÓN, GENERALES DE BRIGADA, Y GENERALES BRIGADIER, QUE SE ENCUENTREN EN ACTIVO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE LA FUNCIÓN PÚBLICA",
+      "cargo": "TITULARES DE LOS ÓRGANOS DE CONTROL INTERNO NOMBRADOS POR ESA DEPENDENCIA EN LA ADMINISTRACIÓN PÚBLICA CENTRALIZADA Y PARAESTATAL"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE LA FUNCIÓN PÚBLICA",
+      "cargo": "PRESIDENTE DEL INSTITUTO DE ADMINISTRACIÓN Y AVALÚOS DE BIENES NACIONALES"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE MARINA",
+      "cargo": "AL TITULAR DE INSPECCIÓN Y CONTRALORÍA DE MARINA, JEFE Y SUBJEFES DEL ESTADO MAYOR, COMANDANTES DE LA FUERZAS NAVALES, ALMIRANTES, VICEALMIRANTES Y CONTRAALMIRANTES, QUE SE ENCUENTREN EN ACTIVO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE MEDIO AMBIENTE Y RECURSOS NATURALES",
+      "cargo": "DIRECTOR GENERAL DE LA COMISIÓN NACIONAL DEL AGUA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE MEDIO AMBIENTE Y RECURSOS NATURALES",
+      "cargo": "PRESIDENTE DEL INSTITUTO NACIONAL DE ECOLOGÍA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE MEDIO AMBIENTE Y RECURSOS NATURALES",
+      "cargo": "PROCURADOR FEDERAL DE PROTECCIÓN AL AMBIENTE"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE MEDIO AMBIENTE Y RECURSOS NATURALES",
+      "cargo": "COMISIONADO NACIONAL DE ÁREAS NATURALES PROTEGIDAS"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE RELACIONES EXTERIORES",
+      "cargo": "PRESIDENTE DEL INSTITUTO MATÍAS ROMERO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE RELACIONES EXTERIORES",
+      "cargo": "DIRECTOR EJECUTIVO DEL INSTITUTO DE LOS MEXICANOS EN EL EXTERIOR"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE RELACIONES EXTERIORES",
+      "cargo": "DIRECTOR EJECUTIVO DE LA AGENCIA MEXICANA DE COOPERACIÓN INTERNACIONAL PARA EL DESARROLLO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE RELACIONES EXTERIORES",
+      "cargo": "EMBAJADORES DE MÉXICO EN EL EXTRANJERO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE RELACIONES EXTERIORES",
+      "cargo": "CÓNSULES GENERALES DE MÉXICO EN EL EXTRANJERO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "DIRECTOR GENERAL DE LA ADMINISTRACIÓN DEL PATRIMONIO DE LA BENEFICENCIA PÚBLICA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "DIRECTOR GENERAL DEL CENTRO NACIONAL DE EQUIDAD DE GÉNERO Y SALUD REPRODUCTIVA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "DIRECTOR GENERAL DEL CENTRO NACIONAL DE EXCELENCIA TECNOLÓGICA EN SALUD"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "DIRECTOR GENERAL DEL CENTRO NACIONAL DE LA TRANSFUSIÓN SANGUÍNEA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "DIRECTOR GENERAL DEL CENTRO NACIONAL DE TRASPLANTES"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "DIRECTOR GENERAL DEL CENTRO NACIONAL DE PROGRAMAS PREVENTIVOS Y CONTROL DE ENFERMEDADES"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "COMISIONADO NACIONAL DEL CENTRO NACIONAL PARA LA PREVENCIÓN Y EL CONTROL DE LAS ADICCIONES"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "DIRECTOR GENERAL DEL CENTRO NACIONAL PARA LA PREVENCIÓN Y EL CONTROL DEL VIH/SIDA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "DIRECTOR GENERAL DEL CENTRO NACIONAL PARA LA SALUD DE LA INFANCIA Y LA ADOLESCENCIA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "COMISIONADO FEDERAL PARA LA PROTECCIÓN CONTRA RIESGOS SANITARIOS"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "TITULAR DE LA COMISIÓN NACIONAL DE ARBITRAJE MÉDICO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "DIRECTOR GENERAL DEL CONSEJO DE LA COMISIÓN NACIONAL DE BIOÉTICA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "COMISIONADO NACIONAL DE PROTECCIÓN SOCIAL EN SALUD"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "DIRECTOR GENERAL DEL INSTITUTO DE GERIATRÍA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SALUD",
+      "cargo": "TITULAR DE LOS SERVICIOS DE ATENCIÓN PSIQUIÁTRICA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SEGURIDAD PÚBLICA",
+      "cargo": "COMISIONADO GENERAL DE LA POLICÍA FEDERAL"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SEGURIDAD PÚBLICA",
+      "cargo": "COMISIONADO DEL SERVICIO DE PROTECCIÓN FEDERAL"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SEGURIDAD PÚBLICA",
+      "cargo": "DIRECTOR GENERAL DE PREVENCIÓN Y READAPTACIÓN SOCIAL"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SEGURIDAD PÚBLICA",
+      "cargo": "PRESIDENTE DEL CONSEJO DE MENORES"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE SEGURIDAD PÚBLICA",
+      "cargo": "DIRECTOR DEL CENTRO DE INVESTIGACIÓN Y ESTUDIOS EN SEGURIDAD"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE TURISMO",
+      "cargo": "DIRECTOR GENERAL DEL CENTRO DE ESTUDIOS SUPERIORES EN TURISMO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DE TURISMO",
+      "cargo": "JEFE DE UNIDAD DE LA CORPORACIÓN ÁNGELES VERDES"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DEL TRABAJO Y PREVISIÓN SOCIAL",
+      "cargo": "PROCURADOR FEDERAL DE LA DEFENSA DEL TRABAJO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "SECRETARÍA DEL TRABAJO Y PREVISIÓN SOCIAL",
+      "cargo": "DIRECTOR GENERAL DEL COMITÉ NACIONAL MIXTO DE PROTECCIÓN AL SALARIO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "PROCURADURÍA GENERAL DE LA REPÚBLICA",
+      "cargo": "TITULAR DEL CENTRO NACIONAL DE PLANEACIÓN, ANÁLISIS E INFORMACIÓN PARA EL COMBATE A LA DELINCUENCIA"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "PROCURADURÍA GENERAL DE LA REPÚBLICA",
+      "cargo": "DIRECTOR GENERAL DEL CENTRO DE EVALUACIÓN Y DESARROLLO HUMANO"
+    },
+    {
+      "tipoAdministracionPublica": "CENTRAL",
+      "entidadAdministracionPublica": "No aplica",
+      "dependencia": "PROCURADURÍA GENERAL DE LA REPÚBLICA",
+      "cargo": "DIRECTOR GENERAL DEL INSTITUTO DE CAPACITACIÓN Y PROFESIONALIZACIÓN EN PROCURACIÓN DE JUSTICIA FEDERAL"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CONSEJO NACIONAL PARA PREVENIR LA DISCRIMINACIÓN",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "PROCURADURÍA FEDERAL DEL CONSUMIDOR",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "ORGANISMO PROMOTOR DE MEDIOS AUDIOVISUALES",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "TALLERES GRÁFICOS DE MÉXICO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO DE SEGURIDAD SOCIAL PARA LAS FUERZAS ARMADAS MEXICANAS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CASA DE MONEDA DE MÉXICO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COMISIÓN NACIONAL PARA LA PROTECCIÓN Y DEFENSA DE LOS USUARIOS DE SERVICIOS FINANCIEROS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COMISIÓN NACIONAL DE VIVIENDA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "FINANCIERA RURAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO PARA EL DESARROLLO TÉCNICO DE LAS HACIENDAS PÚBLICAS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO PARA LA PROTECCIÓN AL AHORRO BANCARIO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "LOTERÍA NACIONAL PARA LA ASISTENCIA PÚBLICA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "PRONÓSTICOS PARA LA ASISTENCIA PÚBLICA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "SERVICIO DE ADMINISTRACIÓN Y ENAJENACIÓN DE BIENES",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COMISIÓN PARA LA REGULARIZACIÓN DE LA TENENCIA DE LA TIERRA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CONSEJO NACIONAL DE EVALUACIÓN DE LA POLÍTICA DE DESARROLLO SOCIAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE LAS PERSONAS ADULTAS MAYORES",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COMISIÓN NACIONAL FORESTAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO MEXICANO DE TECNOLOGÍA DEL AGUA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "PRODUCTOS FORESTALES MEXICANOS (EN PROCESO DE DESINCORPORACIÓN)",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COMISIÓN FEDERAL DE ELECTRICIDAD",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO DE INVESTIGACIONES ELÉCTRICAS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO MEXICANO DEL PETRÓLEO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE INVESTIGACIONES NUCLEARES",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "PEMEX-EXPLORACIÓN Y PRODUCCIÓN",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "PEMEX-GAS Y PETROQUÍMICA BÁSICA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "PEMEX-PETROQUÍMICA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "PEMEX-REFINACIÓN",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "PETRÓLEOS MEXICANOS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CENTRO NACIONAL DE METROLOGÍA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO MEXICANO DE LA PROPIEDAD INDUSTRIAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "SERVICIO GEOLÓGICO MEXICANO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COLEGIO DE POSTGRADUADOS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COMISIÓN NACIONAL DE LAS ZONAS ÁRIDAS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COMITÉ NACIONAL PARA EL DESARROLLO SUSTENTABLE DE LA CAÑA DE AZÚCAR",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE INVESTIGACIONES FORESTALES, AGRÍCOLAS Y PECUARIAS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "PRODUCTORA NACIONAL DE BIOLÓGICOS VETERINARIOS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "AEROPUERTOS Y SERVICIOS AUXILIARES",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "AGENCIA ESPACIAL MEXICANA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CAMINOS Y PUENTES FEDERALES DE INGRESOS Y SERVICIOS CONEXOS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "FERROCARRILES NACIONALES DE MÉXICO (EN PROCESO DE DESINCORPORACIÓN)",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "SERVICIO POSTAL MEXICANO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "TELECOMUNICACIONES DE MÉXICO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CENTRO DE ENSEÑANZA TÉCNICA INDUSTRIAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CENTRO DE INVESTIGACIÓN Y DE ESTUDIOS AVANZADOS DEL INSTITUTO POLITÉCNICO NACIONAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COLEGIO DE BACHILLERES",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COLEGIO NACIONAL DE EDUCACIÓN PROFESIONAL TÉCNICA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COMISIÓN DE OPERACIÓN Y FOMENTO DE ACTIVIDADES ACADÉMICAS DEL INSTITUTO POLITÉCNICO NACIONAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COMISIÓN NACIONAL DE CULTURA FÍSICA Y DEPORTE",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COMISIÓN NACIONAL DE LIBROS DE TEXTO GRATUITOS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CONSEJO NACIONAL DE FOMENTO EDUCATIVO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "FONDO DE CULTURA ECONÓMICA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO MEXICANO DE CINEMATOGRAFÍA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO MEXICANO DE LA JUVENTUD",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO MEXICANO DE LA RADIO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE LENGUAS INDÍGENAS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE LA INFRAESTRUCTURA FÍSICA EDUCATIVA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL PARA LA EDUCACIÓN DE LOS ADULTOS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL PARA LA EVALUACIÓN DE LA EDUCACIÓN",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "PATRONATO DE OBRAS E INSTALACIONES DEL INSTITUTO POLITÉCNICO NACIONAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "PROCURADURÍA AGRARIA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CENTRO REGIONAL DE ALTA ESPECIALIDAD DE CHIAPAS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "HOSPITAL GENERAL DE MÉXICO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "HOSPITAL GENERAL DR. MANUEL GEA GONZÁLEZ",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "HOSPITAL INFANTIL DE MÉXICO FEDERICO GÓMEZ",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "HOSPITAL JUÁREZ DE MÉXICO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "HOSPITAL REGIONAL DE ALTA ESPECIALIDAD DE CIUDAD VICTORIA BICENTENARIO 2010",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "HOSPITAL REGIONAL DE ALTA ESPECIALIDAD DE LA PENÍNSULA DE YUCATÁN",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "HOSPITAL REGIONAL DE ALTA ESPECIALIDAD DE OAXACA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "HOSPITAL REGIONAL DE ALTA ESPECIALIDAD DEL BAJÍO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE CANCEROLOGÍA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE CARDIOLOGÍA IGNACIO CHÁVEZ",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE CIENCIAS MÉDICAS Y NUTRICIÓN SALVADOR ZUBIRÁN",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE ENFERMEDADES RESPIRATORIAS ISMAEL COSÍO VILLEGAS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE MEDICINA GENÓMICA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE NEUROLOGÍA Y NEUROCIRUGÍA MANUEL VELASCO SUÁREZ",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE PEDIATRÍA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE PERINATOLOGÍA ISIDRO ESPINOSA DE LOS REYES",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE PSIQUIATRÍA RAMÓN DE LA FUENTE MUÑIZ",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE REHABILITACIÓN",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE SALUD PÚBLICA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "SISTEMA NACIONAL PARA EL DESARROLLO INTEGRAL DE LA FAMILIA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COMISIÓN NACIONAL DE LOS SALARIOS MÍNIMOS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO DEL FONDO NACIONAL PARA EL CONSUMO DE LOS TRABAJADORES",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE CIENCIAS PENALES",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CENTRO DE INGENIERÍA Y DESARROLLO INDUSTRIAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CENTRO DE INVESTIGACIÓN CIENTÍFICA Y DE EDUCACIÓN SUPERIOR DE ENSENADA, B.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CENTRO DE INVESTIGACIÓN EN QUÍMICA APLICADA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CENTRO DE INVESTIGACIONES Y ESTUDIOS SUPERIORES EN ANTROPOLOGÍA SOCIAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "EL COLEGIO DE LA FRONTERA SUR",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO DE INVESTIGACIONES DR. JOSÉ MARÍA LUIS MORA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE ASTROFÍSICA, ÓPTICA Y ELECTRÓNICA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "COMISIÓN NACIONAL PARA EL DESARROLLO DE LOS PUEBLOS INDÍGENAS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "CONSEJO NACIONAL DE CIENCIA Y TECNOLOGÍA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO DE SEGURIDAD Y SERVICIOS SOCIALES DE LOS TRABAJADORES DEL ESTADO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO DEL FONDO NACIONAL DE LA VIVIENDA PARA LOS TRABAJADORES",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO FEDERAL DE ACCESO A LA INFORMACIÓN Y PROTECCIÓN DE DATOS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO MEXICANO DEL SEGURO SOCIAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "INSTITUTO NACIONAL DE LAS MUJERES",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ORGANISMOS DESCENTRALIZADOS",
+      "dependencia": "PROCURADURÍA DE LA DEFENSA DEL CONTRIBUYENTE",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "NOTIMEX, S.A. DE C.V. (EN PROCESO DE DESINCORPORACIÓN)",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "AGROASEMEX, S.A.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "BANCO DEL AHORRO NACIONAL Y SERVICIOS FINANCIEROS, S.N.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "BANCO NACIONAL DE COMERCIO EXTERIOR, S.N.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "BANCO NACIONAL DE COMERCIO INTERIOR, S.N.C. (EN PROCESO DE DESINCORPORACIÓN)",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "BANCO NACIONAL DE CRÉDITO RURAL, S.N.C. (EN PROCESO DE DESINCORPORACIÓN)",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "BANCO NACIONAL DE OBRAS Y SERVICIOS PÚBLICOS, S.N.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "BANCO NACIONAL DEL EJÉRCITO, FUERZA AÉREA Y ARMADA, S.N.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "EXPORTADORES ASOCIADOS, S.A. DE C.V. (EN PROCESO DE DESINCORPORACIÓN",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "NACIONAL FINANCIERA, S.N.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "SEGUROS DE CRÉDITO A LA VIVIENDA SHF, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "SOCIEDAD HIPOTECARIA FEDERAL, S.N.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "SERVICIOS DE ALMACENAMIENTO DEL NORTE, S.A. (EN PROCESO DE DESINCORPORACIÓN)",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "TERRENOS DE JÁLTIPAN, S.A. (EN PROCESO DE DESINCORPORACIÓN)",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "DICONSA, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "INCOBUSA, S.A. DE C.V. (EN PROCESO DE DESINCORPORACIÓN)",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "LICONSA, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "COMPAÑÍA MEXICANA DE EXPLORACIONES, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "I.I.I. SERVICIOS, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "INSTALACIONES INMOBILIARIAS PARA INDUSTRIAS, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "P.M.I. COMERCIO INTERNACIONAL, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "TERRENOS PARA INDUSTRIAS, S.A. (EN PROCESO DE DESINCORPORACIÓN)",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "EXPORTADORA DE SAL, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "INSTITUTO NACIONAL PARA EL DESARROLLO DE CAPACIDADES DEL SECTOR RURAL, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE ALTAMIRA, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE COATZACOALCOS, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE DOS BOCAS, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE ENSENADA, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE GUAYMAS, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE LÁZARO CÁRDENAS, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE MANZANILLO, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE MAZATLÁN, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE PROGRESO, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE PUERTO MADERO, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE PUERTO VALLARTA, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE SALINA CRUZ, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE TAMPICO, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE TOPOLOBAMPO, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE TUXPAN, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ADMINISTRACIÓN PORTUARIA INTEGRAL DE VERACRUZ, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "FERROCARRIL CHIHUAHUA AL PACÍFICO, S.A. DE C.V. (EN PROCESO DE DESINCORPORACIÓN)",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "FERROCARRIL DEL ISTMO DE TEHUANTEPEC, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "AEROPUERTO INTERNACIONAL DE LA CIUDAD DE MÉXICO, S.A. DE C.V./GRUPO AEROPORTUARIO DE LA CIUDAD DE MÉXICO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CENTRO DE CAPACITACIÓN CINEMATOGRÁFICA, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "COMPAÑÍA OPERADORA DEL CENTRO CULTURAL Y TURÍSTICO DE TIJUANA, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "EDUCAL, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "ESTUDIOS CHURUBUSCO AZTECA, S.A.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "IMPRESORA Y ENCUADERNADORA PROGRESO, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "TELEVISIÓN METROPOLITANA, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CENTROS DE INTEGRACIÓN JUVENIL, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "LABORATORIOS DE BIOLÓGICOS Y REACTIVOS DE MÉXICO, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CONSEJO DE PROMOCIÓN TURÍSTICA DE MÉXICO, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "FONATUR CONSTRUCTORA, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "FONATUR OPERADORA PORTUARIA, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "FONATUR MANTENIMIENTO TURÍSTICO, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "FONATUR PRESTADORA DE SERVICIOS, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CENTRO DE INVESTIGACIÓN CIENTÍFICA DE YUCATÁN, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CENTRO DE INVESTIGACIÓN EN ALIMENTACIÓN Y DESARROLLO, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CENTRO DE INVESTIGACIÓN EN GEOGRAFÍA Y GEOMÁTICA ING. JORGE L. TAMAYO, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CENTRO DE INVESTIGACIÓN EN MATEMÁTICAS, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CENTRO DE INVESTIGACIÓN EN MATERIALES AVANZADOS, S.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CENTRO DE INVESTIGACIÓN Y ASISTENCIA EN TECNOLOGÍA Y DISEÑO DEL ESTADO DE JALISCO, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CENTRO DE INVESTIGACIÓN Y DESARROLLO TECNOLÓGICO EN ELECTROQUÍMICA, S.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CENTRO DE INVESTIGACIÓN Y DOCENCIA ECONÓMICAS, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CENTRO DE INVESTIGACIONES BIOLÓGICAS DEL NOROESTE, S.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CENTRO DE INVESTIGACIÓN EN ÓPTICA, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CIATEC, A.C. CENTRO DE INNOVACIÓN APLICADA EN TECNOLOGÍAS COMPETITIVAS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CIATEQ, A.C. CENTRO DE TECNOLOGÍA AVANZADA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "CORPORACIÓN MEXICANA DE INVESTIGACIÓN EN MATERIALES, S.A. DE C.V.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "EL COLEGIO DE LA FRONTERA NORTE, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "EL COLEGIO DE MICHOACÁN, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "EL COLEGIO DE SAN LUIS, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "INSTITUTO DE ECOLOGÍA, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "EMPRESAS DE PARTICIPACIÓN ESTATAL MAYORITARIA ",
+      "dependencia": "INSTITUTO POTOSINO DE INVESTIGACIÓN CIENTÍFICA Y TECNOLÓGICA, A.C.",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FONDO DE CAPITALIZACIÓN E INVERSIÓN DEL SECTOR RURAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FIDEICOMISOS INSTITUIDOS EN RELACIÓN CON LA AGRICULTURA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FONDO NACIONAL PARA EL FOMENTO DE LAS ARTESANÍAS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FIDEICOMISO FONDO NACIONAL DE HABITACIONES POPULARES",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "PROMÉXICO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FIDEICOMISO DE RIESGO COMPARTIDO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FONDO DE EMPRESAS EXPROPIADAS DEL SECTOR AZUCARERO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FIDEICOMISO DE FORMACIÓN Y CAPACITACIÓN PARA EL PERSONAL DE LA MARINA MERCANTE NACIONAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FIDEICOMISO DE LOS SISTEMAS NORMALIZADO DE COMPETENCIA LABORAL Y DE CERTIFICACIÓN DE COMPETENCIA LABORAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FIDEICOMISO PARA LA CINETECA NACIONAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FIDEICOMISO FONDO NACIONAL DE FOMENTO EJIDAL",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FONDO NACIONAL DE FOMENTO AL TURISMO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FONDO DE INFORMACIÓN Y DOCUMENTACIÓN PARA LA INDUSTRIA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FONDO PARA EL DESARROLLO DE RECURSOS HUMANOS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FONDO DE GARANTÍA Y FOMENTO PARA LAS ACTIVIDADES PESQUERAS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FONDO DE GARANTÍA Y FOMENTO PARA LA AGRICULTURA, GANADERÍA Y AVICULTURA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FONDO ESPECIAL DE ASISTENCIA TÉCNICA Y GARANTÍA PARA CRÉDITOS AGROPECUARIOS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FONDO ESPECIAL PARA FINANCIAMIENTOS AGROPECUARIOS",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FIDEICOMISO DE FOMENTO MINERO",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "FIDEICOMISOS PÚBLICOS",
+      "dependencia": "FONDO DE OPERACIÓN Y FINANCIAMIENTO BANCARIO A LA VIVIENDA",
+      "cargo": "VER OBSERVACIÓN EN EL DICCIONARIO DE DATOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER LEGISLATIVO FEDERAL",
+      "dependencia": "PODER LEGISLATIVO FEDERAL",
+      "cargo": "SENADORES DE LA REPÚBLICA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER LEGISLATIVO FEDERAL",
+      "dependencia": "PODER LEGISLATIVO FEDERAL",
+      "cargo": "RESPONSABLES DE LA ÁREAS DE FINANZAS DE LA CÁMARA DE SENADORES DE LA REPÚBLICA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER LEGISLATIVO FEDERAL",
+      "dependencia": "PODER LEGISLATIVO FEDERAL",
+      "cargo": "DIPUTADOS FEDERALES"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER LEGISLATIVO FEDERAL",
+      "dependencia": "PODER LEGISLATIVO FEDERAL",
+      "cargo": "RESPONSABLE DEL ÁREA DE FINANZAS DE LA CÁMARA DE DIPUTADOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER JUDICIAL FEDERAL",
+      "dependencia": "PODER JUDICIAL FEDERAL",
+      "cargo": "MINISTROS DE LA SUPREMA CORTE DE JUSTICIA DE LA NACIÓN"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER JUDICIAL FEDERAL",
+      "dependencia": "PODER JUDICIAL FEDERAL",
+      "cargo": "CONSEJEROS DE LA JUDICATURA FEDERAL"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER JUDICIAL FEDERAL",
+      "dependencia": "PODER JUDICIAL FEDERAL",
+      "cargo": "MAGISTRADOS DE CIRCUITO"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER JUDICIAL FEDERAL",
+      "dependencia": "PODER JUDICIAL FEDERAL",
+      "cargo": "JUECES DE DISTRITO"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER JUDICIAL FEDERAL",
+      "dependencia": "PODER JUDICIAL FEDERAL",
+      "cargo": "MAGISTRADOS DEL TRIBUNAL ELECTORAL"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER JUDICIAL FEDERAL",
+      "dependencia": "PODER JUDICIAL FEDERAL",
+      "cargo": "SECRETARIOS DEL PODER JUDICIAL DE LA FEDERACIÓN"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER JUDICIAL FEDERAL",
+      "dependencia": "PODER JUDICIAL FEDERAL",
+      "cargo": "RESPONSABLE DEL ÁREA DE FINANZAS DE LA SUPREMA CORTE DE JUSTICIA DE LA NACIÓN"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÁMBITO ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER EJECUTIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "JEFE DE GOBIERNO DEL DISTRITO FEDERAL"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÁMBITO ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER EJECUTIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "GOBERNADORES DE LOS ESTADOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÁMBITO ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER EJECUTIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "PROCURADORES GENERALES DE JUSTICIA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÁMBITO ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER EJECUTIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "TITULARES DE SECRETARIAS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÁMBITO ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER EJECUTIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "CONSEJEROS JURÍDICOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÁMBITO ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER EJECUTIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "DIRECTORES DE LOS CENTROS DE READAPTACIÓN SOCIAL"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÁMBITO ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER EJECUTIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "JEFES DE DELEGACIÓN"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÁMBITO ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER EJECUTIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "TITULARES DE LAS UNIDADES DE INTELIGENCIA PATRIMONIAL Y ECONÓMICA O UNIDADES HOMOLOGAS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER LEGISLATIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER LEGISLATIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "DIPUTADOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER LEGISLATIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER LEGISLATIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "RESPONSABLE DEL ÁREA DE FINANZAS DE LA ASAMBLEA LEGISLATIVA DEL DISTRITO FEDERAL"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER LEGISLATIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER LEGISLATIVO ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "RESPONSABLES DE LAS ÁREAS DE FINANZAS DE LOS CONGRESOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER JUDICIAL ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER JUDICIAL ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "MAGISTRADOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER JUDICIAL ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER JUDICIAL ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "JUECES"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER JUDICIAL ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER JUDICIAL ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "SECRETARIOS DE LOS TRIBUNALES SUPERIORES DE JUSTICIA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER JUDICIAL ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER JUDICIAL ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "CONSEJEROS DE LA JUDICATURA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PODER JUDICIAL ESTATAL Y DEL DISTRITO FEDERAL",
+      "dependencia": "PODER JUDICIAL ESTATAL Y DEL DISTRITO FEDERAL",
+      "cargo": "RESPONSABLES DEL ÁREA DE FINANZAS DE LOS TRIBUNALES SUPERIORES DE JUSTICIA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÁMBITO MUNICIPAL",
+      "dependencia": "PODER EJECUTIVO MUNICIPAL",
+      "cargo": "PRESIDENTES Y RESPONSABLES DE LAS ÁREAS DE FINANZAS MUNICIPALES"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "INSTITUTO FEDERAL ELECTORAL",
+      "cargo": "CONSEJEROS ELECTORALES Y SERVIDORES PÚBLICOS DE LOS SIGUIENTES DOS NIVELES, SEGÚN ESTRUCTURA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "BANCO DE MÉXICO",
+      "cargo": "GOBERNADOR, SUBGOBERNADORES Y SERVIDORES PÚBLICOS DE LOS SIGUIENTES DOS NIVELES, SEGÚN ESTRUCTURA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "COMISIÓN NACIONAL DE LOS DERECHOS HUMANOS",
+      "cargo": "PRESIDENTE Y MIEMBROS DEL CONSEJO CONSULTIVO"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "AUDITORÍA SUPERIOR DE LA FEDERACIÓN",
+      "cargo": "AUDITOR SUPERIOR DE LA FEDERACIÓN Y SERVIDORES PÚBLICOS DE LOS SIGUIENTES DOS NIVELES, SEGÚN ESTRUCTURA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "INSTITUTO NACIONAL DE GEOGRAFÍA Y ESTADÍSTICA",
+      "cargo": "PRESIDENTE, VICEPRESIDENTES Y SERVIDORES PÚBLICOS DE LOS SIGUIENTES DOS NIVELES, SEGÚN ESTRUCTURA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "TRIBUNAL FEDERAL DE JUSTICIA FISCAL Y ADMINISTRATIVA",
+      "cargo": "MAGISTRADOS Y SECRETARIOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "INSTITUTOS O CONSEJOS ELECTORALES DE LAS ENTIDADES FEDERATIVAS",
+      "cargo": "CONSEJEROS ELECTORALES Y SERVIDORES PÚBLICOS DE LOS SIGUIENTES DOS NIVELES, SEGÚN ESTRUCTURA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "TRIBUNALES CONTENCIOSOS ADMINISTRATIVOS DE LAS ENTIDADES FEDERATIVAS",
+      "cargo": "MAGISTRADOS Y SECRETARIOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "INSTITUTOS DE ACCESO A LA INFORMACIÓN PÚBLICA DE LAS ENTIDADES FEDERATIVAS",
+      "cargo": "TITULARES Y SERVIDORES PÚBLICOS DE LOS SIGUIENTES DOS NIVELES, SEGÚN ESTRUCTURA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "COMISIONES DE LOS DERECHOS HUMANOS DE LAS ENTIDADES FEDERATIVAS",
+      "cargo": "TITULARES Y SERVIDORES PÚBLICOS DE LOS SIGUIENTES DOS NIVELES, SEGÚN ESTRUCTURA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "TRIBUNAL SUPERIOR AGRARIO",
+      "cargo": "MAGISTRADOS Y SECRETARIOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "TRIBUNAL FEDERAL DE CONCILIACIÓN Y ARBITRAJE",
+      "cargo": "MAGISTRADOS Y SECRETARIOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "JUNTA FEDERAL DE CONCILIACIÓN Y ARBITRAJE",
+      "cargo": "PRESIDENTE, PRESIDENTES DE LAS JUNTAS ESPECIALES Y SECRETARIOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "ÓRGANOS AUTÓNOMOS Y OTROS",
+      "dependencia": "JUNTAS LOCALES DE CONCILIACIÓN Y ARBITRAJE DE LAS ENTIDADES FEDERATIVAS",
+      "cargo": "PRESIDENTES, PRESIDENTES DE LAS JUNTAS ESPECIALES Y SECRETARIOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PARTIDOS POLÍTICOS",
+      "dependencia": "PARTIDOS POLÍTICOS",
+      "cargo": "CANDIDATOS A PRESIDENTE DE LA REPÚBLICA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PARTIDOS POLÍTICOS",
+      "dependencia": "PARTIDOS POLÍTICOS",
+      "cargo": "CANDIDATOS A SENADORES DE LA REPÚBLICA"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PARTIDOS POLÍTICOS",
+      "dependencia": "PARTIDOS POLÍTICOS",
+      "cargo": "CANDIDATOS A DIPUTADOS FEDERALES"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PARTIDOS POLÍTICOS",
+      "dependencia": "PARTIDOS POLÍTICOS",
+      "cargo": "CANDIDATOS A JEFE DE GOBIERNO DEL DISTRITO FEDERAL"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PARTIDOS POLÍTICOS",
+      "dependencia": "PARTIDOS POLÍTICOS",
+      "cargo": "CANDIDATOS A GOBERNADORES"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PARTIDOS POLÍTICOS",
+      "dependencia": "PARTIDOS POLÍTICOS",
+      "cargo": "CANDIDATOS A DIPUTADOS A LA ASAMBLEA LEGISLATIVA DEL DISTRITO FEDERAL"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PARTIDOS POLÍTICOS",
+      "dependencia": "PARTIDOS POLÍTICOS",
+      "cargo": "CANDIDATOS A DIPUTADOS LOCALES"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PARTIDOS POLÍTICOS",
+      "dependencia": "PARTIDOS POLÍTICOS",
+      "cargo": "CANDIDATOS A PRESIDENTES MUNICIPALES"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PARTIDOS POLÍTICOS",
+      "dependencia": "PARTIDOS POLÍTICOS",
+      "cargo": "CANDIDATOS A JEFES DE DELEGACIÓN DEL DISTRITO FEDERAL"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PARTIDOS POLÍTICOS",
+      "dependencia": "PARTIDOS POLÍTICOS",
+      "cargo": "PRESIDENTES DE PARTIDOS POLÍTICOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PARTIDOS POLÍTICOS",
+      "dependencia": "PARTIDOS POLÍTICOS",
+      "cargo": "SECRETARIOS GENERALES O SUS EQUIVALENTES DE PARTIDOS POLÍTICOS"
+    },
+    {
+      "tipoAdministracionPublica": "PARAESTATAL",
+      "entidadAdministracionPublica": "PARTIDOS POLÍTICOS",
+      "dependencia": "PARTIDOS POLÍTICOS",
+      "cargo": "RESPONSABLES DE FINANZAS DE PARTIDOS POLÍTICOS"
+    }
+  ]
+}

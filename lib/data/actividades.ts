@@ -91,7 +91,7 @@ export const actividadesVulnerables: ActividadVulnerable[] = [
       identificacion:
         "Identificar al cliente o ganador al alcanzar 325 UMA acumuladas en el mes, corroborando listas de personas bloqueadas.",
       aviso:
-        "Presentar aviso dentro de los 17 días siguientes cuando el monto mensual supere 645 UMA, anexando evidencia de pagos y sorteos.",
+        "Presentar aviso a mas tardar el dia 17 del mes inmediato siguiente cuando el monto mensual supere 645 UMA, anexando evidencia de pagos y sorteos.",
     },
     criteriosUif: [
       "Acumular boletos, fichas o créditos del mismo participante durante el mes calendario.",
@@ -520,7 +520,7 @@ export const actividadesVulnerables: ActividadVulnerable[] = [
     ejemplosOperaciones: [
       {
         titulo: "Traslado interbancario",
-        descripcion: "El traslado supera 3,210 UMA y se programa aviso dentro de los 17 días.",
+        descripcion: "El traslado supera 3,210 UMA y se programa aviso para el dia 17 del mes inmediato siguiente.",
       },
       {
         titulo: "Custodia indeterminada",
@@ -983,8 +983,8 @@ export const actividadesVulnerables: ActividadVulnerable[] = [
     clienteObligaciones: buildClienteObligaciones(),
   },
   {
-    key: "fraccion-xii-aduanal-a",
-    fraccion: "Fracción XII",
+    key: "fraccion-xiv-aduanal-a",
+    fraccion: "Fracción XIV",
     nombre: "Comercio exterior: vehículos terrestres, aéreos y marítimos",
     descripcion:
       "Prestación de servicios de comercio exterior como agente o apoderado aduanal relacionados con vehículos.",
@@ -1015,8 +1015,8 @@ export const actividadesVulnerables: ActividadVulnerable[] = [
     clienteObligaciones: buildClienteObligaciones(),
   },
   {
-    key: "fraccion-xii-aduanal-b",
-    fraccion: "Fracción XII",
+    key: "fraccion-xiv-aduanal-b",
+    fraccion: "Fracción XIV",
     nombre: "Comercio exterior: máquinas para juegos y sorteos",
     descripcion:
       "Servicios aduanales relacionados con importación o exportación de máquinas para juegos con apuesta y sorteos.",
@@ -1047,8 +1047,8 @@ export const actividadesVulnerables: ActividadVulnerable[] = [
     clienteObligaciones: buildClienteObligaciones(),
   },
   {
-    key: "fraccion-xii-aduanal-c",
-    fraccion: "Fracción XII",
+    key: "fraccion-xiv-aduanal-c",
+    fraccion: "Fracción XIV",
     nombre: "Comercio exterior: equipos y materiales para tarjetas de pago",
     descripcion:
       "Despacho aduanal de equipos y materiales para la elaboración de tarjetas de pago.",
@@ -1079,8 +1079,8 @@ export const actividadesVulnerables: ActividadVulnerable[] = [
     clienteObligaciones: buildClienteObligaciones(),
   },
   {
-    key: "fraccion-xii-aduanal-d",
-    fraccion: "Fracción XII",
+    key: "fraccion-xiv-aduanal-d",
+    fraccion: "Fracción XIV",
     nombre: "Comercio exterior: joyas, relojes, metales y piedras preciosas",
     descripcion:
       "Servicios de comercio exterior relacionados con joyas, relojes, metales y piedras preciosas.",
@@ -1111,8 +1111,8 @@ export const actividadesVulnerables: ActividadVulnerable[] = [
     clienteObligaciones: buildClienteObligaciones(),
   },
   {
-    key: "fraccion-xii-aduanal-e",
-    fraccion: "Fracción XII",
+    key: "fraccion-xiv-aduanal-e",
+    fraccion: "Fracción XIV",
     nombre: "Comercio exterior: obras de arte",
     descripcion:
       "Servicios de comercio exterior vinculados con la importación o exportación de obras de arte.",
@@ -1143,8 +1143,8 @@ export const actividadesVulnerables: ActividadVulnerable[] = [
     clienteObligaciones: buildClienteObligaciones(),
   },
   {
-    key: "fraccion-xii-aduanal-f",
-    fraccion: "Fracción XII",
+    key: "fraccion-xiv-aduanal-f",
+    fraccion: "Fracción XIV",
     nombre: "Comercio exterior: materiales de resistencia balística",
     descripcion:
       "Despacho aduanal de materiales y equipos de resistencia balística.",
