@@ -16,6 +16,7 @@ import {
   Sparkles,
   Book,
   ClipboardCheck,
+  UserSearch,
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { translations } from "@/lib/translations"
@@ -29,6 +30,7 @@ const options = [
   { name: "expedienteUnico", icon: Users, href: "/kyc-expediente" },
   { name: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },
   { name: "ebr", icon: ClipboardCheck, href: "/ebr" },
+  { name: "pepWhois", icon: UserSearch, href: "/pep-whois" },
   { name: "avisosInformes", icon: FileText, href: "/avisos-informes" },
   { name: "evidenciasTrazabilidad", icon: Database, href: "/evidencias-trazabilidad" },
   { name: "capacitacionControl", icon: GraduationCap, href: "/capacitacion-control" },

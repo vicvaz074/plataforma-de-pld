@@ -1,0 +1,9 @@
+{
+  "sourceId": "opensanctions",
+  "sourceLabel": "OpenSanctions PEP México",
+  "sourceUrl": "https://www.opensanctions.org/",
+  "syncedAt": "2026-05-11T00:00:00.000Z",
+  "count": 0,
+  "license": "OpenSanctions data license applies to synchronized exports; verify commercial terms before production use.",
+  "entities": []
+}

@@ -1,0 +1,179 @@
+{
+  "sourceId": "public-mx",
+  "sourceLabel": "PEP México - fuentes públicas verificadas",
+  "sourceUrl": "local-public-snapshot",
+  "syncedAt": "2026-05-11T00:00:00.000Z",
+  "count": 9,
+  "license": "Compilación local de datos públicos para apoyo PLD; verificar fuente oficial antes de decisión definitiva.",
+  "entities": [
+    {
+      "id": "public-mx-alberto-mendoza-diaz-imt",
+      "name": "Alberto Mendoza Díaz",
+      "aliases": ["Alberto Mendoza Diaz"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Director General del Instituto Mexicano del Transporte",
+          "dependencia": "Secretaría de Infraestructura, Comunicaciones y Transportes",
+          "desde": "2023-01-13"
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "IMT/SICT - documento público",
+      "sourceUrl": "https://imt.mx/images/files/trn/licitaciones/2023/LA-09-A00-009A00001-N-65-2023.pdf",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-11",
+      "topics": ["role.pep", "mx.public-official"]
+    },
+    {
+      "id": "public-mx-claudia-sheinbaum-pardo-presidencia",
+      "name": "Claudia Sheinbaum Pardo",
+      "aliases": ["Claudia Sheinbaum"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Presidenta de los Estados Unidos Mexicanos",
+          "dependencia": "Gobierno de México",
+          "desde": "2024-10-01"
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "Gobierno de México - Presidencia",
+      "sourceUrl": "https://www.gob.mx/presidencia/prensa/version-estenografica-mensaje-de-la-presidenta-claudia-sheinbaum-pardo-durante-su-toma-de-protesta-como-presidenta-constitucional-de-los-estados-unidos-mexicanos",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-11",
+      "topics": ["role.pep", "mx.public-official"]
+    },
+    {
+      "id": "public-mx-marcelo-ebrard-casaubon-economia",
+      "name": "Marcelo Ebrard Casaubón",
+      "aliases": ["Marcelo Ebrard Casaubon", "Marcelo Luis Ebrard Casaubón", "Marcelo Luis Ebrard Casaubon"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Secretario de Economía",
+          "dependencia": "Secretaría de Economía",
+          "desde": "2024-10-01"
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "Secretaría de Economía - Gobierno de México",
+      "sourceUrl": "https://www.gob.mx/se/prensa/mensaje-del-secretario-de-economia-marcelo-ebrard-casaubon-durante-la-reunion-con-empresarios",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-11",
+      "topics": ["role.pep", "mx.public-official"]
+    },
+    {
+      "id": "public-mx-juan-ramon-de-la-fuente-sre",
+      "name": "Juan Ramón de la Fuente Ramírez",
+      "aliases": ["Juan Ramon de la Fuente Ramirez", "Juan Ramón de la Fuente", "Juan Ramon de la Fuente"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Secretario de Relaciones Exteriores",
+          "dependencia": "Secretaría de Relaciones Exteriores",
+          "desde": "2024-10-01"
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "Secretaría de Relaciones Exteriores - Gobierno de México",
+      "sourceUrl": "https://portales.sre.gob.mx/directorio/",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-11",
+      "topics": ["role.pep", "mx.public-official"]
+    },
+    {
+      "id": "public-mx-rosa-icela-rodriguez-velazquez-segob",
+      "name": "Rosa Icela Rodríguez Velázquez",
+      "aliases": ["Rosa Icela Rodriguez Velazquez", "Rosa Icela Rodríguez", "Rosa Icela Rodriguez"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Secretaria de Gobernación",
+          "dependencia": "Secretaría de Gobernación",
+          "desde": "2024-10-01"
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "SRE/Gobierno de México - comunicado oficial",
+      "sourceUrl": "https://www.gob.mx/sre/prensa/290510",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-11",
+      "topics": ["role.pep", "mx.public-official"]
+    },
+    {
+      "id": "public-mx-omar-garcia-harfuch-sspc",
+      "name": "Omar García Harfuch",
+      "aliases": ["Omar Garcia Harfuch"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Secretario de Seguridad y Protección Ciudadana",
+          "dependencia": "Secretaría de Seguridad y Protección Ciudadana",
+          "desde": "2024-10-01"
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "Gobierno de México - SSPC",
+      "sourceUrl": "https://www.gob.mx/sspc/prensa/omar-garcia-harfuch-asume-como-secretario-de-seguridad-y-proteccion-ciudadana",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-11",
+      "topics": ["role.pep", "mx.public-official"]
+    },
+    {
+      "id": "public-mx-ariadna-montiel-reyes-bienestar",
+      "name": "Ariadna Montiel Reyes",
+      "aliases": ["Ariadna Montiel"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Secretaria de Bienestar",
+          "dependencia": "Secretaría de Bienestar",
+          "desde": "2024-10-01"
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "Secretaría de Bienestar - Gobierno de México",
+      "sourceUrl": "https://www.gob.mx/bienestar/prensa/inicia-dispersion-de-pensiones-para-el-bienestar-de-adultos-mayores-personas-con-discapacidad-y-madres-trabajadoras-ariadna-montiel?idiom=es",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-11",
+      "topics": ["role.pep", "mx.public-official"]
+    },
+    {
+      "id": "public-mx-efrain-morales-lopez-conagua",
+      "name": "Efraín Morales López",
+      "aliases": ["Efrain Morales Lopez"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Director General de la Comisión Nacional del Agua",
+          "dependencia": "Comisión Nacional del Agua"
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "Comisión Nacional del Agua - Gobierno de México",
+      "sourceUrl": "https://www.gob.mx/conagua/estructuras/efra",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-11",
+      "topics": ["role.pep", "mx.public-official"]
+    },
+    {
+      "id": "public-mx-jorge-mendoza-sanchez-banobras",
+      "name": "Jorge Mendoza Sánchez",
+      "aliases": ["Jorge Mendoza Sanchez"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Director General",
+          "dependencia": "Banco Nacional de Obras y Servicios Públicos, S.N.C. (Banobras)"
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "Banobras - transparencia",
+      "sourceUrl": "https://transparencia.banobras.gob.mx/articulo-70/directorio/",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-11",
+      "topics": ["role.pep", "mx.public-official"]
+    }
+  ]
+}

@@ -13,7 +13,10 @@ import {
   getUmaForDate,
   matchPepCargo,
   pepCargoFixtures,
+  searchPep,
 } from "../lib/pld"
+import type { PepEntity, PepInternalRecord } from "../lib/pld"
+import pepPublicMxSnapshot from "../public/data/pep-public-mx.json"
 
 test("UMA 2026 uses official INEGI daily, monthly and annual values", () => {
   const uma = getUmaForDate("2026-05-08")
@@ -185,4 +188,200 @@ test("PEP cargo matching is accent-insensitive and returns review state", () => 
   assert.equal(result.status, "coincidencia-cargo")
   assert.equal(result.requiresHumanReview, true)
   assert.equal(result.matches[0]?.cargo, "DIRECTOR GENERAL DEL INSTITUTO MEXICANO DEL TRANSPORTE")
+})
+
+const pepNominalFixture: PepEntity = {
+  id: "os-mx-demo-1",
+  name: "María Fernanda Gómez de la Torre",
+  aliases: ["Ma. Fernanda Gomez Torre"],
+  country: "mx",
+  birthDate: "1977-06-04",
+  positions: [
+    {
+      cargo: "Diputada Federal",
+      dependencia: "Cámara de Diputados",
+      desde: "2024-09-01",
+    },
+  ],
+  source: "opensanctions",
+  sourceLabel: "OpenSanctions PEP",
+  sourceUrl: "https://www.opensanctions.org/",
+  dataset: "peps",
+  lastSeen: "2026-05-11",
+  topics: ["role.pep"],
+}
+
+test("WhoIs PEP search returns high confidence for exact nominal public matches", () => {
+  const result = searchPep(
+    {
+      nombre: "Maria Fernanda Gomez de la Torre",
+      fechaNacimiento: "1977-06-04",
+      relacion: "cliente",
+    },
+    {
+      entities: [pepNominalFixture],
+      cargos: pepCargoFixtures,
+      internalRecords: [],
+    },
+    "2026-05-11T12:00:00.000Z",
+  )
+
+  assert.equal(result.status, "coincidencia_alta")
+  assert.equal(result.results[0]?.entity.id, "os-mx-demo-1")
+  assert.equal(result.results[0]?.source, "opensanctions")
+  assert.equal(result.results[0]?.matchedFields.includes("nombre"), true)
+  assert.equal(result.results[0]?.matchedFields.includes("fechaNacimiento"), true)
+  assert.equal(result.results[0]?.score >= 95, true)
+  assert.equal(result.results[0]?.requiresHumanReview, true)
+})
+
+test("WhoIs PEP search handles partial names and compound surnames as possible matches", () => {
+  const result = searchPep(
+    {
+      nombre: "Fernanda Gomez Torre",
+      relacion: "beneficiario-controlador",
+    },
+    {
+      entities: [pepNominalFixture],
+      cargos: pepCargoFixtures,
+      internalRecords: [],
+    },
+    "2026-05-11T12:00:00.000Z",
+  )
+
+  assert.equal(result.status, "posible_coincidencia")
+  assert.equal(result.results[0]?.matchedFields.includes("alias/nombre parcial"), true)
+  assert.equal(result.results[0]?.score >= 70, true)
+  assert.equal(result.results[0]?.score < 90, true)
+})
+
+test("WhoIs PEP search can escalate on official Mexican PEP position even without a nominal match", () => {
+  const result = searchPep(
+    {
+      cargo: "Director General del Instituto Mexicano del Transporte",
+      dependencia: "Secretaria de Comunicaciones y Transportes",
+      relacion: "representante",
+    },
+    {
+      entities: [],
+      cargos: pepCargoFixtures,
+      internalRecords: [],
+    },
+    "2026-05-11T12:00:00.000Z",
+  )
+
+  assert.equal(result.status, "coincidencia_alta")
+  assert.equal(result.results[0]?.source, "shcp-uif-cargos")
+  assert.equal(result.results[0]?.matchedFields.includes("cargo"), true)
+  assert.equal(result.results[0]?.matchedFields.includes("dependencia"), true)
+})
+
+test("WhoIs PEP search applies internal false-positive decisions before public matches", () => {
+  const falsePositive: PepInternalRecord = {
+    id: "pep-review-fp-1",
+    schemaVersion: 1,
+    subjectName: "María Fernanda Gómez de la Torre",
+    normalizedSubjectName: "MARIA FERNANDA GOMEZ DE LA TORRE",
+    decision: "falso_positivo",
+    sourceEntityId: "os-mx-demo-1",
+    relation: "cliente",
+    evidence: "Homónimo descartado por fecha de nacimiento y expediente interno.",
+    decidedBy: "oficial.cumplimiento@demo.local",
+    decidedAt: "2026-05-11T12:00:00.000Z",
+    nextReviewAt: "2026-11-11",
+  }
+
+  const result = searchPep(
+    {
+      nombre: "Maria Fernanda Gomez de la Torre",
+      fechaNacimiento: "1977-06-04",
+      relacion: "cliente",
+    },
+    {
+      entities: [pepNominalFixture],
+      cargos: pepCargoFixtures,
+      internalRecords: [falsePositive],
+    },
+    "2026-05-11T12:00:00.000Z",
+  )
+
+  assert.equal(result.status, "sin_coincidencia")
+  assert.equal(result.results.length, 0)
+  assert.equal(result.appliedDecisions[0]?.decision, "falso_positivo")
+})
+
+test("WhoIs PEP search surfaces internally registered relatives and associates for review", () => {
+  const relatedPep: PepInternalRecord = {
+    id: "pep-review-related-1",
+    schemaVersion: 1,
+    subjectName: "Carlos Torres Rivas",
+    normalizedSubjectName: "CARLOS TORRES RIVAS",
+    decision: "relacionado_pep",
+    relation: "beneficiario-controlador",
+    relatedPepName: "María Fernanda Gómez de la Torre",
+    evidence: "Declaración del cliente: cónyuge de persona con cargo público relevante.",
+    decidedBy: "oficial.cumplimiento@demo.local",
+    decidedAt: "2026-05-11T12:00:00.000Z",
+    nextReviewAt: "2026-08-11",
+  }
+
+  const result = searchPep(
+    {
+      nombre: "Carlos Torres Rivas",
+      relacion: "beneficiario-controlador",
+    },
+    {
+      entities: [],
+      cargos: pepCargoFixtures,
+      internalRecords: [relatedPep],
+    },
+    "2026-05-11T12:00:00.000Z",
+  )
+
+  assert.equal(result.status, "requiere_revision")
+  assert.equal(result.results[0]?.source, "internal")
+  assert.equal(result.results[0]?.reviewDecision?.decision, "relacionado_pep")
+  assert.equal(result.results[0]?.requiresHumanReview, true)
+})
+
+test("WhoIs PEP public Mexico snapshot finds Alberto Mendoza Diaz by name without accents", () => {
+  const snapshot = pepPublicMxSnapshot as { entities: PepEntity[] }
+  const result = searchPep(
+    {
+      nombre: "Alberto Mendoza Diaz",
+      relacion: "cliente",
+    },
+    {
+      entities: snapshot.entities,
+      cargos: pepCargoFixtures,
+      internalRecords: [],
+    },
+    "2026-05-11T12:00:00.000Z",
+  )
+
+  assert.equal(result.status, "coincidencia_alta")
+  assert.equal(result.results[0]?.entity.name, "Alberto Mendoza Díaz")
+  assert.equal(result.results[0]?.entity.positions?.[0]?.cargo, "Director General del Instituto Mexicano del Transporte")
+  assert.equal(result.results[0]?.matchedFields.includes("nombre"), true)
+})
+
+test("WhoIs PEP public Mexico snapshot finds Marcelo Ebrard Casaubon as Economy Secretary", () => {
+  const snapshot = pepPublicMxSnapshot as { entities: PepEntity[] }
+  const result = searchPep(
+    {
+      nombre: "Marcelo Ebrard Casaubon",
+      relacion: "cliente",
+    },
+    {
+      entities: snapshot.entities,
+      cargos: pepCargoFixtures,
+      internalRecords: [],
+    },
+    "2026-05-11T12:00:00.000Z",
+  )
+
+  assert.equal(result.status, "coincidencia_alta")
+  assert.equal(result.results[0]?.entity.name, "Marcelo Ebrard Casaubón")
+  assert.equal(result.results[0]?.entity.positions?.[0]?.cargo, "Secretario de Economía")
+  assert.equal(result.results[0]?.entity.positions?.[0]?.dependencia, "Secretaría de Economía")
 })

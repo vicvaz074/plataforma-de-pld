@@ -35,7 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useLanguage } from "@/lib/LanguageContext";
 import { PAISES } from "@/lib/data/paises";
-import { matchPepCargo, type PepScreeningResult } from "@/lib/pld";
+import { matchPepCargo, normalizeName, PEP_SEARCH_HISTORY_STORAGE_KEY, type PepScreeningResult, type PepSearchResponse } from "@/lib/pld";
 import { translations } from "@/lib/translations";
 
 interface ExpedienteDetalle {
@@ -526,6 +526,7 @@ export default function EbrPage() {
   const [evaluacionesGuardadas, setEvaluacionesGuardadas] = useState<
     Record<string, StoredEvaluation>
   >({});
+  const [pepWhoisHistory, setPepWhoisHistory] = useState<PepSearchResponse[]>([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState("");
 
   const [clientAnswers, setClientAnswers] =
@@ -573,6 +574,14 @@ export default function EbrPage() {
       setEvaluacionesGuardadas(parsed);
     } catch (_error) {
       setEvaluacionesGuardadas({});
+    }
+
+    try {
+      const raw = window.localStorage.getItem(PEP_SEARCH_HISTORY_STORAGE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as PepSearchResponse[]) : [];
+      setPepWhoisHistory(Array.isArray(parsed) ? parsed : []);
+    } catch (_error) {
+      setPepWhoisHistory([]);
     }
   }, []);
 
@@ -653,7 +662,18 @@ export default function EbrPage() {
     });
   }, [expedienteActual?.nombre, hasBeneficiaryController, pepCargo, pepDependencia]);
 
+  const pepWhoisActual = useMemo(() => {
+    const expedienteNombre = normalizeName(expedienteActual?.nombre);
+    if (!expedienteNombre) return null;
+    return (
+      pepWhoisHistory.find((item) => normalizeName(item.query.nombre) === expedienteNombre) ??
+      null
+    );
+  }, [expedienteActual?.nombre, pepWhoisHistory]);
+
   const finalLevel = useMemo(() => {
+    if (pepWhoisActual?.status === "coincidencia_alta" || pepWhoisActual?.status === "requiere_revision") return "Reforzado";
+    if (pepWhoisActual?.status === "posible_coincidencia") return "Alto";
     if (pepScreening?.status === "coincidencia-cargo") return "Reforzado";
     if (pepScreening?.status === "posible-pep") return "Alto";
     const levels = [
@@ -665,7 +685,7 @@ export default function EbrPage() {
     if (levels.includes("Alto")) return "Alto";
     if (levels.includes("Medio")) return "Medio";
     return "Bajo";
-  }, [clientResult.level, subjectResult.level, beneficiaryResult?.level, pepScreening?.status]);
+  }, [clientResult.level, subjectResult.level, beneficiaryResult?.level, pepScreening?.status, pepWhoisActual?.status]);
 
   const riskBadgeStyles = {
     Bajo: "bg-emerald-100 text-emerald-700",
@@ -774,6 +794,12 @@ export default function EbrPage() {
       addLine(`Validacion PEP por cargos SHCP/UIF: ${pepScreening.status}. ${pepScreening.note}`);
       pepScreening.matches.slice(0, 3).forEach((match) => {
         addLine(`- ${match.cargo} | ${match.dependencia}`, 8);
+      });
+    }
+    if (pepWhoisActual) {
+      addLine(`WhoIs PEP local-first: ${pepWhoisActual.status}. ${pepWhoisActual.recommendation}`);
+      pepWhoisActual.results.slice(0, 3).forEach((match) => {
+        addLine(`- ${match.entity.name} | ${match.source} | score ${match.score}`, 8);
       });
     }
 
@@ -1058,8 +1084,8 @@ export default function EbrPage() {
 	                  />
 	                </div>
 	              </div>
-	              {pepScreening ? (
-	                <div className="rounded-lg border bg-slate-50 p-4 text-sm">
+		              {pepScreening ? (
+		                <div className="rounded-lg border bg-slate-50 p-4 text-sm">
 	                  <div className="flex flex-wrap items-center gap-2">
 	                    <Badge
 	                      className={
@@ -1086,13 +1112,31 @@ export default function EbrPage() {
 	                    ))}
 	                  </div>
 	                </div>
-	              ) : (
-	                <p className="text-sm text-muted-foreground">
-	                  Captura cargo y dependencia cuando el cliente, representante o beneficiario controlador declare o sugiera vínculo con servicio público.
-	                </p>
-	              )}
-	            </CardContent>
-	          </Card>
+		              ) : (
+		                <p className="text-sm text-muted-foreground">
+		                  Captura cargo y dependencia cuando el cliente, representante o beneficiario controlador declare o sugiera vínculo con servicio público.
+		                </p>
+		              )}
+                  <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium">WhoIs PEP local-first</p>
+                        <p className="text-muted-foreground">
+                          {pepWhoisActual
+                            ? `Último resultado: ${pepWhoisActual.status}.`
+                            : "Sin consulta nominal guardada para este expediente."}
+                        </p>
+                      </div>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href="/pep-whois">Abrir WhoIs PEP</Link>
+                      </Button>
+                    </div>
+                    {pepWhoisActual ? (
+                      <p className="mt-3 text-xs text-muted-foreground">{pepWhoisActual.recommendation}</p>
+                    ) : null}
+                  </div>
+		            </CardContent>
+		          </Card>
 
 	          <Card>
             <CardHeader>
@@ -1137,16 +1181,25 @@ export default function EbrPage() {
 	                />
 	              ) : null}
 
-	              {pepScreening ? (
-	                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+		              {pepScreening ? (
+		                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
 	                  <p className="text-sm font-medium">PEP por cargo oficial SHCP/UIF</p>
 	                  <p className="mt-1 text-sm text-muted-foreground">
 	                    Estado: <strong>{pepScreening.status}</strong>. {pepScreening.note}
 	                  </p>
-	                </div>
-	              ) : null}
+		                </div>
+		              ) : null}
 
-	              <div className="rounded-lg border border-dashed p-4">
+                  {pepWhoisActual ? (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm font-medium">WhoIs PEP local-first</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Estado: <strong>{pepWhoisActual.status}</strong>. {pepWhoisActual.recommendation}
+                      </p>
+                    </div>
+                  ) : null}
+
+		              <div className="rounded-lg border border-dashed p-4">
                 <p className="text-sm font-medium">Conclusión</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Nivel final del expediente: <strong>{finalLevel}</strong>.

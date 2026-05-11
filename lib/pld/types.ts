@@ -122,12 +122,145 @@ export interface PepCargo {
   cargo: string
 }
 
+export type PepRelacion = "cliente" | "beneficiario-controlador" | "representante" | "familiar" | "socio" | "otro"
+export type PepEntitySource = "shcp-uif-cargos" | "cnbv" | "opensanctions" | "public-mx" | "internal"
+export type PepWhoIsStatus = "coincidencia_alta" | "posible_coincidencia" | "sin_coincidencia" | "requiere_revision"
+export type PepAmbito = "federal" | "estatal" | "municipal" | "partido" | "autonomo" | "paraestatal" | "desconocido"
+export type PepPoder = "ejecutivo" | "legislativo" | "judicial" | "autonomo" | "partido" | "paraestatal" | "desconocido"
+export type PepResolutionStatus = "resolved" | "possible" | "unresolved" | "conflict" | "stale"
+export type PepSourceType =
+  | "official-csv"
+  | "official-pdf"
+  | "official-directory"
+  | "official-web"
+  | "opensanctions"
+  | "manual-review"
+  | "internal"
+
+export interface PepCargoDefinition extends PepCargo {
+  id: string
+  ambito: PepAmbito
+  poder: PepPoder
+  nivel: "alto" | "medio" | "operativo" | "desconocido"
+  normalizedCargo: string
+  normalizedDependencia: string
+  sourceIds: string[]
+  sourceLabels: string[]
+  sourceUrls: string[]
+  lastVerified: string
+  needsTitularResolution: boolean
+  sourceNotes?: string[]
+}
+
+export interface PepSourceRecord {
+  sourceId: string
+  sourceLabel: string
+  sourceUrl: string
+  sourceType: PepSourceType
+  lastSyncedAt: string
+  maxAgeDays: number
+  status: "active" | "stale" | "error" | "manual-review"
+  license?: string
+  notes?: string
+}
+
+export interface PepPersonRecord extends PepEntity {
+  cargoIds: string[]
+  resolutionStatus: PepResolutionStatus
+  verifiedAt: string
+  sourceIds: string[]
+  confidence?: number
+  evidenceUrl?: string
+}
+
+export interface PepReviewQueueItem {
+  id: string
+  cargoId?: string
+  personId?: string
+  reason: "sin_titular_resuelto" | "fuente_vencida" | "conflicto_fuentes" | "posible_homonimo" | "requiere_evidencia"
+  label: string
+  priority: "alta" | "media" | "baja"
+  sourceIds: string[]
+  createdAt: string
+  recommendation: string
+}
+
+export interface PepCoverageReport {
+  generatedAt: string
+  totalCargos: number
+  cargosConTitular: number
+  cargosSinTitular: number
+  personasResueltas: number
+  staleSources: PepSourceRecord[]
+  freshSources: PepSourceRecord[]
+  reviewQueue: PepReviewQueueItem[]
+  coverageByAmbito: Record<
+    PepAmbito,
+    {
+      total: number
+      resolved: number
+      unresolved: number
+    }
+  >
+  warnings: string[]
+}
+
+export interface PepPosition {
+  cargo: string
+  dependencia?: string
+  desde?: string
+  hasta?: string
+}
+
+export interface PepEntity {
+  id: string
+  name: string
+  aliases?: string[]
+  country?: string
+  birthDate?: string
+  positions?: PepPosition[]
+  source: PepEntitySource
+  sourceLabel: string
+  sourceUrl: string
+  dataset?: string
+  lastSeen?: string
+  topics?: string[]
+}
+
+export interface PepSourceSnapshot {
+  sourceId: PepEntitySource | string
+  sourceLabel: string
+  sourceUrl: string
+  syncedAt: string
+  count: number
+  license?: string
+  entities: PepEntity[]
+}
+
+export interface PepReviewDecision {
+  id: string
+  decision: "confirmado_pep" | "falso_positivo" | "relacionado_pep" | "requiere_revision"
+  subjectName: string
+  normalizedSubjectName: string
+  relation: PepRelacion
+  evidence: string
+  decidedBy: string
+  decidedAt: string
+  nextReviewAt?: string
+  sourceEntityId?: string
+  relatedPepName?: string
+}
+
+export interface PepInternalRecord extends PepReviewDecision {
+  schemaVersion: 1
+}
+
 export interface PepScreeningInput {
   nombre?: string
   cargo?: string
   dependencia?: string
   entidad?: string
-  relacion?: "cliente" | "beneficiario-controlador" | "representante" | "familiar" | "socio" | "otro"
+  relacion?: PepRelacion
 }
 
 export interface PepScreeningResult {
@@ -137,6 +270,41 @@ export interface PepScreeningResult {
   source: string
   checkedAt: string
   note: string
+}
+
+export interface PepSearchQuery {
+  nombre?: string
+  cargo?: string
+  dependencia?: string
+  fechaNacimiento?: string
+  pais?: string
+  relacion?: PepRelacion
+}
+
+export interface PepSearchResult {
+  status: PepWhoIsStatus
+  score: number
+  entity: PepEntity
+  source: PepEntitySource
+  matchedFields: string[]
+  requiresHumanReview: boolean
+  note: string
+  reviewDecision?: PepReviewDecision
+}
+
+export interface PepSearchResponse {
+  status: PepWhoIsStatus
+  checkedAt: string
+  query: PepSearchQuery
+  results: PepSearchResult[]
+  appliedDecisions: PepReviewDecision[]
+  sourceSnapshots: Array<{
+    sourceId: string
+    sourceLabel: string
+    syncedAt?: string
+    count: number
+  }>
+  recommendation: string
 }
 
 export interface EbrFactorResult {
