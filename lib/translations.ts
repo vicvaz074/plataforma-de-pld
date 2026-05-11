@@ -32,6 +32,7 @@ export const translations = {
     auditoriaVerificacion: "Auditoría y Verificación Interna",
     evidenciasTrazabilidad: "Evidencias y Trazabilidad",
     ebr: "Evaluación Basada en Riesgo (EBR)",
+    pepWhois: "WhoIs PEP",
     gobernanzaControl: "Gobernanza y Control Interno",
     compiladoLeyes: "Marco Normativo Aplicable",
 
@@ -80,6 +81,8 @@ export const translations = {
       "Repositorio digital centralizado con sellos de tiempo, control de versiones y logs de acceso.",
     ebrDescription:
       "Matriz de riesgo integral para evaluar clientes, productos y operaciones, con seguimiento de planes de mitigación.",
+    pepWhoisDescription:
+      "Búsqueda PEP local-first con fuentes públicas, base interna y decisiones humanas trazables.",
     gobernanzaControlDescription:
       "Acreditación de órganos de control como Oficial de Cumplimiento, manuales internos y Comité de Comunicación y Control.",
     compiladoLeyesDescription:
@@ -249,6 +252,7 @@ export const translations = {
     auditoriaVerificacion: "Audit and Internal Verification",
     evidenciasTrazabilidad: "Evidence and Traceability",
     ebr: "Risk-Based Assessment (RBA)",
+    pepWhois: "WhoIs PEP",
     gobernanzaControl: "Governance and Internal Control",
     compiladoLeyes: "Applicable Legal Framework",
 
@@ -293,6 +297,8 @@ export const translations = {
       "Centralized digital repository with timestamps, version control and access logs.",
     ebrDescription:
       "Comprehensive risk matrix to evaluate clients, products, and operations with mitigation plan tracking.",
+    pepWhoisDescription:
+      "Local-first PEP screening with public sources, internal records, and auditable human decisions.",
     gobernanzaControlDescription:
       "Accreditation of control bodies such as Compliance Officer, internal manuals and Communication and Control Committee.",
     compiladoLeyesDescription:

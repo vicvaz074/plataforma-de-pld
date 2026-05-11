@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useLanguage } from "@/lib/LanguageContext"
 import { usePathname } from "next/navigation"
 import Image from "next/image"
-import { ChevronLeft, LayoutDashboard, Shield, FileCheck, Users, FileText, GraduationCap, Search, Database, Settings, Sparkles, Book, ClipboardCheck } from "lucide-react"
+import { ChevronLeft, LayoutDashboard, Shield, FileCheck, Users, FileText, GraduationCap, Search, Database, Settings, Sparkles, Book, ClipboardCheck, UserSearch } from "lucide-react"
 import { translations } from "@/lib/translations"
 import { aliciaTranslations } from "@/lib/alicia-translations"
 
@@ -14,6 +14,7 @@ const navigationItems = [
   { key: "expedienteUnico", icon: Users, href: "/kyc-expediente" },
   { key: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },
   { key: "ebr", icon: ClipboardCheck, href: "/ebr" },
+  { key: "pepWhois", icon: UserSearch, href: "/pep-whois" },
   { key: "avisosInformes", icon: FileText, href: "/avisos-informes" },
   { key: "capacitacionControl", icon: GraduationCap, href: "/capacitacion-control" },
   { key: "auditoriaVerificacion", icon: Search, href: "/auditoria-verificacion" },

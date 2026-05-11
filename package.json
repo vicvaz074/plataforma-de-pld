@@ -6,6 +6,12 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
+    "sync:pep:cargos": "tsx scripts/sync-pep-cargos.mjs",
+    "sync:pep:extract-pdf": "tsx scripts/extract-pep-cargos-pdf.mjs",
+    "sync:pep:opensanctions": "node scripts/sync-pep-opensanctions.mjs",
+    "sync:pep:personas": "tsx scripts/sync-pep-personas-mx.mjs",
+    "sync:pep:all": "pnpm sync:pep:cargos && pnpm sync:pep:personas && pnpm validate:pep:data",
+    "validate:pep:data": "tsx scripts/validate-pep-data.mjs",
     "test:pld": "tsx --test tests/*.test.ts",
     "start": "next start"
   },

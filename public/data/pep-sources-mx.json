@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-05-11T22:14:56.067Z",
+  "count": 5,
+  "sources": [
+    {
+      "sourceId": "shcp-uif-csv",
+      "sourceLabel": "SHCP/UIF CSV cargos públicos políticamente expuestos",
+      "sourceUrl": "https://www.secciones.hacienda.gob.mx/work/models/SHCP/UIF/cargos_publicos_politicamente_expuestos.csv",
+      "sourceType": "official-csv",
+      "lastSyncedAt": "2026-05-11T22:14:53.261Z",
+      "maxAgeDays": 90,
+      "status": "active",
+      "notes": "Fuente primaria de cargos PEP."
+    },
+    {
+      "sourceId": "cnbv-pep-nacional",
+      "sourceLabel": "CNBV/SHCP Personas Políticamente Expuestas Nacionales",
+      "sourceUrl": "https://www.gob.mx/cnbv/documentos/personas-politicamente-expuestas-nacionales",
+      "sourceType": "official-web",
+      "lastSyncedAt": "2026-05-11T22:14:56.067Z",
+      "maxAgeDays": 180,
+      "status": "active",
+      "notes": "Página pública que contextualiza la lista enunciativa de cargos PEP nacionales."
+    },
+    {
+      "sourceId": "public-mx",
+      "sourceLabel": "PEP México - fuentes públicas verificadas",
+      "sourceUrl": "local-public-snapshot",
+      "sourceType": "official-directory",
+      "lastSyncedAt": "2026-05-11T00:00:00.000Z",
+      "maxAgeDays": 90,
+      "status": "active",
+      "notes": "Snapshot nominal curado desde fuentes oficiales públicas."
+    },
+    {
+      "sourceId": "opensanctions",
+      "sourceLabel": "OpenSanctions PEP México",
+      "sourceUrl": "https://www.opensanctions.org/",
+      "sourceType": "opensanctions",
+      "lastSyncedAt": "2026-05-11T00:00:00.000Z",
+      "maxAgeDays": 30,
+      "status": "active",
+      "license": "OpenSanctions data license applies to synchronized exports; verify commercial terms before production use.",
+      "notes": "Snapshot local; revisar licencia y términos antes de uso comercial."
+    },
+    {
+      "sourceId": "shcp-pdf-2020",
+      "sourceLabel": "Lista PEP Nacional 2020 SHCP/UBVA",
+      "sourceUrl": "local://Lista_PEPS_2020.pdf",
+      "sourceType": "official-pdf",
+      "lastSyncedAt": "2026-05-11T22:14:53.261Z",
+      "maxAgeDays": 365,
+      "status": "active",
+      "notes": "Insumo de taxonomía de cargos; no contiene titulares nominales actuales."
+    }
+  ],
+  "health": {
+    "fresh": 5,
+    "stale": 0
+  }
+}
