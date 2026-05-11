@@ -1,6 +1,7 @@
 export * from "./actividades"
 export * from "./dates"
 export * from "./ebr"
+export * from "./evidence"
 export * from "./forms"
 export * from "./operations"
 export * from "./pep"

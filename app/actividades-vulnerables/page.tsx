@@ -63,8 +63,16 @@ import { CIUDADES_MEXICO, findCodigoPostalInfo } from "@/lib/data/codigos-postal
 import { demoFraccionXV } from "@/lib/demo/fraccion-xv"
 import { PAISES, findPaisByCodigo, findPaisByNombre } from "@/lib/data/paises"
 import {
+  buildChecklistFromRequirements,
+  classifyAvisoSalida,
   evaluarOperacionVulnerable,
+  evaluateEvidenceChecklist,
+  getAcumulacionRuleForActividad,
+  getDocumentRequirementsForCliente,
   matchPepCargo,
+  type AvisoSalidaTipo,
+  type DocumentRequirement,
+  type EvidenceChecklistEvaluation,
   type PepScreeningResult,
 } from "@/lib/pld"
 
@@ -556,6 +564,16 @@ interface OperacionCliente {
   alertaCodigo?: string
   alertaDescripcion?: string
   prioridadAviso?: string
+  sospecha24h?: boolean
+  avisoSalidaTipo?: AvisoSalidaTipo
+  avisoSalidaLabel?: string
+  avisoSalidaDescripcion?: string
+  evidenciaCanClose?: boolean
+  evidenciaFaltantesCriticos?: number
+  evidenciaFaltantesOpcionales?: number
+  acumulacionAplica?: boolean
+  acumulacionRegla?: string
+  acumulacionRazon?: string
   claveSujetoObligado?: string
   claveActividadVulnerable?: string
   expedienteReferenciado?: string
@@ -627,26 +645,6 @@ function obtenerOpcionTipoCliente(value: string) {
   return CLIENTE_TIPOS.find((tipo) => tipo.value === value)
 }
 
-const TIPO_CLIENTE_OBLIGACIONES: Record<string, keyof ActividadVulnerable["clienteObligaciones"]> = {
-  pf_residente: "personaFisica",
-  pf_visitante: "personaExtranjera",
-  pm_mexicana: "personaMoral",
-  pm_extranjera: "personaExtranjera",
-  entidad_financiera: "otro",
-  fideicomiso: "fideicomiso",
-  organismo_internacional: "autoridad",
-  pm_derecho_publico: "autoridad",
-  pm_derecho_publico_simplificado: "autoridad",
-  // valores legados
-  pfn: "personaFisica",
-  pfe: "personaExtranjera",
-  pmn: "personaMoral",
-  pme: "personaExtranjera",
-  dependencia: "autoridad",
-  vehiculo: "vehiculo",
-  otro: "otro",
-}
-
 function ordenarClientesGuardados(clientes: ClienteGuardado[]) {
   return [...clientes].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
 }
@@ -704,19 +702,37 @@ function buildChecklist(
   tipoCliente: string,
   existente?: Record<string, boolean>,
 ) {
-  const tipoNormalizado = normalizarTipoCliente(tipoCliente)
-  const key =
-    TIPO_CLIENTE_OBLIGACIONES[tipoNormalizado as keyof typeof TIPO_CLIENTE_OBLIGACIONES] ??
-    TIPO_CLIENTE_OBLIGACIONES[tipoCliente as keyof typeof TIPO_CLIENTE_OBLIGACIONES] ??
-    "otro"
-  const requisitosBase = actividad.clienteObligaciones[key]
-  const checklist: Record<string, boolean> = {}
+  const requirements = getDocumentRequirementsForCliente(normalizarTipoCliente(tipoCliente), actividad.key)
+  return buildChecklistFromRequirements(requirements, existente)
+}
 
-  requisitosBase.forEach((item) => {
-    checklist[item] = existente?.[item] ?? false
+function buildJustificacionesEvidencia(documentos: DocumentoSoporte[] = []) {
+  return documentos.reduce<Record<string, string>>((acc, documento) => {
+    if (documento.notas.trim()) {
+      acc[documento.requisito] = documento.notas.trim()
+    }
+    return acc
+  }, {})
+}
+
+function evaluarEvidenciaOperacion(operacion: Pick<
+  OperacionCliente,
+  "actividadKey" | "tipoCliente" | "requisitosChecklist" | "documentosSoporte"
+>): EvidenceChecklistEvaluation {
+  const requirements = getDocumentRequirementsForCliente(operacion.tipoCliente, operacion.actividadKey)
+  return evaluateEvidenceChecklist({
+    requirements,
+    completed: operacion.requisitosChecklist,
+    justifications: buildJustificacionesEvidencia(operacion.documentosSoporte),
   })
+}
 
-  return checklist
+function formatSalidaTipo(tipo: AvisoSalidaTipo) {
+  if (tipo === "aviso_normal") return "Layout normal"
+  if (tipo === "informe_ceros") return "Informe en ceros"
+  if (tipo === "informe_27_bis") return "Informe 27 Bis"
+  if (tipo === "aviso_24h") return "Aviso 24 horas"
+  return "Sin salida"
 }
 
 function obtenerAlertaPorStatus(status: UmbralStatus) {
@@ -724,7 +740,7 @@ function obtenerAlertaPorStatus(status: UmbralStatus) {
     return "Supera el umbral de aviso. Preparar aviso para el día 17 del mes inmediato siguiente y cerrar la ventana de acumulación."
   }
   if (status === "identificacion") {
-    return "Supera el umbral de identificación. Integrar expediente y vigilar acumulación por 6 meses."
+    return "Supera el umbral de identificación. Integrar expediente y aplicar acumulación solo cuando RCG Art. 19 corresponda."
   }
   return null
 }
@@ -740,6 +756,15 @@ function recalcularOperaciones(lista: OperacionCliente[]) {
           : operacion.monto >= operacion.identificacionUmbralPesos
             ? "identificacion"
             : "sin-obligacion"
+      const evidenciaEvaluada = evaluarEvidenciaOperacion(operacion)
+      const salida = classifyAvisoSalida({
+        status: statusPresentado,
+        fechaOperacion: operacion.fechaOperacion,
+        supuesto27Bis: operacion.mismoGrupo && statusPresentado === "aviso",
+        sospecha24h: Boolean(operacion.sospecha24h),
+        evidenceCanClose: evidenciaEvaluada.canClose,
+      })
+      const acumulacionRule = getAcumulacionRuleForActividad(operacion.actividadKey)
 
       procesadas.push(operacion)
 
@@ -749,6 +774,15 @@ function recalcularOperaciones(lista: OperacionCliente[]) {
         umbralStatus: statusPresentado,
         alerta: operacion.alerta ?? obtenerAlertaPorStatus(statusPresentado),
         alertaResuelta: true,
+        avisoSalidaTipo: salida.tipo,
+        avisoSalidaLabel: salida.label,
+        avisoSalidaDescripcion: salida.descripcion,
+        evidenciaCanClose: evidenciaEvaluada.canClose,
+        evidenciaFaltantesCriticos: evidenciaEvaluada.missingCritical.length,
+        evidenciaFaltantesOpcionales: evidenciaEvaluada.missingOptional.length,
+        acumulacionAplica: acumulacionRule.applies,
+        acumulacionRegla: acumulacionRule.source,
+        acumulacionRazon: acumulacionRule.rationale,
       }
     }
 
@@ -781,6 +815,15 @@ function recalcularOperaciones(lista: OperacionCliente[]) {
     }
 
     const alertaCalculada = obtenerAlertaPorStatus(status)
+    const evidenciaEvaluada = evaluarEvidenciaOperacion(operacion)
+    const salida = classifyAvisoSalida({
+      status,
+      fechaOperacion: operacion.fechaOperacion,
+      supuesto27Bis: operacion.mismoGrupo && status === "aviso",
+      sospecha24h: Boolean(operacion.sospecha24h),
+      evidenceCanClose: evidenciaEvaluada.canClose,
+    })
+    const acumulacionRule = getAcumulacionRuleForActividad(operacion.actividadKey)
     let alertaResuelta = operacion.alertaResuelta
 
     if (!alertaCalculada) {
@@ -795,6 +838,15 @@ function recalcularOperaciones(lista: OperacionCliente[]) {
       umbralStatus: status,
       alerta: alertaCalculada,
       alertaResuelta,
+      avisoSalidaTipo: salida.tipo,
+      avisoSalidaLabel: salida.label,
+      avisoSalidaDescripcion: salida.descripcion,
+      evidenciaCanClose: evidenciaEvaluada.canClose,
+      evidenciaFaltantesCriticos: evidenciaEvaluada.missingCritical.length,
+      evidenciaFaltantesOpcionales: evidenciaEvaluada.missingOptional.length,
+      acumulacionAplica: acumulacionRule.applies,
+      acumulacionRegla: acumulacionRule.source,
+      acumulacionRazon: acumulacionRule.rationale,
     }
     procesadas.push(recalculada)
     return recalculada
@@ -877,6 +929,10 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
     typeof raw.monedaDescripcion === "string" ? raw.monedaDescripcion : getMonedaLabel(moneda)
 
   const monto = Number(raw.monto) || 0
+  const fechaOperacion =
+    typeof raw.fechaOperacion === "string"
+      ? raw.fechaOperacion
+      : new Date().toISOString().substring(0, 10)
 
   const personaAviso = sanitizePersonaAviso(raw.personaAviso)
   const inmueble = sanitizeInmueble(raw.inmueble)
@@ -885,12 +941,26 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
   const contraparte = sanitizeContraparte(raw.contraparte)
   const instrumento = sanitizeInstrumento(raw.instrumento)
 
-  const documentosRaw = Array.isArray(raw.documentosSoporte) ? raw.documentosSoporte : []
+  const documentosRaw: unknown[] = Array.isArray(raw.documentosSoporte) ? raw.documentosSoporte : []
   const documentosSoporte = documentosRaw
     .map((doc) => sanitizeDocumento(doc))
     .filter((doc): doc is DocumentoSoporte => Boolean(doc))
 
   const requisitosChecklist = buildChecklist(actividad, tipoCliente, raw.requisitosChecklist)
+  const evidenciaEvaluada = evaluateEvidenceChecklist({
+    requirements: getDocumentRequirementsForCliente(tipoCliente, actividad.key),
+    completed: requisitosChecklist,
+    justifications: buildJustificacionesEvidencia(documentosSoporte),
+  })
+  const statusSanitizado = (raw.umbralStatus as UmbralStatus) ?? "sin-obligacion"
+  const salidaSanitizada = classifyAvisoSalida({
+    status: statusSanitizado,
+    fechaOperacion,
+    supuesto27Bis: Boolean(raw.mismoGrupo) && statusSanitizado === "aviso",
+    sospecha24h: Boolean(raw.sospecha24h),
+    evidenceCanClose: evidenciaEvaluada.canClose,
+  })
+  const acumulacionRule = getAcumulacionRuleForActividad(actividad.key)
 
   return {
     id,
@@ -913,16 +983,13 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
     monto,
     moneda,
     monedaDescripcion,
-    fechaOperacion:
-      typeof raw.fechaOperacion === "string"
-        ? raw.fechaOperacion
-        : new Date().toISOString().substring(0, 10),
+    fechaOperacion,
     tipoOperacion: typeof raw.tipoOperacion === "string" ? raw.tipoOperacion : "",
     evidencia: typeof raw.evidencia === "string" ? raw.evidencia : "",
     umaDiaria: Number(raw.umaDiaria) || 0,
     identificacionUmbralPesos: Number(raw.identificacionUmbralPesos) || 0,
     avisoUmbralPesos: Number(raw.avisoUmbralPesos) || 0,
-    umbralStatus: (raw.umbralStatus as UmbralStatus) ?? "sin-obligacion",
+    umbralStatus: statusSanitizado,
     acumuladoCliente: Number(raw.acumuladoCliente) || Number(raw.monto) || 0,
     alerta: typeof raw.alerta === "string" ? raw.alerta : obtenerAlertaPorStatus(raw.umbralStatus),
     avisoPresentado: Boolean(raw.avisoPresentado),
@@ -935,6 +1002,19 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
     alertaDescripcion:
       typeof raw.alertaDescripcion === "string" ? raw.alertaDescripcion : undefined,
     prioridadAviso: typeof raw.prioridadAviso === "string" ? raw.prioridadAviso : undefined,
+    sospecha24h: Boolean(raw.sospecha24h),
+    avisoSalidaTipo:
+      typeof raw.avisoSalidaTipo === "string" ? (raw.avisoSalidaTipo as AvisoSalidaTipo) : salidaSanitizada.tipo,
+    avisoSalidaLabel:
+      typeof raw.avisoSalidaLabel === "string" ? raw.avisoSalidaLabel : salidaSanitizada.label,
+    avisoSalidaDescripcion:
+      typeof raw.avisoSalidaDescripcion === "string" ? raw.avisoSalidaDescripcion : salidaSanitizada.descripcion,
+    evidenciaCanClose: evidenciaEvaluada.canClose,
+    evidenciaFaltantesCriticos: evidenciaEvaluada.missingCritical.length,
+    evidenciaFaltantesOpcionales: evidenciaEvaluada.missingOptional.length,
+    acumulacionAplica: acumulacionRule.applies,
+    acumulacionRegla: acumulacionRule.source,
+    acumulacionRazon: acumulacionRule.rationale,
     claveSujetoObligado:
       typeof raw.claveSujetoObligado === "string" ? raw.claveSujetoObligado : undefined,
     claveActividadVulnerable:
@@ -1070,7 +1150,7 @@ function sanitizeExpediente(raw: any): ExpedienteDetalle | null {
   const rfc = typeof raw.rfc === "string" ? raw.rfc : ""
   if (!rfc) return null
 
-  const personasRaw = Array.isArray(raw.personas) ? raw.personas : []
+  const personasRaw: unknown[] = Array.isArray(raw.personas) ? raw.personas : []
   const personas = personasRaw
     .map((item) => sanitizeExpedientePersona(item))
     .filter((item): item is ExpedientePersona => Boolean(item))
@@ -1386,6 +1466,7 @@ export default function ActividadesVulnerablesPage() {
   const [clienteNombre, setClienteNombre] = useState<string>("")
   const [rfc, setRfc] = useState<string>("")
   const [mismoGrupo, setMismoGrupo] = useState<string>("no")
+  const [sospecha24h, setSospecha24h] = useState(false)
   const [tipoOperacion, setTipoOperacion] = useState<string>("")
   const [moneda, setMoneda] = useState<string>("MXN")
   const [monedaPersonalizadaCodigo, setMonedaPersonalizadaCodigo] = useState<string>("")
@@ -1772,6 +1853,16 @@ export default function ActividadesVulnerablesPage() {
     [actividadKey],
   )
 
+  const requisitosDocumentalesActuales = useMemo<DocumentRequirement[]>(
+    () => getDocumentRequirementsForCliente(tipoCliente, actividadSeleccionada?.key),
+    [tipoCliente, actividadSeleccionada?.key],
+  )
+
+  const acumulacionRuleActual = useMemo(
+    () => (actividadSeleccionada ? getAcumulacionRuleForActividad(actividadSeleccionada.key) : null),
+    [actividadSeleccionada],
+  )
+
   const esActividadInmuebles = useMemo(
     () => actividadSeleccionada?.key === ACTIVIDAD_INMUEBLES_KEY,
     [actividadSeleccionada],
@@ -1873,11 +1964,10 @@ export default function ActividadesVulnerablesPage() {
     [actividadOperacionSeleccionada, actividadesRegistradasCliente],
   )
 
-  const personasExpediente = expedienteActual?.personas ?? []
-
   const personasExpedienteOpciones = useMemo(
-    () =>
-      personasExpediente.map((persona, index) => {
+    () => {
+      const personasExpediente = expedienteActual?.personas ?? []
+      return personasExpediente.map((persona, index) => {
         const baseId =
           persona.id && persona.id.trim().length > 0
             ? persona.id
@@ -1891,8 +1981,9 @@ export default function ActividadesVulnerablesPage() {
             ? persona.denominacion
             : nombreRepresentante || persona.rfc || `Persona ${index + 1}`
         return { id, label: labelBase, persona }
-      }),
-    [personasExpediente],
+      })
+    },
+    [expedienteActual?.personas],
   )
 
   const personaExpedienteSeleccionadaInfo = useMemo(
@@ -2214,6 +2305,32 @@ export default function ActividadesVulnerablesPage() {
   const evaluacionActual = useMemo(() => {
     if (!actividadSeleccionada || !umaSeleccionada || !umbralPesos) return null
     const monto = Number(montoOperacion)
+    if ((!monto || Number.isNaN(monto) || monto <= 0) && sospecha24h) {
+      const salida = classifyAvisoSalida({
+        status: "aviso",
+        fechaOperacion,
+        sospecha24h: true,
+        evidenceCanClose: true,
+      })
+      return {
+        status: "aviso" as UmbralStatus,
+        alerta: "Aviso de 24 horas por indicios o sospecha. Documentar hechos y evidencia disponible.",
+        acumulado: 0,
+        acumulacionAplica: false,
+        acumulacionRazon: "El aviso de 24 horas no depende de acumulacion semestral ni de cierre documental.",
+        acumulacionAdvertencia: undefined,
+        acumulacionFuente: "RCG art. 27",
+        monto: 0,
+        periodo: buildPeriodo(anioSeleccionado, mesSeleccionado),
+        fechaLimiteAviso: undefined,
+        operacionesConsideradas: 0,
+        obligaciones: [
+          "Presentar aviso dentro de las 24 horas siguientes al conocimiento del indicio.",
+          "Conservar narrativa de hechos, fuente de la alerta y evidencia disponible.",
+        ],
+        salida,
+      }
+    }
     if (!monto || Number.isNaN(monto) || monto <= 0) return null
     const resultado = evaluarOperacionVulnerable({
       actividadKey: actividadSeleccionada.key,
@@ -2229,16 +2346,28 @@ export default function ActividadesVulnerablesPage() {
       })),
     })
     const alerta = obtenerAlertaPorStatus(resultado.status)
+    const salida = classifyAvisoSalida({
+      status: resultado.status,
+      fechaOperacion,
+      supuesto27Bis: mismoGrupo === "si" && resultado.status === "aviso",
+      sospecha24h,
+      evidenceCanClose: true,
+    })
 
     return {
       status: resultado.status,
       alerta,
       acumulado: resultado.acumulacion.montoAcumuladoMxn,
+      acumulacionAplica: resultado.acumulacion.rule.applies,
+      acumulacionRazon: resultado.acumulacion.rule.rationale,
+      acumulacionAdvertencia: resultado.acumulacion.rule.warning,
+      acumulacionFuente: resultado.acumulacion.rule.source,
       monto,
       periodo: buildPeriodo(anioSeleccionado, mesSeleccionado),
       fechaLimiteAviso: resultado.fechaLimiteAviso,
       operacionesConsideradas: resultado.acumulacion.operacionesConsideradas.length,
       obligaciones: resultado.obligaciones,
+      salida,
     }
   }, [
     actividadSeleccionada,
@@ -2249,7 +2378,9 @@ export default function ActividadesVulnerablesPage() {
     anioSeleccionado,
     mesSeleccionado,
     fechaOperacion,
+    mismoGrupo,
     rfc,
+    sospecha24h,
   ])
 
   const controlesEvaluacion = useMemo(() => {
@@ -2260,6 +2391,38 @@ export default function ActividadesVulnerablesPage() {
   const checklistEntriesOperacion = useMemo(
     () => (operacionDocumentos ? Object.entries(operacionDocumentos.requisitosChecklist) : []),
     [operacionDocumentos],
+  )
+  const requisitosOperacion = useMemo(
+    () =>
+      operacionDocumentos
+        ? getDocumentRequirementsForCliente(operacionDocumentos.tipoCliente, operacionDocumentos.actividadKey)
+        : [],
+    [operacionDocumentos],
+  )
+  const requisitosOperacionPorLabel = useMemo(
+    () =>
+      requisitosOperacion.reduce<Record<string, DocumentRequirement>>((acc, requisito) => {
+        acc[requisito.label] = requisito
+        return acc
+      }, {}),
+    [requisitosOperacion],
+  )
+  const evaluacionEvidenciaOperacion = useMemo(
+    () => (operacionDocumentos ? evaluarEvidenciaOperacion(operacionDocumentos) : null),
+    [operacionDocumentos],
+  )
+  const salidaOperacionDocumentos = useMemo(
+    () =>
+      operacionDocumentos
+        ? classifyAvisoSalida({
+            status: operacionDocumentos.umbralStatus,
+            fechaOperacion: operacionDocumentos.fechaOperacion,
+            supuesto27Bis: operacionDocumentos.mismoGrupo && operacionDocumentos.umbralStatus === "aviso",
+            sospecha24h: Boolean(operacionDocumentos.sospecha24h),
+            evidenceCanClose: evaluacionEvidenciaOperacion?.canClose,
+          })
+        : null,
+    [operacionDocumentos, evaluacionEvidenciaOperacion],
   )
   const checklistTotalesOperacion = checklistEntriesOperacion.length
   const checklistCompletadosOperacion = useMemo(
@@ -2312,6 +2475,28 @@ export default function ActividadesVulnerablesPage() {
       sinObligacion: acumulados["sin-obligacion"] ?? 0,
       identificacion: acumulados["identificacion"] ?? 0,
       aviso: acumulados["aviso"] ?? 0,
+    }
+  }, [operaciones])
+
+  const resumenSalidas = useMemo(() => {
+    const acumulados = operaciones.reduce(
+      (acc, operacion) => {
+        const tipo = operacion.avisoSalidaTipo ?? "sin_salida"
+        acc[tipo] = (acc[tipo] ?? 0) + 1
+        return acc
+      },
+      {} as Record<AvisoSalidaTipo, number>,
+    )
+
+    return {
+      avisoNormal: acumulados.aviso_normal ?? 0,
+      informe27Bis: acumulados.informe_27_bis ?? 0,
+      aviso24h: acumulados.aviso_24h ?? 0,
+      sinSalida: acumulados.sin_salida ?? 0,
+      informeCeros:
+        (acumulados.aviso_normal ?? 0) + (acumulados.informe_27_bis ?? 0) + (acumulados.aviso_24h ?? 0) === 0
+          ? 1
+          : 0,
     }
   }, [operaciones])
 
@@ -2442,12 +2627,12 @@ const pasoValido = useMemo(() => {
       Boolean(clienteNombre.trim()) &&
       Boolean(rfc.trim()) &&
       Boolean(tipoOperacion.trim()) &&
-      Boolean(montoOperacion.trim()) &&
+      (sospecha24h || Boolean(montoOperacion.trim())) &&
       (!tipoClienteSeleccionado?.requiresDetalle || Boolean(detalleTipoCliente.trim()))
 
     if (!baseCompleto) return false
 
-    if (esActividadInmuebles) {
+    if (esActividadInmuebles && !sospecha24h) {
       const camposInmuebleCompletos =
         Boolean(codigoOperacionInmueble) &&
         Boolean(figuraClienteInmueble) &&
@@ -2488,6 +2673,7 @@ const pasoValido = useMemo(() => {
   rfc,
   tipoOperacion,
   montoOperacion,
+  sospecha24h,
   evaluacionActual,
   tipoClienteSeleccionado,
   detalleTipoCliente,
@@ -2519,6 +2705,7 @@ const limpiarFormulario = () => {
   setEvidencia("")
   limpiarClienteSeleccionado()
   setMismoGrupo("no")
+  setSospecha24h(false)
   setMoneda("MXN")
   setMonedaPersonalizadaCodigo("")
   setMonedaPersonalizadaDescripcion("")
@@ -2597,6 +2784,7 @@ const cargarDemoFraccionXV = () => {
   setTipoCliente(demo.cliente.tipo)
   setDetalleTipoCliente(demo.cliente.detalle)
   setMismoGrupo(demo.cliente.mismoGrupo ? "si" : "no")
+  setSospecha24h(false)
   setEvidencia(DEMO_EVIDENCIA_DESCRIPCION)
   setCodigoOperacionInmueble(demo.inmueble.codigoOperacion)
   setFiguraClienteInmueble(demo.inmueble.figuraCliente)
@@ -2694,6 +2882,7 @@ const manejarSeleccionClienteGuardado = (valor: string) => {
   setTipoCliente(guardado.tipoCliente)
   setDetalleTipoCliente(guardado.detalleTipoCliente ?? "")
   setMismoGrupo(guardado.mismoGrupo ? "si" : "no")
+  setSospecha24h(false)
 }
 
 const agregarOperacion = () => {
@@ -2706,17 +2895,19 @@ const agregarOperacion = () => {
     return
   }
 
-  if (!clienteNombre || !rfc || !tipoOperacion || !montoOperacion) {
+  if (!clienteNombre || !rfc || !tipoOperacion || (!sospecha24h && !montoOperacion)) {
     toast({
       title: "Faltan datos",
-      description: "Completa la información del cliente, RFC, tipo de operación y monto.",
+      description: sospecha24h
+        ? "Completa la información del cliente, RFC y narrativa de la alerta."
+        : "Completa la información del cliente, RFC, tipo de operación y monto.",
       variant: "destructive",
     })
     return
   }
 
-  const monto = Number(montoOperacion)
-  if (Number.isNaN(monto) || monto <= 0) {
+  const monto = sospecha24h ? Number(montoOperacion) || 0 : Number(montoOperacion)
+  if (!sospecha24h && (Number.isNaN(monto) || monto <= 0)) {
     toast({
       title: "Monto inválido",
       description: "El monto debe ser numérico y mayor a cero.",
@@ -2771,7 +2962,7 @@ const agregarOperacion = () => {
   let contraparteOperacion: ContraparteOperacion | null = null
   let instrumentoOperacion: InstrumentoPublicoOperacion | null = null
 
-  if (esActividadInmuebles) {
+  if (esActividadInmuebles && !sospecha24h) {
     inmuebleOperacion = {
       codigoOperacion: codigoOperacionInmueble,
       fechaInicio: inmuebleForm.fechaInicio,
@@ -2841,6 +3032,19 @@ const agregarOperacion = () => {
   const acumuladoCliente = evaluacionActual?.acumulado ?? monto
   const alerta = obtenerAlertaPorStatus(status)
   const omitirToast = demoCargaRef.current
+  const requisitosChecklist = buildChecklist(actividadSeleccionada, tipoCliente)
+  const evidenciaEvaluada = evaluateEvidenceChecklist({
+    requirements: getDocumentRequirementsForCliente(tipoCliente, actividadSeleccionada.key),
+    completed: requisitosChecklist,
+  })
+  const salidaOperacion = classifyAvisoSalida({
+    status,
+    fechaOperacion,
+    supuesto27Bis: mismoGrupo === "si" && status === "aviso",
+    sospecha24h,
+    evidenceCanClose: evidenciaEvaluada.canClose,
+  })
+  const acumulacionRule = getAcumulacionRuleForActividad(actividadSeleccionada.key)
 
   const nuevaOperacion: OperacionCliente = {
     schemaVersion: 2,
@@ -2870,7 +3074,7 @@ const agregarOperacion = () => {
     avisoPresentado: false,
     alertaResuelta: alerta ? false : true,
     documentosSoporte: [],
-    requisitosChecklist: buildChecklist(actividadSeleccionada, tipoCliente),
+    requisitosChecklist,
     kycIntegrado: false,
     referenciaAviso: esActividadInmuebles ? referenciaAviso.trim() : undefined,
     alertaCodigo: esActividadInmuebles ? alertaCodigo : undefined,
@@ -2879,6 +3083,16 @@ const agregarOperacion = () => {
         ? alertaDescripcion.trim()
         : undefined,
     prioridadAviso: esActividadInmuebles ? prioridadAviso : undefined,
+    sospecha24h,
+    avisoSalidaTipo: salidaOperacion.tipo,
+    avisoSalidaLabel: salidaOperacion.label,
+    avisoSalidaDescripcion: salidaOperacion.descripcion,
+    evidenciaCanClose: evidenciaEvaluada.canClose,
+    evidenciaFaltantesCriticos: evidenciaEvaluada.missingCritical.length,
+    evidenciaFaltantesOpcionales: evidenciaEvaluada.missingOptional.length,
+    acumulacionAplica: acumulacionRule.applies,
+    acumulacionRegla: acumulacionRule.source,
+    acumulacionRazon: acumulacionRule.rationale,
     claveSujetoObligado: claveSujetoObligado.trim() || undefined,
     claveActividadVulnerable: claveActividad.trim() || undefined,
     expedienteReferenciado: expedienteSeleccionado ?? undefined,
@@ -2930,6 +3144,19 @@ const agregarOperacion = () => {
 }
 
 const marcarAvisoPresentado = (id: string) => {
+  const operacion = operaciones.find((item) => item.id === id)
+  if (operacion) {
+    const evidenciaEvaluada = evaluarEvidenciaOperacion(operacion)
+    if (!evidenciaEvaluada.canClose) {
+      toast({
+        title: "Evidencia crítica pendiente",
+        description: `No se puede cerrar el aviso: faltan ${evidenciaEvaluada.missingCritical.length} requisito(s) críticos o una justificación documental.`,
+        variant: "destructive",
+      })
+      return
+    }
+  }
+
   actualizarOperaciones((prev) =>
     prev.map((operacion) =>
       operacion.id === id
@@ -3326,6 +3553,7 @@ const reutilizarDatosCliente = (operacion: OperacionCliente) => {
   setClienteNombre(operacion.cliente)
   setRfc(operacion.rfc)
   setMismoGrupo(operacion.mismoGrupo ? "si" : "no")
+  setSospecha24h(Boolean(operacion.sospecha24h))
   setTipoOperacion(operacion.tipoOperacion)
   if (MONEDAS.some((item) => item.value === operacion.moneda)) {
     setMoneda(operacion.moneda)
@@ -3477,6 +3705,19 @@ const alternarRequisitoChecklist = (operacionId: string, requisito: string) => {
 }
 
 const marcarKycIntegrado = (operacionId: string, valor: boolean) => {
+  const operacion = operaciones.find((item) => item.id === operacionId)
+  if (valor && operacion) {
+    const evidenciaEvaluada = evaluarEvidenciaOperacion(operacion)
+    if (!evidenciaEvaluada.canClose) {
+      toast({
+        title: "Checklist documental incompleto",
+        description: `Puedes guardar avances, pero para cerrar el expediente faltan ${evidenciaEvaluada.missingCritical.length} requisito(s) críticos.`,
+        variant: "destructive",
+      })
+      return
+    }
+  }
+
   actualizarOperaciones((prev) =>
     prev.map((operacion) =>
       operacion.id === operacionId
@@ -3583,8 +3824,8 @@ const eliminarDocumentoSoporte = (operacionId: string, documentoId: string) => {
 const obligacionesTexto = actividadSeleccionada?.obligaciones ?? null
 
 const requiereInforme27Bis = useMemo(
-  () => evaluacionActual?.status === "aviso" && mismoGrupo === "si",
-  [evaluacionActual, mismoGrupo],
+  () => evaluacionActual?.salida.tipo === "informe_27_bis",
+  [evaluacionActual],
 )
 
 const avanzar = () => {
@@ -3657,7 +3898,7 @@ const cambiarMesCalendario = (delta: number) => {
         </div>
       </section>
 
-      <Tabs value={tabActiva} onValueChange={setTabActiva} className="space-y-6">
+      <Tabs value={tabActiva} onValueChange={(value) => setTabActiva(value as typeof tabActiva)} className="space-y-6">
         <TabsList className="grid w-full gap-2 rounded-xl border bg-white p-1 sm:grid-cols-4">
           <TabsTrigger value="resumen" className="text-sm">Resumen ejecutivo</TabsTrigger>
           <TabsTrigger value="captura" className="text-sm">Captura guiada</TabsTrigger>
@@ -3738,6 +3979,29 @@ const cambiarMesCalendario = (delta: number) => {
           <Card className="border-slate-200">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-slate-600" /> Salidas regulatorias del periodo
+              </CardTitle>
+              <CardDescription>Separación operativa entre layout normal, informe en ceros, informe 27 Bis y aviso de 24 horas.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-5">
+              {[
+                { label: "Layout normal", value: resumenSalidas.avisoNormal },
+                { label: "Informe en ceros", value: resumenSalidas.informeCeros },
+                { label: "Informe 27 Bis", value: resumenSalidas.informe27Bis },
+                { label: "Aviso 24 horas", value: resumenSalidas.aviso24h },
+                { label: "Sin salida", value: resumenSalidas.sinSalida },
+              ].map((item) => (
+                <div key={item.label} className="rounded-lg border bg-white p-3 text-center text-sm">
+                  <p className="text-xs font-semibold uppercase text-slate-500">{item.label}</p>
+                  <p className="mt-1 text-2xl font-bold text-slate-800">{item.value}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
                 <Layers className="h-5 w-5 text-slate-600" /> Últimos registros capturados
               </CardTitle>
               <CardDescription>Visualiza rápidamente las operaciones más recientes y su semáforo.</CardDescription>
@@ -3762,6 +4026,9 @@ const cambiarMesCalendario = (delta: number) => {
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <Badge variant="outline" className="bg-white">
                             {monthLabel(operacion.mes)} {operacion.anio}
+                          </Badge>
+                          <Badge variant="outline" className="bg-slate-50">
+                            {formatSalidaTipo(operacion.avisoSalidaTipo ?? "sin_salida")}
                           </Badge>
                           <span
                             className={`inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-xs font-medium text-white ${getStatusColor(operacion.umbralStatus)}`}
@@ -3850,15 +4117,23 @@ const cambiarMesCalendario = (delta: number) => {
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Documentos y datos a requerir (Anexo 3)</Label>
-                      <ScrollArea className="h-24 rounded border bg-slate-50 p-3 text-xs text-slate-700">
+                      <Label>
+                        Checklist documental por tipo de persona
+                        {requisitosDocumentalesActuales[0]?.source ? ` (${requisitosDocumentalesActuales[0].source.split(",")[0]})` : ""}
+                      </Label>
+                      <ScrollArea className="h-32 rounded border bg-slate-50 p-3 text-xs text-slate-700">
                         <ul className="space-y-1 list-disc pl-4">
-                          <li>Identificación oficial vigente del cliente y del representante.</li>
-                          <li>Comprobantes de domicilio y datos de contacto.</li>
-                          <li>Información fiscal y perfil transaccional declarado.</li>
-                          <li>Documentos que acrediten la actividad vulnerable registrada.</li>
+                          {requisitosDocumentalesActuales.slice(0, 8).map((requisito) => (
+                            <li key={requisito.id}>
+                              {requisito.label}
+                              {requisito.critical ? " *" : ""}
+                            </li>
+                          ))}
                         </ul>
                       </ScrollArea>
+                      <p className="text-xs text-muted-foreground">
+                        * Evidencia crítica: permite guardar avances, pero bloquea cierre sin documento o justificación.
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <Label>Cargar identificación del sujeto obligado</Label>
@@ -4335,6 +4610,23 @@ const cambiarMesCalendario = (delta: number) => {
                           ))}
                         </ul>
                       </div>
+                      {acumulacionRuleActual && (
+                        <div
+                          className={`rounded border p-3 text-xs ${
+                            acumulacionRuleActual.applies
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                              : "border-amber-200 bg-amber-50 text-amber-800"
+                          }`}
+                        >
+                          <p className="font-semibold">
+                            {acumulacionRuleActual.applies ? "Acumula seis meses" : "No acumula seis meses"}
+                          </p>
+                          <p className="mt-1">{acumulacionRuleActual.rationale}</p>
+                          {acumulacionRuleActual.warning && (
+                            <p className="mt-1 font-medium">{acumulacionRuleActual.warning}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -4658,6 +4950,16 @@ const cambiarMesCalendario = (delta: number) => {
                     >
                       <Info className="mr-2 h-4 w-4" /> ¿Cómo identificar el mismo grupo?
                     </Button>
+                    <label className="flex items-start gap-2 rounded border border-rose-200 bg-rose-50/60 p-3 text-xs text-rose-800">
+                      <Checkbox
+                        checked={sospecha24h}
+                        onCheckedChange={(checked) => setSospecha24h(Boolean(checked))}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        Activar aviso de 24 horas por indicios, lista o sospecha. Documentar hechos y no esperar al cierre documental.
+                      </span>
+                    </label>
                   </div>
                   <div className="space-y-2">
                     <Label>Tipo de operación</Label>
@@ -5537,6 +5839,15 @@ const cambiarMesCalendario = (delta: number) => {
                             <span>{evaluacionActual.alerta}</span>
                           </div>
                         )}
+                        <div className="space-y-1 rounded border border-slate-200 bg-white p-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                            {formatSalidaTipo(evaluacionActual.salida.tipo)}
+                          </p>
+                          <p>{evaluacionActual.salida.descripcion}</p>
+                          <p className="text-muted-foreground">
+                            {evaluacionActual.acumulacionRazon}
+                          </p>
+                        </div>
                         {controlesEvaluacion.length > 0 && (
                           <div className="space-y-1 rounded border border-emerald-100 bg-emerald-50/60 p-2 text-emerald-800">
                             <p className="text-[11px] font-semibold uppercase tracking-wide">Controles aplicables</p>
@@ -5605,7 +5916,7 @@ const cambiarMesCalendario = (delta: number) => {
                   <div className="rounded border border-emerald-400 bg-emerald-50 p-4 text-sm text-emerald-800">
                     <p className="font-semibold">Informe 27 Bis</p>
                     <p>
-                      La operación rebasa el umbral de aviso y el cliente pertenece al mismo grupo empresarial. Preparar informe en ceros (27 Bis) en lugar del aviso directo, preservando evidencia documental.
+                      La operación rebasa el umbral de aviso y el cliente pertenece al mismo grupo empresarial. Clasificar como informe 27 Bis, no como informe en ceros ordinario, preservando evidencia documental.
                     </p>
                   </div>
                 )}
@@ -5757,23 +6068,28 @@ const cambiarMesCalendario = (delta: number) => {
                   <p className="mt-1 text-xs text-muted-foreground">{tipoOperacion || "Tipo de operación pendiente"}</p>
                 </div>
                 <div className="rounded border bg-white p-4 text-sm">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Acumulación SAT</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Acumulación RCG Art. 19</p>
                   <p className="mt-2 text-xl font-semibold text-slate-800">
                     {evaluacionActual ? formatCurrency(evaluacionActual.acumulado) : "$0.00"}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {evaluacionActual?.operacionesConsideradas ?? 0} operación(es) consideradas en seis meses.
+                    {evaluacionActual?.acumulacionAplica
+                      ? `${evaluacionActual.operacionesConsideradas} operación(es) consideradas en seis meses.`
+                      : "No acumula seis meses bajo RCG Art. 19; evaluar aviso directo o registro interno."}
                   </p>
+                  {evaluacionActual?.acumulacionAdvertencia && (
+                    <p className="mt-2 text-xs text-amber-700">{evaluacionActual.acumulacionAdvertencia}</p>
+                  )}
                 </div>
                 <div className="rounded border bg-white p-4 text-sm">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Semáforo</p>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Salida regulatoria</p>
                   <p className="mt-2 text-xl font-semibold text-slate-800">
-                    {evaluacionActual ? getStatusLabel(evaluacionActual.status) : "Sin evaluación"}
+                    {evaluacionActual ? formatSalidaTipo(evaluacionActual.salida.tipo) : "Sin evaluación"}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {evaluacionActual?.fechaLimiteAviso
-                      ? `Aviso ordinario: ${formatDateDisplay(evaluacionActual.fechaLimiteAviso)}`
-                      : "Sin fecha de aviso ordinario."}
+                    {evaluacionActual?.salida.fechaLimite
+                      ? `Fecha límite: ${formatDateDisplay(evaluacionActual.salida.fechaLimite)}`
+                      : evaluacionActual?.salida.descripcion ?? "Sin fecha de aviso ordinario."}
                   </p>
                 </div>
               </CardContent>
@@ -5946,6 +6262,24 @@ const cambiarMesCalendario = (delta: number) => {
                               <p className="text-slate-600">Actividad: {operacion.actividadNombre}</p>
                               <p className="text-slate-600">Monto acumulado: {formatCurrency(operacion.acumuladoCliente)}</p>
                               <p className="text-slate-600">Operación: {operacion.tipoOperacion}</p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
+                                  {formatSalidaTipo(operacion.avisoSalidaTipo ?? "sin_salida")}
+                                </Badge>
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    operacion.evidenciaCanClose
+                                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                      : "border-amber-200 bg-amber-50 text-amber-700"
+                                  }
+                                >
+                                  Evidencia {operacion.evidenciaCanClose ? "lista" : `${operacion.evidenciaFaltantesCriticos ?? 0} crítica(s) pendiente(s)`}
+                                </Badge>
+                                <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
+                                  {operacion.acumulacionAplica ? "Acumula 6 meses" : "No acumula RCG 19"}
+                                </Badge>
+                              </div>
                               {operacion.alerta && (
                                 <div className="mt-2 flex items-center gap-2 rounded bg-amber-50 p-2 text-amber-800">
                                   <AlertCircle className="h-4 w-4" />
@@ -6181,8 +6515,8 @@ const cambiarMesCalendario = (delta: number) => {
                 <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
                   <div className="space-y-2">
                     <div className="grid grid-cols-7 text-center text-xs font-semibold uppercase text-slate-500">
-                      {WEEK_DAYS.map((dia) => (
-                        <span key={dia}>{dia}</span>
+                      {WEEK_DAYS.map((dia, index) => (
+                        <span key={`${dia}-${index}`}>{dia}</span>
                       ))}
                     </div>
                     <div className="grid grid-cols-7 gap-2">
@@ -6440,6 +6774,11 @@ const cambiarMesCalendario = (delta: number) => {
                             Mismo grupo empresarial
                           </Badge>
                         )}
+                        {salidaOperacionDocumentos && (
+                          <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
+                            {formatSalidaTipo(salidaOperacionDocumentos.tipo)}
+                          </Badge>
+                        )}
                       </div>
                       <div className="mt-4 grid gap-3 text-xs text-slate-600">
                         <div>
@@ -6474,6 +6813,15 @@ const cambiarMesCalendario = (delta: number) => {
                             {operacionDocumentos.tipoOperacion || "Sin clasificación específica"}
                           </p>
                         </div>
+                        <div className="rounded border border-slate-200 bg-slate-50 p-2">
+                          <p className="text-[11px] uppercase tracking-wide text-slate-500">Regla de acumulación</p>
+                          <p className="mt-1 font-medium text-slate-700">
+                            {operacionDocumentos.acumulacionAplica ? "Acumula seis meses" : "No acumula seis meses"}
+                          </p>
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            {operacionDocumentos.acumulacionRazon ?? "Criterio RCG Art. 19 pendiente de calcular."}
+                          </p>
+                        </div>
                       </div>
                     </div>
 
@@ -6504,6 +6852,19 @@ const cambiarMesCalendario = (delta: number) => {
                           Evidencias cargadas: {" "}
                           <span className="font-semibold text-slate-700">{evidenciasRegistradasOperacion}</span>
                         </p>
+                        {evaluacionEvidenciaOperacion && (
+                          <p
+                            className={
+                              evaluacionEvidenciaOperacion.canClose
+                                ? "text-emerald-700"
+                                : "text-amber-700"
+                            }
+                          >
+                            {evaluacionEvidenciaOperacion.canClose
+                              ? "Listo para cierre interno."
+                              : `${evaluacionEvidenciaOperacion.missingCritical.length} evidencia(s) crítica(s) pendientes bloquean cierre.`}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -6562,7 +6923,9 @@ const cambiarMesCalendario = (delta: number) => {
                       ) : (
                         <ScrollArea className="mt-3 max-h-60 pr-2">
                           <div className="space-y-2">
-                            {checklistEntriesOperacion.map(([requisito, completado]) => (
+                            {checklistEntriesOperacion.map(([requisito, completado]) => {
+                              const metadata = requisitosOperacionPorLabel[requisito]
+                              return (
                               <label
                                 key={requisito}
                                 className="flex items-start gap-2 rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600"
@@ -6572,9 +6935,17 @@ const cambiarMesCalendario = (delta: number) => {
                                   onCheckedChange={() => alternarRequisitoChecklist(operacionDocumentos.id, requisito)}
                                   className="mt-0.5"
                                 />
-                                <span>{requisito}</span>
+                                <span className="space-y-1">
+                                  <span className="block font-medium text-slate-700">
+                                    {requisito}
+                                    {metadata?.critical ? " *" : ""}
+                                  </span>
+                                  {metadata?.source && (
+                                    <span className="block text-[11px] text-muted-foreground">{metadata.source}</span>
+                                  )}
+                                </span>
                               </label>
-                            ))}
+                            )})}
                           </div>
                         </ScrollArea>
                       )}
@@ -6593,7 +6964,7 @@ const cambiarMesCalendario = (delta: number) => {
                             <Button
                               key={requisito}
                               type="button"
-                              size="xs"
+                              size="sm"
                               variant="outline"
                               onClick={() => setNuevoDocumento((prev) => ({ ...prev, requisito }))}
                             >
@@ -6880,7 +7251,7 @@ const cambiarMesCalendario = (delta: number) => {
                 <div className="space-y-2">
                   <Label>¿Pertenece al mismo grupo?</Label>
                   <div className="flex items-center gap-2">
-                    {[{ value: "si", label: "Sí" }, { value: "no", label: "No" }].map((option) => (
+                    {([{ value: "si", label: "Sí" }, { value: "no", label: "No" }] as const).map((option) => (
                       <Button
                         key={option.value}
                         type="button"
