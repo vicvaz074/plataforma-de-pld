@@ -6,7 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "test:pld": "tsx --test tests/pld-rules.test.ts",
+    "test:pld": "tsx --test tests/*.test.ts",
     "start": "next start"
   },
   "dependencies": {

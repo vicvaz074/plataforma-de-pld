@@ -1,4 +1,56 @@
 export type UmbralStatus = "sin-obligacion" | "identificacion" | "aviso"
+export type AvisoSalidaTipo = "aviso_normal" | "informe_ceros" | "informe_27_bis" | "aviso_24h" | "sin_salida"
+export type DocumentRequirementCategory =
+  | "identificacion"
+  | "fiscal"
+  | "domicilio"
+  | "representacion"
+  | "beneficiario-controlador"
+  | "operacion"
+  | "pep-ebr"
+
+export interface DocumentRequirement {
+  id: string
+  label: string
+  category: DocumentRequirementCategory
+  critical: boolean
+  appliesTo: string[]
+  source: string
+  requiresJustificationWhenMissing: boolean
+  activityOverrides?: string[]
+}
+
+export interface EvidenceChecklistEvaluation {
+  canSave: boolean
+  canClose: boolean
+  missingCritical: DocumentRequirement[]
+  missingOptional: DocumentRequirement[]
+  justifications: Array<{
+    requirementId: string
+    label: string
+    justification: string
+  }>
+  sourceNotes: string[]
+  recommendedActions: string[]
+}
+
+export interface OperacionEvidenceStatus {
+  canSave: boolean
+  canClose: boolean
+  checklist: Record<string, boolean>
+  missingCriticalCount: number
+  missingOptionalCount: number
+  sourceNotes: string[]
+}
+
+export interface AcumulacionRule {
+  applies: boolean
+  mode: "umbral-identificacion" | "todas-las-operaciones" | "no-acumula"
+  source: string
+  sourceUrl: string
+  rationale: string
+  warning?: string
+}
 
 export interface UmaValue {
   year: number
@@ -44,6 +96,7 @@ export interface OperacionObligacionResult {
   fechaLimiteAviso?: string
   acumulacion: {
     aplica: boolean
+    rule: AcumulacionRule
     ventanaInicio: string
     ventanaFin: string
     montoAcumuladoMxn: number
@@ -51,6 +104,15 @@ export interface OperacionObligacionResult {
   }
   obligaciones: string[]
   alertas: string[]
+}
+
+export interface AvisoSalidaResult {
+  tipo: AvisoSalidaTipo
+  label: string
+  descripcion: string
+  fechaLimite?: string
+  canClose: boolean
+  warnings: string[]
 }
 
 export interface PepCargo {
