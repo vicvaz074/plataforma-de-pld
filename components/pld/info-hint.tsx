@@ -59,7 +59,11 @@ export function InfoHint({ content, className, label = "Más información" }: In
               <DialogDescription>{content.summary}</DialogDescription>
             </DialogHeader>
             <div className="space-y-3 text-sm text-slate-700">
-              {content.body?.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+              {content.body?.map((paragraph) => (
+                <p key={paragraph} className="break-words">
+                  {paragraph}
+                </p>
+              ))}
               {content.sourceUrl && (
                 <a
                   className="inline-flex max-w-full items-center rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"

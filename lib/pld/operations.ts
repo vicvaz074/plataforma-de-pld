@@ -1,7 +1,14 @@
 import { findActividadByKey } from "./actividades"
 import { calcularFechaLimiteAvisoOrdinario, subtractMonths } from "./dates"
 import { getUmaForDate, mxnToUma, roundMoney, umaToMxn } from "./uma"
-import type { AcumulacionRule, AvisoSalidaResult, OperacionObligacionResult, OperacionVulnerable, UmbralStatus } from "./types"
+import type {
+  AcumulacionRule,
+  AvisoSalidaResult,
+  AvisoSalidaTipo,
+  OperacionObligacionResult,
+  OperacionVulnerable,
+  UmbralStatus,
+} from "./types"
 
 const MONEY_TOLERANCE = 0.01
 const RCG_URL =
@@ -60,6 +67,21 @@ export interface EvaluarOperacionInput {
   fechaOperacion: string
   montoMxn: number
   operacionesHistoricas?: OperacionVulnerable[]
+}
+
+export interface RecurringPaymentReviewInput {
+  actividadKey: string
+  mesesCubiertos?: number
+  montoMxn: number
+  mensualidadEsperadaMxn?: number
+  salidaTipo?: AvisoSalidaTipo | UmbralStatus
+}
+
+export interface RecurringPaymentReviewResult {
+  requiresReview: boolean
+  reasonCode?: "pago-recurrente-multiperiodo"
+  monthlyEquivalentMxn?: number
+  message?: string
 }
 
 export function getAcumulacionRuleForActividad(actividadKey: string): AcumulacionRule {
@@ -153,6 +175,28 @@ export function evaluarOperacionVulnerable(input: EvaluarOperacionInput): Operac
     },
     obligaciones,
     alertas,
+  }
+}
+
+export function detectRecurringPaymentReview(input: RecurringPaymentReviewInput): RecurringPaymentReviewResult {
+  const mesesCubiertos = Math.max(1, Math.floor(Number(input.mesesCubiertos) || 1))
+  if (input.actividadKey !== "fraccion-xv-uso-goce" || mesesCubiertos <= 1) {
+    return { requiresReview: false }
+  }
+
+  const monthlyEquivalentMxn = roundMoney(
+    input.mensualidadEsperadaMxn && input.mensualidadEsperadaMxn > 0
+      ? input.mensualidadEsperadaMxn
+      : input.montoMxn / mesesCubiertos,
+  )
+
+  return {
+    requiresReview: true,
+    reasonCode: "pago-recurrente-multiperiodo",
+    monthlyEquivalentMxn,
+    message:
+      `Pago de arrendamiento cubre ${mesesCubiertos} meses. Revisar contrato, periodos cubiertos y mensualidad ` +
+      "para descartar falso positivo operativo antes de cerrar la salida SAT.",
   }
 }
 

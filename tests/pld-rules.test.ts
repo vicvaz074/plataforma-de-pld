@@ -6,6 +6,7 @@ import {
   calcularFechaLimiteAvisoOrdinario,
   calcularFechaLimiteAvisoSospecha,
   classifyAvisoSalida,
+  detectRecurringPaymentReview,
   evaluarOperacionVulnerable,
   evaluateEvidenceChecklist,
   getAcumulacionRuleForActividad,
@@ -174,6 +175,33 @@ test("notice output classification covers ordinary, zero, 27 Bis and 24 hour not
   assert.equal(classifyAvisoSalida({ periodoSinOperaciones: true }).tipo, "informe_ceros")
   assert.equal(classifyAvisoSalida({ status: "aviso", supuesto27Bis: true }).tipo, "informe_27_bis")
   assert.equal(classifyAvisoSalida({ sospecha24h: true }).tipo, "aviso_24h")
+})
+
+test("recurring rent payments covering multiple months are flagged for review instead of treated as automatic excess", () => {
+  const review = detectRecurringPaymentReview({
+    actividadKey: "fraccion-xv-uso-goce",
+    mesesCubiertos: 3,
+    montoMxn: 450000,
+    mensualidadEsperadaMxn: 150000,
+    salidaTipo: "aviso_normal",
+  })
+
+  assert.equal(review.requiresReview, true)
+  assert.equal(review.reasonCode, "pago-recurrente-multiperiodo")
+  assert.equal(review.monthlyEquivalentMxn, 150000)
+  assert.match(review.message ?? "", /3 meses/)
+})
+
+test("ordinary single-month rent payments do not create recurring false-positive review", () => {
+  const review = detectRecurringPaymentReview({
+    actividadKey: "fraccion-xv-uso-goce",
+    mesesCubiertos: 1,
+    montoMxn: 150000,
+    mensualidadEsperadaMxn: 150000,
+    salidaTipo: "identificacion",
+  })
+
+  assert.equal(review.requiresReview, false)
 })
 
 test("PEP cargo matching is accent-insensitive and returns review state", () => {

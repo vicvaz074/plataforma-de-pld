@@ -12,6 +12,7 @@
     "sync:pep:personas": "tsx scripts/sync-pep-personas-mx.mjs",
     "sync:pep:all": "pnpm sync:pep:cargos && pnpm sync:pep:personas && pnpm validate:pep:data",
     "sync:sat:formatos": "tsx scripts/sync-sat-formatos.mjs",
+    "sync:sat:postal": "node scripts/sync-sat-postal-catalog.mjs",
     "validate:pep:data": "tsx scripts/validate-pep-data.mjs",
     "test:pld": "tsx --test tests/*.test.ts",
     "start": "next start"

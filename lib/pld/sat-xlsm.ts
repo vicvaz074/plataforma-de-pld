@@ -86,10 +86,14 @@ export function buildSatDynamicOperationForm(input: {
   prefill?: Record<string, unknown>
 }): SatDynamicOperationForm {
   const layout = normalizeSatXlsmLayout(input.layout)
+  const sections = layout.sections.map((section) => ({
+    ...section,
+    fields: section.fields.map(withInferredSectionKind),
+  }))
   const initialValues: Record<string, string> = {}
   const prefill = input.prefill || {}
 
-  for (const field of layout.sections.flatMap((section) => section.fields)) {
+  for (const field of sections.flatMap((section) => section.fields)) {
     const value = prefillValueForField(field, prefill)
     if (value) initialValues[field.id] = value
   }
@@ -98,7 +102,7 @@ export function buildSatDynamicOperationForm(input: {
     templateId: input.template.templateId,
     templateFile: input.template.officialXlsmName,
     templateVariant: input.variantId,
-    sections: layout.sections,
+    sections,
     initialValues,
     requiredFieldIds: layout.sections
       .flatMap((section) => section.fields)
@@ -108,11 +112,37 @@ export function buildSatDynamicOperationForm(input: {
   }
 }
 
+function withInferredSectionKind(field: SatXlsmField): SatXlsmField {
+  if (field.sectionKind) return field
+  const sheet = slug(field.sheetName)
+  if (sheet.includes("persona-objeto")) return { ...field, sectionKind: "persona_objeto" }
+  if (sheet.includes("beneficiario")) return { ...field, sectionKind: "beneficiario_controlador" }
+  if (sheet.includes("socio") || sheet.includes("tercero") || sheet.includes("contraparte")) {
+    return { ...field, sectionKind: "contraparte" }
+  }
+  if (sheet.includes("recpropios") || sheet.includes("prestamo") || sheet.includes("liquidacion") || sheet.includes("finbursatil")) {
+    return { ...field, sectionKind: "liquidacion" }
+  }
+  if (sheet.includes("instrumento") || sheet.includes("contrato")) return { ...field, sectionKind: "instrumento" }
+  return { ...field, sectionKind: "acto_operacion" }
+}
+
 export function normalizeSatXlsmLayout(layout: SatXlsmLayout): SatXlsmLayout {
-  if (!layout.templateId.includes("fraccion-v-inmuebles")) return layout
+  const sectionsWithoutAuxiliaryFields = layout.sections.map((section) => ({
+    ...section,
+    fields: section.fields.filter((field) => !isAuxiliarySatXlsmField(field)),
+  }))
+
+  if (!layout.templateId.includes("fraccion-v-inmuebles")) {
+    return {
+      ...layout,
+      sections: sectionsWithoutAuxiliaryFields,
+    }
+  }
+
   return {
     ...layout,
-    sections: layout.sections.map((section) => {
+    sections: sectionsWithoutAuxiliaryFields.map((section) => {
       const manualFields = getManualFields(layout.templateId, section.sheetName, layout.optionLists)
       const fields = mergeFields([
         ...manualFields,
@@ -123,6 +153,15 @@ export function normalizeSatXlsmLayout(layout: SatXlsmLayout): SatXlsmLayout {
       return { ...section, fields }
     }),
   }
+}
+
+function isAuxiliarySatXlsmField(field: SatXlsmField): boolean {
+  const label = slug(field.label)
+  return (
+    (field.source === "xlsm-label" && /^los-campos-marcados-con.*obligatorios?$/.test(label)) ||
+    label === "n-a" ||
+    label === "na"
+  )
 }
 
 export function fillSatXlsmTemplate(
@@ -360,10 +399,10 @@ function parseSharedStrings(xml: string): string[] {
 
 function parseSheetCells(xml: string, sharedStrings: string[]): CellMap {
   const cells: CellMap = {}
-  const regex = /<c\b([^>]*)>([\s\S]*?)<\/c>|<c\b([^>]*)\/>/g
+  const regex = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g
   let match: RegExpExecArray | null
   while ((match = regex.exec(xml))) {
-    const attrs = match[1] || match[3] || ""
+    const attrs = match[1] || ""
     const body = match[2] || ""
     const ref = getAttr(attrs, "r")
     if (!ref) continue
@@ -477,6 +516,7 @@ function buildLabelFields(sheetName: string, cells: CellMap): SatXlsmField[] {
   const fields: SatXlsmField[] = []
   for (const [labelCell, label] of Object.entries(cells)) {
     if (!label.includes("*") || label.length > 120) continue
+    if (isAuxiliaryLabelText(label)) continue
     const { col, row } = splitCell(labelCell)
     const targetCell = `${numberToColumn(columnToNumber(col) + 1)}${row}`
     const existingTarget = cells[targetCell]
@@ -493,6 +533,11 @@ function buildLabelFields(sheetName: string, cells: CellMap): SatXlsmField[] {
     })
   }
   return fields
+}
+
+function isAuxiliaryLabelText(label: string): boolean {
+  const normalized = slug(label)
+  return /^los-campos-marcados-con.*obligatorios?$/.test(normalized) || normalized === "n-a" || normalized === "na"
 }
 
 function inferDataType(label: string): SatXlsmField["dataType"] {
@@ -1063,9 +1108,169 @@ function prefillValueForField(field: SatXlsmField, prefill: Record<string, unkno
     "persona.rfc": prefill.clienteRfc,
     "persona.nombre": prefill.clienteNombre,
   }
-  const raw = lookup[field.id]
+  const raw = lookup[field.id] ?? inferPrefillValueForExtractedField(field, prefill)
   if (raw === undefined || raw === null || raw === "") return ""
   return String(raw)
+}
+
+function inferPrefillValueForExtractedField(field: SatXlsmField, prefill: Record<string, unknown>): unknown {
+  if (field.source === "manual-sat-map") return undefined
+
+  const sheet = slug(field.sheetName)
+  const label = slug(field.label)
+  const { col, row } = splitCell(field.cell)
+
+  if (sheet.includes("persona-objeto")) {
+    const headerValue = inferHeaderPrefill(field, prefill)
+    if (headerValue !== undefined) return headerValue
+    if (row >= 18 && row <= 32) return inferPersonFieldPrefill(label, col, prefill, "cliente_pf")
+    if (row >= 33 && row <= 45) return inferPersonFieldPrefill(label, col, prefill, "cliente_pm")
+    if (row >= 46 && row <= 58) return inferPersonFieldPrefill(label, col, prefill, "representante")
+    if (row >= 59 && row <= 85) return inferDomicilioFieldPrefill(label, col, prefill)
+    if (row >= 86) return inferContactoFieldPrefill(label, col, prefill)
+    return inferPersonFieldPrefill(label, col, prefill, "cliente")
+  }
+
+  if (sheet.includes("beneficiario")) {
+    if (row <= 16) return inferPersonFieldPrefill(label, col, prefill, "beneficiario_pf")
+    return inferPersonFieldPrefill(label, col, prefill, "beneficiario_pm")
+  }
+
+  if (sheet.includes("acto") || sheet.includes("aviso")) {
+    const headerValue = inferHeaderPrefill(field, prefill)
+    if (headerValue !== undefined) return headerValue
+    if (label.includes("fecha") && !label.includes("nacimiento") && !label.includes("constitucion")) {
+      return prefill.fechaOperacion
+    }
+    if (label.includes("monto") || label.includes("valor")) return prefill.montoMxn
+    if (label.includes("moneda") || label.includes("divisa")) return prefill.monedaSat || prefill.moneda
+    if (label.includes("instrumento-monetario")) return prefill.instrumentoMonetario || prefill.instrumento
+    if (label.includes("codigo-postal")) return prefill.codigoPostal || prefill.clienteCodigoPostal
+    if (label.includes("colonia")) return prefill.coloniaInmueble || prefill.clienteColonia
+    if (label.includes("calle")) return prefill.calleInmueble || prefill.clienteCalle
+    if (label.includes("numero-exterior")) return prefill.numeroExteriorInmueble || prefill.clienteNumeroExterior
+    if (label.includes("numero-interior")) return prefill.numeroInteriorInmueble || prefill.clienteNumeroInterior
+    if (label.includes("folio-real")) return prefill.folioReal
+  }
+
+  if (sheet.includes("recpropios") || sheet.includes("prestamo") || sheet.includes("finbursatil")) {
+    if (label.includes("moneda") || label.includes("divisa")) return prefill.monedaSat || prefill.moneda
+    if (label.includes("monto")) return prefill.montoMxn
+    if (label.includes("instrumento")) return prefill.instrumentoMonetario || prefill.instrumento
+  }
+
+  if (sheet.includes("socio") || sheet.includes("tercero")) {
+    return inferPersonFieldPrefill(label, col, prefill, "contraparte")
+  }
+
+  return undefined
+}
+
+function inferHeaderPrefill(field: SatXlsmField, prefill: Record<string, unknown>): unknown {
+  const cell = field.cell.toUpperCase()
+  const sheet = slug(field.sheetName)
+
+  if (sheet.includes("persona-objeto")) {
+    if (cell === "C4") return prefill.sujetoObligadoRfc || prefill.tenantRfc
+    if (cell === "C5") return prefill.periodo
+    if (cell === "C6") return prefill.referenciaAviso
+    if (cell === "E6") return prefill.prioridadAviso || "1,NORMAL"
+    if (cell === "C7") return prefill.alertaCodigo || "100,Sin alerta."
+    if (cell === "E7") return prefill.alertaDescripcion
+  }
+
+  if (sheet.includes("aviso")) {
+    if (cell === "C5") return prefill.sujetoObligadoRfc || prefill.tenantRfc
+    if (cell === "C6") return prefill.periodo
+    if (cell === "C7") return prefill.referenciaAviso
+    if (cell === "E7") return prefill.prioridadAviso || "1,NORMAL"
+    if (cell === "C8") return prefill.alertaCodigo || "100,Sin alerta."
+    if (cell === "E8") return prefill.alertaDescripcion
+  }
+
+  return undefined
+}
+
+function inferPersonFieldPrefill(
+  label: string,
+  _col: string,
+  prefill: Record<string, unknown>,
+  scope: "cliente" | "cliente_pf" | "cliente_pm" | "representante" | "beneficiario_pf" | "beneficiario_pm" | "contraparte",
+): unknown {
+  if (label.includes("razon-social") || label.includes("denominacion")) {
+    if (scope === "beneficiario_pm") return prefill.beneficiarioRazonSocial || prefill.beneficiarioNombre
+    if (scope === "contraparte") return prefill.contraparteRazonSocial || prefill.contraparteNombre
+    return prefill.clienteRazonSocial || prefill.clienteNombre
+  }
+  if (label.includes("nombre")) {
+    if (scope.startsWith("beneficiario")) return prefill.beneficiarioNombre
+    if (scope === "representante") return prefill.representanteNombre
+    if (scope === "contraparte") return prefill.contraparteNombre
+    return prefill.clienteNombrePf || prefill.clienteNombreSat || splitPersonName(stringPrefill(prefill.clienteNombre)).nombre
+  }
+  if (label.includes("apellido-paterno")) {
+    if (scope.startsWith("beneficiario")) return prefill.beneficiarioApellidoPaterno
+    if (scope === "representante") return prefill.representanteApellidoPaterno
+    if (scope === "contraparte") return prefill.contraparteApellidoPaterno
+    return prefill.clienteApellidoPaterno || splitPersonName(stringPrefill(prefill.clienteNombre)).apellidoPaterno
+  }
+  if (label.includes("apellido-materno")) {
+    if (scope.startsWith("beneficiario")) return prefill.beneficiarioApellidoMaterno
+    if (scope === "representante") return prefill.representanteApellidoMaterno
+    if (scope === "contraparte") return prefill.contraparteApellidoMaterno
+    return prefill.clienteApellidoMaterno || splitPersonName(stringPrefill(prefill.clienteNombre)).apellidoMaterno
+  }
+  if (label.includes("fecha-nacimiento")) {
+    if (scope.startsWith("beneficiario")) return prefill.beneficiarioFechaNacimiento
+    if (scope === "representante") return prefill.representanteFechaNacimiento
+    if (scope === "contraparte") return prefill.contraparteFechaNacimiento
+    return prefill.clienteFechaNacimiento
+  }
+  if (label.includes("fecha-constitucion")) {
+    if (scope === "beneficiario_pm") return prefill.beneficiarioFechaConstitucion
+    if (scope === "contraparte") return prefill.contraparteFechaConstitucion
+    return prefill.clienteFechaConstitucion
+  }
+  if (label === "rfc" || label.includes("rfc")) {
+    if (scope.startsWith("beneficiario")) return prefill.beneficiarioRfc
+    if (scope === "representante") return prefill.representanteRfc
+    if (scope === "contraparte") return prefill.contraparteRfc
+    return prefill.clienteRfc
+  }
+  if (label.includes("curp")) {
+    if (scope.startsWith("beneficiario")) return prefill.beneficiarioCurp
+    if (scope === "representante") return prefill.representanteCurp
+    if (scope === "contraparte") return prefill.contraparteCurp
+    return prefill.clienteCurp
+  }
+  if (label.includes("pais") || label.includes("nacionalidad")) {
+    if (scope.startsWith("beneficiario")) return prefill.beneficiarioPais || "MEXICO,MX"
+    if (scope === "contraparte") return prefill.contrapartePais || "MEXICO,MX"
+    return prefill.clientePais || "MEXICO,MX"
+  }
+  if (label.includes("actividad-economica")) return prefill.clienteActividadEconomica
+  if (label.includes("giro-mercantil")) return prefill.clienteGiro
+  return undefined
+}
+
+function inferDomicilioFieldPrefill(label: string, col: string, prefill: Record<string, unknown>): unknown {
+  if (label.includes("pais") || col === "B") return prefill.clientePais || "MEXICO,MX"
+  if (label.includes("estado") || label.includes("entidad") || col === "C") return prefill.clienteEstado
+  if (label.includes("municipio")) return prefill.clienteMunicipio
+  if (label.includes("ciudad") || label.includes("poblacion") || col === "D") return prefill.clienteCiudad
+  if (label.includes("colonia") || col === "E") return prefill.clienteColonia
+  if (label.includes("calle") || label.includes("avenida") || col === "F") return prefill.clienteCalle
+  if (label.includes("numero-exterior") || col === "G") return prefill.clienteNumeroExterior
+  if (label.includes("numero-interior") || col === "H") return prefill.clienteNumeroInterior
+  if (label.includes("codigo-postal") || col === "I" || col === "J") return prefill.clienteCodigoPostal
+  return undefined
+}
+
+function inferContactoFieldPrefill(label: string, col: string, prefill: Record<string, unknown>): unknown {
+  if (label.includes("pais") || col === "B") return prefill.clientePaisTelefono || "MEXICO,MX"
+  if (label.includes("telefono") || col === "C") return prefill.clienteTelefono
+  if (label.includes("correo") || col === "D") return prefill.clienteCorreo
+  return undefined
 }
 
 function stringPrefill(value: unknown): string {
