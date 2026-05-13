@@ -1,0 +1,35 @@
+{
+  "packageId": "satpkg-case-202605-fraccion-v-inmuebles-cliente-DLV190624M32-1778612023873-aviso_normal",
+  "outputKind": "aviso_normal",
+  "templateId": "sat-fraccion-v-inmuebles",
+  "templateFile": "Inmuebles_v4_5.xlsm",
+  "workbookStatus": "filled",
+  "writtenCells": [
+    "Acto u operación!C5",
+    "Acto u operación!C7",
+    "Acto u operación!C8",
+    "Acto u operación!B42",
+    "Acto u operación!C42",
+    "Acto u operación!D42",
+    "Acto u operación!G42",
+    "Acto u operación!H42",
+    "Acto u operación!J42",
+    "Acto u operación!K42",
+    "Acto u operación!L42",
+    "Acto u operación!M42",
+    "Acto u operación!B70",
+    "Acto u operación!C70",
+    "Acto u operación!D70",
+    "Acto u operación!E70",
+    "Acto u operación!F70"
+  ],
+  "missingRequiredFields": [],
+  "validation": {
+    "status": "listo",
+    "missingFields": [],
+    "errors": [],
+    "warnings": []
+  },
+  "generatedAt": "2026-05-12T18:53:48.284Z",
+  "sppldManualUpload": "Pendiente de validación manual en SPPLD"
+}

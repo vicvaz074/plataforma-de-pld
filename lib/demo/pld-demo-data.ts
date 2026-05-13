@@ -1,11 +1,17 @@
 import { evaluarOperacionVulnerable } from "@/lib/pld/operations"
 import { matchPepCargo } from "@/lib/pld/pep"
+import { buildDefaultPldTenants } from "@/lib/pld/tenants"
+import { buildPldOperationalCase } from "@/lib/pld/operational-flow"
+import { generateSatOutputPackage } from "@/lib/pld/sat-outputs"
+import { buildSatFormatSnapshot } from "@/lib/pld/sat-formatos"
 import type { PepScreeningResult, UmbralStatus } from "@/lib/pld/types"
 
 export const DEMO_SEED_METADATA_KEY = "pld-demo-seed-metadata"
 
 export const DEMO_STORAGE_KEYS = [
   "registro-sat-data",
+  "pld-tenants",
+  "pld-active-tenant-id",
   "kyc_expedientes_detalle",
   "actividades_vulnerables_clientes",
   "actividades_vulnerables_operaciones",
@@ -21,6 +27,8 @@ export const DEMO_STORAGE_KEYS = [
   "pld-evidences-documents",
   "pld-evidences-logs",
   "evidencias-trazabilidad-data",
+  "pld-sat-output-packages",
+  "pld-sat-format-snapshot",
   "gobernanza-control-data",
   "monitoreo-operaciones-data",
   "documents",
@@ -739,6 +747,176 @@ function buildOperations(referenceDate: Date) {
   })
 }
 
+function buildSatOutputPackages(referenceDate: Date) {
+  const tenant = {
+    ...buildDefaultPldTenants("tenant-demo-isn").tenants[0],
+    id: "tenant-demo-isn",
+    rfc: DEMO_SUBJECT.rfc,
+    razonSocial: DEMO_SUBJECT.nombre,
+    representanteCumplimiento: {
+      ...buildDefaultPldTenants("tenant-demo-isn").tenants[0].representanteCumplimiento,
+      nombre: DEMO_SUBJECT.oficial,
+      email: DEMO_SUBJECT.correoCumplimiento,
+    },
+  }
+  const completedEvidence = {
+    "pm-acta-constitutiva": true,
+    "pm-rfc-constancia": true,
+    "pm-domicilio": true,
+    "pm-poderes-representante": true,
+    "pm-identificacion-representante": true,
+    "pm-beneficiario-controlador": true,
+    "pf-identificacion-oficial": true,
+    "pf-domicilio": true,
+    "pf-actividad": true,
+    "pf-beneficiario-controlador": true,
+    "operacion-soporte": true,
+    "operacion-forma-pago": true,
+  }
+  const baseDate = dateOnly(referenceDate)
+  const inmueblesSatFieldValues = buildInmueblesSatFieldValues()
+  const avisoNormal = buildPldOperationalCase({
+    tenant,
+    periodo: "202605",
+    actividadKey: "fraccion-v-inmuebles",
+    clienteId: "cliente-DLV190624M32",
+    clienteNombre: "Desarrollos Lago Verde, S.A.P.I. de C.V.",
+    clienteRfc: "DLV190624M32",
+    tipoCliente: "pm_mexicana",
+    fechaOperacion: "2026-05-05",
+    montoMxn: 1_850_000,
+    formaPago: "Transferencia SPEI",
+    completedEvidence,
+    satTemplateId: "sat-fraccion-v-inmuebles",
+    satTemplateFile: "Inmuebles_v4_5.xlsm",
+    satTemplateVariant: "sat-fraccion-v-inmuebles",
+    satFieldValues: inmueblesSatFieldValues,
+    satMissingRequiredFields: [],
+    satWorkbookStatus: "listo",
+    actor: DEMO_SUBJECT.oficial,
+  })
+  const informeCeros = {
+    ...buildPldOperationalCase({
+      tenant,
+      periodo: "202606",
+      actividadKey: "fraccion-v-inmuebles",
+      clienteId: "periodo-sin-operaciones",
+      clienteNombre: "Periodo sin operaciones objeto de aviso",
+      clienteRfc: DEMO_SUBJECT.rfc,
+      tipoCliente: "pm_mexicana",
+      fechaOperacion: baseDate,
+      montoMxn: 0,
+      formaPago: "No aplica",
+      completedEvidence,
+      actor: DEMO_SUBJECT.oficial,
+    }),
+    satOutputStatus: {
+      kind: "informe_ceros" as const,
+      label: "Informe en ceros",
+      descripcion: "Periodo demo sin actos u operaciones objeto de aviso.",
+      canClose: true,
+      warnings: [],
+    },
+  }
+  const informe27Bis = buildPldOperationalCase({
+    tenant,
+    periodo: "202605",
+    actividadKey: "fraccion-xv-uso-goce",
+    clienteId: "cliente-DLV190624M32-27bis",
+    clienteNombre: "Desarrollos Lago Verde, S.A.P.I. de C.V.",
+    clienteRfc: "DLV190624M32",
+    tipoCliente: "pm_mexicana",
+    fechaOperacion: "2026-05-10",
+    montoMxn: 420_000,
+    formaPago: "Intercompañía documentada",
+    supuesto27Bis: true,
+    completedEvidence,
+    actor: DEMO_SUBJECT.oficial,
+  })
+  const aviso24h = buildPldOperationalCase({
+    tenant,
+    periodo: "202605",
+    actividadKey: "fraccion-vi-metales",
+    clienteId: "cliente-ROGM780915K20-24h",
+    clienteNombre: "María Fernanda Rojas Gómez",
+    clienteRfc: "ROGM780915K20",
+    tipoCliente: "pf_residente",
+    fechaOperacion: "2026-05-07",
+    montoMxn: 120_000,
+    formaPago: "Transferencia SPEI",
+    sospecha24h: true,
+    alertaCodigo: "2901",
+    alertaDescripcion: "Cliente PEP con operación incongruente frente al perfil declarado.",
+    suspicionNarrative:
+      "La cliente declaró cargo público y solicitó acelerar la operación sin entregar soporte completo de origen de recursos.",
+    completedEvidence,
+    actor: DEMO_SUBJECT.oficial,
+  })
+
+  return [avisoNormal, informeCeros, informe27Bis, aviso24h].map(generateSatOutputPackage)
+}
+
+function buildInmueblesSatFieldValues() {
+  return {
+    "persona_aviso.sujeto_obligado_rfc": DEMO_SUBJECT.rfc,
+    "persona_aviso.periodo": "202605",
+    "persona_aviso.referencia": "AV-DEMO-202605-001",
+    "persona_aviso.prioridad": "1,NORMAL",
+    "persona_aviso.tipo_alerta": "100,Sin alerta.",
+    "persona_aviso.pm.razon_social": "Desarrollos Lago Verde, S.A.P.I. de C.V.",
+    "persona_aviso.pm.fecha_constitucion": "24/06/2019",
+    "persona_aviso.pm.rfc": "DLV190624M32",
+    "persona_aviso.pm.pais_nacionalidad": "MEXICO,MX",
+    "persona_aviso.pm.giro_mercantil": "NO APLICA||1000000",
+    "persona_aviso.representante.nombre": "Ricardo",
+    "persona_aviso.representante.apellido_paterno": "Valdés",
+    "persona_aviso.representante.apellido_materno": "Novelo",
+    "persona_aviso.representante.fecha_nacimiento": "02/07/1976",
+    "persona_aviso.representante.rfc": "VANR760702QZ4",
+    "persona_aviso.representante.curp": "VANR760702HNLLVC09",
+    "persona_aviso.domicilio_nacional.estado": "Nuevo León",
+    "persona_aviso.domicilio_nacional.municipio": "San Pedro Garza García",
+    "persona_aviso.domicilio_nacional.ciudad": "San Pedro Garza García",
+    "persona_aviso.domicilio_nacional.colonia": "Valle del Campestre",
+    "persona_aviso.domicilio_nacional.calle": "Avenida Roble",
+    "persona_aviso.domicilio_nacional.numero_exterior": "300",
+    "persona_aviso.domicilio_nacional.codigo_postal": "66260",
+    "persona_aviso.contacto.pais_telefono": "MEXICO,MX",
+    "persona_aviso.contacto.telefono": "8183552200",
+    "persona_aviso.contacto.correo": "cumplimiento@dlv.demo",
+    "beneficiario.pf.nombre": "Adriana",
+    "beneficiario.pf.apellido_paterno": "Luna",
+    "beneficiario.pf.apellido_materno": "Paredes",
+    "beneficiario.pf.fecha_nacimiento": "12/09/1976",
+    "beneficiario.pf.rfc": "LUPA760912QA1",
+    "beneficiario.pf.curp": "LUPA760912MNLNRD04",
+    "beneficiario.pf.pais_nacionalidad": "MEXICO,MX",
+    "acto.fecha_operacion": "05/05/2026",
+    "acto.figura_cliente": "2,Comprador",
+    "acto.figura_sujeto_obligado": "3,Intermediario",
+    "inmueble.tipo_bien": "12,Terreno urbano habitacional",
+    "inmueble.valor_pactado": "1850000",
+    "inmueble.codigo_postal": "66260",
+    "inmueble.calle": "Avenida Roble",
+    "inmueble.numero_exterior": "300",
+    "inmueble.colonia": "Valle del Campestre",
+    "inmueble.terreno_m2": "240",
+    "inmueble.inmueble_m2": "185",
+    "inmueble.folio_real": "FR-2026-000184",
+    "instrumento.fecha": "05/05/2026",
+    "instrumento.numero": "INS-DEMO-2026-184",
+    "instrumento.notario": "28",
+    "instrumento.entidad": "19,NUEVO LEÓN",
+    "instrumento.valor_avaluo": "1850000",
+    "instrumento.fecha_contrato": "05/05/2026",
+    "pago.fecha": "05/05/2026",
+    "pago.forma_pago": "1,Contado",
+    "pago.instrumento_monetario": "8,Transferencia Interbancaria",
+    "pago.moneda": "1,Peso mexicano",
+    "pago.monto": "1850000",
+  }
+}
+
 function buildEbrEvaluations(referenceDate: Date) {
   const pepScreening = matchPepCargo({
     nombre: "María Fernanda Rojas Gómez",
@@ -1328,7 +1506,7 @@ function buildProgress() {
     {
       id: "registro-sat",
       title: "Alta y Registro SAT/SPPLD",
-      description: "Sujeto obligado, actividad vulnerable, REC y acuses iniciales.",
+      description: "Alta SAT vinculada al EUI: sujeto obligado, actividad, REC, folio y acuses.",
       path: "/registro-sat",
       progress: 100,
       status: "completado",
@@ -1344,7 +1522,7 @@ function buildProgress() {
     {
       id: "kyc-demo",
       title: "Expedientes KYC",
-      description: "Tres expedientes con documentos y beneficiario controlador.",
+      description: "EUI multi-cliente enlazado a Alta SAT, beneficiario controlador y evidencia.",
       path: "/kyc-expediente",
       progress: 85,
       status: "en-progreso",
@@ -1360,7 +1538,7 @@ function buildProgress() {
     {
       id: "operaciones-demo",
       title: "Actos y Operaciones",
-      description: "Operaciones con identificación, aviso, acumulación y PEP.",
+      description: "Operaciones con identificación, EBR/evidencia y salida SAT sugerida.",
       path: "/actividades-vulnerables",
       progress: 80,
       status: "pendiente-revision",
@@ -1371,6 +1549,22 @@ function buildProgress() {
         { id: "op-1", title: "Registrar operaciones inmobiliarias", completed: true },
         { id: "op-2", title: "Validar avisos ordinarios", completed: true },
         { id: "op-3", title: "Cerrar evidencia PEP", completed: false },
+      ],
+    },
+    {
+      id: "avisos-sat-demo",
+      title: "Avisos e Informes SAT",
+      description: "Ruta demo: Alta SAT → EUI → Operación → EBR/Evidencia → Aviso/Informe SAT.",
+      path: "/avisos-informes",
+      progress: 100,
+      status: "completado",
+      iconName: "FileText",
+      category: "cumplimiento",
+      priority: 1,
+      tasks: [
+        { id: "sat-out-1", title: "XML de aviso normal", completed: true },
+        { id: "sat-out-2", title: "Informe en ceros", completed: true },
+        { id: "sat-out-3", title: "Informe 27 Bis y aviso 24 horas", completed: true },
       ],
     },
     {
@@ -1402,6 +1596,20 @@ export function buildPldDemoDataset(referenceDate = new Date()): PldDemoDataset 
   const auditoria = buildAuditoria(referenceDate)
   const evidencias = buildEvidencias(referenceDate)
   const gobernanza = buildGobernanza(referenceDate)
+  const tenantState = buildDefaultPldTenants("tenant-demo-isn")
+  tenantState.tenants[0] = {
+    ...tenantState.tenants[0],
+    rfc: DEMO_SUBJECT.rfc,
+    razonSocial: DEMO_SUBJECT.nombre,
+    nombreComercial: "Sierra Norte Demo PLD",
+    representanteCumplimiento: {
+      ...tenantState.tenants[0].representanteCumplimiento,
+      nombre: DEMO_SUBJECT.oficial,
+      email: DEMO_SUBJECT.correoCumplimiento,
+    },
+  }
+  const satOutputPackages = buildSatOutputPackages(referenceDate)
+  const satFormatSnapshot = buildSatFormatSnapshot(referenceDate.toISOString())
   const metadata = {
     schemaVersion: 1,
     name: "Demo PLD Actividades Vulnerables 2026",
@@ -1414,12 +1622,15 @@ export function buildPldDemoDataset(referenceDate = new Date()): PldDemoDataset 
       operaciones: operaciones.length,
       ebr: Object.keys(ebr).length,
       evidencias: evidencias.docs.length,
+      satPackages: satOutputPackages.length,
       hallazgos: auditoria.planes.length,
     },
   }
 
   return {
     "registro-sat-data": registroSat,
+    "pld-tenants": tenantState,
+    "pld-active-tenant-id": tenantState.activeTenantId,
     kyc_expedientes_detalle: expedientes,
     actividades_vulnerables_clientes: expedientes.map((expediente) => ({
       rfc: expediente.rfc,
@@ -1441,6 +1652,8 @@ export function buildPldDemoDataset(referenceDate = new Date()): PldDemoDataset 
     "pld-evidences-documents": evidencias.docs,
     "pld-evidences-logs": evidencias.logs,
     "evidencias-trazabilidad-data": evidencias.snapshot,
+    "pld-sat-output-packages": satOutputPackages,
+    "pld-sat-format-snapshot": satFormatSnapshot,
     "gobernanza-control-data": gobernanza,
     "monitoreo-operaciones-data": {
       alertas: operaciones

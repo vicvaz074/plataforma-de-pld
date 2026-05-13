@@ -1,0 +1,407 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-05-12T18:32:02.198Z",
+  "source": "Plantillas oficiales SAT de Actividades Vulnerables cacheadas localmente",
+  "layouts": [
+    {
+      "templateId": "sat-fraccion-i-juegos",
+      "officialXlsmName": "JuegosySorteos_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:32:09.396Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 10,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-i-juegos.json"
+    },
+    {
+      "templateId": "sat-fraccion-ii-tarjetas-servicios",
+      "officialXlsmName": "TarjetasServCred_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:32:22.267Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 9,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-ii-tarjetas-servicios.json"
+    },
+    {
+      "templateId": "sat-fraccion-ii-tarjetas-prepagadas",
+      "officialXlsmName": "TarjetasPrepago_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:33:07.332Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 12,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-ii-tarjetas-prepagadas.json"
+    },
+    {
+      "templateId": "sat-fraccion-ii-instrumentos-valor",
+      "officialXlsmName": "TarjetasDevRwd_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:33:37.884Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 12,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-ii-instrumentos-valor.json"
+    },
+    {
+      "templateId": "sat-fraccion-iii-cheques",
+      "officialXlsmName": "ChequesViajero_v4_4.xlsm",
+      "generatedAt": "2026-05-12T18:33:42.414Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 11,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-iii-cheques.json"
+    },
+    {
+      "templateId": "sat-fraccion-iv-prestamos",
+      "officialXlsmName": "MutuoPrestCred_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:33:45.683Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 14,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-iv-prestamos.json"
+    },
+    {
+      "templateId": "sat-fraccion-v-inmuebles",
+      "officialXlsmName": "Inmuebles_v4_5.xlsm",
+      "generatedAt": "2026-05-12T18:33:49.192Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 16,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-v-inmuebles.json"
+    },
+    {
+      "templateId": "sat-fraccion-v-bis-desarrollo",
+      "officialXlsmName": "DesarrollosInmobiliarios_v4_7.xlsm",
+      "generatedAt": "2026-05-12T18:34:04.396Z",
+      "workbookHasMacros": true,
+      "sectionCount": 7,
+      "optionListCount": 14,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-v-bis-desarrollo.json"
+    },
+    {
+      "templateId": "sat-fraccion-vi-metales",
+      "officialXlsmName": "MetalesyJoyas_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:34:07.614Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 15,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-vi-metales.json"
+    },
+    {
+      "templateId": "sat-fraccion-vii-arte",
+      "officialXlsmName": "ObrasArte_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:34:10.765Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 19,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-vii-arte.json"
+    },
+    {
+      "templateId": "sat-fraccion-viii-vehiculos",
+      "officialXlsmName": "Vehiculos_v4_4.xlsm",
+      "generatedAt": "2026-05-12T18:34:14.242Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 18,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-viii-vehiculos.json"
+    },
+    {
+      "templateId": "sat-fraccion-ix-blindaje",
+      "officialXlsmName": "Blindaje_v4_4.xlsm",
+      "generatedAt": "2026-05-12T18:34:17.341Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 13,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-ix-blindaje.json"
+    },
+    {
+      "templateId": "sat-fraccion-x-traslado",
+      "officialXlsmName": "TraslCustValores_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:34:41.296Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 17,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-x-traslado.json"
+    },
+    {
+      "templateId": "sat-fraccion-xi-a-inmuebles",
+      "officialXlsmName": "SPR01_CompraventaInmuebles_v5_0.xlsm",
+      "generatedAt": "2026-05-12T18:35:15.693Z",
+      "workbookHasMacros": true,
+      "sectionCount": 6,
+      "optionListCount": 27,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xi-a-inmuebles.json"
+    },
+    {
+      "templateId": "sat-fraccion-xi-a-inmuebles-cesion",
+      "officialXlsmName": "SPR02_CesionDerechosInmuebles_v5_0.xlsm",
+      "generatedAt": "2026-05-12T18:35:34.470Z",
+      "workbookHasMacros": true,
+      "sectionCount": 6,
+      "optionListCount": 27,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xi-a-inmuebles-cesion.json"
+    },
+    {
+      "templateId": "sat-fraccion-xi-b-administracion",
+      "officialXlsmName": "SPR03_AdministracionDeRecursos_v5_0.xlsm",
+      "generatedAt": "2026-05-12T18:35:47.795Z",
+      "workbookHasMacros": true,
+      "sectionCount": 6,
+      "optionListCount": 27,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xi-b-administracion.json"
+    },
+    {
+      "templateId": "sat-fraccion-xi-c-cuentas",
+      "officialXlsmName": "SPR04_ConstitucionDePersonasMorales_v5_0.xlsm",
+      "generatedAt": "2026-05-12T18:36:03.070Z",
+      "workbookHasMacros": true,
+      "sectionCount": 6,
+      "optionListCount": 27,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xi-c-cuentas.json"
+    },
+    {
+      "templateId": "sat-fraccion-xi-d-aportaciones",
+      "officialXlsmName": "SPR05_OrganizacionDeAportaciones_v5_0.xlsm",
+      "generatedAt": "2026-05-12T18:36:16.759Z",
+      "workbookHasMacros": true,
+      "sectionCount": 6,
+      "optionListCount": 27,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xi-d-aportaciones.json"
+    },
+    {
+      "templateId": "sat-fraccion-xi-e-fusion",
+      "officialXlsmName": "SPR06_Fusion_v5_0.xlsm",
+      "generatedAt": "2026-05-12T18:36:30.601Z",
+      "workbookHasMacros": true,
+      "sectionCount": 6,
+      "optionListCount": 27,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xi-e-fusion.json"
+    },
+    {
+      "templateId": "sat-fraccion-xi-e-escision",
+      "officialXlsmName": "SPR07_Escision_v5_0.xlsm",
+      "generatedAt": "2026-05-12T18:36:44.468Z",
+      "workbookHasMacros": true,
+      "sectionCount": 6,
+      "optionListCount": 27,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xi-e-escision.json"
+    },
+    {
+      "templateId": "sat-fraccion-xi-e-administracion-pm",
+      "officialXlsmName": "SPR08_AdministracionDePersonasMorales_v5_0.xlsm",
+      "generatedAt": "2026-05-12T18:36:58.341Z",
+      "workbookHasMacros": true,
+      "sectionCount": 6,
+      "optionListCount": 27,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xi-e-administracion-pm.json"
+    },
+    {
+      "templateId": "sat-fraccion-xi-e-fideicomisos",
+      "officialXlsmName": "SPR09_ConstitucionDeFideicomisos_v5_0.xlsm",
+      "generatedAt": "2026-05-12T18:37:12.746Z",
+      "workbookHasMacros": true,
+      "sectionCount": 6,
+      "optionListCount": 27,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xi-e-fideicomisos.json"
+    },
+    {
+      "templateId": "sat-fraccion-xi-e-compraventa-entidades",
+      "officialXlsmName": "SPR10_ComparaventaDeEntidadesMercantiles_v5_0.xlsm",
+      "generatedAt": "2026-05-12T18:38:02.001Z",
+      "workbookHasMacros": true,
+      "sectionCount": 6,
+      "optionListCount": 27,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xi-e-compraventa-entidades.json"
+    },
+    {
+      "templateId": "sat-fraccion-xii-notarios-a",
+      "officialXlsmName": "FedatariosSP_Inmuebles_v4_4.xlsm",
+      "generatedAt": "2026-05-12T18:38:05.291Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 6,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xii-notarios-a.json"
+    },
+    {
+      "templateId": "sat-fraccion-xii-notarios-b",
+      "officialXlsmName": "FedatarioPoder_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:38:19.188Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 8,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xii-notarios-b.json"
+    },
+    {
+      "templateId": "sat-fraccion-xii-notarios-c",
+      "officialXlsmName": "FedatarioConstitucionPM_v4_4.xlsm",
+      "generatedAt": "2026-05-12T18:38:19.235Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 11,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xii-notarios-c.json"
+    },
+    {
+      "templateId": "sat-fraccion-xii-notarios-d",
+      "officialXlsmName": "FedatarioConstitucionFid_v4_6.xlsm",
+      "generatedAt": "2026-05-12T18:38:36.909Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 16,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xii-notarios-d.json"
+    },
+    {
+      "templateId": "sat-fraccion-xii-notarios-e",
+      "officialXlsmName": "FedatarioMutuo_v4_4.xlsm",
+      "generatedAt": "2026-05-12T18:38:50.430Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 12,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xii-notarios-e.json"
+    },
+    {
+      "templateId": "sat-fraccion-xii-corredores-a",
+      "officialXlsmName": "FedatarioAvaluo_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:40:00.223Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 6,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xii-corredores-a.json"
+    },
+    {
+      "templateId": "sat-fraccion-xii-corredores-c-compra-venta",
+      "officialXlsmName": "FedatarioCompraVenta_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:40:24.550Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 11,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xii-corredores-c-compra-venta.json"
+    },
+    {
+      "templateId": "sat-fraccion-xii-corredores-c-fusion",
+      "officialXlsmName": "FedatarioFusion_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:40:38.392Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 8,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xii-corredores-c-fusion.json"
+    },
+    {
+      "templateId": "sat-fraccion-xii-corredores-c-escision",
+      "officialXlsmName": "FedatarioEscision_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:40:50.047Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 8,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xii-corredores-c-escision.json"
+    },
+    {
+      "templateId": "sat-fraccion-xii-corredores-c-modif-patrimonial",
+      "officialXlsmName": "FedatarioModifPatrimonial_v4_4.xlsm",
+      "generatedAt": "2026-05-12T18:41:00.769Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 7,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xii-corredores-c-modif-patrimonial.json"
+    },
+    {
+      "templateId": "sat-fraccion-xii-sp-poder",
+      "officialXlsmName": "FedatariosSP_Poder_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:41:03.512Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 5,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xii-sp-poder.json"
+    },
+    {
+      "templateId": "sat-fraccion-xii-sp-modif-patrimonial",
+      "officialXlsmName": "FedatariosSP_ModifPatrimonial_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:41:30.717Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 7,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xii-sp-modif-patrimonial.json"
+    },
+    {
+      "templateId": "sat-fraccion-xii-cesion-fideicomiso",
+      "officialXlsmName": "FedatarioCesion_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:42:02.529Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 8,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xii-cesion-fideicomiso.json"
+    },
+    {
+      "templateId": "sat-fraccion-xiii-donativos",
+      "officialXlsmName": "Donativos_v4_3.xlsm",
+      "generatedAt": "2026-05-12T18:43:06.666Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 12,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xiii-donativos.json"
+    },
+    {
+      "templateId": "sat-fraccion-xiv-comercio-exterior",
+      "officialXlsmName": "0-InformeEnCeros.xlsm",
+      "generatedAt": "2026-05-12T18:43:57.997Z",
+      "workbookHasMacros": true,
+      "sectionCount": 1,
+      "optionListCount": 1,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xiv-comercio-exterior.json"
+    },
+    {
+      "templateId": "sat-fraccion-xv-arrendamiento",
+      "officialXlsmName": "Arrendamiento_v4_5.xlsm",
+      "generatedAt": "2026-05-12T18:44:07.406Z",
+      "workbookHasMacros": true,
+      "sectionCount": 3,
+      "optionListCount": 13,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xv-arrendamiento.json"
+    },
+    {
+      "templateId": "sat-fraccion-xvi-activos-virtuales",
+      "officialXlsmName": "ActivosVirtuales_v1.2.xlsm",
+      "generatedAt": "2026-05-12T18:44:15.323Z",
+      "workbookHasMacros": true,
+      "sectionCount": 9,
+      "optionListCount": 13,
+      "source": "Plantilla oficial SAT XLSM",
+      "path": "/data/sat-xlsm-layouts/sat-fraccion-xvi-activos-virtuales.json"
+    }
+  ]
+}

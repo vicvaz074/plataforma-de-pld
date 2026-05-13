@@ -811,7 +811,7 @@ export default function CapacitacionControlPage() {
       doc.setFont("helvetica", "normal")
 
       const addLine = (text: string) => {
-        const lines = doc.splitTextToSize(text, 515)
+        const lines = doc.splitTextToSize(text, 515) as string[]
         lines.forEach((line) => {
           if (y > 760) {
             doc.addPage()

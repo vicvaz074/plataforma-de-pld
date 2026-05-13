@@ -311,13 +311,9 @@ export default function EvidenciasTrazabilidadPage() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.documents, JSON.stringify(documents))
-    localStorage.setItem(STORAGE_KEYS.snapshot, JSON.stringify({ documentos: documents, logs }))
-  }, [documents])
-
-  useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.logs, JSON.stringify(logs))
     localStorage.setItem(STORAGE_KEYS.snapshot, JSON.stringify({ documentos: documents, logs }))
-  }, [logs])
+  }, [documents, logs])
 
   const syncExternalEvidence = () => {
     const externalDocs: EvidenceDocument[] = []
@@ -565,6 +561,7 @@ export default function EvidenciasTrazabilidadPage() {
       return
     }
 
+    const selectedFile = formState.file
     const reader = new FileReader()
     reader.onload = () => {
       const fileData = reader.result as string
@@ -590,9 +587,9 @@ export default function EvidenciasTrazabilidadPage() {
         const updatedDoc: EvidenceDocument = {
           ...existingDoc,
           id: randomId(),
-          fileName: formState.file!.name,
-          fileSize: formState.file!.size,
-          fileType: formState.file!.type,
+          fileName: selectedFile.name,
+          fileSize: selectedFile.size,
+          fileType: selectedFile.type,
           fileData,
           uploadDate: timestamp,
           documentDate: formState.documentDate,
@@ -614,14 +611,14 @@ export default function EvidenciasTrazabilidadPage() {
           module: selectedModule,
           submodule: formState.submodule,
           documentType: formState.documentType,
-          title: formState.title || formState.file.name,
+          title: formState.title || selectedFile.name,
           notes: formState.notes,
           uploadDate: timestamp,
           documentDate: formState.documentDate,
           user: formState.user,
-          fileName: formState.file.name,
-          fileSize: formState.file.size,
-          fileType: formState.file.type,
+          fileName: selectedFile.name,
+          fileSize: selectedFile.size,
+          fileType: selectedFile.type,
           fileData,
           version: 1,
           versionHistory: [],
@@ -651,7 +648,7 @@ export default function EvidenciasTrazabilidadPage() {
       })
     }
 
-    reader.readAsDataURL(formState.file)
+    reader.readAsDataURL(selectedFile)
   }
 
   const registerLog = (
@@ -778,10 +775,10 @@ export default function EvidenciasTrazabilidadPage() {
         doc.addPage()
         currentY = 60
       }
-      doc.setFont(undefined, "bold")
+      doc.setFont("helvetica", "bold")
       doc.text(`${getModuleName(evidence.module)} - ${evidence.title}`, 40, currentY)
       currentY += 18
-      doc.setFont(undefined, "normal")
+      doc.setFont("helvetica", "normal")
       const details = [
         `Submódulo: ${evidence.submodule}`,
         `Tipo: ${evidence.documentType}`,

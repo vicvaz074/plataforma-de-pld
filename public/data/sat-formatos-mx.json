@@ -1,0 +1,660 @@
+{
+  "schemaVersion": 1,
+  "source": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+  "generatedAt": "2026-05-12T18:05:49.837Z",
+  "items": [
+    {
+      "id": "sat-fraccion-i-juegos",
+      "fraccion": "Fracción I",
+      "anexo": "Anexo 1",
+      "actividadKeys": [
+        "fraccion-i-juegos"
+      ],
+      "nombre": "Juegos con apuesta, concursos o sorteos",
+      "claveActividad": "JAS",
+      "layoutXmlTag": "juegos_sorteos",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_I/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_I/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_I/juegosysorteos.zip",
+      "plantillaAvisoNombre": "JuegosySorteos_v4_3.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "JuegosySorteos_v4_3.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:31 GMT",
+      "officialZipSize": 4160632,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:47 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "JuegosySorteos_v4_3.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-ii-tarjetas-servicios",
+      "fraccion": "Fracción II",
+      "anexo": "Anexo 2-A",
+      "actividadKeys": [
+        "fraccion-ii-tarjetas-servicios"
+      ],
+      "nombre": "Tarjetas de servicios o crédito",
+      "claveActividad": "TSC",
+      "layoutXmlTag": "tarjetas_servicios_credito",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_II_monederos/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_II_tarjetascredito/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_II_tarjetascredito/tarjetasservcred.zip",
+      "plantillaAvisoNombre": "TarjetasServCred_v4_3.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "TarjetasServCred_v4_3.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:47 GMT",
+      "officialZipSize": 4128925,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:31 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "TarjetasServCred_v4_3.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-ii-tarjetas-prepagadas",
+      "fraccion": "Fracción II",
+      "anexo": "Anexo 2-B",
+      "actividadKeys": [
+        "fraccion-ii-tarjetas-prepagadas"
+      ],
+      "nombre": "Tarjetas prepagadas",
+      "claveActividad": "TPP",
+      "layoutXmlTag": "tarjetas_prepagadas",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_II_monederos/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_II_tarjetasprepagadas/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_II_tarjetasprepagadas/tarjetasprepago.zip",
+      "plantillaAvisoNombre": "TarjetasPrepago_v4_3.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "TarjetasPrepago_v4_3.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:34 GMT",
+      "officialZipSize": 4135723,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:40 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "TarjetasPrepago_v4_3.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-ii-instrumentos-valor",
+      "fraccion": "Fracción II",
+      "anexo": "Anexo 2-C",
+      "actividadKeys": [
+        "fraccion-ii-instrumentos-valor"
+      ],
+      "nombre": "Instrumentos de almacenamiento de valor monetario",
+      "claveActividad": "TAV",
+      "layoutXmlTag": "tarjetas_valor_monetario",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_II_monederos/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_II_monederos/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_II_monederos/tarjetasdevrwd.zip",
+      "plantillaAvisoNombre": "TarjetasDevRwd_v4_3.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "TarjetasDevRwd_v4_3.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:40 GMT",
+      "officialZipSize": 4131013,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:47 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "TarjetasDevRwd_v4_3.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-iii-cheques",
+      "fraccion": "Fracción III",
+      "anexo": "Anexo 3",
+      "actividadKeys": [
+        "fraccion-iii-cheques"
+      ],
+      "nombre": "Cheques de viajero",
+      "claveActividad": "CHV",
+      "layoutXmlTag": "cheques_viajero",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_III/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_III/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_III/chequesviajero.zip",
+      "plantillaAvisoNombre": "ChequesViajero_v4_4.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "ChequesViajero_v4_4.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:40 GMT",
+      "officialZipSize": 4139813,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:34 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "ChequesViajero_v4_4.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-iv-prestamos",
+      "fraccion": "Fracción IV",
+      "anexo": "Anexo 4",
+      "actividadKeys": [
+        "fraccion-iv-prestamos"
+      ],
+      "nombre": "Mutuo, préstamo, crédito o garantía",
+      "claveActividad": "MCG",
+      "layoutXmlTag": "mutuo_prestamo_credito",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_IV/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_IV/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_IV/mutuoprestcred.zip",
+      "plantillaAvisoNombre": "MutuoPrestCred_v4_3.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "MutuoPrestCred_v4_3.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:40 GMT",
+      "officialZipSize": 4228018,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:31 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "MutuoPrestCred_v4_3.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-v-inmuebles",
+      "fraccion": "Fracción V",
+      "anexo": "Anexo 5",
+      "actividadKeys": [
+        "fraccion-v-inmuebles"
+      ],
+      "nombre": "Construcción, desarrollo, comercialización o transmisión de inmuebles",
+      "claveActividad": "INM",
+      "layoutXmlTag": "inmuebles",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_V_desarrolloinmobiliario/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_V_transmisionderechos/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_V_transmisionderechos/inmuebles.zip",
+      "plantillaAvisoNombre": "Inmuebles_v4_5.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "Inmuebles_v4_5.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:34 GMT",
+      "officialZipSize": 4230906,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:31 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "informe_27_bis",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "Inmuebles_v4_5.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-v-bis-desarrollo",
+      "fraccion": "Fracción V Bis",
+      "anexo": "Anexo 5-A",
+      "actividadKeys": [
+        "fraccion-v-bis-desarrollo"
+      ],
+      "nombre": "Recepción de recursos para desarrollo inmobiliario",
+      "claveActividad": "VBI",
+      "layoutXmlTag": "desarrollos_inmobiliarios",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_Vbis/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_Vbis/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_Vbis/avisos.zip",
+      "plantillaAvisoNombre": "DesarrollosInmobiliarios_v4_7.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "DesarrollosInmobiliarios_v4_7.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:34 GMT",
+      "officialZipSize": 4830209,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:31 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "informe_27_bis",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "DesarrollosInmobiliarios_v4_7.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-vi-metales",
+      "fraccion": "Fracción VI",
+      "anexo": "Anexo 6",
+      "actividadKeys": [
+        "fraccion-vi-metales"
+      ],
+      "nombre": "Metales, piedras preciosas, joyas o relojes",
+      "claveActividad": "MJO",
+      "layoutXmlTag": "metales_joyas",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_VI/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_VI/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_VI/metalesyjoyas.zip",
+      "plantillaAvisoNombre": "MetalesyJoyas_v4_3.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "MetalesyJoyas_v4_3.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:40 GMT",
+      "officialZipSize": 4137057,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:31 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "MetalesyJoyas_v4_3.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-vii-arte",
+      "fraccion": "Fracción VII",
+      "anexo": "Anexo 7",
+      "actividadKeys": [
+        "fraccion-vii-arte"
+      ],
+      "nombre": "Subasta o venta de obras de arte",
+      "claveActividad": "OBA",
+      "layoutXmlTag": "obras_arte",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_VII/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_VII/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_VII/obrasarte.zip",
+      "plantillaAvisoNombre": "ObrasArte_v4_3.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "ObrasArte_v4_3.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:40 GMT",
+      "officialZipSize": 4135654,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:34 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "ObrasArte_v4_3.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-viii-vehiculos",
+      "fraccion": "Fracción VIII",
+      "anexo": "Anexo 8",
+      "actividadKeys": [
+        "fraccion-viii-vehiculos"
+      ],
+      "nombre": "Vehículos aéreos, marítimos o terrestres",
+      "claveActividad": "VEH",
+      "layoutXmlTag": "vehiculos",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_VIII/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_VIII/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_VIII/vehiculos.zip",
+      "plantillaAvisoNombre": "Vehiculos_v4_4.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "Vehiculos_v4_4.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:40 GMT",
+      "officialZipSize": 4155222,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:31 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "Vehiculos_v4_4.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-ix-blindaje",
+      "fraccion": "Fracción IX",
+      "anexo": "Anexo 9",
+      "actividadKeys": [
+        "fraccion-ix-blindaje"
+      ],
+      "nombre": "Servicios de blindaje",
+      "claveActividad": "BLI",
+      "layoutXmlTag": "blindaje",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_IX/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_IX/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_IX/blindaje.zip",
+      "plantillaAvisoNombre": "Blindaje_v4_4.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "Blindaje_v4_4.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:47 GMT",
+      "officialZipSize": 4139935,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:31 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "Blindaje_v4_4.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-x-traslado",
+      "fraccion": "Fracción X",
+      "anexo": "Anexo 10",
+      "actividadKeys": [
+        "fraccion-x-traslado"
+      ],
+      "nombre": "Traslado o custodia de dinero o valores",
+      "claveActividad": "TCV",
+      "layoutXmlTag": "traslado_custodia_valores",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_X/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_X/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_X/traslcustvalores.zip",
+      "plantillaAvisoNombre": "TraslCustValores_v4_3.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "TraslCustValores_v4_3.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:40 GMT",
+      "officialZipSize": 4189423,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:31 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "TraslCustValores_v4_3.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-xi-servicios-profesionales",
+      "fraccion": "Fracción XI",
+      "anexo": "Anexo 11",
+      "actividadKeys": [
+        "fraccion-xi-a-inmuebles",
+        "fraccion-xi-b-administracion",
+        "fraccion-xi-c-cuentas",
+        "fraccion-xi-d-aportaciones",
+        "fraccion-xi-e-corporativo"
+      ],
+      "nombre": "Servicios profesionales independientes",
+      "claveActividad": "SPR",
+      "layoutXmlTag": "servicios_profesionales",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
+      "plantillaAvisoNombre": "Paquete múltiple de plantillas oficiales (.zip)",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "Paquete múltiple de plantillas oficiales (.zip)",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:47 GMT",
+      "officialZipSize": 43240094,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:34 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "paquete_multiple",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "informe_27_bis",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "sprcompraventa2.zip",
+        "sprconstitucionfid2.zip",
+        "sprconstitucionpm2 (1).zip",
+        "sprescision2 (1).zip",
+        "sprfusion2 (1).zip",
+        "sprinmuebles2 (2).zip",
+        "sproperacion2 (4).zip",
+        "spradmonrecursos2 (12).zip",
+        "spraportacion2 (2).zip",
+        "sprcesion2 (3).zip"
+      ]
+    },
+    {
+      "id": "sat-fraccion-xii-fe-publica",
+      "fraccion": "Fracción XII",
+      "anexo": "Anexo 12",
+      "actividadKeys": [
+        "fraccion-xii-notarios-a",
+        "fraccion-xii-notarios-b",
+        "fraccion-xii-notarios-c",
+        "fraccion-xii-notarios-d",
+        "fraccion-xii-notarios-e",
+        "fraccion-xii-corredores-a",
+        "fraccion-xii-corredores-b",
+        "fraccion-xii-corredores-c",
+        "fraccion-xii-corredores-d"
+      ],
+      "nombre": "Servicios de fe pública",
+      "claveActividad": "FEP",
+      "layoutXmlTag": "fe_publica",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+      "plantillaAvisoNombre": "Paquete múltiple de plantillas oficiales (.zip)",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "Paquete múltiple de plantillas oficiales (.zip)",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:31 GMT",
+      "officialZipSize": 17324804,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:31 GMT",
+      "zeroReportZipSize": 1709853,
+      "layoutStatus": "paquete_multiple",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "informe_27_bis",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "Compra o venta de acciones o partes sociales.zip",
+        "Constituci¢n de personas morales.zip",
+        "Constituci¢n o modificaci¢n de Fideicomiso traslativo de Dominio o en garant¡a sobre inmuebles.zip",
+        "Escisi¢n.zip",
+        "Fusi¢n.zip",
+        "Modificaci¢n patrimonial por aumento de capital o por disminuci¢n de capital.zip",
+        "Modificaci¢n patrimonial por aumento o disminuci¢n de capital.zip",
+        "Otorgamiento de contratos de mutuo o crdito con o sin garant¡a.zip",
+        "Otorgamiento de poder irrevocable para actos de administraci¢n o dominio.zip",
+        "Otorgamiento de poder irrevocable para actos de administraci¢n o para actos de dominio.zip",
+        "Realizaci¢n de aval£os.zip",
+        "Transmisi¢n o constituci¢n de derechos reales sobre inmuebles.zip",
+        "Cesi¢n de derechos de fideicomitente_Cesi¢n de derechos de fideicomisario.zip"
+      ]
+    },
+    {
+      "id": "sat-fraccion-xiii-donativos",
+      "fraccion": "Fracción XIII",
+      "anexo": "Anexo 13",
+      "actividadKeys": [
+        "fraccion-xiii-donativos"
+      ],
+      "nombre": "Recepción de donativos",
+      "claveActividad": "DON",
+      "layoutXmlTag": "donativos",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XIII/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XIII/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XIII/donativos.zip",
+      "plantillaAvisoNombre": "Donativos_v4_3.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "Donativos_v4_3.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:34 GMT",
+      "officialZipSize": 4136761,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:31 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "Donativos_v4_3.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-xiv-comercio-exterior",
+      "fraccion": "Fracción XIV",
+      "anexo": "Anexo 14",
+      "actividadKeys": [
+        "fraccion-xiv-aduanal-a",
+        "fraccion-xiv-aduanal-b",
+        "fraccion-xiv-aduanal-c",
+        "fraccion-xiv-aduanal-d",
+        "fraccion-xiv-aduanal-e",
+        "fraccion-xiv-aduanal-f"
+      ],
+      "nombre": "Servicios de comercio exterior",
+      "claveActividad": "ADU",
+      "layoutXmlTag": "comercio_exterior",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XIV/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XIV/aviso.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XIV/aviso.zip",
+      "plantillaAvisoNombre": "0-InformeEnCeros.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "0-InformeEnCeros.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:34 GMT",
+      "officialZipSize": 1196727,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:34 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "informe_por_pedimento",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "0-InformeEnCeros.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-xv-arrendamiento",
+      "fraccion": "Fracción XV",
+      "anexo": "Anexo 15",
+      "actividadKeys": [
+        "fraccion-xv-uso-goce"
+      ],
+      "nombre": "Derechos personales de uso o goce de bienes inmuebles",
+      "claveActividad": "ARR",
+      "layoutXmlTag": "arrendamiento",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XV/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XV/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XV/arrendamiento.zip",
+      "plantillaAvisoNombre": "Arrendamiento_v4_5.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "Arrendamiento_v4_5.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:47 GMT",
+      "officialZipSize": 4190962,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:31 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "informe_27_bis",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "Arrendamiento_v4_5.xlsm"
+      ]
+    },
+    {
+      "id": "sat-fraccion-xvi-activos-virtuales",
+      "fraccion": "Fracción XVI",
+      "anexo": "Anexo 16",
+      "actividadKeys": [
+        "fraccion-xvi-activos-virtuales",
+        "fraccion-xvi-activos-virtuales-operacion",
+        "fraccion-xvi-activos-virtuales-contraprestacion"
+      ],
+      "nombre": "Proveedores de activos virtuales",
+      "claveActividad": "AVT",
+      "layoutXmlTag": "activos_virtuales",
+      "folletoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XVI/folleto.pdf",
+      "informeCerosUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XVI/informeenceros.zip",
+      "avisoUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XVI/aviso.zip",
+      "plantillaAvisoNombre": "ActivosVirtuales_v1.2.xlsm",
+      "plantillaInformeNombre": "0-InformeEnCeros.xlsm",
+      "officialXlsmName": "ActivosVirtuales_v1.2.xlsm",
+      "officialZipLastModified": "Fri, 24 Apr 2026 19:31:40 GMT",
+      "officialZipSize": 4874676,
+      "zeroReportZipLastModified": "Fri, 24 Apr 2026 19:31:34 GMT",
+      "zeroReportZipSize": 1196727,
+      "layoutStatus": "oficial_verificado",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "satPageUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html",
+      "sourceLastVerified": "2026-05-12",
+      "zipEntries": [
+        "ActivosVirtuales_v1.2.xlsm"
+      ]
+    }
+  ]
+}

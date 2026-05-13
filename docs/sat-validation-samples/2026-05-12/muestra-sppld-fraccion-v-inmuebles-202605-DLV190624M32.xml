@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archivo xmlns="http://www.uif.shcp.gob.mx/recepcion/actividades-vulnerables" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <informe>
+    <mes_reportado>202605</mes_reportado>
+    <tipo_salida>aviso_normal</tipo_salida>
+    <borrador_no_cargable>NO</borrador_no_cargable>
+    <formato_sat>
+      <id>sat-fraccion-v-inmuebles</id>
+      <anexo>Anexo 5</anexo>
+      <fraccion>Fracción V</fraccion>
+      <clave_actividad>INM</clave_actividad>
+      <plantilla>Inmuebles_v4_5.xlsm</plantilla>
+      <fuente>https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html</fuente>
+      <verificado_en>2026-05-12</verificado_en>
+    </formato_sat>
+    <sujeto_obligado>
+      <rfc>ISN2103158Q7</rfc>
+      <razon_social>Inmobiliaria Sierra Norte, S.A. de C.V.</razon_social>
+    </sujeto_obligado>
+    <salida_sat>
+      <sin_operaciones>0</sin_operaciones>
+      <exento>0</exento>
+      <aviso>1</aviso>
+      <fecha_limite>2026-06-17</fecha_limite>
+    </salida_sat>
+    <aviso>
+      <referencia_aviso>case-202605-fraccion-v-inmuebles-cliente-DLV190624M32-1778612023873</referencia_aviso>
+      <prioridad>1</prioridad>
+      <alerta>
+        <tipo_alerta>100</tipo_alerta>
+        <descripcion_alerta>Sin alerta.</descripcion_alerta>
+      </alerta>
+      <persona_aviso>
+        <nombre_razon_social>Desarrollos Lago Verde, S.A.P.I. de C.V.</nombre_razon_social>
+        <rfc>DLV190624M32</rfc>
+        <tipo_cliente>pm_mexicana</tipo_cliente>
+      </persona_aviso>
+      <detalle_operaciones>
+        <inmuebles>
+          <actividad>fraccion-v-inmuebles</actividad>
+          <fecha_operacion>2026-05-05</fecha_operacion>
+          <forma_pago>Transferencia SPEI</forma_pago>
+          <monto_operacion>1850000.00</monto_operacion>
+        </inmuebles>
+      </detalle_operaciones>
+      <evidencia>
+        <puede_cerrar>SI</puede_cerrar>
+        <faltantes_criticos>0</faltantes_criticos>
+      </evidencia>
+    </aviso>
+  </informe>
+  <validacion>
+    <estatus>listo</estatus>
+    <faltantes></faltantes>
+    <advertencias></advertencias>
+  </validacion>
+  <trazabilidad>
+    <generado_en>2026-05-12T18:53:43.875Z</generado_en>
+    <version_xml>sat-layout-oficial-v1</version_xml>
+  </trazabilidad>
+</archivo>

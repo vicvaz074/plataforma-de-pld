@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
+import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
 import { actividadesVulnerables } from "@/lib/data/actividades"
 import { findCodigoPostalInfo, registerCodigoPostalInfo, type CodigoPostalInfo } from "@/lib/data/codigos-postales"
 import { PAISES, findPaisByNombre } from "@/lib/data/paises"
@@ -608,6 +609,8 @@ const ejemplosSujetosObligados: EjemploSujetoObligado[] = [
 ]
 
 const normalizarTexto = (valor: unknown) => (typeof valor === "string" ? valor : "")
+const toRecord = (valor: unknown): Record<string, unknown> =>
+  valor && typeof valor === "object" ? (valor as Record<string, unknown>) : {}
 const normalizarEspacios = (texto: string) => texto.replace(/\s+/g, " ").trim()
 const normalizarBusqueda = (texto: string) =>
   texto
@@ -991,6 +994,7 @@ export default function RegistroSATPage() {
   const [datosChecklistState, setDatosChecklistState] = useState<DatosChecklistState>(() =>
     createDefaultDatosChecklistState(),
   )
+  const [registroStorageReady, setRegistroStorageReady] = useState(false)
 
   const seccionesAplicables = useMemo(() => {
     if (tipoSujeto === "none") return []
@@ -1027,9 +1031,24 @@ export default function RegistroSATPage() {
     return seleccionadas.join("; ")
   }, [actividades, catalogoActividades])
 
-  useEffect(() => {
+  const cargarRegistroSatData = useCallback(() => {
     const savedData = localStorage.getItem("registro-sat-data")
-    if (!savedData) return
+    if (!savedData) {
+      setDocumentos([])
+      setDatosChecklistState(createDefaultDatosChecklistState())
+      setSujetosRegistrados([])
+      setSujetoSeleccionadoId(null)
+      setTipoSujeto("none")
+      setIdentificacion(createDefaultIdentificacion())
+      setContactos(Array.from({ length: 3 }, () => createDefaultContacto()))
+      setActividades([createDefaultActividad()])
+      setRepresentante(createDefaultRepresentante())
+      setDocumentosRegistro({ detalle: null, acuse: null, aceptacion: null })
+      setSujetoEnEdicionId(null)
+      setEjemploSeleccionado("")
+      setRegistroStorageReady(true)
+      return
+    }
 
     try {
       const data = JSON.parse(savedData)
@@ -1084,6 +1103,10 @@ export default function RegistroSATPage() {
 
             const registroCompleto =
               item.registroCompleto === true || (detalle !== null && acuse !== null && aceptacion !== null)
+            const identificacionRaw = toRecord(item.identificacion)
+            const representanteRaw = toRecord(item.representante)
+            const representanteContactoRaw = toRecord(representanteRaw.contacto)
+            const representanteCertificacionRaw = toRecord(representanteRaw.certificacion)
 
             return {
               id: item.id ?? crypto.randomUUID(),
@@ -1103,108 +1126,80 @@ export default function RegistroSATPage() {
               identificacion:
                 item.identificacion && typeof item.identificacion === "object"
                   ? {
-                      fecha: normalizarTexto((item.identificacion as Record<string, unknown>).fecha),
-                      rfc: normalizarTexto((item.identificacion as Record<string, unknown>).rfc),
-                      nombre: normalizarTexto((item.identificacion as Record<string, unknown>).nombre),
-                      apellidoPaterno: normalizarTexto((item.identificacion as Record<string, unknown>).apellidoPaterno),
-                      paisNacionalidad: normalizarTexto((item.identificacion as Record<string, unknown>).paisNacionalidad),
-                      paisNacimiento: normalizarTexto((item.identificacion as Record<string, unknown>).paisNacimiento),
-                      curp: normalizarTexto((item.identificacion as Record<string, unknown>).curp),
+                      fecha: normalizarTexto(identificacionRaw.fecha),
+                      rfc: normalizarTexto(identificacionRaw.rfc),
+                      nombre: normalizarTexto(identificacionRaw.nombre),
+                      apellidoPaterno: normalizarTexto(identificacionRaw.apellidoPaterno),
+                      paisNacionalidad: normalizarTexto(identificacionRaw.paisNacionalidad),
+                      paisNacimiento: normalizarTexto(identificacionRaw.paisNacimiento),
+                      curp: normalizarTexto(identificacionRaw.curp),
                     }
                   : createDefaultIdentificacion(),
               contactos: Array.isArray(item.contactos)
-                ? item.contactos.map((contacto: Record<string, unknown>) => ({
-                    nombreCompleto: normalizarTexto(contacto.nombreCompleto),
-                    claveLada: normalizarTexto(contacto.claveLada),
-                    telefonoFijo: normalizarTexto(contacto.telefonoFijo),
-                    extension: normalizarTexto(contacto.extension),
-                    telefonoMovil: normalizarTexto(contacto.telefonoMovil),
-                    correo: normalizarTexto(contacto.correo),
-                  }))
+                ? item.contactos.map((contacto) => {
+                    const contactoRaw = toRecord(contacto)
+                    return {
+                      nombreCompleto: normalizarTexto(contactoRaw.nombreCompleto),
+                      claveLada: normalizarTexto(contactoRaw.claveLada),
+                      telefonoFijo: normalizarTexto(contactoRaw.telefonoFijo),
+                      extension: normalizarTexto(contactoRaw.extension),
+                      telefonoMovil: normalizarTexto(contactoRaw.telefonoMovil),
+                      correo: normalizarTexto(contactoRaw.correo),
+                    }
+                  })
                 : Array.from({ length: 3 }, () => createDefaultContacto()),
               actividades: Array.isArray(item.actividades)
-                ? item.actividades.map((actividad: Record<string, unknown>) => ({
-                    actividadKey: normalizarTexto(actividad.actividadKey),
-                    fechaPrimera: normalizarTexto(actividad.fechaPrimera),
-                    cuentaRegistro: normalizarTexto(actividad.cuentaRegistro) as "" | "si" | "no",
-                    tipoDocumento: normalizarTexto(actividad.tipoDocumento),
-                    autoridadDocumento: normalizarTexto(actividad.autoridadDocumento),
-                    folioDocumento: normalizarTexto(actividad.folioDocumento),
-                    periodoDocumento: normalizarTexto(actividad.periodoDocumento),
-                    domicilio: {
-                      codigoPostal: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.codigoPostal),
-                      tipoVialidad: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.tipoVialidad),
-                      nombreVialidad: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.nombreVialidad),
-                      numeroExterior: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.numeroExterior),
-                      numeroInterior: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.numeroInterior),
-                      colonia: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.colonia),
-                      alcaldia: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.alcaldia),
-                      entidad: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.entidad),
-                      pais:
-                        normalizarTexto((actividad.domicilio as Record<string, unknown>)?.pais) ||
-                        createDefaultDomicilio().pais,
-                    },
-                  }))
+                ? item.actividades.map((actividad) => {
+                    const actividadRaw = toRecord(actividad)
+                    const domicilioRaw = toRecord(actividadRaw.domicilio)
+                    return {
+                      actividadKey: normalizarTexto(actividadRaw.actividadKey),
+                      fechaPrimera: normalizarTexto(actividadRaw.fechaPrimera),
+                      cuentaRegistro: normalizarTexto(actividadRaw.cuentaRegistro) as "" | "si" | "no",
+                      tipoDocumento: normalizarTexto(actividadRaw.tipoDocumento),
+                      autoridadDocumento: normalizarTexto(actividadRaw.autoridadDocumento),
+                      folioDocumento: normalizarTexto(actividadRaw.folioDocumento),
+                      periodoDocumento: normalizarTexto(actividadRaw.periodoDocumento),
+                      domicilio: {
+                        codigoPostal: normalizarTexto(domicilioRaw.codigoPostal),
+                        tipoVialidad: normalizarTexto(domicilioRaw.tipoVialidad),
+                        nombreVialidad: normalizarTexto(domicilioRaw.nombreVialidad),
+                        numeroExterior: normalizarTexto(domicilioRaw.numeroExterior),
+                        numeroInterior: normalizarTexto(domicilioRaw.numeroInterior),
+                        colonia: normalizarTexto(domicilioRaw.colonia),
+                        alcaldia: normalizarTexto(domicilioRaw.alcaldia),
+                        entidad: normalizarTexto(domicilioRaw.entidad),
+                        pais: normalizarTexto(domicilioRaw.pais) || createDefaultDomicilio().pais,
+                      },
+                    }
+                  })
                 : [createDefaultActividad()],
               representante:
                 item.representante && typeof item.representante === "object"
                   ? {
                       ...createDefaultRepresentante(),
-                      nombre: normalizarTexto((item.representante as Record<string, unknown>).nombre),
-                      apellidoPaterno: normalizarTexto((item.representante as Record<string, unknown>).apellidoPaterno),
-                      apellidoMaterno: normalizarTexto((item.representante as Record<string, unknown>).apellidoMaterno),
-                      fechaNacimiento: normalizarTexto((item.representante as Record<string, unknown>).fechaNacimiento),
-                      rfc: normalizarTexto((item.representante as Record<string, unknown>).rfc),
-                      curp: normalizarTexto((item.representante as Record<string, unknown>).curp),
-                      paisNacionalidad: normalizarTexto(
-                        (item.representante as Record<string, unknown>).paisNacionalidad,
-                      ),
-                      fechaDesignacion: normalizarTexto(
-                        (item.representante as Record<string, unknown>).fechaDesignacion,
-                      ),
-                      fechaAceptacion: normalizarTexto(
-                        (item.representante as Record<string, unknown>).fechaAceptacion,
-                      ),
+                      nombre: normalizarTexto(representanteRaw.nombre),
+                      apellidoPaterno: normalizarTexto(representanteRaw.apellidoPaterno),
+                      apellidoMaterno: normalizarTexto(representanteRaw.apellidoMaterno),
+                      fechaNacimiento: normalizarTexto(representanteRaw.fechaNacimiento),
+                      rfc: normalizarTexto(representanteRaw.rfc),
+                      curp: normalizarTexto(representanteRaw.curp),
+                      paisNacionalidad: normalizarTexto(representanteRaw.paisNacionalidad),
+                      fechaDesignacion: normalizarTexto(representanteRaw.fechaDesignacion),
+                      fechaAceptacion: normalizarTexto(representanteRaw.fechaAceptacion),
                       contacto: {
-                        claveLada: normalizarTexto(
-                          ((item.representante as Record<string, unknown>).contacto as Record<string, unknown>)?.claveLada,
-                        ),
-                        telefonoFijo: normalizarTexto(
-                          ((item.representante as Record<string, unknown>).contacto as Record<string, unknown>)
-                            ?.telefonoFijo,
-                        ),
-                        extension: normalizarTexto(
-                          ((item.representante as Record<string, unknown>).contacto as Record<string, unknown>)?.extension,
-                        ),
-                        telefonoMovil: normalizarTexto(
-                          ((item.representante as Record<string, unknown>).contacto as Record<string, unknown>)
-                            ?.telefonoMovil,
-                        ),
-                        correo: normalizarTexto(
-                          ((item.representante as Record<string, unknown>).contacto as Record<string, unknown>)?.correo,
-                        ),
+                        claveLada: normalizarTexto(representanteContactoRaw.claveLada),
+                        telefonoFijo: normalizarTexto(representanteContactoRaw.telefonoFijo),
+                        extension: normalizarTexto(representanteContactoRaw.extension),
+                        telefonoMovil: normalizarTexto(representanteContactoRaw.telefonoMovil),
+                        correo: normalizarTexto(representanteContactoRaw.correo),
                       },
                       certificacion: {
-                        respuesta: normalizarTexto(
-                          ((item.representante as Record<string, unknown>).certificacion as Record<string, unknown>)
-                            ?.respuesta,
-                        ) as "" | "si" | "no",
-                        tipoDocumento: normalizarTexto(
-                          ((item.representante as Record<string, unknown>).certificacion as Record<string, unknown>)
-                            ?.tipoDocumento,
-                        ),
-                        autoridadDocumento: normalizarTexto(
-                          ((item.representante as Record<string, unknown>).certificacion as Record<string, unknown>)
-                            ?.autoridadDocumento,
-                        ),
-                        folioDocumento: normalizarTexto(
-                          ((item.representante as Record<string, unknown>).certificacion as Record<string, unknown>)
-                            ?.folioDocumento,
-                        ),
-                        periodoDocumento: normalizarTexto(
-                          ((item.representante as Record<string, unknown>).certificacion as Record<string, unknown>)
-                            ?.periodoDocumento,
-                        ),
+                        respuesta: normalizarTexto(representanteCertificacionRaw.respuesta) as "" | "si" | "no",
+                        tipoDocumento: normalizarTexto(representanteCertificacionRaw.tipoDocumento),
+                        autoridadDocumento: normalizarTexto(representanteCertificacionRaw.autoridadDocumento),
+                        folioDocumento: normalizarTexto(representanteCertificacionRaw.folioDocumento),
+                        periodoDocumento: normalizarTexto(representanteCertificacionRaw.periodoDocumento),
                       },
                     }
                   : null,
@@ -1258,29 +1253,31 @@ export default function RegistroSATPage() {
         contactosCargados[index] ? { ...createDefaultContacto(), ...contactosCargados[index] } : createDefaultContacto(),
       )
 
-      const actividadesCargadas = Array.isArray(data.actividades)
-        ? data.actividades.map((actividad: Record<string, unknown>) => ({
-            actividadKey: normalizarTexto(actividad.actividadKey),
-            fechaPrimera: normalizarTexto(actividad.fechaPrimera),
-            cuentaRegistro: normalizarTexto(actividad.cuentaRegistro) as "" | "si" | "no",
-            tipoDocumento: normalizarTexto(actividad.tipoDocumento),
-            autoridadDocumento: normalizarTexto(actividad.autoridadDocumento),
-            folioDocumento: normalizarTexto(actividad.folioDocumento),
-            periodoDocumento: normalizarTexto(actividad.periodoDocumento),
-            domicilio: {
-              codigoPostal: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.codigoPostal),
-              tipoVialidad: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.tipoVialidad),
-              nombreVialidad: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.nombreVialidad),
-              numeroExterior: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.numeroExterior),
-              numeroInterior: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.numeroInterior),
-              colonia: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.colonia),
-              alcaldia: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.alcaldia),
-              entidad: normalizarTexto((actividad.domicilio as Record<string, unknown>)?.entidad),
-              pais:
-                normalizarTexto((actividad.domicilio as Record<string, unknown>)?.pais) ||
-                createDefaultDomicilio().pais,
-            },
-          }))
+      const actividadesCargadas: Partial<ActividadSujeto>[] = Array.isArray(data.actividades)
+        ? data.actividades.map((actividad: unknown) => {
+            const actividadRaw = toRecord(actividad)
+            const domicilioRaw = toRecord(actividadRaw.domicilio)
+            return {
+              actividadKey: normalizarTexto(actividadRaw.actividadKey),
+              fechaPrimera: normalizarTexto(actividadRaw.fechaPrimera),
+              cuentaRegistro: normalizarTexto(actividadRaw.cuentaRegistro) as "" | "si" | "no",
+              tipoDocumento: normalizarTexto(actividadRaw.tipoDocumento),
+              autoridadDocumento: normalizarTexto(actividadRaw.autoridadDocumento),
+              folioDocumento: normalizarTexto(actividadRaw.folioDocumento),
+              periodoDocumento: normalizarTexto(actividadRaw.periodoDocumento),
+              domicilio: {
+                codigoPostal: normalizarTexto(domicilioRaw.codigoPostal),
+                tipoVialidad: normalizarTexto(domicilioRaw.tipoVialidad),
+                nombreVialidad: normalizarTexto(domicilioRaw.nombreVialidad),
+                numeroExterior: normalizarTexto(domicilioRaw.numeroExterior),
+                numeroInterior: normalizarTexto(domicilioRaw.numeroInterior),
+                colonia: normalizarTexto(domicilioRaw.colonia),
+                alcaldia: normalizarTexto(domicilioRaw.alcaldia),
+                entidad: normalizarTexto(domicilioRaw.entidad),
+                pais: normalizarTexto(domicilioRaw.pais) || createDefaultDomicilio().pais,
+              },
+            }
+          })
         : []
 
       const actividadesNormalizadas =
@@ -1288,7 +1285,9 @@ export default function RegistroSATPage() {
           ? actividadesCargadas.map((actividad) => ({ ...createDefaultActividad(), ...actividad }))
           : [createDefaultActividad()]
 
-      const representanteRaw = (data.representante ?? {}) as Record<string, unknown>
+      const representanteRaw = toRecord(data.representante)
+      const representanteContactoRaw = toRecord(representanteRaw.contacto)
+      const representanteCertificacionRaw = toRecord(representanteRaw.certificacion)
       const representanteCargado: RepresentanteCumplimiento = {
         ...createDefaultRepresentante(),
         nombre: normalizarTexto(representanteRaw.nombre),
@@ -1301,21 +1300,18 @@ export default function RegistroSATPage() {
         fechaDesignacion: normalizarTexto(representanteRaw.fechaDesignacion),
         fechaAceptacion: normalizarTexto(representanteRaw.fechaAceptacion),
         contacto: {
-          claveLada: normalizarTexto((representanteRaw.contacto as Record<string, unknown>)?.claveLada),
-          telefonoFijo: normalizarTexto((representanteRaw.contacto as Record<string, unknown>)?.telefonoFijo),
-          extension: normalizarTexto((representanteRaw.contacto as Record<string, unknown>)?.extension),
-          telefonoMovil: normalizarTexto((representanteRaw.contacto as Record<string, unknown>)?.telefonoMovil),
-          correo: normalizarTexto((representanteRaw.contacto as Record<string, unknown>)?.correo),
+          claveLada: normalizarTexto(representanteContactoRaw.claveLada),
+          telefonoFijo: normalizarTexto(representanteContactoRaw.telefonoFijo),
+          extension: normalizarTexto(representanteContactoRaw.extension),
+          telefonoMovil: normalizarTexto(representanteContactoRaw.telefonoMovil),
+          correo: normalizarTexto(representanteContactoRaw.correo),
         },
         certificacion: {
-          respuesta: normalizarTexto((representanteRaw.certificacion as Record<string, unknown>)?.respuesta) as
-            | ""
-            | "si"
-            | "no",
-          tipoDocumento: normalizarTexto((representanteRaw.certificacion as Record<string, unknown>)?.tipoDocumento),
-          autoridadDocumento: normalizarTexto((representanteRaw.certificacion as Record<string, unknown>)?.autoridadDocumento),
-          folioDocumento: normalizarTexto((representanteRaw.certificacion as Record<string, unknown>)?.folioDocumento),
-          periodoDocumento: normalizarTexto((representanteRaw.certificacion as Record<string, unknown>)?.periodoDocumento),
+          respuesta: normalizarTexto(representanteCertificacionRaw.respuesta) as "" | "si" | "no",
+          tipoDocumento: normalizarTexto(representanteCertificacionRaw.tipoDocumento),
+          autoridadDocumento: normalizarTexto(representanteCertificacionRaw.autoridadDocumento),
+          folioDocumento: normalizarTexto(representanteCertificacionRaw.folioDocumento),
+          periodoDocumento: normalizarTexto(representanteCertificacionRaw.periodoDocumento),
         },
       }
 
@@ -1329,12 +1325,20 @@ export default function RegistroSATPage() {
       setActividades(actividadesNormalizadas)
       setRepresentante(representanteCargado)
       setDocumentosRegistro(documentosRegistroGuardados)
+      setRegistroStorageReady(true)
     } catch (error) {
       console.error("Error al cargar datos de registro SAT", error)
+      setRegistroStorageReady(true)
     }
   }, [])
 
   useEffect(() => {
+    cargarRegistroSatData()
+  }, [cargarRegistroSatData])
+
+  useEffect(() => {
+    if (!registroStorageReady) return
+
     const data = {
       documentos,
       datosChecklist: datosChecklistState,
@@ -1357,6 +1361,7 @@ export default function RegistroSATPage() {
     actividades,
     representante,
     documentosRegistro,
+    registroStorageReady,
   ])
 
   const crearDocumentoDesdeArchivo = async (file: File, tipo: string): Promise<DocumentUpload> => {
@@ -1385,7 +1390,7 @@ export default function RegistroSATPage() {
         "https://unpkg.com/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs"
     }
     const buffer = await file.arrayBuffer()
-    const pdf = await pdfjs.getDocument({ data: buffer, disableWorker: true }).promise
+    const pdf = await pdfjs.getDocument({ data: buffer }).promise
     let textoCompleto = ""
 
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
@@ -1766,20 +1771,21 @@ export default function RegistroSATPage() {
       }
 
       if (!info) return
-      registerCodigoPostalInfo(info)
+      const codigoPostalInfo = info
+      registerCodigoPostalInfo(codigoPostalInfo)
 
       setActividades((prev) =>
         prev.map((actividad, idx) => {
           if (idx !== index) return actividad
           if (actividad.domicilio.codigoPostal !== limpio) return actividad
-          const colonias = info.asentamientos ?? []
+          const colonias = codigoPostalInfo.asentamientos ?? []
           return {
             ...actividad,
             domicilio: {
               ...actividad.domicilio,
               pais: "México",
-              entidad: info.estado ?? "",
-              alcaldia: info.municipio ?? "",
+              entidad: codigoPostalInfo.estado ?? "",
+              alcaldia: codigoPostalInfo.municipio ?? "",
               colonia:
                 colonias.length > 0
                   ? colonias.includes(actividad.domicilio.colonia)
@@ -2106,6 +2112,40 @@ export default function RegistroSATPage() {
           </Card>
         </div>
       </div>
+
+      <PldDemoDataControls onDataChange={cargarRegistroSatData} />
+
+      {sujetoSeleccionado && (
+        <Card className="border-emerald-200 bg-emerald-50/60">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-emerald-700" /> Alta SAT vinculada al EUI
+            </CardTitle>
+            <CardDescription>
+              Este sujeto obligado alimenta el Expediente Único de Identificación y las salidas SAT de avisos.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 text-sm md:grid-cols-4">
+            <div>
+              <p className="text-xs text-muted-foreground">Sujeto obligado</p>
+              <p className="font-medium">{sujetoSeleccionado.nombre}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">RFC</p>
+              <p className="font-medium">{sujetoSeleccionado.identificacion.rfc || "Sin RFC"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Folio SAT</p>
+              <p className="font-medium">{sujetoSeleccionado.actividades[0]?.folioDocumento || "Pendiente"}</p>
+            </div>
+            <div className="flex items-end">
+              <Button asChild size="sm" className="w-full">
+                <a href="/kyc-expediente">Abrir EUI relacionado</a>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-2">

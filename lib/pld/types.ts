@@ -1,5 +1,6 @@
 export type UmbralStatus = "sin-obligacion" | "identificacion" | "aviso"
 export type AvisoSalidaTipo = "aviso_normal" | "informe_ceros" | "informe_27_bis" | "aviso_24h" | "sin_salida"
+export type SatOutputKind = "aviso_normal" | "informe_ceros" | "informe_27_bis" | "aviso_24h"
 export type DocumentRequirementCategory =
   | "identificacion"
   | "fiscal"
@@ -340,5 +341,567 @@ export interface AuditReportInput {
     risk: "Bajo" | "Medio" | "Alto"
     observation: string
     recommendation: string
+  }>
+}
+
+export interface TenantActividadVulnerableConfig {
+  actividadKey: string
+  altaSppldActiva: boolean
+  fechaAlta?: string
+  responsableOperativo?: string
+  responsableCumplimiento?: string
+  politicaInterna?: string
+}
+
+export interface PldTenant {
+  id: string
+  schemaVersion: 1
+  rfc: string
+  razonSocial: string
+  nombreComercial?: string
+  representanteCumplimiento: {
+    nombre: string
+    cargo?: string
+    email?: string
+  }
+  responsablesInternos: Array<{
+    area: string
+    nombre: string
+    funcion: string
+  }>
+  actividades: TenantActividadVulnerableConfig[]
+  manual: {
+    version: string
+    vigenteDesde: string
+    proximaRevision: string
+  }
+  ebr: {
+    metodologiaVersion: string
+    ultimaRevision: string
+    proximaRevision: string
+  }
+  policies: {
+    conservaAnios: number
+    noGuardarEfirma: true
+    requiereCotejo: boolean
+  }
+}
+
+export interface PldTenantsState {
+  schemaVersion: 1
+  activeTenantId: string
+  tenants: PldTenant[]
+}
+
+export interface SatFormatoManifestItem {
+  id: string
+  fraccion: string
+  anexo: string
+  actividadKeys: string[]
+  nombre: string
+  claveActividad: string
+  folletoUrl: string
+  informeCerosUrl?: string
+  avisoUrl?: string
+  plantillaAvisoNombre?: string
+  plantillaInformeNombre?: string
+  officialXlsmName: string
+  officialZipLastModified?: string
+  officialZipSize?: number
+  zeroReportZipLastModified?: string
+  zeroReportZipSize?: number
+  layoutStatus: "oficial_verificado" | "paquete_multiple" | "informe_por_pedimento" | "pendiente_validacion_sppld"
+  layoutXmlTag: string
+  outputModes: SatOutputKind[]
+  satPageUrl: string
+  sourceLastVerified: string
+}
+
+export interface SatFormatSnapshot {
+  schemaVersion: 1
+  source: string
+  generatedAt: string
+  items: SatFormatoManifestItem[]
+}
+
+export interface SatTemplateVariant {
+  templateId: string
+  variantId: string
+  label: string
+  actividadKeys: string[]
+  officialXlsmName: string
+  sourceZipUrl: string
+  nestedZipName?: string
+  localPath: string
+  sourceNote?: string
+}
+
+export interface SatTemplateCatalogItem {
+  templateId: string
+  formatoId: string
+  fraccion: string
+  anexo: string
+  actividadKeys: string[]
+  nombre: string
+  claveActividad: string
+  officialXlsmName: string
+  sourceZipUrl: string
+  localPath: string
+  outputModes: SatOutputKind[]
+  variants: SatTemplateVariant[]
+  requiresVariantSelection: boolean
+  sourceLastVerified: string
+}
+
+export interface SatXlsmOptionList {
+  id: string
+  label: string
+  sourceSheet: string
+  sourceRange: string
+  options: string[]
+}
+
+export interface SatXlsmField {
+  id: string
+  label: string
+  sheetName: string
+  cell: string
+  required: boolean
+  dataType: "texto" | "numero" | "fecha" | "moneda" | "catalogo"
+  optionListId?: string
+  options?: string[]
+  source: "xlsm-data-validation" | "xlsm-label" | "manual-sat-map"
+  repeatGroup?: string
+  repeatIndex?: number
+  repeatLimit?: number
+  sectionKind?:
+    | "alta_sat"
+    | "persona_objeto"
+    | "beneficiario_controlador"
+    | "acto_operacion"
+    | "liquidacion"
+    | "instrumento"
+    | "contraparte"
+    | "evidencia"
+  conditionalGroup?: string
+  targetCell?: string
+  readOnly?: boolean
+  placeholder?: string
+}
+
+export interface SatXlsmOptionListCellBinding {
+  sheetName: string
+  cell: string
+  optionListId?: string
+  options: string[]
+}
+
+export interface SatRepeatGroup {
+  id: string
+  label: string
+  sheetName: string
+  startRow: number
+  endRow: number
+  rowCount: number
+}
+
+export interface SatConditionalGroup {
+  id: string
+  label: string
+  selectorFieldId?: string
+  activeWhen?: string[]
+}
+
+export interface SatCellValue {
+  fieldId: string
+  sheetName: string
+  cell: string
+  value: string
+  optionListId?: string
+}
+
+export interface SatXlsmSection {
+  id: string
+  title: string
+  sheetName: string
+  sheetState: "visible" | "hidden" | "veryHidden"
+  fields: SatXlsmField[]
+}
+
+export interface SatXlsmLayout {
+  schemaVersion: 1
+  templateId: string
+  officialXlsmName: string
+  generatedAt: string
+  workbookHasMacros: boolean
+  sections: SatXlsmSection[]
+  optionLists: SatXlsmOptionList[]
+  source: string
+}
+
+export interface SatFieldMapping {
+  fieldId: string
+  sheetName: string
+  cell: string
+  localSource?: string
+}
+
+export interface SatDynamicOperationForm {
+  templateId: string
+  templateFile: string
+  templateVariant?: string
+  sections: SatXlsmSection[]
+  initialValues: Record<string, string>
+  requiredFieldIds: string[]
+  sourceLayoutGeneratedAt: string
+}
+
+export type SatTemplateQuestionnaire = SatDynamicOperationForm
+
+export interface SatFilledWorkbookResult {
+  status: "filled" | "blocked"
+  workbook: Uint8Array
+  fileName: string
+  writtenCells: string[]
+  missingRequiredFields: string[]
+  warnings: string[]
+}
+
+export interface SatFieldDefinition {
+  id: string
+  label: string
+  xmlTag: string
+  required: boolean
+  source: string
+  dataType: "etiqueta" | "alfanumerico" | "numerico" | "fecha" | "moneda"
+  pattern?: string
+  maxLength?: number
+}
+
+export interface SatLayoutDefinition {
+  id: string
+  formatoId: string
+  anexo: string
+  outputKinds: SatOutputKind[]
+  activityXmlTag: string
+  requiredFields: SatFieldDefinition[]
+  sourceUrl: string
+  sourceLastVerified: string
+}
+
+export interface SatOutputValidation {
+  status: "listo" | "borrador_bloqueado"
+  missingFields: string[]
+  errors: string[]
+  warnings: string[]
+}
+
+export interface SatDownloadOption {
+  id: string
+  label: string
+  kind: "official_template" | "filled_workbook" | "xml" | "capture_sheet" | "validation"
+  fileName?: string
+  url?: string
+  mimeType?: string
+  status: "available" | "blocked" | "external"
+}
+
+export interface SatOutputPackage {
+  id: string
+  schemaVersion: 1
+  createdAt: string
+  tenantId: string
+  tenantRfc: string
+  tenantName: string
+  periodo: string
+  formatoId: string
+  actividadKey: string
+  clienteNombre: string
+  clienteRfc?: string
+  outputKind: SatOutputKind
+  label: string
+  xml: string
+  xmlFileName: string
+  ficha: string
+  fichaFileName: string
+  officialTemplateUrl?: string
+  officialTemplateName?: string
+  satTemplateId?: string
+  satTemplateFile?: string
+  satTemplateVariant?: string
+  satTemplateLocalPath?: string
+  satFieldValues?: Record<string, string>
+  satCellValues?: Record<string, string>
+  satMissingRequiredFields?: string[]
+  satWorkbookStatus?: "pendiente" | "borrador_bloqueado" | "listo"
+  satWorkbookFileName?: string
+  satOutputOverride?: SatOutputOverride
+  validation: SatOutputValidation
+  downloads: SatDownloadOption[]
+}
+
+export type WizardStepStatus = "complete" | "missing" | "review" | "blocked"
+
+export interface StepBlockingReason {
+  id: string
+  label: string
+  description: string
+  kind: "field" | "document" | "sat" | "evidence" | "narrative" | "operation"
+  severity: "required" | "warning"
+}
+
+export interface OperationalWizardStepDiagnostics {
+  status: WizardStepStatus
+  canContinue: boolean
+  reasons: StepBlockingReason[]
+  alertTitle: string
+  alertDescription: string
+}
+
+export interface SatOutputOverride {
+  originalKind: SatOutputKind
+  requestedKind: SatOutputKind
+  reason: string
+  user: string
+  at: string
+}
+
+export interface SatOutputOverrideRequest {
+  requestedKind: SatOutputKind
+  reason: string
+  user?: string
+  at?: string
+}
+
+export interface InfoHintContent {
+  id: string
+  title: string
+  summary: string
+  body?: string[]
+  sourceLabel?: string
+  sourceUrl?: string
+}
+
+export interface RegulatorySourceChipDefinition {
+  id: string
+  label: string
+  detail: string
+  sourceUrl?: string
+  tone: "neutral" | "success" | "warning"
+}
+
+export interface RegulatorySourceDisplay {
+  summary: string
+  visibleWarning: string
+  detail: string
+  chips: RegulatorySourceChipDefinition[]
+}
+
+export interface BlockingReasonsViewItem {
+  id: string
+  label: string
+  action: string
+  severity: StepBlockingReason["severity"]
+  kind: StepBlockingReason["kind"]
+}
+
+export interface BlockingReasonsView {
+  title: string
+  subtitle: string
+  hasBlockers: boolean
+  items: BlockingReasonsViewItem[]
+}
+
+export type OperationalMonitoringStatus = "aviso" | "identificacion" | "sin-obligacion"
+
+export interface OperationalMonitoringLane {
+  status: OperationalMonitoringStatus
+  label: string
+  count: number
+  tone: "danger" | "warning" | "success"
+  primaryAction: string
+}
+
+export interface OperationalMonitoringView {
+  totalOperations: number
+  activeAlerts: number
+  resolvedAlerts: number
+  lanes: OperationalMonitoringLane[]
+}
+
+export interface PldSubjectRegistrationLink {
+  sujetoObligadoId: string
+  sujetoObligadoRfc: string
+  sujetoObligadoNombre: string
+  tenantId?: string
+  tenantRfc?: string
+  tenantName?: string
+  actividadKeys: string[]
+  foliosRegistro: string[]
+  euiCount: number
+  euiRfcs: string[]
+  acuses: Array<{
+    type: "detalle" | "acuse" | "aceptacion"
+    name: string
+    uploadedAt?: string
+  }>
+  status: "vinculado" | "sin_eui" | "sin_tenant"
+}
+
+export interface SatOutputStatus {
+  kind: SatOutputKind
+  label: string
+  descripcion: string
+  canClose: boolean
+  fechaLimite?: string
+  warnings: string[]
+}
+
+export interface EvidenceRequirementDecision {
+  canSave: boolean
+  canClose: boolean
+  canContinueForSatOutput: boolean
+  missingCritical: DocumentRequirement[]
+  missingOptional: DocumentRequirement[]
+  acceptedJustifications: EvidenceChecklistEvaluation["justifications"]
+  closingBlockedReasons: string[]
+  recommendedActions: string[]
+  sourceNotes: string[]
+}
+
+export interface PldOperationalAuditEvent {
+  id: string
+  at: string
+  action: "case_created" | "evidence_reviewed" | "ebr_evaluated" | "sat_output_classified" | "xml_generated"
+  actor: string
+  detail: string
+}
+
+export interface PldOperationalCase {
+  id: string
+  schemaVersion: 1
+  tenantId: string
+  tenantRfc: string
+  tenantName: string
+  periodo: string
+  actividadKey: string
+  satFormatoId: string
+  satTemplateId?: string
+  satTemplateFile?: string
+  satTemplateVariant?: string
+  satFieldValues?: Record<string, string>
+  satCellValues?: Record<string, string>
+  satMissingRequiredFields?: string[]
+  satWorkbookStatus?: "pendiente" | "borrador_bloqueado" | "listo"
+  clienteId: string
+  clienteNombre: string
+  clienteRfc?: string
+  tipoCliente: string
+  fechaOperacion: string
+  montoMxn: number
+  formaPago: string
+  ebrId?: string
+  evidenceStatus: EvidenceRequirementDecision
+  satOutputStatus: SatOutputStatus
+  xmlVersion?: string
+  acuse?: {
+    folio?: string
+    fechaPresentacion?: string
+    archivoNombre?: string
+  }
+  folio?: string
+  alertaCodigo?: string
+  alertaDescripcion?: string
+  suspicionNarrative?: string
+  auditTrail: PldOperationalAuditEvent[]
+}
+
+export interface SatXmlGenerationResult {
+  valid: boolean
+  errors: string[]
+  warnings: string[]
+  xml: string
+  fileName: string
+  formatoId: string
+  outputKind: SatOutputKind
+  generatedAt: string
+}
+
+export type EbrControlEffectiveness = "alta" | "media" | "baja" | "no_aplica"
+export type EbrRiskLevel = "Bajo" | "Medio" | "Medio-Alto" | "Alto"
+export type EbrMethodologyFactorKey =
+  | "clientesUsuarios"
+  | "productosServicios"
+  | "canalesTransacciones"
+  | "geografia"
+
+export interface EbrControlMitigant {
+  key: string
+  label: string
+  effectiveness: EbrControlEffectiveness
+  reduction: number
+}
+
+export interface EbrMethodologyInput {
+  actividadKey: string
+  cliente: {
+    tipoPersona?: string
+    actividadEconomica?: string
+    pepStatus?: PepWhoIsStatus | "sin_coincidencia" | "no_consultado"
+    beneficiarioControladorIdentificado?: boolean
+    listasRestrictivas?: "sin-coincidencia" | "posible-coincidencia" | "coincidencia" | "no-consultado"
+    congruenciaTransaccional?: "esperada" | "inusual" | "inconsistente" | "no_evaluada"
+  }
+  productoServicio: {
+    altoValor?: boolean
+    portabilidad?: boolean
+    transferibilidad?: boolean
+    anonimato?: boolean
+    efectivo?: boolean
+  }
+  canal: {
+    tipo?: "presencial" | "no_presencial" | "mixto"
+    intermediario?: boolean
+  }
+  geografia: {
+    zonaRiesgo?: "ordinaria" | "alta_incidencia" | "fronteriza" | "turistica_alto_valor" | "no_evaluada"
+    frontera?: boolean
+  }
+  controles: Record<string, EbrControlEffectiveness>
+}
+
+export interface EbrMethodologyEvaluation {
+  id: string
+  actividadKey: string
+  evaluatedAt: string
+  weights: {
+    clientesUsuarios: 0.3
+    productosServicios: 0.3
+    canalesTransacciones: 0.2
+    geografia: 0.2
+  }
+  factors: Array<{
+    key: EbrMethodologyFactorKey
+    label: string
+    score: number
+    level: EbrRiskLevel
+    indicators: Array<{
+      label: string
+      score: number
+      rationale: string
+    }>
+  }>
+  controls: EbrControlMitigant[]
+  inherent: {
+    score: number
+    level: EbrRiskLevel
+  }
+  residual: {
+    score: number
+    level: EbrRiskLevel
+  }
+  actionPlan: Array<{
+    priority: "Prioridad 1" | "Prioridad 2" | "Prioridad 3"
+    action: string
   }>
 }

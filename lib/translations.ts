@@ -1,4 +1,7 @@
-export const translations = {
+export type TranslationLanguage = "es" | "en"
+export type TranslationDictionary = Record<string, string>
+
+export const translations: Record<TranslationLanguage, TranslationDictionary> = {
   es: {
     // Navigation and general
     dashboard: "Panel de control",
@@ -131,9 +134,6 @@ export const translations = {
     noData: "No hay datos disponibles",
 
     // Profile and settings
-    profile: "Perfil",
-    settings: "Configuración",
-    logout: "Cerrar sesión",
     forgotPassword: "¿Olvidaste tu contraseña?",
     updateProfile: "Actualizar perfil",
     theme: "Tema",
@@ -347,9 +347,6 @@ export const translations = {
     noData: "No data available",
 
     // Profile and settings
-    profile: "Profile",
-    settings: "Settings",
-    logout: "Logout",
     forgotPassword: "Forgot your password?",
     updateProfile: "Update profile",
     theme: "Theme",
@@ -435,4 +432,4 @@ export const translations = {
   },
 }
 
-export type TranslationKey = keyof typeof translations.es
+export type TranslationKey = string

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { jsPDF } from "jspdf"
 import * as XLSX from "xlsx"
+import Image from "next/image"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -841,10 +842,10 @@ export default function GobernanzaControlPage() {
         doc.addPage()
         offset = 60
       }
-      doc.setFont(undefined, "bold")
+      doc.setFont("helvetica", "bold")
       doc.text(`${question.category} – ${question.question}`, 40, offset, { maxWidth: 515 })
       offset += 14
-      doc.setFont(undefined, "normal")
+      doc.setFont("helvetica", "normal")
       doc.text(`Respuesta: ${question.answer || "Sin respuesta"}`, 40, offset)
       offset += 12
       if (question.notes) {
@@ -1421,10 +1422,13 @@ export default function GobernanzaControlPage() {
                       {base64ToText(viewerDoc.base64)}
                     </pre>
                   ) : (
-                    <img
+                    <Image
                       src={`data:${viewerDoc.mimeType};base64,${viewerDoc.base64}`}
                       alt={viewerDoc.fileName}
+                      width={960}
+                      height={720}
                       className="w-full h-full object-contain"
+                      unoptimized
                     />
                   )}
                 </div>

@@ -17,6 +17,7 @@ const SIDEBAR_COLLAPSED_WIDTH = "5rem"
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [isCompactViewport, setIsCompactViewport] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
 
@@ -55,6 +56,13 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  useEffect(() => {
+    const updateViewport = () => setIsCompactViewport(window.innerWidth < 768)
+    updateViewport()
+    window.addEventListener("resize", updateViewport)
+    return () => window.removeEventListener("resize", updateViewport)
+  }, [])
+
   const handleSidebarToggle = () => {
     setIsSidebarCollapsed((prev) => {
       const next = !prev
@@ -64,7 +72,11 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   }
 
   const isLoginPage = pathname === "/login"
-  const sidebarOffset = isSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH
+  const effectiveSidebarCollapsed = isCompactViewport || isSidebarCollapsed
+  const sidebarOffset = effectiveSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH
+  const contentStyle = isAuthenticated
+    ? { marginLeft: sidebarOffset, width: `calc(100% - ${sidebarOffset})` }
+    : { marginLeft: 0, width: "100%" }
 
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
@@ -73,11 +85,11 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
           {isLoginPage ? (
             children
           ) : (
-            <div className="flex min-h-screen">
-              {isAuthenticated && <Sidebar collapsed={isSidebarCollapsed} onToggle={handleSidebarToggle} />}
-              <div className="flex-1 flex flex-col transition-[margin] duration-300" style={{ marginLeft: isAuthenticated ? sidebarOffset : 0 }}>
+            <div className="flex min-h-screen overflow-x-hidden">
+              {isAuthenticated && <Sidebar collapsed={effectiveSidebarCollapsed} onToggle={handleSidebarToggle} />}
+              <div className="flex-1 min-w-0 flex flex-col transition-[margin,width] duration-300" style={contentStyle}>
                 {isAuthenticated && <Header sidebarOffset={sidebarOffset} showSidebarLogo={isSidebarCollapsed} />}
-                <main className={`flex-1 p-8 bg-background ${isAuthenticated ? "mt-16" : ""}`}>{children}</main>
+                <main className={`min-w-0 flex-1 bg-background p-4 sm:p-8 ${isAuthenticated ? "mt-16" : ""}`}>{children}</main>
               </div>
             </div>
           )}

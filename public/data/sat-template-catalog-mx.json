@@ -1,0 +1,717 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-05-12T18:05:49.837Z",
+  "items": [
+    {
+      "templateId": "sat-fraccion-i-juegos",
+      "formatoId": "sat-fraccion-i-juegos",
+      "fraccion": "Fracción I",
+      "anexo": "Anexo 1",
+      "actividadKeys": [
+        "fraccion-i-juegos"
+      ],
+      "nombre": "Juegos con apuesta, concursos o sorteos",
+      "claveActividad": "JAS",
+      "officialXlsmName": "JuegosySorteos_v4_3.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_I/juegosysorteos.zip",
+      "localPath": "/sat-templates/sat-fraccion-i-juegos/JuegosySorteos_v4_3.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-ii-tarjetas-servicios",
+      "formatoId": "sat-fraccion-ii-tarjetas-servicios",
+      "fraccion": "Fracción II",
+      "anexo": "Anexo 2-A",
+      "actividadKeys": [
+        "fraccion-ii-tarjetas-servicios"
+      ],
+      "nombre": "Tarjetas de servicios o crédito",
+      "claveActividad": "TSC",
+      "officialXlsmName": "TarjetasServCred_v4_3.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_II_tarjetascredito/tarjetasservcred.zip",
+      "localPath": "/sat-templates/sat-fraccion-ii-tarjetas-servicios/TarjetasServCred_v4_3.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-ii-tarjetas-prepagadas",
+      "formatoId": "sat-fraccion-ii-tarjetas-prepagadas",
+      "fraccion": "Fracción II",
+      "anexo": "Anexo 2-B",
+      "actividadKeys": [
+        "fraccion-ii-tarjetas-prepagadas"
+      ],
+      "nombre": "Tarjetas prepagadas",
+      "claveActividad": "TPP",
+      "officialXlsmName": "TarjetasPrepago_v4_3.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_II_tarjetasprepagadas/tarjetasprepago.zip",
+      "localPath": "/sat-templates/sat-fraccion-ii-tarjetas-prepagadas/TarjetasPrepago_v4_3.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-ii-instrumentos-valor",
+      "formatoId": "sat-fraccion-ii-instrumentos-valor",
+      "fraccion": "Fracción II",
+      "anexo": "Anexo 2-C",
+      "actividadKeys": [
+        "fraccion-ii-instrumentos-valor"
+      ],
+      "nombre": "Instrumentos de almacenamiento de valor monetario",
+      "claveActividad": "TAV",
+      "officialXlsmName": "TarjetasDevRwd_v4_3.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_II_monederos/tarjetasdevrwd.zip",
+      "localPath": "/sat-templates/sat-fraccion-ii-instrumentos-valor/TarjetasDevRwd_v4_3.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-iii-cheques",
+      "formatoId": "sat-fraccion-iii-cheques",
+      "fraccion": "Fracción III",
+      "anexo": "Anexo 3",
+      "actividadKeys": [
+        "fraccion-iii-cheques"
+      ],
+      "nombre": "Cheques de viajero",
+      "claveActividad": "CHV",
+      "officialXlsmName": "ChequesViajero_v4_4.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_III/chequesviajero.zip",
+      "localPath": "/sat-templates/sat-fraccion-iii-cheques/ChequesViajero_v4_4.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-iv-prestamos",
+      "formatoId": "sat-fraccion-iv-prestamos",
+      "fraccion": "Fracción IV",
+      "anexo": "Anexo 4",
+      "actividadKeys": [
+        "fraccion-iv-prestamos"
+      ],
+      "nombre": "Mutuo, préstamo, crédito o garantía",
+      "claveActividad": "MCG",
+      "officialXlsmName": "MutuoPrestCred_v4_3.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_IV/mutuoprestcred.zip",
+      "localPath": "/sat-templates/sat-fraccion-iv-prestamos/MutuoPrestCred_v4_3.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-v-inmuebles",
+      "formatoId": "sat-fraccion-v-inmuebles",
+      "fraccion": "Fracción V",
+      "anexo": "Anexo 5",
+      "actividadKeys": [
+        "fraccion-v-inmuebles"
+      ],
+      "nombre": "Construcción, desarrollo, comercialización o transmisión de inmuebles",
+      "claveActividad": "INM",
+      "officialXlsmName": "Inmuebles_v4_5.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_V_transmisionderechos/inmuebles.zip",
+      "localPath": "/sat-templates/sat-fraccion-v-inmuebles/Inmuebles_v4_5.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "informe_27_bis",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-v-bis-desarrollo",
+      "formatoId": "sat-fraccion-v-bis-desarrollo",
+      "fraccion": "Fracción V Bis",
+      "anexo": "Anexo 5-A",
+      "actividadKeys": [
+        "fraccion-v-bis-desarrollo"
+      ],
+      "nombre": "Recepción de recursos para desarrollo inmobiliario",
+      "claveActividad": "VBI",
+      "officialXlsmName": "DesarrollosInmobiliarios_v4_7.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_Vbis/avisos.zip",
+      "localPath": "/sat-templates/sat-fraccion-v-bis-desarrollo/DesarrollosInmobiliarios_v4_7.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "informe_27_bis",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-vi-metales",
+      "formatoId": "sat-fraccion-vi-metales",
+      "fraccion": "Fracción VI",
+      "anexo": "Anexo 6",
+      "actividadKeys": [
+        "fraccion-vi-metales"
+      ],
+      "nombre": "Metales, piedras preciosas, joyas o relojes",
+      "claveActividad": "MJO",
+      "officialXlsmName": "MetalesyJoyas_v4_3.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_VI/metalesyjoyas.zip",
+      "localPath": "/sat-templates/sat-fraccion-vi-metales/MetalesyJoyas_v4_3.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-vii-arte",
+      "formatoId": "sat-fraccion-vii-arte",
+      "fraccion": "Fracción VII",
+      "anexo": "Anexo 7",
+      "actividadKeys": [
+        "fraccion-vii-arte"
+      ],
+      "nombre": "Subasta o venta de obras de arte",
+      "claveActividad": "OBA",
+      "officialXlsmName": "ObrasArte_v4_3.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_VII/obrasarte.zip",
+      "localPath": "/sat-templates/sat-fraccion-vii-arte/ObrasArte_v4_3.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-viii-vehiculos",
+      "formatoId": "sat-fraccion-viii-vehiculos",
+      "fraccion": "Fracción VIII",
+      "anexo": "Anexo 8",
+      "actividadKeys": [
+        "fraccion-viii-vehiculos"
+      ],
+      "nombre": "Vehículos aéreos, marítimos o terrestres",
+      "claveActividad": "VEH",
+      "officialXlsmName": "Vehiculos_v4_4.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_VIII/vehiculos.zip",
+      "localPath": "/sat-templates/sat-fraccion-viii-vehiculos/Vehiculos_v4_4.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-ix-blindaje",
+      "formatoId": "sat-fraccion-ix-blindaje",
+      "fraccion": "Fracción IX",
+      "anexo": "Anexo 9",
+      "actividadKeys": [
+        "fraccion-ix-blindaje"
+      ],
+      "nombre": "Servicios de blindaje",
+      "claveActividad": "BLI",
+      "officialXlsmName": "Blindaje_v4_4.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_IX/blindaje.zip",
+      "localPath": "/sat-templates/sat-fraccion-ix-blindaje/Blindaje_v4_4.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-x-traslado",
+      "formatoId": "sat-fraccion-x-traslado",
+      "fraccion": "Fracción X",
+      "anexo": "Anexo 10",
+      "actividadKeys": [
+        "fraccion-x-traslado"
+      ],
+      "nombre": "Traslado o custodia de dinero o valores",
+      "claveActividad": "TCV",
+      "officialXlsmName": "TraslCustValores_v4_3.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_X/traslcustvalores.zip",
+      "localPath": "/sat-templates/sat-fraccion-x-traslado/TraslCustValores_v4_3.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-xi-a-inmuebles",
+      "formatoId": "sat-fraccion-xi-servicios-profesionales",
+      "fraccion": "Fracción XI",
+      "anexo": "Anexo 11",
+      "actividadKeys": [
+        "fraccion-xi-a-inmuebles",
+        "fraccion-xi-b-administracion",
+        "fraccion-xi-c-cuentas",
+        "fraccion-xi-d-aportaciones",
+        "fraccion-xi-e-corporativo"
+      ],
+      "nombre": "Servicios profesionales independientes",
+      "claveActividad": "SPR",
+      "officialXlsmName": "SPR01_CompraventaInmuebles_v5_0.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
+      "localPath": "/sat-templates/sat-fraccion-xi-a-inmuebles/SPR01_CompraventaInmuebles_v5_0.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "informe_27_bis",
+        "aviso_24h"
+      ],
+      "variants": [
+        {
+          "templateId": "sat-fraccion-xi-a-inmuebles",
+          "variantId": "spr-01-compraventa-inmuebles",
+          "label": "Compraventa de inmuebles",
+          "actividadKeys": [
+            "fraccion-xi-a-inmuebles"
+          ],
+          "officialXlsmName": "SPR01_CompraventaInmuebles_v5_0.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
+          "nestedZipName": "sprinmuebles2 (2).zip",
+          "localPath": "/sat-templates/sat-fraccion-xi-a-inmuebles/SPR01_CompraventaInmuebles_v5_0.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xi-a-inmuebles-cesion",
+          "variantId": "spr-02-cesion-derechos-inmuebles",
+          "label": "Cesión de derechos sobre inmuebles",
+          "actividadKeys": [
+            "fraccion-xi-a-inmuebles"
+          ],
+          "officialXlsmName": "SPR02_CesionDerechosInmuebles_v5_0.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
+          "nestedZipName": "sprcesion2 (3).zip",
+          "localPath": "/sat-templates/sat-fraccion-xi-a-inmuebles-cesion/SPR02_CesionDerechosInmuebles_v5_0.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xi-b-administracion",
+          "variantId": "spr-03-administracion-recursos",
+          "label": "Administración y manejo de recursos",
+          "actividadKeys": [
+            "fraccion-xi-b-administracion"
+          ],
+          "officialXlsmName": "SPR03_AdministracionDeRecursos_v5_0.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
+          "nestedZipName": "spradmonrecursos2 (12).zip",
+          "localPath": "/sat-templates/sat-fraccion-xi-b-administracion/SPR03_AdministracionDeRecursos_v5_0.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xi-c-cuentas",
+          "variantId": "spr-04-constitucion-personas-morales",
+          "label": "Constitución de personas morales",
+          "actividadKeys": [
+            "fraccion-xi-c-cuentas",
+            "fraccion-xi-e-corporativo"
+          ],
+          "officialXlsmName": "SPR04_ConstitucionDePersonasMorales_v5_0.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
+          "nestedZipName": "sprconstitucionpm2 (1).zip",
+          "localPath": "/sat-templates/sat-fraccion-xi-c-cuentas/SPR04_ConstitucionDePersonasMorales_v5_0.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xi-d-aportaciones",
+          "variantId": "spr-05-organizacion-aportaciones",
+          "label": "Organización de aportaciones de capital",
+          "actividadKeys": [
+            "fraccion-xi-d-aportaciones"
+          ],
+          "officialXlsmName": "SPR05_OrganizacionDeAportaciones_v5_0.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
+          "nestedZipName": "spraportacion2 (2).zip",
+          "localPath": "/sat-templates/sat-fraccion-xi-d-aportaciones/SPR05_OrganizacionDeAportaciones_v5_0.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xi-e-fusion",
+          "variantId": "spr-06-fusion",
+          "label": "Fusión de personas morales",
+          "actividadKeys": [
+            "fraccion-xi-e-corporativo"
+          ],
+          "officialXlsmName": "SPR06_Fusion_v5_0.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
+          "nestedZipName": "sprfusion2 (1).zip",
+          "localPath": "/sat-templates/sat-fraccion-xi-e-fusion/SPR06_Fusion_v5_0.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xi-e-escision",
+          "variantId": "spr-07-escision",
+          "label": "Escisión de personas morales",
+          "actividadKeys": [
+            "fraccion-xi-e-corporativo"
+          ],
+          "officialXlsmName": "SPR07_Escision_v5_0.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
+          "nestedZipName": "sprescision2 (1).zip",
+          "localPath": "/sat-templates/sat-fraccion-xi-e-escision/SPR07_Escision_v5_0.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xi-e-administracion-pm",
+          "variantId": "spr-08-administracion-personas-morales",
+          "label": "Administración de personas morales",
+          "actividadKeys": [
+            "fraccion-xi-e-corporativo"
+          ],
+          "officialXlsmName": "SPR08_AdministracionDePersonasMorales_v5_0.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
+          "nestedZipName": "sproperacion2 (4).zip",
+          "localPath": "/sat-templates/sat-fraccion-xi-e-administracion-pm/SPR08_AdministracionDePersonasMorales_v5_0.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xi-e-fideicomisos",
+          "variantId": "spr-09-constitucion-fideicomisos",
+          "label": "Constitución de fideicomisos",
+          "actividadKeys": [
+            "fraccion-xi-e-corporativo"
+          ],
+          "officialXlsmName": "SPR09_ConstitucionDeFideicomisos_v5_0.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
+          "nestedZipName": "sprconstitucionfid2.zip",
+          "localPath": "/sat-templates/sat-fraccion-xi-e-fideicomisos/SPR09_ConstitucionDeFideicomisos_v5_0.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xi-e-compraventa-entidades",
+          "variantId": "spr-10-compraventa-entidades",
+          "label": "Compraventa de entidades mercantiles",
+          "actividadKeys": [
+            "fraccion-xi-e-corporativo"
+          ],
+          "officialXlsmName": "SPR10_ComparaventaDeEntidadesMercantiles_v5_0.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
+          "nestedZipName": "sprcompraventa2.zip",
+          "localPath": "/sat-templates/sat-fraccion-xi-e-compraventa-entidades/SPR10_ComparaventaDeEntidadesMercantiles_v5_0.xlsm"
+        }
+      ],
+      "requiresVariantSelection": true,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-xii-notarios-a",
+      "formatoId": "sat-fraccion-xii-fe-publica",
+      "fraccion": "Fracción XII",
+      "anexo": "Anexo 12",
+      "actividadKeys": [
+        "fraccion-xii-notarios-a",
+        "fraccion-xii-notarios-b",
+        "fraccion-xii-notarios-c",
+        "fraccion-xii-notarios-d",
+        "fraccion-xii-notarios-e",
+        "fraccion-xii-corredores-a",
+        "fraccion-xii-corredores-b",
+        "fraccion-xii-corredores-c",
+        "fraccion-xii-corredores-d"
+      ],
+      "nombre": "Servicios de fe pública",
+      "claveActividad": "FEP",
+      "officialXlsmName": "FedatariosSP_Inmuebles_v4_4.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+      "localPath": "/sat-templates/sat-fraccion-xii-notarios-a/FedatariosSP_Inmuebles_v4_4.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "informe_27_bis",
+        "aviso_24h"
+      ],
+      "variants": [
+        {
+          "templateId": "sat-fraccion-xii-notarios-a",
+          "variantId": "fep-inmuebles",
+          "label": "Transmisión o constitución de derechos reales sobre inmuebles",
+          "actividadKeys": [
+            "fraccion-xii-notarios-a"
+          ],
+          "officialXlsmName": "FedatariosSP_Inmuebles_v4_4.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+          "localPath": "/sat-templates/sat-fraccion-xii-notarios-a/FedatariosSP_Inmuebles_v4_4.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xii-notarios-b",
+          "variantId": "fep-poder",
+          "label": "Otorgamiento de poder irrevocable",
+          "actividadKeys": [
+            "fraccion-xii-notarios-b"
+          ],
+          "officialXlsmName": "FedatarioPoder_v4_3.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+          "localPath": "/sat-templates/sat-fraccion-xii-notarios-b/FedatarioPoder_v4_3.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xii-notarios-c",
+          "variantId": "fep-constitucion-pm",
+          "label": "Constitución de personas morales",
+          "actividadKeys": [
+            "fraccion-xii-notarios-c",
+            "fraccion-xii-corredores-b"
+          ],
+          "officialXlsmName": "FedatarioConstitucionPM_v4_4.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+          "localPath": "/sat-templates/sat-fraccion-xii-notarios-c/FedatarioConstitucionPM_v4_4.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xii-notarios-d",
+          "variantId": "fep-fideicomiso",
+          "label": "Constitución o modificación de fideicomiso traslativo de dominio o garantía sobre inmuebles",
+          "actividadKeys": [
+            "fraccion-xii-notarios-d",
+            "fraccion-xii-corredores-d"
+          ],
+          "officialXlsmName": "FedatarioConstitucionFid_v4_6.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+          "localPath": "/sat-templates/sat-fraccion-xii-notarios-d/FedatarioConstitucionFid_v4_6.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xii-notarios-e",
+          "variantId": "fep-mutuo",
+          "label": "Otorgamiento de contratos de mutuo o crédito",
+          "actividadKeys": [
+            "fraccion-xii-notarios-e"
+          ],
+          "officialXlsmName": "FedatarioMutuo_v4_4.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+          "localPath": "/sat-templates/sat-fraccion-xii-notarios-e/FedatarioMutuo_v4_4.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xii-corredores-a",
+          "variantId": "fep-avaluos",
+          "label": "Realización de avalúos",
+          "actividadKeys": [
+            "fraccion-xii-corredores-a"
+          ],
+          "officialXlsmName": "FedatarioAvaluo_v4_3.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+          "localPath": "/sat-templates/sat-fraccion-xii-corredores-a/FedatarioAvaluo_v4_3.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xii-corredores-c-compra-venta",
+          "variantId": "fep-compra-venta-acciones",
+          "label": "Compra o venta de acciones o partes sociales",
+          "actividadKeys": [
+            "fraccion-xii-corredores-c"
+          ],
+          "officialXlsmName": "FedatarioCompraVenta_v4_3.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+          "localPath": "/sat-templates/sat-fraccion-xii-corredores-c-compra-venta/FedatarioCompraVenta_v4_3.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xii-corredores-c-fusion",
+          "variantId": "fep-fusion",
+          "label": "Fusión",
+          "actividadKeys": [
+            "fraccion-xii-corredores-c"
+          ],
+          "officialXlsmName": "FedatarioFusion_v4_3.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+          "localPath": "/sat-templates/sat-fraccion-xii-corredores-c-fusion/FedatarioFusion_v4_3.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xii-corredores-c-escision",
+          "variantId": "fep-escision",
+          "label": "Escisión",
+          "actividadKeys": [
+            "fraccion-xii-corredores-c"
+          ],
+          "officialXlsmName": "FedatarioEscision_v4_3.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+          "localPath": "/sat-templates/sat-fraccion-xii-corredores-c-escision/FedatarioEscision_v4_3.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xii-corredores-c-modif-patrimonial",
+          "variantId": "fep-modificacion-patrimonial",
+          "label": "Modificación patrimonial por aumento o disminución de capital",
+          "actividadKeys": [
+            "fraccion-xii-corredores-c"
+          ],
+          "officialXlsmName": "FedatarioModifPatrimonial_v4_4.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+          "localPath": "/sat-templates/sat-fraccion-xii-corredores-c-modif-patrimonial/FedatarioModifPatrimonial_v4_4.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xii-sp-poder",
+          "variantId": "fep-sp-poder",
+          "label": "Poder irrevocable ante servidor público",
+          "actividadKeys": [
+            "fraccion-xii-notarios-b"
+          ],
+          "officialXlsmName": "FedatariosSP_Poder_v4_3.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+          "localPath": "/sat-templates/sat-fraccion-xii-sp-poder/FedatariosSP_Poder_v4_3.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xii-sp-modif-patrimonial",
+          "variantId": "fep-sp-modificacion-patrimonial",
+          "label": "Modificación patrimonial ante servidor público",
+          "actividadKeys": [
+            "fraccion-xii-corredores-c"
+          ],
+          "officialXlsmName": "FedatariosSP_ModifPatrimonial_v4_3.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+          "localPath": "/sat-templates/sat-fraccion-xii-sp-modif-patrimonial/FedatariosSP_ModifPatrimonial_v4_3.xlsm"
+        },
+        {
+          "templateId": "sat-fraccion-xii-cesion-fideicomiso",
+          "variantId": "fep-cesion-fideicomiso",
+          "label": "Cesión de derechos de fideicomitente o fideicomisario",
+          "actividadKeys": [
+            "fraccion-xii-notarios-d",
+            "fraccion-xii-corredores-d"
+          ],
+          "officialXlsmName": "FedatarioCesion_v4_3.xlsm",
+          "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
+          "localPath": "/sat-templates/sat-fraccion-xii-cesion-fideicomiso/FedatarioCesion_v4_3.xlsm"
+        }
+      ],
+      "requiresVariantSelection": true,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-xiii-donativos",
+      "formatoId": "sat-fraccion-xiii-donativos",
+      "fraccion": "Fracción XIII",
+      "anexo": "Anexo 13",
+      "actividadKeys": [
+        "fraccion-xiii-donativos"
+      ],
+      "nombre": "Recepción de donativos",
+      "claveActividad": "DON",
+      "officialXlsmName": "Donativos_v4_3.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XIII/donativos.zip",
+      "localPath": "/sat-templates/sat-fraccion-xiii-donativos/Donativos_v4_3.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-xiv-comercio-exterior",
+      "formatoId": "sat-fraccion-xiv-comercio-exterior",
+      "fraccion": "Fracción XIV",
+      "anexo": "Anexo 14",
+      "actividadKeys": [
+        "fraccion-xiv-aduanal-a",
+        "fraccion-xiv-aduanal-b",
+        "fraccion-xiv-aduanal-c",
+        "fraccion-xiv-aduanal-d",
+        "fraccion-xiv-aduanal-e",
+        "fraccion-xiv-aduanal-f"
+      ],
+      "nombre": "Servicios de comercio exterior",
+      "claveActividad": "ADU",
+      "officialXlsmName": "0-InformeEnCeros.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XIV/aviso.zip",
+      "localPath": "/sat-templates/sat-fraccion-xiv-comercio-exterior/0-InformeEnCeros.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-xv-arrendamiento",
+      "formatoId": "sat-fraccion-xv-arrendamiento",
+      "fraccion": "Fracción XV",
+      "anexo": "Anexo 15",
+      "actividadKeys": [
+        "fraccion-xv-uso-goce"
+      ],
+      "nombre": "Derechos personales de uso o goce de bienes inmuebles",
+      "claveActividad": "ARR",
+      "officialXlsmName": "Arrendamiento_v4_5.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XV/arrendamiento.zip",
+      "localPath": "/sat-templates/sat-fraccion-xv-arrendamiento/Arrendamiento_v4_5.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "informe_27_bis",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    },
+    {
+      "templateId": "sat-fraccion-xvi-activos-virtuales",
+      "formatoId": "sat-fraccion-xvi-activos-virtuales",
+      "fraccion": "Fracción XVI",
+      "anexo": "Anexo 16",
+      "actividadKeys": [
+        "fraccion-xvi-activos-virtuales",
+        "fraccion-xvi-activos-virtuales-operacion",
+        "fraccion-xvi-activos-virtuales-contraprestacion"
+      ],
+      "nombre": "Proveedores de activos virtuales",
+      "claveActividad": "AVT",
+      "officialXlsmName": "ActivosVirtuales_v1.2.xlsm",
+      "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XVI/aviso.zip",
+      "localPath": "/sat-templates/sat-fraccion-xvi-activos-virtuales/ActivosVirtuales_v1.2.xlsm",
+      "outputModes": [
+        "informe_ceros",
+        "aviso_normal",
+        "aviso_24h"
+      ],
+      "variants": [],
+      "requiresVariantSelection": false,
+      "sourceLastVerified": "2026-05-12"
+    }
+  ]
+}
