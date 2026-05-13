@@ -823,18 +823,14 @@ export default function BeneficiarioControladorPage() {
                   </div>
 
                   <div className="flex gap-2">
-                    {["si", "no", "no-aplica"].map((option) => (
+                    {(["si", "no", "no-aplica"] as const).map((option) => (
                       <Button
                         key={option}
                         variant={pregunta.answer === option ? "default" : "outline"}
                         size="sm"
-                        onClick={() =>
-                          actualizarRespuesta(pregunta.id, option as ChecklistItem["answer"])
-                        }
+                        onClick={() => actualizarRespuesta(pregunta.id, option)}
                         className={
-                          pregunta.answer === option
-                            ? getAnswerColor(option as ChecklistItem["answer"])
-                            : ""
+                          pregunta.answer === option ? getAnswerColor(option) : ""
                         }
                       >
                         {option === "si" ? "Sí" : option === "no" ? "No" : "No Aplica"}

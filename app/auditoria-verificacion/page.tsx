@@ -373,25 +373,22 @@ const storeWithDates = <T,>(key: StorageKey, value: T) => {
 
 const parseStoredLineamientos = (raw: unknown): LineamientoVersion[] => {
   if (!Array.isArray(raw)) return []
-  return raw
-    .map((item) => {
-      if (!item || typeof item !== "object") return null
+  return raw.flatMap((item): LineamientoVersion[] => {
+      if (!item || typeof item !== "object") return []
       const { version, date, approvedBy, notes } = item as Partial<LineamientoVersion> & {
         date?: string
       }
-      if (!version || !date || !approvedBy) return null
+      if (!version || !date || !approvedBy) return []
       const parsedDate = new Date(date)
-      if (Number.isNaN(parsedDate.getTime())) return null
-      return { version, date: parsedDate, approvedBy, notes }
+      if (Number.isNaN(parsedDate.getTime())) return []
+      return [{ version, date: parsedDate, approvedBy, notes }]
     })
-    .filter((item): item is LineamientoVersion => item !== null)
 }
 
 const parseStoredAudits = (raw: unknown): InternalAuditRecord[] => {
   if (!Array.isArray(raw)) return []
-  return raw
-    .map((item) => {
-      if (!item || typeof item !== "object") return null
+  return raw.flatMap((item): InternalAuditRecord[] => {
+      if (!item || typeof item !== "object") return []
       const { id, date, scope, findings, responsible, status, followUpDue } = item as Partial<
         InternalAuditRecord
       > & {
@@ -401,24 +398,24 @@ const parseStoredAudits = (raw: unknown): InternalAuditRecord[] => {
       }
 
       if (!id || !date || !findings || !responsible || !status || !Array.isArray(scope)) {
-        return null
+        return []
       }
 
       const parsedDate = new Date(date)
-      if (Number.isNaN(parsedDate.getTime())) return null
+      if (Number.isNaN(parsedDate.getTime())) return []
 
       const parsedFollowUp = followUpDue ? new Date(followUpDue) : undefined
-      if (parsedFollowUp && Number.isNaN(parsedFollowUp.getTime())) return null
+      if (parsedFollowUp && Number.isNaN(parsedFollowUp.getTime())) return []
 
       const normalizedScope = scope
         .map((value) => (typeof value === "string" ? value.trim() : ""))
         .filter((value) => value.length > 0)
 
-      if (!normalizedScope.length) return null
+      if (!normalizedScope.length) return []
 
-      if (!["Cerrado", "En seguimiento", "Abierto"].includes(status)) return null
+      if (!["Cerrado", "En seguimiento", "Abierto"].includes(status)) return []
 
-      return {
+      return [{
         id,
         date: parsedDate,
         scope: normalizedScope,
@@ -426,16 +423,14 @@ const parseStoredAudits = (raw: unknown): InternalAuditRecord[] => {
         responsible,
         status: status as InternalAuditRecord["status"],
         followUpDue: parsedFollowUp,
-      }
+      }]
     })
-    .filter((item): item is InternalAuditRecord => item !== null)
 }
 
 const parseStoredRequests = (raw: unknown): AuthorityRequest[] => {
   if (!Array.isArray(raw)) return []
-  return raw
-    .map((item) => {
-      if (!item || typeof item !== "object") return null
+  return raw.flatMap((item): AuthorityRequest[] => {
+      if (!item || typeof item !== "object") return []
       const { id, authority, receivedAt, dueDate, respondedAt, status, responsible, documents } = item as Partial<
         AuthorityRequest
       > & {
@@ -445,23 +440,23 @@ const parseStoredRequests = (raw: unknown): AuthorityRequest[] => {
         documents?: unknown
       }
 
-      if (!id || !authority || !receivedAt || !dueDate || !status || !responsible) return null
+      if (!id || !authority || !receivedAt || !dueDate || !status || !responsible) return []
 
-      if (!["SAT", "UIF"].includes(authority)) return null
-      if (!["Pendiente", "En progreso", "Cerrado"].includes(status)) return null
+      if (!["SAT", "UIF"].includes(authority)) return []
+      if (!["Pendiente", "En progreso", "Cerrado"].includes(status)) return []
 
       const parsedReceived = new Date(receivedAt)
       const parsedDue = new Date(dueDate)
-      if (Number.isNaN(parsedReceived.getTime()) || Number.isNaN(parsedDue.getTime())) return null
+      if (Number.isNaN(parsedReceived.getTime()) || Number.isNaN(parsedDue.getTime())) return []
 
       const parsedResponded = respondedAt ? new Date(respondedAt) : undefined
-      if (parsedResponded && Number.isNaN(parsedResponded.getTime())) return null
+      if (parsedResponded && Number.isNaN(parsedResponded.getTime())) return []
 
       const normalizedDocuments = Array.isArray(documents)
         ? documents.map((value) => (typeof value === "string" ? value : String(value)))
         : []
 
-      return {
+      return [{
         id,
         authority: authority as AuthorityRequest["authority"],
         receivedAt: parsedReceived,
@@ -470,9 +465,8 @@ const parseStoredRequests = (raw: unknown): AuthorityRequest[] => {
         status: status as AuthorityRequest["status"],
         responsible,
         documents: normalizedDocuments,
-      }
+      }]
     })
-    .filter((item): item is AuthorityRequest => item !== null)
 }
 
 const parseStoredActionPlans = (raw: unknown): ActionPlan[] => {
@@ -760,7 +754,7 @@ export default function AuditoriaVerificacionPage() {
 
   const answeredQuestions = useMemo(
     () =>
-      Object.values(responses).filter((response) => response.answer && response.answer !== "").length,
+      Object.values(responses).filter((response) => Boolean(response.answer)).length,
     [responses]
   )
 
@@ -885,7 +879,7 @@ export default function AuditoriaVerificacionPage() {
   const scopeCompletion = useMemo(() => {
     const values = Object.values(scopeAnswers)
     if (!values.length) return 0
-    const completed = values.filter((value) => value !== "").length
+    const completed = values.length
     return Math.round((completed / values.length) * 100)
   }, [scopeAnswers])
 
@@ -1179,12 +1173,12 @@ export default function AuditoriaVerificacionPage() {
 
     let currentY = startY
 
-    doc.setFont(undefined, "bold")
+    doc.setFont("helvetica", "bold")
     headers.forEach((header, index) => {
       doc.text(header, 14 + columnWidths.slice(0, index).reduce((acc, width) => acc + width, 0), currentY)
     })
 
-    doc.setFont(undefined, "normal")
+    doc.setFont("helvetica", "normal")
     currentY += 8
 
     auditLog.forEach((record) => {

@@ -12,13 +12,16 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
+import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
 import {
   Building2,
   CalendarClock,
+  Database,
   FileText,
   Home,
   Mail,
   MapPin,
+  ShieldCheck,
   Users,
 } from "lucide-react"
 import { CLIENTE_TIPOS, findClienteTipoLabel } from "@/lib/data/tipos-cliente"
@@ -448,6 +451,7 @@ interface SujetoObligadoResumen {
   nombre: string
   tipo: string
   actividad: string
+  folioDocumento?: string
   identificacion: {
     rfc: string
     nombre: string
@@ -824,6 +828,8 @@ function KycExpedienteContent() {
             correo?: string
           }>
           actividades?: Array<{
+            actividadKey?: string
+            folioDocumento?: string
             domicilio?: {
               codigoPostal?: string
               tipoVialidad?: string
@@ -845,6 +851,8 @@ function KycExpedienteContent() {
               nombre: typeof item.nombre === "string" ? item.nombre : "",
               tipo: typeof item.tipo === "string" ? item.tipo : "",
               actividad: typeof item.actividad === "string" ? item.actividad : "",
+              folioDocumento:
+                typeof item.actividades?.[0]?.folioDocumento === "string" ? item.actividades[0].folioDocumento : undefined,
               identificacion: {
                 rfc: typeof item.identificacion?.rfc === "string" ? item.identificacion.rfc : "",
                 nombre: typeof item.identificacion?.nombre === "string" ? item.identificacion.nombre : "",
@@ -1622,9 +1630,51 @@ function KycExpedienteContent() {
   const coloniasInmueblePmdp = infoUbicacionInmueblePmdp?.asentamientos ?? []
 
   const tipoClienteResumen = tipoClienteLabel
+  const sujetoObligadoSeleccionado =
+    sujetosRegistrados.find((sujeto) => sujeto.id === sujetoObligadoId) ?? sujetosRegistrados[0] ?? null
 
   return (
     <div className="space-y-6">
+      <PldDemoDataControls />
+
+      {sujetoObligadoSeleccionado && (
+        <Card className="border-emerald-200 bg-emerald-50/60">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-emerald-700" /> Alta SAT vinculada al EUI
+            </CardTitle>
+            <CardDescription>
+              El expediente toma el sujeto obligado registrado ante SAT como fuente de cumplimiento y trazabilidad.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 text-sm md:grid-cols-5">
+            <div>
+              <p className="text-xs text-muted-foreground">Sujeto obligado</p>
+              <p className="font-medium">{sujetoObligadoSeleccionado.nombre}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">RFC</p>
+              <p className="font-medium">{sujetoObligadoSeleccionado.identificacion.rfc || "Sin RFC"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Actividad registrada</p>
+              <p className="font-medium">{sujetoObligadoSeleccionado.actividad || "Sin actividad"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Folio / acuse</p>
+              <p className="font-medium">{sujetoObligadoSeleccionado.folioDocumento || "Pendiente"}</p>
+            </div>
+            <div className="flex items-end">
+              <Button asChild size="sm" className="w-full gap-2">
+                <a href="/avisos-informes">
+                  <Database className="h-4 w-4" /> Salidas SAT
+                </a>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {tipoExpediente === "persona_moral" && (
         <>
       <Card className="border-slate-200">
@@ -1769,7 +1819,7 @@ function KycExpedienteContent() {
         </Card>
       )}
 
-      {tipoExpediente === "persona_fisica" && (
+      {(tipoExpediente as string) === "persona_fisica" && (
         <>
           <Card className="border-slate-200">
             <CardHeader>
@@ -2464,7 +2514,7 @@ function KycExpedienteContent() {
         </Card>
       )}
 
-      {tipoExpediente === "persona_moral_derecho_publico" && (
+      {(tipoExpediente as string) === "persona_moral_derecho_publico" && (
         <>
           <Card className="border-slate-200">
             <CardHeader>

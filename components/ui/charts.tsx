@@ -1,14 +1,32 @@
-export const BarChart = ({ data, xKey, yKey }) => (
+type ChartDatum = Record<string, string | number>
+
+interface CartesianChartProps {
+  data: ChartDatum[]
+  xKey: string
+  yKey: string
+}
+
+interface PieChartProps {
+  data: ChartDatum[]
+}
+
+function toNumber(value: string | number | undefined) {
+  if (typeof value === "number") return value
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+export const BarChart = ({ data, xKey, yKey }: CartesianChartProps) => (
   <div className="h-64 flex items-end justify-between">
     {data.map((item, index) => (
-      <div key={index} className="w-8 bg-blue-500" style={{ height: `${item[yKey] / 10}%` }}>
+      <div key={index} className="w-8 bg-blue-500" style={{ height: `${toNumber(item[yKey]) / 10}%` }}>
         <div className="text-xs text-center">{item[xKey]}</div>
       </div>
     ))}
   </div>
 )
 
-export const LineChart = ({ data, xKey, yKey }) => (
+export const LineChart = ({ data, xKey }: CartesianChartProps) => (
   <div className="h-64 flex items-end justify-between">
     {data.map((item, index) => (
       <div key={index} className="w-8 flex flex-col items-center">
@@ -20,7 +38,7 @@ export const LineChart = ({ data, xKey, yKey }) => (
   </div>
 )
 
-export const PieChart = ({ data }) => (
+export const PieChart = ({ data }: PieChartProps) => (
   <div className="h-64 relative">
     <svg viewBox="0 0 100 100" className="w-full h-full">
       {data.map((item, index) => {

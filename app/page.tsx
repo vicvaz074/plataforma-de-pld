@@ -18,6 +18,7 @@ import {
   ClipboardCheck,
   UserSearch,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { translations } from "@/lib/translations"
 import { aliciaTranslations } from "@/lib/alicia-translations"
@@ -25,7 +26,15 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
 
-const options = [
+type HomeOption = {
+  name: string
+  icon: LucideIcon
+  href: string
+  image?: string
+  external?: boolean
+}
+
+const options: HomeOption[] = [
   { name: "registroSat", icon: FileCheck, href: "/registro-sat" },
   { name: "expedienteUnico", icon: Users, href: "/kyc-expediente" },
   { name: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },

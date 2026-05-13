@@ -11,7 +11,11 @@ import { clearPldDemoData, getPldDemoSeedStatus, installPldDemoData } from "@/li
 
 type DemoStatus = ReturnType<typeof getPldDemoSeedStatus>
 
-export function PldDemoDataControls() {
+interface PldDemoDataControlsProps {
+  onDataChange?: () => void
+}
+
+export function PldDemoDataControls({ onDataChange }: PldDemoDataControlsProps = {}) {
   const { toast } = useToast()
   const [status, setStatus] = useState<DemoStatus>(null)
 
@@ -27,6 +31,8 @@ export function PldDemoDataControls() {
   const handleInstall = () => {
     const result = installPldDemoData(window.localStorage, new Date("2026-05-08T12:00:00-06:00"))
     refreshStatus()
+    window.dispatchEvent(new CustomEvent("pld-demo-data-changed"))
+    onDataChange?.()
     toast({
       title: "Datos demo cargados",
       description: `${result.counts.expedientes} expedientes, ${result.counts.operaciones} operaciones y ${result.counts.evidencias} evidencias listas para mostrar.`,
@@ -36,6 +42,8 @@ export function PldDemoDataControls() {
   const handleClear = () => {
     clearPldDemoData(window.localStorage)
     refreshStatus()
+    window.dispatchEvent(new CustomEvent("pld-demo-data-changed"))
+    onDataChange?.()
     toast({
       title: "Datos demo eliminados",
       description: "Se limpiaron las llaves demo PLD sin tocar idioma ni sesión.",
