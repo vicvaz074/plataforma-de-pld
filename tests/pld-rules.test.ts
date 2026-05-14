@@ -12,11 +12,14 @@ import {
   getAcumulacionRuleForActividad,
   getDocumentRequirementsForCliente,
   getUmaForDate,
+  getPepSearchHistoryItemKey,
   matchPepCargo,
   pepCargoFixtures,
+  PEP_SEARCH_HISTORY_CLEAR_ALL,
+  removePepSearchHistoryItem,
   searchPep,
 } from "../lib/pld"
-import type { PepEntity, PepInternalRecord } from "../lib/pld"
+import type { PepEntity, PepInternalRecord, PepSearchResponse } from "../lib/pld"
 import pepPublicMxSnapshot from "../public/data/pep-public-mx.json"
 
 test("UMA 2026 uses official INEGI daily, monthly and annual values", () => {
@@ -481,4 +484,30 @@ test("WhoIs PEP public Mexico snapshot includes former Mexican presidents since 
     assert.equal(result.results[0]?.entity.positions?.[0]?.cargo, "Expresidente de los Estados Unidos Mexicanos", nombre)
     assert.equal(result.results[0]?.matchedFields.includes("nombre"), true, nombre)
   }
+})
+
+test("WhoIs PEP search history can remove one item or clear the whole list", () => {
+  const first = {
+    status: "posible_coincidencia",
+    checkedAt: "2026-05-14T10:00:00.000Z",
+    query: { nombre: "Mariana Imaz Sheinbaum", relacion: "familiar" },
+    results: [],
+    appliedDecisions: [],
+    sourceSnapshots: [],
+    recommendation: "Revisar posible familiar.",
+  } satisfies PepSearchResponse
+  const second = {
+    status: "coincidencia_alta",
+    checkedAt: "2026-05-14T10:05:00.000Z",
+    query: { nombre: "Vicente Fox Quesada", relacion: "cliente" },
+    results: [],
+    appliedDecisions: [],
+    sourceSnapshots: [],
+    recommendation: "Aplicar debida diligencia reforzada.",
+  } satisfies PepSearchResponse
+
+  const remaining = removePepSearchHistoryItem([first, second], getPepSearchHistoryItemKey(first))
+
+  assert.deepEqual(remaining, [second])
+  assert.deepEqual(removePepSearchHistoryItem([first, second], PEP_SEARCH_HISTORY_CLEAR_ALL), [])
 })
