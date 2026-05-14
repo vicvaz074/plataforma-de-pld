@@ -4,6 +4,7 @@ import { buildDefaultPldTenants } from "@/lib/pld/tenants"
 import { buildPldOperationalCase } from "@/lib/pld/operational-flow"
 import { generateSatOutputPackage } from "@/lib/pld/sat-outputs"
 import { buildSatFormatSnapshot } from "@/lib/pld/sat-formatos"
+import { buildSatTemplateDemoScenarios } from "@/lib/pld/sat-demo-scenarios"
 import type { PepScreeningResult, UmbralStatus } from "@/lib/pld/types"
 
 export const DEMO_SEED_METADATA_KEY = "pld-demo-seed-metadata"
@@ -820,6 +821,9 @@ function buildSatOutputPackages(referenceDate: Date) {
     satFieldValues: f4594SatFieldValues,
     satMissingRequiredFields: [],
     satWorkbookStatus: "listo",
+    workbookValidationStatus: "golden_fixture",
+    goldenFixtureId: "f4594-arrendamiento-av202505-mac-xmlfix",
+    satDemoScenarioId: "sat-demo-sat-fraccion-xv-arrendamiento",
     actor: DEMO_SUBJECT.oficial,
   })
   const informeCeros = {
@@ -880,7 +884,41 @@ function buildSatOutputPackages(referenceDate: Date) {
     actor: DEMO_SUBJECT.oficial,
   })
 
-  return [avisoNormal, avisoF4594, informeCeros, informe27Bis, aviso24h].map(generateSatOutputPackage)
+  const satScenarioCases = buildSatTemplateDemoScenarios()
+    .filter((scenario) => scenario.templateId !== "sat-fraccion-xv-arrendamiento")
+    .map((scenario) =>
+      buildPldOperationalCase({
+        tenant: {
+          ...tenant,
+          id: `tenant-${scenario.id}`,
+          rfc: scenario.tenantRfc,
+          razonSocial: scenario.tenantName,
+        },
+        periodo: scenario.periodo,
+        actividadKey: scenario.actividadKey,
+        clienteId: `cliente-${scenario.clienteRfc}-${scenario.templateId}`,
+        clienteNombre: scenario.clienteNombre,
+        clienteRfc: scenario.clienteRfc,
+        tipoCliente: "pm_mexicana",
+        fechaOperacion: scenario.fechaOperacion,
+        montoMxn: scenario.montoMxn,
+        formaPago: scenario.formaPago,
+        completedEvidence: scenario.completedEvidence,
+        satTemplateId: scenario.templateId,
+        satTemplateFile: scenario.template.officialXlsmName,
+        satTemplateVariant: scenario.templateId,
+        satFieldValues: scenario.satFieldValues,
+        satCellValues: scenario.satCellValues,
+        satMissingRequiredFields: [],
+        satWorkbookStatus: "listo",
+        workbookValidationStatus: scenario.workbookValidationStatus,
+        goldenFixtureId: scenario.goldenFixtureId,
+        satDemoScenarioId: scenario.id,
+        actor: DEMO_SUBJECT.oficial,
+      }),
+    )
+
+  return [avisoNormal, avisoF4594, informeCeros, informe27Bis, aviso24h, ...satScenarioCases].map(generateSatOutputPackage)
 }
 
 function buildInmueblesSatFieldValues() {

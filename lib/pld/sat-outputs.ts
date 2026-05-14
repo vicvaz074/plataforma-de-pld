@@ -153,6 +153,9 @@ export function generateSatOutputPackage(operationalCase: PldOperationalCase): S
     satMissingRequiredFields: operationalCase.satMissingRequiredFields,
     satWorkbookStatus: operationalCase.satWorkbookStatus,
     satWorkbookFileName: workbookFileName,
+    workbookValidationStatus: operationalCase.workbookValidationStatus,
+    goldenFixtureId: operationalCase.goldenFixtureId,
+    satDemoScenarioId: operationalCase.satDemoScenarioId,
     validation,
     downloads,
   }

@@ -4,6 +4,7 @@ import path from "node:path"
 import test from "node:test"
 
 import { unzipSync } from "fflate"
+import XLSX from "xlsx"
 
 import {
   buildSatDynamicOperationForm,
@@ -137,6 +138,7 @@ test("Inmuebles questionnaire maps Persona Objeto and Beneficiario controlador w
   assert.equal(byId.get("persona_aviso.tipo_alerta")?.optionListId, "Alertas")
   assert.equal(byId.get("persona_aviso.pm.razon_social")?.cell, "B33")
   assert.equal(byId.get("persona_aviso.pm.giro_mercantil")?.optionListId, "Giros")
+  assert.equal(byId.get("persona_aviso.domicilio_nacional.codigo_postal")?.cell, "B60")
   assert.equal(byId.get("persona_aviso.domicilio_nacional.colonia")?.cell, "E60")
   assert.equal(byId.get("beneficiario.pf.nombre")?.sheetName, "Beneficiario controlador")
   assert.equal(byId.get("beneficiario.pf.nombre")?.cell, "B5")
@@ -321,6 +323,70 @@ test("legacy demo SAT package values are enriched before filling Inmuebles XLSM"
   assert.match(beneficiarioSheet, /LUPA760912MNLNRD04/)
 })
 
+test("filled Inmuebles XLSM normalizes periodo, postal codes and date-visible cells", () => {
+  const template = resolveSatTemplateForActividad("fraccion-v-inmuebles")
+  const workbookPath = path.join(repoRoot, getSatTemplateCachePath(template))
+  assert.equal(existsSync(workbookPath), true, "Run pnpm sync:sat:formatos to cache official SAT XLSM templates")
+  const layout = extractSatXlsmLayoutFromBuffer(readFileSync(workbookPath), template)
+  const values = buildSatWorkbookDownloadValues({
+    satTemplateId: template.templateId,
+    values: {
+      "acto.fecha_operacion": "05/05/2026",
+      "acto.figura_cliente": "2,Comprador",
+      "acto.figura_sujeto_obligado": "3,Intermediario",
+      "instrumento.fecha": "05/05/2026",
+      "instrumento.fecha_contrato": "05/05/2026",
+      "inmueble.tipo_bien": "12,Terreno urbano habitacional",
+      "inmueble.valor_pactado": "1850000",
+      "inmueble.codigo_postal": "CP 66260, San Pedro Garza García",
+      "inmueble.calle": "Avenida Roble",
+      "inmueble.numero_exterior": "300",
+      "inmueble.colonia": "Valle del Campestre",
+      "inmueble.terreno_m2": "240",
+      "inmueble.inmueble_m2": "185",
+      "inmueble.folio_real": "FR-2026-000184",
+      "pago.fecha": "05/05/2026",
+      "pago.forma_pago": "1,Contado",
+      "pago.instrumento_monetario": "8,Transferencia Interbancaria",
+      "pago.moneda": "1,Peso mexicano",
+      "pago.monto": "1850000",
+    },
+    tenantRfc: "ISN2103158Q7",
+    periodo: "2026-05",
+    outputKind: "aviso_normal",
+    clienteNombre: "Desarrollos Lago Verde, S.A.P.I. de C.V.",
+    clienteRfc: "DLV190624M32",
+    packageId: "satpkg-demo-legacy",
+  })
+  const filled = fillSatXlsmTemplate(readFileSync(workbookPath), {
+    template,
+    values,
+    layout,
+  })
+  const workbook = XLSX.read(Buffer.from(filled.workbook), {
+    type: "buffer",
+    cellFormula: true,
+    cellNF: true,
+  })
+  const persona = workbook.Sheets["Persona Objeto del aviso"]
+  const acto = workbook.Sheets["Acto u operación"]
+
+  assert.equal(filled.status, "filled")
+  assert.equal(values["persona_aviso.periodo"], "202605")
+  assert.equal(persona.C5.v, "202605")
+  assert.equal(String(persona.B60.v), "66260")
+  assert.equal(persona.C60.f?.includes("VLOOKUP(B60"), true)
+  assert.equal(persona.D60.f?.includes("VLOOKUP(B60"), true)
+  assert.equal(persona.I60?.v ?? "", "")
+  assert.equal(String(acto.D42.v), "66260")
+  assert.equal(acto.E42.f?.includes("VLOOKUP(D42"), true)
+  assert.equal(acto.F42.f?.includes("VLOOKUP(D42"), true)
+  assert.equal(acto.B56.w, "05/05/2026")
+  assert.notEqual(acto.B56.w, "46147")
+  assert.notEqual(acto.G56.w, "46147")
+  assert.notEqual(acto.B70.w, "46147")
+})
+
 test("filled SAT XLSM keeps macros and writes mapped values into official workbook cells", () => {
   const template = resolveSatTemplateForActividad("fraccion-v-inmuebles")
   const workbookPath = path.join(repoRoot, getSatTemplateCachePath(template))
@@ -368,6 +434,11 @@ test("filled SAT XLSM keeps macros and writes mapped values into official workbo
   const personaSheet = Buffer.from(zip["xl/worksheets/sheet1.xml"]).toString("utf8")
   const beneficiarioSheet = Buffer.from(zip["xl/worksheets/sheet2.xml"]).toString("utf8")
   const sheet = Buffer.from(zip["xl/worksheets/sheet3.xml"]).toString("utf8")
+  const workbook = XLSX.read(Buffer.from(filled.workbook), {
+    type: "buffer",
+    cellNF: true,
+  })
+  const acto = workbook.Sheets["Acto u operación"]
 
   assert.equal(Boolean(zip["xl/vbaProject.bin"]), true)
   assert.equal(filled.status, "filled")
@@ -375,7 +446,7 @@ test("filled SAT XLSM keeps macros and writes mapped values into official workbo
   assert.match(personaSheet, /Desarrollos Lago Verde/)
   assert.match(beneficiarioSheet, /Adriana/)
   assert.match(beneficiarioSheet, /LUPA760912QA1/)
-  assert.match(sheet, /12\/05\/2026/)
+  assert.notEqual(acto.C5.w, "46154")
   assert.match(sheet, /4850000/)
   assert.match(sheet, /2500000/)
   assert.equal(filled.writtenCells.includes("Persona Objeto del aviso!C4"), true)

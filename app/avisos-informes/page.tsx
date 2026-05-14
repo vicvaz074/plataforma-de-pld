@@ -55,6 +55,8 @@ import {
   Users,
 } from "lucide-react"
 import {
+  buildSatTemplateDemoScenarioValues,
+  buildSatTemplateDemoScenarios,
   buildSatWorkbookDownloadValues,
   applySatOutputOverride,
   buildSatPackageActionView,
@@ -157,6 +159,9 @@ interface SatOutputPackageResumen {
   satMissingRequiredFields?: string[]
   satWorkbookStatus?: "pendiente" | "borrador_bloqueado" | "listo"
   satWorkbookFileName?: string
+  workbookValidationStatus?: "golden_fixture" | "strict_synthetic" | "pending"
+  goldenFixtureId?: string
+  satDemoScenarioId?: string
   satOutputOverride?: SatOutputOverride
   validation: {
     status: "listo" | "borrador_bloqueado"
@@ -659,6 +664,14 @@ export default function AvisosInformesPage() {
                       : undefined,
                   satWorkbookFileName:
                     typeof record.satWorkbookFileName === "string" ? record.satWorkbookFileName : undefined,
+                  workbookValidationStatus:
+                    record.workbookValidationStatus === "golden_fixture" ||
+                    record.workbookValidationStatus === "strict_synthetic" ||
+                    record.workbookValidationStatus === "pending"
+                      ? record.workbookValidationStatus
+                      : undefined,
+                  goldenFixtureId: typeof record.goldenFixtureId === "string" ? record.goldenFixtureId : undefined,
+                  satDemoScenarioId: typeof record.satDemoScenarioId === "string" ? record.satDemoScenarioId : undefined,
                   satOutputOverride:
                     (originalKind === "aviso_normal" ||
                       originalKind === "informe_ceros" ||
@@ -1194,10 +1207,16 @@ export default function AvisosInformesPage() {
       const response = await fetch(templatePath)
       if (!response.ok) throw new Error(`No fue posible cargar ${templatePath}`)
       const layout = await loadSatLayout(satPackage.satTemplateId || template.templateId)
+      const demoScenario = satPackage.satDemoScenarioId
+        ? buildSatTemplateDemoScenarios().find((scenario) => scenario.id === satPackage.satDemoScenarioId)
+        : undefined
+      const demoValues = demoScenario
+        ? buildSatTemplateDemoScenarioValues({ scenario: demoScenario, layout })
+        : { satFieldValues: {}, satCellValues: {} }
       const workbookValues = buildSatWorkbookDownloadValues({
         satTemplateId: satPackage.satTemplateId || template.templateId,
-        values: satPackage.satFieldValues || {},
-        cellValues: satPackage.satCellValues || {},
+        values: { ...demoValues.satFieldValues, ...(satPackage.satFieldValues || {}) },
+        cellValues: { ...demoValues.satCellValues, ...(satPackage.satCellValues || {}) },
         tenantRfc: satPackage.tenantRfc,
         periodo: satPackage.periodo,
         outputKind: satPackage.outputKind,

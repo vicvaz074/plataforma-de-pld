@@ -40,6 +40,9 @@ export interface BuildPldOperationalCaseInput {
   satCellValues?: Record<string, string>
   satMissingRequiredFields?: string[]
   satWorkbookStatus?: "pendiente" | "borrador_bloqueado" | "listo"
+  workbookValidationStatus?: "golden_fixture" | "strict_synthetic" | "pending"
+  goldenFixtureId?: string
+  satDemoScenarioId?: string
   actor?: string
 }
 
@@ -90,6 +93,9 @@ export function buildPldOperationalCase(input: BuildPldOperationalCaseInput): Pl
     satCellValues: input.satCellValues,
     satMissingRequiredFields: input.satMissingRequiredFields,
     satWorkbookStatus: input.satWorkbookStatus,
+    workbookValidationStatus: input.workbookValidationStatus,
+    goldenFixtureId: input.goldenFixtureId,
+    satDemoScenarioId: input.satDemoScenarioId,
     clienteId: input.clienteId,
     clienteNombre: input.clienteNombre,
     clienteRfc: input.clienteRfc,
