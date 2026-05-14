@@ -569,7 +569,7 @@ function SatFieldControl({
 
   return (
     <div
-      className={`min-w-0 space-y-2 overflow-hidden border-b pb-4 last:border-b-0 ${
+      className={`min-w-0 space-y-2 overflow-visible border-b pb-4 last:border-b-0 ${
         isMissing ? "border-amber-100 bg-amber-50/60 px-3 py-3" : "border-slate-100"
       }`}
     >
@@ -580,22 +580,26 @@ function SatFieldControl({
         </span>
       </Label>
       {options.length > 0 ? (
-        <SatOptionCombobox
-          value={value}
-          options={options}
-          placeholder={isPostalCodeField(field) ? "Busca o captura CP" : "Selecciona opción del Excel SAT"}
-          allowCustomValue={isPostalCodeField(field)}
-          onChange={(next) => onChange(field.id, next)}
-        />
+        <div className="p-1">
+          <SatOptionCombobox
+            value={value}
+            options={options}
+            placeholder={isPostalCodeField(field) ? "Busca o captura CP" : "Selecciona opción del Excel SAT"}
+            allowCustomValue={isPostalCodeField(field)}
+            onChange={(next) => onChange(field.id, next)}
+          />
+        </div>
       ) : (
         <>
-          <Input
-            value={value}
-            inputMode={field.dataType === "numero" || field.dataType === "moneda" ? "decimal" : "text"}
-            placeholder={field.dataType === "fecha" ? "dd/mm/aaaa" : field.placeholder ?? "Captura valor"}
-            className="bg-white"
-            onChange={(event) => onChange(field.id, event.target.value)}
-          />
+          <div className="p-1">
+            <Input
+              value={value}
+              inputMode={field.dataType === "numero" || field.dataType === "moneda" ? "decimal" : "text"}
+              placeholder={field.dataType === "fecha" ? "dd/mm/aaaa" : field.placeholder ?? "Captura valor"}
+              className="bg-white"
+              onChange={(event) => onChange(field.id, event.target.value)}
+            />
+          </div>
           {isCatalogWithoutResolvedList && (
             <p className="text-[11px] leading-relaxed text-amber-700">
               El XLSM marca esta celda como validada, pero no expone un catálogo seleccionable. Captura el valor y revisa
