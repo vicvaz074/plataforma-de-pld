@@ -245,7 +245,7 @@ test("SAT XML generation validates required data and escapes special characters"
   assert.match(result.xml, /<mes_reportado>202605<\/mes_reportado>/)
   assert.match(result.xml, /Relojes &amp; Joyas del Centro &lt;Sucursal Norte&gt;/)
   assert.match(result.xml, /Cliente se rehusa a proporcionar documentos &amp; solicita facturar a tercero/)
-  assert.match(result.xml, /<tipo_salida>aviso_24h<\/tipo_salida>/)
+  assert.doesNotMatch(result.xml, /<tipo_salida>|<borrador_no_cargable>|<validacion>|<trazabilidad>/)
   assert.match(result.xml, /<prioridad>2<\/prioridad>/)
   assert.match(result.xml, /<detalle_operaciones>/)
   assert.doesNotMatch(result.xml, /sat-local-first-v1/)
@@ -289,7 +289,7 @@ test("SAT output packages distinguish ready XML, blocked draft, zero report and 
   })
   assert.equal(blocked.validation.status, "borrador_bloqueado")
   assert.equal(blocked.validation.missingFields.includes("sujeto_obligado.rfc"), true)
-  assert.match(blocked.xml, /<borrador_no_cargable>SI<\/borrador_no_cargable>/)
+  assert.doesNotMatch(blocked.xml, /<borrador_no_cargable>|<validacion>|<trazabilidad>/)
 
   const zeroReport = generateSatOutputPackage({
     ...baseCase,
@@ -299,7 +299,7 @@ test("SAT output packages distinguish ready XML, blocked draft, zero report and 
     },
   })
   assert.equal(zeroReport.outputKind, "informe_ceros")
-  assert.match(zeroReport.xml, /<sin_operaciones>1<\/sin_operaciones>/)
+  assert.doesNotMatch(zeroReport.xml, /<aviso>|<sin_operaciones>/)
 
   const bis27 = generateSatOutputPackage({
     ...baseCase,
@@ -309,7 +309,7 @@ test("SAT output packages distinguish ready XML, blocked draft, zero report and 
     },
   })
   assert.equal(bis27.outputKind, "informe_27_bis")
-  assert.match(bis27.xml, /<exento>1<\/exento>/)
+  assert.doesNotMatch(bis27.xml, /<exento>|<tipo_salida>/)
 })
 
 test("demo dataset links SAT registration, EUI and prebuilt SAT output packages", () => {

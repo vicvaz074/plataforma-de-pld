@@ -413,3 +413,72 @@ test("WhoIs PEP public Mexico snapshot finds Marcelo Ebrard Casaubon as Economy 
   assert.equal(result.results[0]?.entity.positions?.[0]?.cargo, "Secretario de Economía")
   assert.equal(result.results[0]?.entity.positions?.[0]?.dependencia, "Secretaría de Economía")
 })
+
+test("WhoIs PEP flags possible family or close-associate matches by uncommon surname", () => {
+  const snapshot = pepPublicMxSnapshot as { entities: PepEntity[] }
+  const result = searchPep(
+    {
+      nombre: "Mariana Imaz Sheinbaum",
+      relacion: "familiar",
+    },
+    {
+      entities: snapshot.entities,
+      cargos: pepCargoFixtures,
+      internalRecords: [],
+    },
+    "2026-05-13T12:00:00.000Z",
+  )
+
+  assert.equal(result.status, "posible_coincidencia")
+  assert.equal(result.results[0]?.entity.name, "Claudia Sheinbaum Pardo")
+  assert.equal(result.results[0]?.matchedFields.includes("apellido/familiar posible"), true)
+  assert.equal(result.results[0]?.requiresHumanReview, true)
+  assert.match(result.recommendation, /familiar|asociad/i)
+})
+
+test("WhoIs PEP avoids surname-only alerts for very common Mexican surnames", () => {
+  const snapshot = pepPublicMxSnapshot as { entities: PepEntity[] }
+  const result = searchPep(
+    {
+      nombre: "Carlos García López",
+      relacion: "cliente",
+    },
+    {
+      entities: snapshot.entities,
+      cargos: pepCargoFixtures,
+      internalRecords: [],
+    },
+    "2026-05-13T12:00:00.000Z",
+  )
+
+  assert.equal(result.status, "sin_coincidencia")
+})
+
+test("WhoIs PEP public Mexico snapshot includes former Mexican presidents since 2000", () => {
+  const snapshot = pepPublicMxSnapshot as { entities: PepEntity[] }
+  const names = [
+    "Vicente Fox Quesada",
+    "Felipe Calderon Hinojosa",
+    "Enrique Pena Nieto",
+    "Andres Manuel Lopez Obrador",
+  ]
+
+  for (const nombre of names) {
+    const result = searchPep(
+      {
+        nombre,
+        relacion: "cliente",
+      },
+      {
+        entities: snapshot.entities,
+        cargos: pepCargoFixtures,
+        internalRecords: [],
+      },
+      "2026-05-13T12:00:00.000Z",
+    )
+
+    assert.equal(result.status, "coincidencia_alta", nombre)
+    assert.equal(result.results[0]?.entity.positions?.[0]?.cargo, "Expresidente de los Estados Unidos Mexicanos", nombre)
+    assert.equal(result.results[0]?.matchedFields.includes("nombre"), true, nombre)
+  }
+})

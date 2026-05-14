@@ -400,6 +400,10 @@ export interface SatFormatoManifestItem {
   actividadKeys: string[]
   nombre: string
   claveActividad: string
+  xmlActivityCode: string
+  xmlNamespace: string
+  xmlSchemaLocation: string
+  xmlLayoutId: string
   folletoUrl: string
   informeCerosUrl?: string
   avisoUrl?: string
@@ -825,6 +829,37 @@ export interface SatXmlGenerationResult {
   formatoId: string
   outputKind: SatOutputKind
   generatedAt: string
+}
+
+export interface SatXmlValidationIssue {
+  field: string
+  message: string
+  severity: "error" | "warning"
+}
+
+export interface SatXmlNodeDefinition {
+  tag: string
+  sourceField?: string
+  required?: boolean
+  transform?: "text" | "catalog_code" | "country_code" | "date_yyyymmdd" | "money"
+  children?: SatXmlNodeDefinition[]
+}
+
+export interface SatXmlLayoutDefinition {
+  id: string
+  formatoId: string
+  activityCode: string
+  namespace: string
+  schemaLocation: string
+  rootTag: "archivo"
+  avisoNode?: SatXmlNodeDefinition
+}
+
+export interface SatXmlCanonicalComparison {
+  equivalent: boolean
+  actualCanonical: string
+  expectedCanonical: string
+  diff: string
 }
 
 export type EbrControlEffectiveness = "alta" | "media" | "baja" | "no_aplica"

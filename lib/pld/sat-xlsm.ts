@@ -1,5 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate"
 
+import { excelSerialFromDate } from "./sat-xml"
 import type {
   SatDynamicOperationForm,
   SatFilledWorkbookResult,
@@ -24,6 +25,10 @@ type ParsedWorkbook = {
 }
 
 type CellMap = Record<string, string>
+type ResolvedWorkbookCellValue = {
+  value: string
+  dataType?: SatXlsmField["dataType"]
+}
 
 const SHEET_COMBOS = "Combos"
 const XML_SOURCE = "Plantilla oficial SAT XLSM"
@@ -133,7 +138,10 @@ export function normalizeSatXlsmLayout(layout: SatXlsmLayout): SatXlsmLayout {
     fields: section.fields.filter((field) => !isAuxiliarySatXlsmField(field)),
   }))
 
-  if (!layout.templateId.includes("fraccion-v-inmuebles")) {
+  const hasManualAuthoritativeMap =
+    layout.templateId.includes("fraccion-v-inmuebles") || layout.templateId.includes("fraccion-xv-arrendamiento")
+
+  if (!hasManualAuthoritativeMap) {
     return {
       ...layout,
       sections: sectionsWithoutAuxiliaryFields,
@@ -183,8 +191,8 @@ export function fillSatXlsmTemplate(
     if (!valuesForSheet?.size) continue
     const xml = readZipText(zip, sheet.path)
     let updatedXml = xml
-    for (const [cell, value] of valuesForSheet) {
-      updatedXml = setCellInlineString(updatedXml, cell, String(value))
+    for (const [cell, cellValue] of valuesForSheet) {
+      updatedXml = setCellValue(updatedXml, cell, cellValue)
       writtenCells.push(`${sheet.name}!${cell}`)
     }
     zip[sheet.path] = strToU8(updatedXml)
@@ -198,7 +206,7 @@ export function fillSatXlsmTemplate(
           const sheetValues = cellValues.get(field.sheetName)
           const byField = normalizeString(options.values[field.id])
           const byCell = normalizeString(options.values[`${field.sheetName}!${field.cell}`])
-          return !normalizeString(sheetValues?.get(field.cell)) && !byField && !byCell
+          return !normalizeString(sheetValues?.get(field.cell)?.value) && !byField && !byCell
         })
         .map((field) => field.id)
     : []
@@ -251,7 +259,9 @@ export function buildSatWorkbookDownloadValues(input: {
     ...(input.cellValues || {}),
   }
 
-  if (!input.satTemplateId?.includes("fraccion-v-inmuebles")) return values
+  const isInmueblesTemplate = Boolean(input.satTemplateId?.includes("fraccion-v-inmuebles"))
+  const isArrendamientoTemplate = Boolean(input.satTemplateId?.includes("fraccion-xv-arrendamiento"))
+  if (!isInmueblesTemplate && !isArrendamientoTemplate) return values
 
   const setIfEmpty = (key: string, value: unknown) => {
     if (values[key] || value === undefined || value === null || value === "") return
@@ -291,10 +301,12 @@ export function buildSatWorkbookDownloadValues(input: {
   }
 
   setIfEmpty("pago.fecha", values["acto.fecha_operacion"])
-  setIfEmpty("instrumento.fecha", values["acto.fecha_operacion"])
-  setIfEmpty("instrumento.fecha_contrato", values["acto.fecha_operacion"])
+  if (isInmueblesTemplate) {
+    setIfEmpty("instrumento.fecha", values["acto.fecha_operacion"])
+    setIfEmpty("instrumento.fecha_contrato", values["acto.fecha_operacion"])
+  }
 
-  if (isDemoPackage) {
+  if (isDemoPackage && isInmueblesTemplate) {
     setIfEmpty("persona_aviso.pm.fecha_constitucion", "24/06/2019")
     setIfEmpty("persona_aviso.pm.giro_mercantil", "NO APLICA||1000000")
     setIfEmpty("persona_aviso.representante.nombre", "Ricardo")
@@ -549,6 +561,7 @@ function inferDataType(label: string): SatXlsmField["dataType"] {
 }
 
 function getManualFields(templateId: string, sheetName: string, optionLists: SatXlsmOptionList[]): SatXlsmField[] {
+  if (templateId.includes("fraccion-xv-arrendamiento")) return getArrendamientoManualFields(sheetName, optionLists)
   if (!templateId.includes("fraccion-v-inmuebles")) return []
   const optionMap = new Map(optionLists.map((list) => [list.id, list.options]))
   const field = (
@@ -895,6 +908,211 @@ function getManualFields(templateId: string, sheetName: string, optionLists: Sat
   ]
 }
 
+function getArrendamientoManualFields(sheetName: string, optionLists: SatXlsmOptionList[]): SatXlsmField[] {
+  const optionMap = new Map(optionLists.map((list) => [list.id, list.options]))
+  const field = (
+    id: string,
+    label: string,
+    cell: string,
+    dataType: SatXlsmField["dataType"],
+    optionListId?: string,
+    required = true,
+    extras: Partial<SatXlsmField> = {},
+  ): SatXlsmField => ({
+    id,
+    label,
+    sheetName,
+    cell,
+    required,
+    dataType,
+    optionListId,
+    options: optionListId ? optionMap.get(optionListId) || [] : undefined,
+    source: "manual-sat-map",
+    targetCell: `${sheetName}!${cell}`,
+    ...extras,
+  })
+
+  if (sheetName === "Persona Objeto del aviso") {
+    return [
+      field("persona_aviso.sujeto_obligado_rfc", "RFC del sujeto obligado", "C4", "texto", undefined, true, {
+        sectionKind: "alta_sat",
+      }),
+      field("persona_aviso.periodo", "Periodo reportado AAAAMM", "C5", "texto", undefined, true, {
+        sectionKind: "alta_sat",
+      }),
+      field("persona_aviso.referencia", "Referencia del aviso", "C6", "texto", undefined, true, {
+        sectionKind: "alta_sat",
+      }),
+      field("persona_aviso.prioridad", "Prioridad", "E6", "catalogo", "Prioridades", true, {
+        sectionKind: "alta_sat",
+      }),
+      field("persona_aviso.tipo_alerta", "Tipo de alerta", "C7", "catalogo", "Alertas", true, {
+        sectionKind: "alta_sat",
+      }),
+      ...buildRepeatedFields({
+        groupId: "persona_objeto_pm",
+        basePrefix: "persona_aviso.pm",
+        labelPrefix: "Persona moral o fideicomiso objeto del aviso",
+        sheetName,
+        startRow: 33,
+        count: 10,
+        sectionKind: "persona_objeto",
+        requiredFirstRow: true,
+        optionalFirstRowKeys: ["fecha_constitucion", "rfc", "denominacion_fiduciario", "rfc_fiduciario", "identificador_fideicomiso"],
+        columns: [
+          ["razon_social", "Denominación o razón social", "B", "texto"],
+          ["fecha_constitucion", "Fecha de constitución", "C", "fecha"],
+          ["rfc", "RFC", "D", "texto"],
+          ["pais_nacionalidad", "País de nacionalidad", "E", "catalogo", "Paises"],
+          ["giro_mercantil", "Giro mercantil", "F", "catalogo", "Giros"],
+          ["denominacion_fiduciario", "Denominación fiduciario", "G", "texto"],
+          ["rfc_fiduciario", "RFC fiduciario", "H", "texto"],
+          ["identificador_fideicomiso", "Identificador del fideicomiso", "I", "texto"],
+        ],
+        field,
+      }),
+      ...buildRepeatedFields({
+        groupId: "persona_objeto_representante",
+        basePrefix: "persona_aviso.representante",
+        labelPrefix: "Representante o apoderado",
+        sheetName,
+        startRow: 46,
+        count: 10,
+        sectionKind: "persona_objeto",
+        requiredFirstRow: true,
+        optionalFirstRowKeys: ["fecha_nacimiento", "rfc", "curp"],
+        columns: [
+          ["nombre", "Nombre(s)", "B", "texto"],
+          ["apellido_paterno", "Apellido paterno", "C", "texto"],
+          ["apellido_materno", "Apellido materno", "D", "texto"],
+          ["fecha_nacimiento", "Fecha de nacimiento", "E", "fecha"],
+          ["rfc", "RFC", "F", "texto"],
+          ["curp", "CURP", "G", "texto"],
+        ],
+        field,
+      }),
+      ...buildRepeatedFields({
+        groupId: "persona_objeto_domicilio_nacional",
+        basePrefix: "persona_aviso.domicilio_nacional",
+        labelPrefix: "Domicilio nacional",
+        sheetName,
+        startRow: 60,
+        count: 10,
+        sectionKind: "persona_objeto",
+        requiredFirstRow: true,
+        optionalFirstRowKeys: ["estado", "municipio", "numero_interior"],
+        columns: [
+          ["codigo_postal", "Código postal", "B", "texto"],
+          ["estado", "Estado", "C", "texto"],
+          ["municipio", "Municipio o delegación", "D", "texto"],
+          ["colonia", "Colonia", "E", "texto"],
+          ["calle", "Calle, avenida o vía", "F", "texto"],
+          ["numero_exterior", "Número exterior", "G", "texto"],
+          ["numero_interior", "Número interior", "H", "texto"],
+        ],
+        field,
+      }),
+      ...buildRepeatedFields({
+        groupId: "persona_objeto_contacto",
+        basePrefix: "persona_aviso.contacto",
+        labelPrefix: "Contacto",
+        sheetName,
+        startRow: 86,
+        count: 6,
+        sectionKind: "persona_objeto",
+        requiredFirstRow: true,
+        optionalFirstRowKeys: ["correo"],
+        columns: [
+          ["pais_telefono", "País del teléfono", "B", "catalogo", "Paises"],
+          ["telefono", "Número de teléfono", "C", "texto"],
+          ["correo", "Correo electrónico", "D", "texto"],
+        ],
+        field,
+      }),
+    ]
+  }
+
+  if (sheetName === "Beneficiario controlador") {
+    return [
+      ...buildRepeatedFields({
+        groupId: "beneficiario_controlador_pf",
+        basePrefix: "beneficiario.pf",
+        labelPrefix: "Beneficiario controlador persona física",
+        sheetName,
+        startRow: 5,
+        count: 10,
+        sectionKind: "beneficiario_controlador",
+        requiredFirstRow: false,
+        columns: [
+          ["nombre", "Nombre(s)", "B", "texto"],
+          ["apellido_paterno", "Apellido paterno", "C", "texto"],
+          ["apellido_materno", "Apellido materno", "D", "texto"],
+          ["fecha_nacimiento", "Fecha de nacimiento", "E", "fecha"],
+          ["rfc", "RFC", "F", "texto"],
+          ["curp", "CURP", "G", "texto"],
+          ["pais_nacionalidad", "País de nacionalidad", "H", "catalogo", "Paises"],
+        ],
+        field,
+      }),
+    ]
+  }
+
+  if (sheetName !== "Acto u operación") return []
+
+  return [
+    field("acto.fecha_operacion", "Fecha de operación", "C4", "fecha", undefined, true, {
+      sectionKind: "acto_operacion",
+    }),
+    field("acto.tipo_operacion", "Tipo de operación", "C5", "catalogo", "TipoOperacion", true, {
+      sectionKind: "acto_operacion",
+    }),
+    ...buildRepeatedFields({
+      groupId: "inmuebles",
+      basePrefix: "inmueble",
+      labelPrefix: "Inmueble arrendado",
+      sheetName,
+      startRow: 12,
+      count: 10,
+      sectionKind: "acto_operacion",
+      requiredFirstRow: true,
+      optionalFirstRowKeys: ["estado", "municipio", "numero_interior"],
+      columns: [
+        ["tipo_bien", "Tipo de inmueble", "B", "catalogo", "TipoInmueble"],
+        ["valor_referencia", "Valor de referencia", "C", "moneda"],
+        ["codigo_postal", "Código postal", "D", "texto"],
+        ["estado", "Estado", "E", "texto"],
+        ["municipio", "Municipio o delegación", "F", "texto"],
+        ["colonia", "Colonia", "G", "texto"],
+        ["calle", "Calle, avenida o vía", "H", "texto"],
+        ["numero_exterior", "Número exterior", "I", "texto"],
+        ["numero_interior", "Número interior", "J", "texto"],
+        ["folio_real", "Folio real o antecedentes registrales", "K", "texto"],
+        ["fecha_inicio", "Fecha de inicio", "L", "fecha"],
+        ["fecha_termino", "Fecha de término", "M", "fecha"],
+      ],
+      field,
+    }),
+    ...buildRepeatedFields({
+      groupId: "pagos",
+      basePrefix: "pago",
+      labelPrefix: "Liquidación",
+      sheetName,
+      startRow: 27,
+      count: 25,
+      sectionKind: "liquidacion",
+      requiredFirstRow: true,
+      columns: [
+        ["fecha", "Fecha de pago", "B", "fecha"],
+        ["forma_pago", "Forma de pago", "C", "catalogo", "FormasPago"],
+        ["instrumento_monetario", "Instrumento monetario", "D", "catalogo", "InstrumentoMonetario"],
+        ["moneda", "Moneda o divisa", "E", "catalogo", "Monedas"],
+        ["monto", "Monto de operación", "F", "moneda"],
+      ],
+      field,
+    }),
+  ]
+}
+
 function buildRepeatedFields(input: {
   groupId: string
   basePrefix: string
@@ -956,8 +1174,8 @@ function fieldPriority(field: SatXlsmField) {
 function resolveWorkbookCellValues(
   values: Record<string, string | number | boolean | null | undefined>,
   layout?: SatXlsmLayout,
-): Map<string, Map<string, string>> {
-  const result = new Map<string, Map<string, string>>()
+): Map<string, Map<string, ResolvedWorkbookCellValue>> {
+  const result = new Map<string, Map<string, ResolvedWorkbookCellValue>>()
   const fieldMap = new Map<string, SatXlsmField>()
   layout?.sections.flatMap((section) => section.fields).forEach((field) => fieldMap.set(field.id, field))
 
@@ -965,19 +1183,64 @@ function resolveWorkbookCellValues(
     if (rawValue === undefined || rawValue === null || rawValue === "") continue
     let sheetName = ""
     let cell = ""
+    let field: SatXlsmField | undefined
     if (key.includes("!")) {
       ;[sheetName, cell] = key.split("!")
     } else {
-      const field = fieldMap.get(key)
+      field = fieldMap.get(key)
       if (!field) continue
       sheetName = field.sheetName
       cell = field.cell
     }
     if (!sheetName || !cell) continue
     if (!result.has(sheetName)) result.set(sheetName, new Map())
-    result.get(sheetName)?.set(cell.toUpperCase(), String(rawValue))
+    result.get(sheetName)?.set(cell.toUpperCase(), {
+      value: String(rawValue),
+      dataType: field?.dataType,
+    })
   }
   return result
+}
+
+function setCellValue(xml: string, cellRef: string, cellValue: ResolvedWorkbookCellValue): string {
+  const numericValue = normalizeTypedNumber(cellValue)
+  if (numericValue !== null) return setCellNumber(xml, cellRef, numericValue)
+  return setCellInlineString(xml, cellRef, cellValue.value)
+}
+
+function normalizeTypedNumber(cellValue: ResolvedWorkbookCellValue): string | null {
+  if (cellValue.dataType === "fecha") {
+    const serial = excelSerialFromDate(cellValue.value)
+    return serial === null ? null : String(serial)
+  }
+  if (cellValue.dataType === "moneda" || cellValue.dataType === "numero") {
+    const numeric = Number(cellValue.value.replace(/,/g, ""))
+    return Number.isFinite(numeric) ? String(numeric) : null
+  }
+  return null
+}
+
+function setCellNumber(xml: string, cellRef: string, value: string): string {
+  const rowNumber = Number(cellRef.match(/\d+/)?.[0])
+  const cellRegex = new RegExp(`<c\\b([^>]*\\br="${cellRef}"[^>]*)>([\\s\\S]*?)<\\/c>|<c\\b([^>]*\\br="${cellRef}"[^>]*)\\/>`)
+  const existing = xml.match(cellRegex)
+  if (existing) {
+    const attrs = existing[1] || existing[3] || ""
+    const style = getAttr(attrs, "s")
+    const styleAttr = style ? ` s="${style}"` : ""
+    return xml.replace(cellRegex, `<c r="${cellRef}"${styleAttr}><v>${escapeXml(value)}</v></c>`)
+  }
+
+  const cellXml = `<c r="${cellRef}"><v>${escapeXml(value)}</v></c>`
+  const rowRegex = new RegExp(`(<row\\b[^>]*\\br="${rowNumber}"[^>]*>)([\\s\\S]*?)(<\\/row>)`)
+  if (rowRegex.test(xml)) {
+    return xml.replace(rowRegex, (_match, start, body, end) => {
+      const inserted = insertCellSorted(body, cellRef, cellXml)
+      return `${start}${inserted}${end}`
+    })
+  }
+
+  return xml.replace("</sheetData>", `<row r="${rowNumber}">${cellXml}</row></sheetData>`)
 }
 
 function setCellInlineString(xml: string, cellRef: string, value: string): string {
