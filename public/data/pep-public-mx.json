@@ -3,7 +3,7 @@
   "sourceLabel": "PEP México - fuentes públicas verificadas",
   "sourceUrl": "local-public-snapshot",
   "syncedAt": "2026-05-11T00:00:00.000Z",
-  "count": 16,
+  "count": 18,
   "license": "Compilación local de datos públicos para apoyo PLD; verificar fuente oficial antes de decisión definitiva.",
   "entities": [
     {
@@ -174,6 +174,46 @@
       "dataset": "pep-public-mx-curated",
       "lastSeen": "2026-05-11",
       "topics": ["role.pep", "mx.public-official"]
+    },
+    {
+      "id": "public-mx-carlos-salinas-de-gortari-expresidente",
+      "name": "Carlos Salinas de Gortari",
+      "aliases": ["Carlos Salinas", "Salinas de Gortari"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Expresidente de los Estados Unidos Mexicanos",
+          "dependencia": "Presidencia de la República",
+          "desde": "1988-12-01",
+          "hasta": "1994-11-30"
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "INEHRM/Gobierno de México",
+      "sourceUrl": "https://www.inehrm.gob.mx/es/Constitucion1917/337",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-14",
+      "topics": ["role.pep", "mx.former-president"]
+    },
+    {
+      "id": "public-mx-ernesto-zedillo-ponce-de-leon-expresidente",
+      "name": "Ernesto Zedillo Ponce de León",
+      "aliases": ["Ernesto Zedillo Ponce de Leon", "Ernesto Zedillo"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Expresidente de los Estados Unidos Mexicanos",
+          "dependencia": "Presidencia de la República",
+          "desde": "1994-12-01",
+          "hasta": "2000-11-30"
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "INEHRM/Gobierno de México",
+      "sourceUrl": "https://www.inehrm.gob.mx/es/Constitucion1917/337",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-14",
+      "topics": ["role.pep", "mx.former-president"]
     },
     {
       "id": "public-mx-vicente-fox-quesada-expresidente",
