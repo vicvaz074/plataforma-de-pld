@@ -102,7 +102,7 @@ export const SAT_FORMATOS_ACTIVIDADES: SatFormatoManifestItem[] = [
     id: "sat-fraccion-ii-instrumentos-valor",
     fraccion: "Fracción II",
     anexo: "Anexo 2-C",
-    actividadKeys: ["fraccion-ii-instrumentos-valor"],
+    actividadKeys: ["fraccion-ii-instrumentos-valor", "fraccion-ii-vales"],
     nombre: "Instrumentos de almacenamiento de valor monetario",
     claveActividad: "TAV",
     layoutXmlTag: "tarjetas_valor_monetario",
