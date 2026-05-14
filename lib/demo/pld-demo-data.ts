@@ -795,6 +795,33 @@ function buildSatOutputPackages(referenceDate: Date) {
     satWorkbookStatus: "listo",
     actor: DEMO_SUBJECT.oficial,
   })
+  const f4594SatFieldValues = buildF4594SatFieldValues()
+  const f4594Tenant = {
+    ...tenant,
+    id: "tenant-demo-f4594",
+    rfc: "FSC220908AC2",
+    razonSocial: "F4594 Sujeto Obligado Demo",
+  }
+  const avisoF4594 = buildPldOperationalCase({
+    tenant: f4594Tenant,
+    periodo: "202505",
+    actividadKey: "fraccion-xv-uso-goce",
+    clienteId: "cliente-LME161125GY9",
+    clienteNombre: "LOGISALL MEXICO S DE RL DE CV",
+    clienteRfc: "LME161125GY9",
+    tipoCliente: "pm_mexicana",
+    fechaOperacion: "2025-05-26",
+    montoMxn: 148_092.99,
+    formaPago: "1,Contado",
+    completedEvidence,
+    satTemplateId: "sat-fraccion-xv-arrendamiento",
+    satTemplateFile: "Arrendamiento_v4_5.xlsm",
+    satTemplateVariant: "sat-fraccion-xv-arrendamiento",
+    satFieldValues: f4594SatFieldValues,
+    satMissingRequiredFields: [],
+    satWorkbookStatus: "listo",
+    actor: DEMO_SUBJECT.oficial,
+  })
   const informeCeros = {
     ...buildPldOperationalCase({
       tenant,
@@ -853,7 +880,7 @@ function buildSatOutputPackages(referenceDate: Date) {
     actor: DEMO_SUBJECT.oficial,
   })
 
-  return [avisoNormal, informeCeros, informe27Bis, aviso24h].map(generateSatOutputPackage)
+  return [avisoNormal, avisoF4594, informeCeros, informe27Bis, aviso24h].map(generateSatOutputPackage)
 }
 
 function buildInmueblesSatFieldValues() {
@@ -914,6 +941,49 @@ function buildInmueblesSatFieldValues() {
     "pago.instrumento_monetario": "8,Transferencia Interbancaria",
     "pago.moneda": "1,Peso mexicano",
     "pago.monto": "1850000",
+  }
+}
+
+function buildF4594SatFieldValues() {
+  return {
+    "persona_aviso.sujeto_obligado_rfc": "FSC220908AC2",
+    "persona_aviso.periodo": "202505",
+    "persona_aviso.referencia": "AV202505",
+    "persona_aviso.prioridad": "1,NORMAL",
+    "persona_aviso.tipo_alerta": "100,Sin alerta.",
+    "persona_aviso.pm.razon_social": "LOGISALL MEXICO S DE RL DE CV",
+    "persona_aviso.pm.fecha_constitucion": "25/11/2016",
+    "persona_aviso.pm.rfc": "LME161125GY9",
+    "persona_aviso.pm.pais_nacionalidad": "MEXICO,MX",
+    "persona_aviso.pm.giro_mercantil": "INDUSTRIA - PLASTICO Y DEL HULE||3260005",
+    "persona_aviso.representante.nombre": "LEE",
+    "persona_aviso.representante.apellido_paterno": "CHUNWOO",
+    "persona_aviso.representante.apellido_materno": "N",
+    "persona_aviso.representante.fecha_nacimiento": "23/09/1977",
+    "persona_aviso.representante.curp": "LEXC770923HNEXXH07",
+    "persona_aviso.domicilio_nacional.codigo_postal": "66650",
+    "persona_aviso.domicilio_nacional.colonia": "PESQUERIA",
+    "persona_aviso.domicilio_nacional.calle": "ARMONIA",
+    "persona_aviso.domicilio_nacional.numero_exterior": "104",
+    "persona_aviso.contacto.pais_telefono": "MEXICO,MX",
+    "persona_aviso.contacto.telefono": "66926318336",
+    "persona_aviso.contacto.correo": "SANTANA@LOGISALL.COM",
+    "acto.fecha_operacion": "26/05/2025",
+    "acto.tipo_operacion": "1501,Arrendamiento de inmuebles",
+    "inmueble.tipo_bien": "11,Nave Industrial",
+    "inmueble.valor_referencia": "58569267",
+    "inmueble.codigo_postal": "66679",
+    "inmueble.colonia": "LA ARENA",
+    "inmueble.calle": "CARRETERA PESQUERIA-LOS RAMONES",
+    "inmueble.numero_exterior": "KM 11",
+    "inmueble.folio_real": "06019003",
+    "inmueble.fecha_inicio": "01/05/2025",
+    "inmueble.fecha_termino": "31/05/2025",
+    "pago.fecha": "26/05/2025",
+    "pago.forma_pago": "1,Contado",
+    "pago.instrumento_monetario": "8,Transferencia Interbancaria",
+    "pago.moneda": "2,Dólar estadounidense",
+    "pago.monto": "148092.99",
   }
 }
 

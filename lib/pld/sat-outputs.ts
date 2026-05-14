@@ -1,4 +1,5 @@
 import { resolveSatFormatoForActividad } from "./sat-formatos"
+import { buildOfficialSatXml } from "./sat-xml"
 import { resolveSatTemplateForActividad } from "./sat-template-catalog"
 import type {
   PldOperationalCase,
@@ -87,21 +88,23 @@ export function generateSatOutputPackage(operationalCase: PldOperationalCase): S
     operationalCase.actividadKey,
     operationalCase.satTemplateVariant || operationalCase.satTemplateId,
   )
-  const layout = getSatLayoutForActividad(operationalCase.actividadKey)
   const outputKind = operationalCase.satOutputStatus.kind
   const generatedAt = new Date().toISOString()
   const validation = validateSatOutput(operationalCase, outputKind)
   const prefix = outputKind === "informe_ceros" || outputKind === "informe_27_bis" ? "informe" : "aviso"
   const clienteRfc = sanitizeFilePart(operationalCase.clienteRfc || operationalCase.clienteId || "SINRFC")
   const fractionSlug = slugFraction(formato.fraccion)
-  const xmlFileName = `${prefix}-${fractionSlug}-${operationalCase.periodo || "SINPERIODO"}-${clienteRfc}.xml`
+  const referenciaRaw = operationalCase.satFieldValues?.["persona_aviso.referencia"]?.trim() || ""
+  const referenciaAviso = referenciaRaw ? sanitizeFilePart(referenciaRaw) : ""
+  const xmlFileName = `${prefix}-${fractionSlug}-${operationalCase.periodo || "SINPERIODO"}-${
+    referenciaAviso || clienteRfc
+  }.xml`
   const fichaFileName = `ficha-captura-${fractionSlug}-${operationalCase.periodo || "SINPERIODO"}-${clienteRfc}.csv`
   const workbookFileName = `${prefix}-${fractionSlug}-${operationalCase.periodo || "SINPERIODO"}-${clienteRfc}.xlsm`
-  const xml = buildSatXml({
+  const xml = buildOfficialSatXml({
     operationalCase,
     outputKind,
     validation,
-    layout,
     generatedAt,
   })
   const ficha = buildCaptureSheet(operationalCase, outputKind, validation)
@@ -256,83 +259,6 @@ function validateSatOutput(operationalCase: PldOperationalCase, outputKind: SatO
     errors,
     warnings,
   }
-}
-
-function buildSatXml(input: {
-  operationalCase: PldOperationalCase
-  outputKind: SatOutputKind
-  validation: SatOutputValidation
-  layout: SatLayoutDefinition
-  generatedAt: string
-}) {
-  const { operationalCase, outputKind, validation, layout, generatedAt } = input
-  const formato = resolveSatFormatoForActividad(operationalCase.actividadKey)
-  const isBlocked = validation.status === "borrador_bloqueado"
-  const isInformeCeros = outputKind === "informe_ceros"
-  const isInforme27Bis = outputKind === "informe_27_bis"
-  const isAviso = outputKind === "aviso_normal" || outputKind === "aviso_24h"
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<archivo xmlns="http://www.uif.shcp.gob.mx/recepcion/actividades-vulnerables" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <informe>
-    <mes_reportado>${escapeXml(operationalCase.periodo)}</mes_reportado>
-    <tipo_salida>${escapeXml(outputKind)}</tipo_salida>
-    <borrador_no_cargable>${isBlocked ? "SI" : "NO"}</borrador_no_cargable>
-    <formato_sat>
-      <id>${escapeXml(formato.id)}</id>
-      <anexo>${escapeXml(formato.anexo)}</anexo>
-      <fraccion>${escapeXml(formato.fraccion)}</fraccion>
-      <clave_actividad>${escapeXml(formato.claveActividad)}</clave_actividad>
-      <plantilla>${escapeXml(formato.officialXlsmName)}</plantilla>
-      <fuente>${escapeXml(formato.satPageUrl)}</fuente>
-      <verificado_en>${escapeXml(formato.sourceLastVerified)}</verificado_en>
-    </formato_sat>
-    <sujeto_obligado>
-      <rfc>${escapeXml(operationalCase.tenantRfc)}</rfc>
-      <razon_social>${escapeXml(operationalCase.tenantName)}</razon_social>
-    </sujeto_obligado>
-    <salida_sat>
-      <sin_operaciones>${isInformeCeros ? "1" : "0"}</sin_operaciones>
-      <exento>${isInforme27Bis ? "1" : "0"}</exento>
-      <aviso>${isAviso ? "1" : "0"}</aviso>
-      <fecha_limite>${escapeXml(operationalCase.satOutputStatus.fechaLimite || "")}</fecha_limite>
-    </salida_sat>
-    <aviso>
-      <referencia_aviso>${escapeXml(operationalCase.id)}</referencia_aviso>
-      <prioridad>${outputKind === "aviso_24h" ? "2" : "1"}</prioridad>
-      <alerta>
-        <tipo_alerta>${escapeXml(operationalCase.alertaCodigo || (outputKind === "aviso_24h" ? "9999" : "100"))}</tipo_alerta>
-        <descripcion_alerta>${escapeXml(operationalCase.alertaDescripcion || operationalCase.suspicionNarrative || "Sin alerta.")}</descripcion_alerta>
-      </alerta>
-      <persona_aviso>
-        <nombre_razon_social>${escapeXml(operationalCase.clienteNombre)}</nombre_razon_social>
-        ${operationalCase.clienteRfc ? `<rfc>${escapeXml(operationalCase.clienteRfc)}</rfc>` : ""}
-        <tipo_cliente>${escapeXml(operationalCase.tipoCliente)}</tipo_cliente>
-      </persona_aviso>
-      <detalle_operaciones>
-        <${layout.activityXmlTag}>
-          <actividad>${escapeXml(operationalCase.actividadKey)}</actividad>
-          <fecha_operacion>${escapeXml(operationalCase.fechaOperacion)}</fecha_operacion>
-          <forma_pago>${escapeXml(operationalCase.formaPago)}</forma_pago>
-          <monto_operacion>${formatMoney(operationalCase.montoMxn)}</monto_operacion>
-        </${layout.activityXmlTag}>
-      </detalle_operaciones>
-      <evidencia>
-        <puede_cerrar>${operationalCase.evidenceStatus.canClose ? "SI" : "NO"}</puede_cerrar>
-        <faltantes_criticos>${operationalCase.evidenceStatus.missingCritical.length}</faltantes_criticos>
-      </evidencia>
-    </aviso>
-  </informe>
-  <validacion>
-    <estatus>${escapeXml(validation.status)}</estatus>
-    <faltantes>${escapeXml(validation.missingFields.join("|"))}</faltantes>
-    <advertencias>${escapeXml(validation.warnings.join("|"))}</advertencias>
-  </validacion>
-  <trazabilidad>
-    <generado_en>${escapeXml(generatedAt)}</generado_en>
-    <version_xml>sat-layout-oficial-v1</version_xml>
-  </trazabilidad>
-</archivo>`
 }
 
 function buildCaptureSheet(

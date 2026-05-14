@@ -120,11 +120,11 @@ const VERDICT_COPY: Record<PepWhoIsStatus, { title: string; message: string; cla
 
 const SAMPLE_NAMES = [
   "Marcelo Ebrard Casaubón",
+  "Mariana Imaz Sheinbaum",
+  "Vicente Fox Quesada",
+  "Felipe Calderón Hinojosa",
   "Alberto Mendoza Díaz",
   "Claudia Sheinbaum Pardo",
-  "Juan Ramón de la Fuente",
-  "Omar García Harfuch",
-  "Jorge Mendoza Sánchez",
 ]
 
 const EMPTY_QUERY: PepSearchQuery = {
@@ -269,7 +269,7 @@ export default function PepWhoIsPage() {
             </div>
             <div>
               <h1 className="text-3xl font-semibold tracking-normal">WhoIs PEP</h1>
-              <p className="text-sm text-muted-foreground">Escribe un nombre y la plataforma dirá si aparece como PEP en las fuentes locales cargadas.</p>
+              <p className="text-sm text-muted-foreground">Escribe un nombre y la plataforma revisará PEP nominales, posibles familiares/asociados y fuentes locales cargadas.</p>
             </div>
           </div>
         </div>
@@ -299,7 +299,7 @@ export default function PepWhoIsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-xl">Buscar persona</CardTitle>
-              <CardDescription>La búsqueda ignora acentos y compara nombre, alias y decisiones internas.</CardDescription>
+              <CardDescription>La búsqueda ignora acentos y compara nombre, alias, apellidos poco comunes y decisiones internas.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 lg:grid-cols-[1fr_180px]">

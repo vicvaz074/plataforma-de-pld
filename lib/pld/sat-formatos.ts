@@ -10,9 +10,25 @@ function url(path: string) {
   return `${SAT_FORMATOS_BASE}/${path}`
 }
 
-function formato(input: Omit<SatFormatoManifestItem, "satPageUrl" | "sourceLastVerified">): SatFormatoManifestItem {
+function formato(
+  input: Omit<
+    SatFormatoManifestItem,
+    "satPageUrl" | "sourceLastVerified" | "xmlActivityCode" | "xmlNamespace" | "xmlSchemaLocation" | "xmlLayoutId"
+  > & {
+    xmlActivityCode?: string
+    xmlNamespace?: string
+    xmlSchemaLocation?: string
+    xmlLayoutId?: string
+  },
+): SatFormatoManifestItem {
+  const xmlActivityCode = input.xmlActivityCode || input.claveActividad
+  const xmlNamespace = input.xmlNamespace || `http://www.uif.shcp.gob.mx/recepcion/${xmlActivityCode.toLowerCase()}`
   return {
     ...input,
+    xmlActivityCode,
+    xmlNamespace,
+    xmlSchemaLocation: input.xmlSchemaLocation || `${xmlNamespace} ${xmlActivityCode.toLowerCase()}.xsd`,
+    xmlLayoutId: input.xmlLayoutId || input.id,
     satPageUrl: SAT_PAGE,
     sourceLastVerified: VERIFIED_AT,
   }
@@ -405,7 +421,11 @@ export const SAT_FORMATOS_ACTIVIDADES: SatFormatoManifestItem[] = [
     anexo: "Anexo 15",
     actividadKeys: ["fraccion-xv-uso-goce"],
     nombre: "Derechos personales de uso o goce de bienes inmuebles",
-    claveActividad: "ARR",
+    claveActividad: "ARI",
+    xmlActivityCode: "ARI",
+    xmlNamespace: "http://www.uif.shcp.gob.mx/recepcion/ari",
+    xmlSchemaLocation: "http://www.uif.shcp.gob.mx/recepcion/ari ari.xsd",
+    xmlLayoutId: "sat-xml-arrendamiento-v4-5",
     layoutXmlTag: "arrendamiento",
     folletoUrl: url("Fraccion_XV/folleto.pdf"),
     informeCerosUrl: url("Fraccion_XV/informeenceros.zip"),

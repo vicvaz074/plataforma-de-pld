@@ -20,6 +20,52 @@ export const PEP_INTERNAL_STORAGE_KEY = "pld-pep-internal-records"
 export const PEP_SEARCH_HISTORY_STORAGE_KEY = "pld-pep-search-history"
 export const PEP_OPENSANCTIONS_SOURCE_URL = "https://www.opensanctions.org/"
 
+const COMMON_MX_SURNAME_TOKENS = new Set([
+  "AGUILAR",
+  "ALVAREZ",
+  "BAUTISTA",
+  "CASTILLO",
+  "CHAVEZ",
+  "CRUZ",
+  "DIAZ",
+  "DOMINGUEZ",
+  "FLORES",
+  "GARCIA",
+  "GOMEZ",
+  "GONZALEZ",
+  "GUTIERREZ",
+  "HERNANDEZ",
+  "HERRERA",
+  "JIMENEZ",
+  "LOPEZ",
+  "MARTINEZ",
+  "MENDOZA",
+  "MORALES",
+  "MORENO",
+  "MUÑOZ",
+  "MUNOZ",
+  "NAVARRO",
+  "ORTEGA",
+  "ORTIZ",
+  "PEREZ",
+  "RAMIREZ",
+  "RAMOS",
+  "REYES",
+  "RIVERA",
+  "RODRIGUEZ",
+  "ROJAS",
+  "ROMERO",
+  "RUIZ",
+  "SANCHEZ",
+  "SILVA",
+  "TORRES",
+  "VARGAS",
+  "VAZQUEZ",
+  "VELAZQUEZ",
+])
+
+const FAMILY_MATCH_FIELD = "apellido/familiar posible"
+
 export const pepCargoFixtures: PepCargo[] = [
   {
     tipoAdministracionPublica: "CENTRAL",
@@ -181,6 +227,7 @@ function tokenizeName(value?: string): string[] {
 function scorePepEntity(entity: PepEntity, query: PepSearchQuery): PepSearchResult | null {
   const matchedFields: string[] = []
   const nameScore = scoreName(query.nombre, [entity.name, ...(entity.aliases ?? [])], matchedFields)
+  const familyNameScore = scoreFamilyName(query.nombre, [entity.name, ...(entity.aliases ?? [])], matchedFields)
   const cargoScore = scorePositions(query.cargo, entity.positions, "cargo", matchedFields)
   const dependencyScore = scorePositions(query.dependencia, entity.positions, "dependencia", matchedFields)
   const birthDateScore = query.fechaNacimiento && entity.birthDate === query.fechaNacimiento ? 12 : 0
@@ -189,12 +236,13 @@ function scorePepEntity(entity: PepEntity, query: PepSearchQuery): PepSearchResu
   if (birthDateScore > 0) matchedFields.push("fechaNacimiento")
   if (countryScore > 0) matchedFields.push("pais")
 
-  const baseScore = Math.max(nameScore, cargoScore)
+  const baseScore = Math.max(nameScore, familyNameScore, cargoScore)
   const score = Math.min(100, Math.round(baseScore + dependencyScore + birthDateScore + countryScore))
 
   if (score < 55) return null
 
   const status = score >= 90 ? "coincidencia_alta" : "posible_coincidencia"
+  const familyOnlyMatch = familyNameScore >= 55 && familyNameScore >= nameScore && cargoScore === 0
   return {
     status,
     score,
@@ -205,6 +253,8 @@ function scorePepEntity(entity: PepEntity, query: PepSearchQuery): PepSearchResu
     note:
       status === "coincidencia_alta"
         ? "Coincidencia alta contra fuente nominal pública. Requiere revisión humana y evidencia antes de confirmarla."
+        : familyOnlyMatch
+          ? "Coincidencia por apellido poco común con una PEP nominal. Puede tratarse de familiar, asociado u homónimo; requiere revisión humana y evidencia."
         : "Coincidencia parcial contra fuente nominal pública. Documentar criterio de descarte o confirmación.",
   }
 }
@@ -233,6 +283,35 @@ function scoreName(queryName: string | undefined, candidates: string[], matchedF
   }
 
   return bestScore
+}
+
+function scoreFamilyName(queryName: string | undefined, candidates: string[], matchedFields: string[]): number {
+  const querySurnameTokens = surnameTokensForFamilyMatch(queryName)
+  if (querySurnameTokens.length === 0) return 0
+
+  let bestScore = 0
+  for (const candidate of candidates) {
+    const candidateSurnameTokens = surnameTokensForFamilyMatch(candidate)
+    if (candidateSurnameTokens.length === 0) continue
+
+    const matchedTokens = querySurnameTokens.filter((token) => candidateSurnameTokens.includes(token))
+    if (matchedTokens.length === 0) continue
+
+    bestScore = Math.max(bestScore, matchedTokens.length >= 2 ? 82 : 68)
+  }
+
+  if (bestScore >= 55) matchedFields.push(FAMILY_MATCH_FIELD)
+  return bestScore
+}
+
+function surnameTokensForFamilyMatch(value?: string): string[] {
+  const tokens = tokenizeName(value)
+  if (tokens.length < 3) return []
+
+  return tokens
+    .slice(-2)
+    .filter((token) => token.length >= 5)
+    .filter((token) => !COMMON_MX_SURNAME_TOKENS.has(token))
 }
 
 function scorePositions(
@@ -356,6 +435,9 @@ function buildPepRecommendation(results: PepSearchResult[], appliedDecisions: Pe
     return "Revisar relación, evidencia interna y autorización de cumplimiento antes de continuar."
   }
   if (results.some((result) => result.status === "posible_coincidencia")) {
+    if (results.some((result) => result.matchedFields.includes(FAMILY_MATCH_FIELD))) {
+      return "Tratar como posible familiar o asociado de PEP: solicitar declaración, documentar parentesco o descarte y elevar a revisión de cumplimiento."
+    }
     return "Documentar descarte o confirmación de la coincidencia parcial con evidencia suficiente."
   }
   if (appliedDecisions.some((decision) => decision.decision === "falso_positivo")) {

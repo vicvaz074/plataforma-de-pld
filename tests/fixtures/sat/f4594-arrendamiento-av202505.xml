@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<archivo xsi:schemaLocation="http://www.uif.shcp.gob.mx/recepcion/ari ari.xsd" xmlns="http://www.uif.shcp.gob.mx/recepcion/ari" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<informe>
+<mes_reportado>202505</mes_reportado>
+<sujeto_obligado>
+<clave_sujeto_obligado>FSC220908AC2</clave_sujeto_obligado>
+<clave_actividad>ARI</clave_actividad>
+</sujeto_obligado>
+<aviso>
+<referencia_aviso>AV202505</referencia_aviso>
+<prioridad>1</prioridad>
+<alerta>
+<tipo_alerta>100</tipo_alerta>
+</alerta>
+<persona_aviso>
+<tipo_persona>
+<persona_moral>
+<denominacion_razon>LOGISALL MEXICO S DE RL DE CV</denominacion_razon>
+<fecha_constitucion>20161125</fecha_constitucion>
+<rfc>LME161125GY9</rfc>
+<pais_nacionalidad>MX</pais_nacionalidad>
+<giro_mercantil>3260005</giro_mercantil>
+<representante_apoderado>
+<nombre>LEE</nombre>
+<apellido_paterno>CHUNWOO</apellido_paterno>
+<apellido_materno>N</apellido_materno>
+<fecha_nacimiento>19770923</fecha_nacimiento>
+<curp>LEXC770923HNEXXH07</curp>
+</representante_apoderado>
+</persona_moral>
+</tipo_persona>
+<tipo_domicilio>
+<nacional>
+<colonia>PESQUERIA</colonia>
+<calle>ARMONIA</calle>
+<numero_exterior>104</numero_exterior>
+<codigo_postal>66650</codigo_postal>
+</nacional>
+</tipo_domicilio>
+<telefono>
+<clave_pais>MX</clave_pais>
+<numero_telefono>66926318336</numero_telefono>
+<correo_electronico>SANTANA@LOGISALL.COM</correo_electronico>
+</telefono>
+</persona_aviso>
+<detalle_operaciones>
+<datos_operacion>
+<fecha_operacion>20250526</fecha_operacion>
+<tipo_operacion>1501</tipo_operacion>
+<caracteristicas>
+<fecha_inicio>20250501</fecha_inicio>
+<fecha_termino>20250531</fecha_termino>
+<tipo_inmueble>11</tipo_inmueble>
+<valor_referencia>58569267.00</valor_referencia>
+<colonia>LA ARENA</colonia>
+<calle>CARRETERA PESQUERIA-LOS RAMONES</calle>
+<numero_exterior>KM 11</numero_exterior>
+<codigo_postal>66679</codigo_postal>
+<folio_real>06019003</folio_real>
+</caracteristicas>
+<datos_liquidacion>
+<fecha_pago>20250526</fecha_pago>
+<forma_pago>1</forma_pago>
+<instrumento_monetario>8</instrumento_monetario>
+<moneda>2</moneda>
+<monto_operacion>148092.99</monto_operacion>
+</datos_liquidacion>
+</datos_operacion>
+</detalle_operaciones>
+</aviso>
+</informe>
+</archivo>
