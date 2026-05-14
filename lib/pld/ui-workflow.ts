@@ -4,6 +4,7 @@ import type {
   OperationalMonitoringStatus,
   OperationalMonitoringView,
   RegulatorySourceDisplay,
+  SatXlsmField,
   SatOutputKind,
   SatOutputOverride,
   SatOutputOverrideRequest,
@@ -41,6 +42,225 @@ export interface SatPackageActionView {
   enabled: boolean
   emphasis: "primary" | "secondary" | "quiet"
   reason?: string
+}
+
+export interface SatQuestionnaireFieldView {
+  visibleFieldIds: string[]
+  autoFilledFieldIds: string[]
+  optionalHiddenFieldIds: string[]
+  visibleRequiredMissingCount: number
+  autoFilledCount: number
+  optionalHiddenCount: number
+}
+
+export interface SatQuestionnaireDedupedFieldView {
+  fields: SatXlsmField[]
+  values: Record<string, string>
+  missingRequiredIds: string[]
+  duplicateFieldIdsByRepresentative: Record<string, string[]>
+  duplicateHiddenCount: number
+}
+
+export const FIXED_SAT_TIPO_OPERACION_BY_TEMPLATE: Record<string, string> = {
+  "sat-fraccion-v-inmuebles": "501,Compra Venta de Inmuebles",
+  "sat-fraccion-v-bis-desarrollo": "1601,Aportación a Desarrollo(s) Inmobiliario(s)",
+  "sat-fraccion-ix-blindaje": "901,Servicios de blindaje",
+}
+
+export function getFixedSatTipoOperacion(templateId: string | undefined): string | undefined {
+  if (!templateId) return undefined
+  return FIXED_SAT_TIPO_OPERACION_BY_TEMPLATE[templateId]
+}
+
+export function chooseSatTipoOperacionField(fields: SatXlsmField[]): SatXlsmField | undefined {
+  const candidates = fields.filter((field) => {
+    const text = normalizeSatFieldText(`${field.id} ${field.label} ${field.optionListId ?? ""}`)
+    return (
+      field.id === "acto.tipo_operacion" ||
+      /(^|-)tipo-(de-)?operacion($|-)/.test(text) ||
+      /(^|-)tipoope($|-)|(^|-)tipooperacion($|-)/.test(text)
+    )
+  })
+
+  return candidates.sort(compareTipoOperacionField)[0]
+}
+
+export function buildSatQuestionnaireFieldView(input: {
+  fields: SatXlsmField[]
+  values: Record<string, string>
+  initialValues?: Record<string, string>
+  missingRequiredIds: string[]
+  showResolvedFields?: boolean
+  showOptionalFields?: boolean
+  editedFieldIds?: string[]
+}): SatQuestionnaireFieldView {
+  const missingSet = new Set(input.missingRequiredIds)
+  const editedSet = new Set(input.editedFieldIds ?? [])
+  const visibleFieldIds: string[] = []
+  const autoFilledFieldIds: string[] = []
+  const optionalHiddenFieldIds: string[] = []
+
+  for (const field of input.fields) {
+    const value = (input.values[field.id] ?? "").trim()
+    const initialValue = (input.initialValues?.[field.id] ?? "").trim()
+    const isMissing = missingSet.has(field.id)
+    const isResolved = Boolean(value) && !isMissing
+    const isEditedByUser = editedSet.has(field.id)
+    const isAutoFilled = isResolved && !isEditedByUser && Boolean(initialValue) && value === initialValue
+    const isEmptyOptional = !field.required && !value
+
+    if (isAutoFilled) autoFilledFieldIds.push(field.id)
+    if (isEmptyOptional) optionalHiddenFieldIds.push(field.id)
+
+    if (
+      isMissing ||
+      (isEmptyOptional && input.showOptionalFields) ||
+      (isResolved && (input.showResolvedFields || !isAutoFilled))
+    ) {
+      visibleFieldIds.push(field.id)
+    }
+  }
+
+  return {
+    visibleFieldIds,
+    autoFilledFieldIds,
+    optionalHiddenFieldIds,
+    visibleRequiredMissingCount: visibleFieldIds.filter((fieldId) => missingSet.has(fieldId)).length,
+    autoFilledCount: autoFilledFieldIds.length,
+    optionalHiddenCount: optionalHiddenFieldIds.length,
+  }
+}
+
+function compareTipoOperacionField(a: SatXlsmField, b: SatXlsmField): number {
+  const score = (field: SatXlsmField) =>
+    ((field.options?.length ?? 0) > 0 ? 0 : 100) +
+    (field.required ? 0 : 10) +
+    (field.source === "xlsm-data-validation" ? 0 : field.source === "manual-sat-map" ? 6 : 4) +
+    (field.id === "acto.tipo_operacion" ? 2 : 0)
+  return score(a) - score(b) || compareSatFieldsForDisplay(a, b)
+}
+
+export function isSatFieldManagedByPrimaryCapture(field: SatXlsmField): boolean {
+  const label = normalizeSatFieldText(`${field.id} ${field.label} ${field.optionListId ?? ""}`)
+  const section = field.sectionKind ?? ""
+  const isPersonSection =
+    section === "persona_objeto" || section === "beneficiario_controlador" || section === "contraparte"
+  const isIdentityOrEuiField =
+    /nombre|apellido|denominacion|razon-social|rfc|curp|nacionalidad|pais|fecha-nacimiento|fecha-constitucion|actividad-economica|giro|domicilio|calle|avenida|via|numero-exterior|numero-interior|codigo-postal|colonia|municipio|alcaldia|entidad|ciudad|poblacion|telefono|correo|contacto|representante|apoderado/.test(
+      label,
+    )
+  const isMoneyOrCurrencyField =
+    field.dataType === "moneda" ||
+    /monto|moneda|divisa|importe|valor|precio|contraprestacion|cantidad-pagada|pago-total/.test(label)
+  const isOperationalDate =
+    /fecha/.test(label) &&
+    !/nacimiento|constitucion/.test(label) &&
+    /operacion|pago|liquidacion|aportacion|prestamo|contrato|instrumento/.test(label)
+  const isPaymentInstrument = /forma-de-pago|instrumento-monetario|medio-de-pago/.test(label)
+
+  return (isPersonSection && isIdentityOrEuiField) || isMoneyOrCurrencyField || isOperationalDate || isPaymentInstrument
+}
+
+export function buildSatQuestionnaireDedupedFieldView(input: {
+  fields: SatXlsmField[]
+  values: Record<string, string>
+  missingRequiredIds: string[]
+}): SatQuestionnaireDedupedFieldView {
+  const missingSet = new Set(input.missingRequiredIds)
+  const buckets = new Map<string, SatXlsmField[]>()
+  const passthroughFields: SatXlsmField[] = []
+
+  for (const field of input.fields) {
+    const key = getSatQuestionnaireDuplicateKey(field)
+    if (!key) {
+      passthroughFields.push(field)
+      continue
+    }
+    const group = buckets.get(key) ?? []
+    group.push(field)
+    buckets.set(key, group)
+  }
+
+  const fields: SatXlsmField[] = [...passthroughFields]
+  const values: Record<string, string> = {}
+  const duplicateFieldIdsByRepresentative: Record<string, string[]> = {}
+  const missingRequiredIds: string[] = []
+  let duplicateHiddenCount = 0
+
+  for (const field of passthroughFields) {
+    values[field.id] = input.values[field.id] ?? ""
+    if (missingSet.has(field.id)) missingRequiredIds.push(field.id)
+  }
+
+  for (const group of buckets.values()) {
+    const representative = chooseSatFieldRepresentative(group)
+    const duplicates = group.filter((field) => field.id !== representative.id)
+    const representativeValue = getFirstFilledValue(group, input.values)
+    const groupHasMissingRequired = group.some((field) => missingSet.has(field.id))
+
+    fields.push(representative)
+    values[representative.id] = representativeValue
+    if (duplicates.length > 0) {
+      duplicateHiddenCount += duplicates.length
+      duplicateFieldIdsByRepresentative[representative.id] = duplicates.map((field) => field.id)
+    }
+    if (groupHasMissingRequired && !representativeValue.trim()) {
+      missingRequiredIds.push(representative.id)
+    }
+  }
+
+  return {
+    fields: fields.sort(compareSatFieldsForDisplay),
+    values,
+    missingRequiredIds,
+    duplicateFieldIdsByRepresentative,
+    duplicateHiddenCount,
+  }
+}
+
+export function expandSatFieldValuesForDuplicateFields(input: {
+  fields: SatXlsmField[]
+  values: Record<string, string>
+}): Record<string, string> {
+  const deduped = buildSatQuestionnaireDedupedFieldView({
+    fields: input.fields.filter((field) => !isSatFieldManagedByPrimaryCapture(field)),
+    values: input.values,
+    missingRequiredIds: [],
+  })
+  const output = { ...input.values }
+
+  for (const [representativeId, duplicateIds] of Object.entries(deduped.duplicateFieldIdsByRepresentative)) {
+    const value = output[representativeId] ?? deduped.values[representativeId] ?? ""
+    if (!value.trim()) continue
+    for (const duplicateId of duplicateIds) {
+      if (!output[duplicateId]?.trim()) output[duplicateId] = value
+    }
+  }
+
+  return output
+}
+
+export function getActionableSatMissingFieldIds(input: {
+  fields: SatXlsmField[]
+  missingRequiredIds: string[]
+}): string[] {
+  const fieldById = new Map(input.fields.map((field) => [field.id, field] as const))
+  const missingFields = input.missingRequiredIds
+    .map((fieldId) => fieldById.get(fieldId))
+    .filter((field): field is SatXlsmField => Boolean(field))
+    .filter((field) => !isSatFieldManagedByPrimaryCapture(field))
+  const deduped = buildSatQuestionnaireDedupedFieldView({
+    fields: missingFields,
+    values: {},
+    missingRequiredIds: missingFields.map((field) => field.id),
+  })
+  const knownIds = new Set(deduped.missingRequiredIds)
+  const unknownIds = input.missingRequiredIds.filter((fieldId) => {
+    const field = fieldById.get(fieldId)
+    return !field
+  })
+
+  return [...unknownIds, ...deduped.fields.map((field) => field.id).filter((fieldId) => knownIds.has(fieldId))]
 }
 
 export function buildRegulatorySourceDisplay(input: {
@@ -387,4 +607,55 @@ function normalizeChipId(value: string): string {
 
 function dedupeSourceChips(chips: RegulatorySourceDisplay["chips"]) {
   return chips.filter((chip, index, array) => array.findIndex((item) => item.id === chip.id) === index)
+}
+
+function normalizeSatFieldText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
+
+function getSatQuestionnaireDuplicateKey(field: SatXlsmField): string | null {
+  if (field.repeatGroup) return null
+  const label = normalizeSatFieldText(field.label)
+  if (!label || label.length < 4) return null
+  return `${field.sectionKind ?? "acto_operacion"}|${label}`
+}
+
+function chooseSatFieldRepresentative(fields: SatXlsmField[]): SatXlsmField {
+  return [...fields].sort(compareSatFieldRepresentative)[0]
+}
+
+function compareSatFieldRepresentative(a: SatXlsmField, b: SatXlsmField): number {
+  const score = (field: SatXlsmField) =>
+    (field.source === "xlsm-label" ? 10 : 0) -
+    ((field.options?.length ?? 0) > 0 ? 4 : 0) -
+    (field.source === "manual-sat-map" ? 3 : 0) -
+    (field.source === "xlsm-data-validation" ? 2 : 0)
+  return score(a) - score(b) || compareSatFieldsForDisplay(a, b)
+}
+
+function compareSatFieldsForDisplay(a: SatXlsmField, b: SatXlsmField): number {
+  const sheetCompare = a.sheetName.localeCompare(b.sheetName)
+  if (sheetCompare !== 0) return sheetCompare
+  return getCellRow(a.cell) - getCellRow(b.cell) || getCellColumn(a.cell).localeCompare(getCellColumn(b.cell))
+}
+
+function getFirstFilledValue(fields: SatXlsmField[], values: Record<string, string>): string {
+  for (const field of fields) {
+    const value = values[field.id]?.trim()
+    if (value) return values[field.id]
+  }
+  return ""
+}
+
+function getCellRow(cell: string): number {
+  return Number(cell.match(/\d+/)?.[0] ?? 0)
+}
+
+function getCellColumn(cell: string): string {
+  return cell.match(/[A-Z]+/i)?.[0]?.toUpperCase() ?? ""
 }

@@ -147,6 +147,86 @@ test("Inmuebles questionnaire maps Persona Objeto and Beneficiario controlador w
   assert.equal(form.initialValues["beneficiario.pf.nombre"], "Adriana")
 })
 
+test("Desarrollo inmobiliario questionnaire keeps official XLSM dropdown options", () => {
+  const template = resolveSatTemplateForActividad("fraccion-v-bis-desarrollo")
+  const layout = JSON.parse(
+    readFileSync(path.join(repoRoot, "public/data/sat-xlsm-layouts/sat-fraccion-v-bis-desarrollo.json"), "utf8"),
+  )
+  const form = buildSatDynamicOperationForm({ template, layout })
+  const fields = form.sections.flatMap((section) => section.fields)
+  const tipoDesarrollo = fields.find((field) => field.label === "Tipo de Desarrollo")
+  const moneda = fields.find((field) => field.label === "Moneda o Divisa")
+
+  assert.equal(tipoDesarrollo?.optionListId, "TipoDesarrollo")
+  assert.deepEqual(tipoDesarrollo?.options?.slice(0, 3), ["1,Habitacional", "2,Comercial", "3,Oficinas"])
+  assert.equal(moneda?.optionListId, "Monedas")
+  assert.equal((moneda?.options?.length ?? 0) > 100, true)
+})
+
+test("SAT questionnaire excludes XLSM helper text that is not a user input", () => {
+  const template = resolveSatTemplateForActividad("fraccion-v-bis-desarrollo")
+  const layout = JSON.parse(
+    readFileSync(path.join(repoRoot, "public/data/sat-xlsm-layouts/sat-fraccion-v-bis-desarrollo.json"), "utf8"),
+  )
+  const form = buildSatDynamicOperationForm({ template, layout })
+  const fields = form.sections.flatMap((section) => section.fields)
+
+  assert.equal(
+    fields.some((field) => /Los campos marcados con/i.test(field.label)),
+    false,
+  )
+  assert.equal(
+    form.requiredFieldIds.some((fieldId) => /los-campos-marcados/i.test(fieldId)),
+    false,
+  )
+})
+
+test("SAT questionnaire does not prefill description of goods with country values", () => {
+  const template = resolveSatTemplateForActividad("fraccion-v-bis-desarrollo")
+  const layout = JSON.parse(
+    readFileSync(path.join(repoRoot, "public/data/sat-xlsm-layouts/sat-fraccion-v-bis-desarrollo.json"), "utf8"),
+  )
+  const form = buildSatDynamicOperationForm({
+    template,
+    layout,
+    prefill: {
+      clientePais: "MEXICO,MX",
+      contrapartePais: "MEXICO,MX",
+    },
+  })
+  const descriptionFields = form.sections
+    .flatMap((section) => section.fields)
+    .filter((field) => /descripci[oó]n del bien/i.test(field.label))
+
+  assert.equal(descriptionFields.length > 0, true)
+  for (const field of descriptionFields) {
+    assert.equal(form.initialValues[field.id] ?? "", "")
+  }
+})
+
+test("Juegos y sorteos questionnaire resolves dropdowns after self-closing XLSM cells", () => {
+  const template = resolveSatTemplateForActividad("fraccion-i-juegos")
+  const workbookPath = path.join(repoRoot, getSatTemplateCachePath(template))
+  assert.equal(existsSync(workbookPath), true, "Run pnpm sync:sat:formatos to cache official SAT XLSM templates")
+  const layout = extractSatXlsmLayoutFromBuffer(readFileSync(workbookPath), template)
+  const fields = layout.sections.flatMap((section) => section.fields)
+  const tipoOperacion = fields.find((field) => field.optionListId === "TipoOpe")
+  const lineaNegocio = fields.find((field) => field.optionListId === "LineaNego")
+  const medioEmpleado = fields.find((field) => field.optionListId === "MedioEmp")
+  const tipoBien = fields.find((field) => field.optionListId === "TipoBien1")
+  const tipoInmueble = fields.find((field) => field.optionListId === "TipoInm")
+
+  assert.deepEqual(tipoOperacion?.options?.slice(0, 3), [
+    "101,Venta de boletos /fichas /recibos u otros instrumentos de juego similares",
+    "102,Pago de boletos /fichas /recibos u otros instrumentos de juego similares",
+    "103,Pago de premios",
+  ])
+  assert.deepEqual(lineaNegocio?.options?.slice(0, 2), ["1,Hipódromo", "2,Galgódromo"])
+  assert.deepEqual(medioEmpleado?.options?.slice(0, 2), ["1,Presencial", "2,Internet"])
+  assert.equal((tipoBien?.options?.length ?? 0) >= 9, true)
+  assert.equal((tipoInmueble?.options?.length ?? 0) >= 19, true)
+})
+
 test("Inmuebles questionnaire supports repeatable SAT rows for inmuebles and pagos", () => {
   const template = resolveSatTemplateForActividad("fraccion-v-inmuebles")
   const workbookPath = path.join(repoRoot, getSatTemplateCachePath(template))

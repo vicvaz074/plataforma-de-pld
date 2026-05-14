@@ -36,14 +36,21 @@ export interface ButtonProps
   asChild?: boolean
 }
 
+function hasExplicitButtonLayout(className: ButtonProps["className"]) {
+  return typeof className === "string" && /\b(w-|min-w-|max-w-|mx-|self-|justify-)/.test(className)
+}
+
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
+    const hasExplicitLayout = hasExplicitButtonLayout(className)
+
     return (
       <Comp
         className={cn(
           buttonVariants({ variant, size, className }),
-          "max-w-xs mx-auto flex items-center justify-center border-[rgba(226,232,240,1)]",
+          !hasExplicitLayout && "max-w-xs mx-auto",
+          "flex items-center justify-center border-[rgba(226,232,240,1)]",
         )}
         ref={ref}
         {...props}

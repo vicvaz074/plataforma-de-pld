@@ -25,6 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -32,7 +33,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/components/ui/use-toast"
 import {
-  BlockingReasonsCallout,
   OperationalProgressRail,
   RegulatorySourceChip,
   SatOutputSummaryPanel,
@@ -44,6 +44,7 @@ import {
   ArrowRight,
   Building2,
   CalendarDays,
+  ChevronsUpDown,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -56,6 +57,7 @@ import {
   Paperclip,
   PlayCircle,
   Plus,
+  Search,
   ShieldAlert,
   Trash2,
   TrendingUp,
@@ -64,6 +66,7 @@ import {
 } from "lucide-react"
 import type { ActividadVulnerable } from "@/lib/data/actividades"
 import { actividadesVulnerables } from "@/lib/data/actividades"
+import { cn } from "@/lib/utils"
 import { UMA_MONTHS, findUmaByMonthYear } from "@/lib/data/uma"
 import { CLIENTE_TIPOS, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
 import { CIUDADES_MEXICO, findCodigoPostalInfo } from "@/lib/data/codigos-postales"
@@ -74,13 +77,17 @@ import {
   buildDefaultPldTenants,
   buildPldOperationalCase,
   classifyAvisoSalida,
+  detectRecurringPaymentReview,
   evaluarOperacionVulnerable,
   evaluateOperationalEvidenceDecision,
   evaluatePldEbrMethodology,
   evaluateEvidenceChecklist,
   generateSatXml,
   getAcumulacionRuleForActividad,
+  getActionableSatMissingFieldIds,
+  chooseSatTipoOperacionField,
   getDocumentRequirementsForCliente,
+  getFixedSatTipoOperacion,
   matchPepCargo,
   PLD_ACTIVE_TENANT_STORAGE_KEY,
   PLD_TENANTS_STORAGE_KEY,
@@ -91,8 +98,8 @@ import {
   buildRegulatorySourceDisplay,
   resolveSatFormatoForActividad,
   resolveSatTemplateForActividad,
+  expandSatFieldValuesForDuplicateFields,
   satFieldValuesToWorkbookCells,
-  SAT_FORMATOS_ACTIVIDADES,
   sanitizePldTenant,
   type AvisoSalidaTipo,
   type DocumentRequirement,
@@ -148,6 +155,200 @@ function resolveActividadPorClave(clave: string | undefined) {
     actividadesVulnerables.find(
       (actividad) => normalizarFraccion(actividad.fraccion) === normalizarFraccion(clave),
     )
+  )
+}
+
+type ActividadVulnerableComboboxProps = {
+  value: string
+  options: ActividadVulnerable[]
+  placeholder?: string
+  disabled?: boolean
+  triggerClassName?: string
+  onChange: (value: string) => void
+}
+
+function ActividadVulnerableCombobox({
+  value,
+  options,
+  placeholder = "Busca por fracción o actividad",
+  disabled,
+  triggerClassName,
+  onChange,
+}: ActividadVulnerableComboboxProps) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const selected = options.find((actividad) => actividad.key === value)
+  const filteredOptions = useMemo(() => {
+    const term = normalizarBusqueda(query)
+    if (!term) return options
+    return options.filter((actividad) => {
+      const searchable = [
+        actividad.fraccion,
+        actividad.nombre,
+        actividad.descripcion,
+        actividad.key,
+        ...actividad.ejemplosOperaciones.map((ejemplo) => `${ejemplo.titulo} ${ejemplo.descripcion}`),
+      ].join(" ")
+      return normalizarBusqueda(searchable).includes(term)
+    })
+  }, [options, query])
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className={cn("h-10 w-full max-w-none justify-between gap-2 bg-white px-3 text-left font-normal", triggerClassName)}
+        >
+          <span className="min-w-0 flex-1 truncate">
+            {selected ? `${selected.fraccion} - ${selected.nombre}` : placeholder}
+          </span>
+          <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="max-h-[360px] w-[--radix-popover-trigger-width] overflow-hidden p-0">
+        <div className="border-b p-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onInput={(event) => setQuery(event.currentTarget.value)}
+              placeholder="Filtrar por fracción, nombre o palabra clave"
+              className="h-9 pl-8"
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="max-h-72 space-y-1 overflow-y-auto overscroll-contain p-1">
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((actividad) => {
+              const isSelected = actividad.key === value
+              return (
+                <button
+                  key={actividad.key}
+                  type="button"
+                  className={`flex w-full min-w-0 items-start gap-2 rounded-md px-3 py-2 text-left text-sm transition hover:bg-slate-100 ${
+                    isSelected ? "bg-emerald-50 text-emerald-900" : "text-slate-700"
+                  }`}
+                  onClick={() => {
+                    onChange(actividad.key)
+                    setOpen(false)
+                    setQuery("")
+                  }}
+                >
+                  <CheckCircle2
+                    className={`mt-0.5 h-4 w-4 shrink-0 ${isSelected ? "text-emerald-600" : "text-transparent"}`}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold">{actividad.fraccion}</span>
+                    <span className="line-clamp-2 text-xs leading-relaxed text-slate-500">{actividad.nombre}</span>
+                  </span>
+                </button>
+              )
+            })
+          ) : (
+            <div className="px-3 py-6 text-center text-sm text-slate-500">
+              No encontré actividades con ese texto.
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+type SearchableOptionComboboxProps = {
+  value: string
+  options: string[]
+  placeholder: string
+  searchPlaceholder?: string
+  disabled?: boolean
+  emptyLabel?: string
+  onChange: (value: string) => void
+}
+
+function SearchableOptionCombobox({
+  value,
+  options,
+  placeholder,
+  searchPlaceholder = "Buscar opción",
+  disabled,
+  emptyLabel = "Sin opciones",
+  onChange,
+}: SearchableOptionComboboxProps) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const uniqueOptions = useMemo(() => Array.from(new Set(options.filter(Boolean))), [options])
+  const filteredOptions = useMemo(() => {
+    const term = normalizarBusqueda(query)
+    if (!term) return uniqueOptions
+    return uniqueOptions.filter((option) => normalizarBusqueda(option).includes(term))
+  }, [query, uniqueOptions])
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className="h-10 w-full justify-between gap-2 bg-white px-3 text-left font-normal"
+        >
+          <span className="min-w-0 flex-1 truncate">{value || placeholder}</span>
+          <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="max-h-[360px] w-[--radix-popover-trigger-width] overflow-hidden p-0">
+        <div className="border-b p-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onInput={(event) => setQuery(event.currentTarget.value)}
+              placeholder={searchPlaceholder}
+              className="h-9 pl-8"
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="max-h-72 space-y-1 overflow-y-auto overscroll-contain p-1">
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option) => {
+              const isSelected = option === value
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  className={`flex w-full min-w-0 items-start gap-2 rounded-md px-3 py-2 text-left text-sm transition hover:bg-slate-100 ${
+                    isSelected ? "bg-emerald-50 text-emerald-900" : "text-slate-700"
+                  }`}
+                  onClick={() => {
+                    onChange(option)
+                    setOpen(false)
+                    setQuery("")
+                  }}
+                >
+                  <CheckCircle2
+                    className={`mt-0.5 h-4 w-4 shrink-0 ${isSelected ? "text-emerald-600" : "text-transparent"}`}
+                  />
+                  <span className="min-w-0 flex-1 line-clamp-2 text-xs leading-relaxed">{option}</span>
+                </button>
+              )
+            })
+          ) : (
+            <div className="px-3 py-6 text-center text-sm text-slate-500">{emptyLabel}</div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -295,13 +496,13 @@ const INSTRUMENTO_FORM_DEFAULT: InstrumentoPublicoFormState = {
 const STEPS = [
   {
     id: 0,
-    titulo: "Sujeto obligado",
-    descripcion: "Multi-cliente, periodo, UMA y responsables.",
+    titulo: "Contexto",
+    descripcion: "Sujeto, periodo y UMA.",
   },
   {
     id: 1,
-    titulo: "Actividad",
-    descripcion: "Fracción, formato SAT y reglas base.",
+    titulo: "Formato SAT",
+    descripcion: "Fracción, plantilla y reglas.",
   },
   {
     id: 2,
@@ -320,8 +521,8 @@ const STEPS = [
   },
   {
     id: 5,
-    titulo: "EBR/alertas",
-    descripcion: "Riesgo residual y señales de alerta.",
+    titulo: "Riesgo",
+    descripcion: "EBR y señales de alerta.",
   },
   {
     id: 6,
@@ -330,8 +531,8 @@ const STEPS = [
   },
   {
     id: 7,
-    titulo: "Salida SAT",
-    descripcion: "XML, aviso, 27 Bis, 24h o ceros.",
+    titulo: "Salida",
+    descripcion: "Excel, XML y trazabilidad.",
   },
 ]
 
@@ -595,6 +796,7 @@ interface ExpedienteDetalle {
   tipoCliente?: string
   detalleTipoCliente?: string
   responsable?: string
+  sujetoObligadoId?: string
   sujetoObligadoNombre?: string
   sujetoObligadoRfc?: string
   claveSujetoObligado?: string
@@ -673,6 +875,10 @@ interface OperacionCliente {
   satCellValues?: Record<string, string>
   satMissingRequiredFields?: string[]
   satWorkbookStatus?: "pendiente" | "borrador_bloqueado" | "listo"
+  pagoRecurrenteMeses?: number
+  pagoRecurrenteMensualidad?: number
+  posibleFalsoPositivo?: boolean
+  falsoPositivoRazon?: string
 }
 
 interface ClienteGuardado {
@@ -707,6 +913,15 @@ interface DocumentoSoporte {
   fechaRegistro: string
 }
 
+interface DraftEvidenceUpload {
+  id: string
+  requisitoId: string
+  requisitoLabel: string
+  archivoNombre: string
+  archivoContenido?: string
+  fechaRegistro: string
+}
+
 const now = new Date()
 const currentYear = now.getFullYear()
 const currentMonth = now.getMonth() + 1
@@ -716,6 +931,22 @@ const CLIENTES_STORAGE_KEY = "actividades_vulnerables_clientes"
 const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
 const NUEVO_CLIENTE_VALUE = "__nuevo__"
 const MANUAL_EXPEDIENTE_VALUE = "__manual__"
+
+function buildReusableSatFieldValues(values?: Record<string, string>) {
+  if (!values) return {}
+  return Object.fromEntries(
+    Object.entries(values).filter(([fieldId]) => {
+      const normalized = fieldId.toLowerCase()
+      return !(
+        normalized.includes("periodo") ||
+        normalized.includes("fecha") ||
+        normalized.includes("monto") ||
+        normalized.includes("valor_pactado") ||
+        normalized.includes("referencia")
+      )
+    }),
+  )
+}
 
 function normalizarTipoCliente(value: string) {
   const option = CLIENTE_TIPOS.find((tipo) => tipo.value === value)
@@ -1217,6 +1448,11 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
     figuraCliente: typeof raw.figuraCliente === "string" ? raw.figuraCliente : undefined,
     figuraSujetoObligado:
       typeof raw.figuraSujetoObligado === "string" ? raw.figuraSujetoObligado : undefined,
+    pagoRecurrenteMeses: Number(raw.pagoRecurrenteMeses) > 0 ? Number(raw.pagoRecurrenteMeses) : undefined,
+    pagoRecurrenteMensualidad:
+      Number(raw.pagoRecurrenteMensualidad) > 0 ? Number(raw.pagoRecurrenteMensualidad) : undefined,
+    posibleFalsoPositivo: Boolean(raw.posibleFalsoPositivo),
+    falsoPositivoRazon: typeof raw.falsoPositivoRazon === "string" ? raw.falsoPositivoRazon : undefined,
   }
 }
 
@@ -1278,11 +1514,23 @@ function sanitizeExpedientePersona(raw: any): ExpedientePersona | null {
                 domicilioRaw.pais
               : undefined,
           entidad: typeof domicilioRaw.entidad === "string" ? domicilioRaw.entidad : undefined,
-          municipio: typeof domicilioRaw.municipio === "string" ? domicilioRaw.municipio : undefined,
+          municipio:
+            typeof domicilioRaw.municipio === "string"
+              ? domicilioRaw.municipio
+              : typeof domicilioRaw.alcaldia === "string"
+                ? domicilioRaw.alcaldia
+                : undefined,
           ciudad: typeof domicilioRaw.ciudad === "string" ? domicilioRaw.ciudad : undefined,
           colonia: typeof domicilioRaw.colonia === "string" ? domicilioRaw.colonia : undefined,
           codigoPostal: typeof domicilioRaw.codigoPostal === "string" ? domicilioRaw.codigoPostal : undefined,
-          calle: typeof domicilioRaw.calle === "string" ? domicilioRaw.calle : undefined,
+          calle:
+            typeof domicilioRaw.calle === "string"
+              ? domicilioRaw.calle
+              : typeof domicilioRaw.nombreVialidad === "string"
+                ? [domicilioRaw.tipoVialidad, domicilioRaw.nombreVialidad]
+                    .filter((item) => typeof item === "string" && item.trim())
+                    .join(" ")
+                : undefined,
           numeroExterior:
             typeof domicilioRaw.numeroExterior === "string" ? domicilioRaw.numeroExterior : undefined,
           numeroInterior:
@@ -1347,6 +1595,12 @@ function sanitizeExpediente(raw: any): ExpedienteDetalle | null {
     detalleTipoCliente:
       typeof raw.detalleTipoCliente === "string" ? raw.detalleTipoCliente : undefined,
     responsable: typeof raw.responsable === "string" ? raw.responsable : undefined,
+    sujetoObligadoId:
+      typeof raw.sujetoObligadoId === "string"
+        ? raw.sujetoObligadoId
+        : typeof raw.expedienteEui?.sujetoObligadoId === "string"
+          ? raw.expedienteEui.sujetoObligadoId
+          : undefined,
     sujetoObligadoNombre:
       typeof raw.sujetoObligadoNombre === "string"
         ? raw.sujetoObligadoNombre
@@ -1466,10 +1720,22 @@ function sanitizePersonaAviso(raw: any): PersonaAvisoOperacion | null {
                 domicilioRaw.pais
               : undefined,
           entidad: typeof domicilioRaw.entidad === "string" ? domicilioRaw.entidad : undefined,
-          municipio: typeof domicilioRaw.municipio === "string" ? domicilioRaw.municipio : undefined,
+          municipio:
+            typeof domicilioRaw.municipio === "string"
+              ? domicilioRaw.municipio
+              : typeof domicilioRaw.alcaldia === "string"
+                ? domicilioRaw.alcaldia
+                : undefined,
           colonia: typeof domicilioRaw.colonia === "string" ? domicilioRaw.colonia : undefined,
           codigoPostal: typeof domicilioRaw.codigoPostal === "string" ? domicilioRaw.codigoPostal : undefined,
-          calle: typeof domicilioRaw.calle === "string" ? domicilioRaw.calle : undefined,
+          calle:
+            typeof domicilioRaw.calle === "string"
+              ? domicilioRaw.calle
+              : typeof domicilioRaw.nombreVialidad === "string"
+                ? [domicilioRaw.tipoVialidad, domicilioRaw.nombreVialidad]
+                    .filter((item) => typeof item === "string" && item.trim())
+                    .join(" ")
+                : undefined,
           numeroExterior:
             typeof domicilioRaw.numeroExterior === "string" ? domicilioRaw.numeroExterior : undefined,
           numeroInterior:
@@ -1657,12 +1923,16 @@ export default function ActividadesVulnerablesPage() {
   const [monedaPersonalizadaCodigo, setMonedaPersonalizadaCodigo] = useState<string>("")
   const [monedaPersonalizadaDescripcion, setMonedaPersonalizadaDescripcion] = useState<string>("")
   const [fechaOperacion, setFechaOperacion] = useState<string>(new Date().toISOString().substring(0, 10))
+  const [pagoRecurrenteMeses, setPagoRecurrenteMeses] = useState<string>("1")
+  const [pagoRecurrenteMensualidad, setPagoRecurrenteMensualidad] = useState<string>("")
+  const [pagoRecurrenteNota, setPagoRecurrenteNota] = useState<string>("")
   const [evidencia, setEvidencia] = useState<string>("")
   const [tenantState, setTenantState] = useState(() => buildDefaultPldTenants("tenant-demo-pld"))
   const [tenantsLoaded, setTenantsLoaded] = useState(false)
   const [draftEvidenceChecklist, setDraftEvidenceChecklist] = useState<Record<string, boolean>>({})
   const [draftEvidenceJustifications, setDraftEvidenceJustifications] = useState<Record<string, string>>({})
   const [draftEvidenceFiles, setDraftEvidenceFiles] = useState<Record<string, string>>({})
+  const [draftEvidenceUploads, setDraftEvidenceUploads] = useState<DraftEvidenceUpload[]>([])
   const [expedientesDetalle, setExpedientesDetalle] = useState<Record<string, ExpedienteDetalle>>({})
   const [expedientesListo, setExpedientesListo] = useState(false)
   const [expedienteSeleccionado, setExpedienteSeleccionado] = useState<string | null>(null)
@@ -1702,9 +1972,6 @@ export default function ActividadesVulnerablesPage() {
   const [actividadInfoKey, setActividadInfoKey] = useState<string | null>(null)
   const [infoModal, setInfoModal] = useState<InfoModalKey | null>(null)
   const [tabActiva, setTabActiva] = useState<"resumen" | "captura" | "seguimiento" | "explorar">("resumen")
-  const [registroModo, setRegistroModo] = useState<"consulta" | "nuevo">("consulta")
-  const [expedienteConsultaId, setExpedienteConsultaId] = useState<string | null>(null)
-  const [sujetoConsulta, setSujetoConsulta] = useState<string>("")
   const [relacionNegocios, setRelacionNegocios] = useState(false)
   const [relacionNegociosOpen, setRelacionNegociosOpen] = useState(false)
   const [pepCargoCliente, setPepCargoCliente] = useState("")
@@ -1743,7 +2010,6 @@ export default function ActividadesVulnerablesPage() {
     archivoContenido: "",
     fechaRegistro: new Date().toISOString().substring(0, 10),
   })
-  const [busquedaActividad, setBusquedaActividad] = useState("")
   const [busquedaClienteGuardado, setBusquedaClienteGuardado] = useState("")
   const [busquedaCiudadInmueble, setBusquedaCiudadInmueble] = useState("")
   const [busquedaColoniaInmueble, setBusquedaColoniaInmueble] = useState("")
@@ -2171,15 +2437,6 @@ export default function ActividadesVulnerablesPage() {
     }
   }, [operaciones, operacionDocumentos])
 
-  const mesesDisponibles = useMemo(
-    () =>
-      umaVentana
-        .filter((entry) => entry.year === anioSeleccionado)
-        .map((entry) => entry.month)
-        .sort((a, b) => a - b),
-    [anioSeleccionado, umaVentana],
-  )
-
   const actividadSeleccionada = useMemo(
     () => actividadesVulnerables.find((actividad) => actividad.key === actividadKey),
     [actividadKey],
@@ -2188,6 +2445,22 @@ export default function ActividadesVulnerablesPage() {
   const requisitosDocumentalesActuales = useMemo<DocumentRequirement[]>(
     () => getDocumentRequirementsForCliente(tipoCliente, actividadSeleccionada?.key),
     [tipoCliente, actividadSeleccionada?.key],
+  )
+  const soporteOperacionRequirement = useMemo(
+    () =>
+      requisitosDocumentalesActuales.find((requisito) => requisito.id === "operacion-soporte") ?? {
+        id: "operacion-soporte",
+        label: "Soporte del acto u operacion.",
+      },
+    [requisitosDocumentalesActuales],
+  )
+  const formaPagoRequirement = useMemo(
+    () =>
+      requisitosDocumentalesActuales.find((requisito) => requisito.id === "operacion-forma-pago") ?? {
+        id: "operacion-forma-pago",
+        label: "Evidencia de forma de pago.",
+      },
+    [requisitosDocumentalesActuales],
   )
 
   const acumulacionRuleActual = useMemo(
@@ -2198,6 +2471,16 @@ export default function ActividadesVulnerablesPage() {
   const esActividadInmuebles = useMemo(
     () => actividadSeleccionada?.key === ACTIVIDAD_INMUEBLES_KEY,
     [actividadSeleccionada],
+  )
+
+  const operacionesReutilizables = useMemo(
+    () =>
+      operaciones
+        .filter((operacion) => operacion.actividadKey === actividadKey)
+        .filter((operacion) => !rfc.trim() || operacion.rfc === rfc.trim().toUpperCase())
+        .sort((a, b) => toDate(b.fechaOperacion).getTime() - toDate(a.fechaOperacion).getTime())
+        .slice(0, 3),
+    [actividadKey, operaciones, rfc],
   )
 
   const satFormatoActual = useMemo(() => {
@@ -2263,11 +2546,17 @@ export default function ActividadesVulnerablesPage() {
         instrumentoEntidad: instrumentoForm.entidad,
         instrumentoValorAvaluo: instrumentoForm.valorAvaluo,
         clienteNombre,
+        clienteNombrePf: personaAvisoActual?.nombre,
+        clienteApellidoPaterno: personaAvisoActual?.apellidoPaterno,
+        clienteApellidoMaterno: personaAvisoActual?.apellidoMaterno,
+        clienteRazonSocial: personaAvisoActual?.denominacion,
         clienteRfc: rfc,
+        clienteFechaNacimiento: personaAvisoActual?.fechaNacimiento,
         clienteFechaConstitucion: personaAvisoActual?.fechaConstitucion,
         clienteCurp: personaAvisoActual?.curp,
         clientePais: paisSatOption(personaAvisoActual?.pais),
         clienteGiro: personaAvisoActual?.giro,
+        clienteActividadEconomica: personaAvisoActual?.giro,
         clienteEstado: personaAvisoActual?.domicilio?.entidad,
         clienteMunicipio: personaAvisoActual?.domicilio?.municipio,
         clienteCiudad: personaAvisoActual?.domicilio?.ciudad,
@@ -2338,12 +2627,47 @@ export default function ActividadesVulnerablesPage() {
     tipoOperacion,
   ])
 
-  const satEffectiveFieldValues = useMemo(
+  const tipoOperacionSatField = useMemo(() => {
+    const fields = satDynamicFormActual?.sections.flatMap((section) => section.fields) ?? []
+    return chooseSatTipoOperacionField(fields)
+  }, [satDynamicFormActual])
+
+  const fixedTipoOperacionSat = useMemo(
+    () => getFixedSatTipoOperacion(satTemplateActual?.templateId),
+    [satTemplateActual?.templateId],
+  )
+
+  const tipoOperacionOptions = useMemo(() => {
+    const satOptions = tipoOperacionSatField?.options ?? []
+    if (satOptions.length > 0) return Array.from(new Set(satOptions.filter(Boolean)))
+    return []
+  }, [tipoOperacionSatField])
+
+  useEffect(() => {
+    if (!fixedTipoOperacionSat || tipoOperacion === fixedTipoOperacionSat) return
+    setTipoOperacion(fixedTipoOperacionSat)
+  }, [fixedTipoOperacionSat, tipoOperacion])
+
+  const satAllFieldsActual = useMemo(
+    () => satDynamicFormActual?.sections.flatMap((section) => section.fields) ?? [],
+    [satDynamicFormActual],
+  )
+
+  const satRawEffectiveFieldValues = useMemo(
     () => ({
       ...(satDynamicFormActual?.initialValues ?? {}),
       ...satFieldValues,
     }),
     [satDynamicFormActual, satFieldValues],
+  )
+
+  const satEffectiveFieldValues = useMemo(
+    () =>
+      expandSatFieldValuesForDuplicateFields({
+        fields: satAllFieldsActual,
+        values: satRawEffectiveFieldValues,
+      }),
+    [satAllFieldsActual, satRawEffectiveFieldValues],
   )
 
   const satEffectiveCellValues = useMemo(
@@ -2353,11 +2677,15 @@ export default function ActividadesVulnerablesPage() {
 
   const satMissingRequiredFields = useMemo(() => {
     if (!satDynamicFormActual) return []
-    return satDynamicFormActual.requiredFieldIds.filter((fieldId) => {
+    const missingRequiredIds = satDynamicFormActual.requiredFieldIds.filter((fieldId) => {
       const value = satEffectiveFieldValues[fieldId]
       return !value || !value.trim()
     })
-  }, [satDynamicFormActual, satEffectiveFieldValues])
+    return getActionableSatMissingFieldIds({
+      fields: satAllFieldsActual,
+      missingRequiredIds,
+    })
+  }, [satAllFieldsActual, satDynamicFormActual, satEffectiveFieldValues])
 
   const satWorkbookStatusActual = useMemo<"pendiente" | "borrador_bloqueado" | "listo">(() => {
     if (!satDynamicFormActual) return "pendiente"
@@ -2405,11 +2733,6 @@ export default function ActividadesVulnerablesPage() {
     [expedienteSeleccionado, expedientesDetalle],
   )
 
-  const expedienteConsultaActual = useMemo(
-    () => (expedienteConsultaId ? expedientesDetalle[expedienteConsultaId] ?? null : null),
-    [expedienteConsultaId, expedientesDetalle],
-  )
-
   const expedientesDisponibles = useMemo(
     () =>
       Object.values(expedientesDetalle).sort((a, b) =>
@@ -2419,42 +2742,106 @@ export default function ActividadesVulnerablesPage() {
   )
 
   const fechaBaseExpediente = expedienteActual?.actualizadoEn
-  const fechaBaseConsulta = expedienteConsultaActual?.actualizadoEn
 
   const siguienteRevisionAnual = useMemo(() => {
     if (!relacionNegocios) return null
-    const fechaBase = fechaBaseConsulta ?? fechaBaseExpediente
+    const fechaBase = fechaBaseExpediente
     if (!fechaBase) return null
     const fecha = new Date(fechaBase)
     fecha.setFullYear(fecha.getFullYear() + 1)
     return fecha.toISOString().substring(0, 10)
-  }, [fechaBaseConsulta, fechaBaseExpediente, relacionNegocios])
+  }, [fechaBaseExpediente, relacionNegocios])
+
+  const resolveSujetoObligadoOptionValue = useCallback(
+    (expediente: ExpedienteDetalle) => {
+      const matchingTenant = tenantState.tenants.find((tenant) => {
+        const tenantTokens = [
+          tenant.id,
+          tenant.rfc,
+          tenant.razonSocial,
+          tenant.nombreComercial,
+        ].filter((item): item is string => Boolean(item))
+        const expedienteTokens = [
+          expediente.sujetoObligadoId,
+          expediente.sujetoObligadoRfc,
+          expediente.sujetoObligadoNombre,
+          expediente.claveSujetoObligado,
+        ].filter((item): item is string => Boolean(item))
+
+        return expedienteTokens.some((expedienteToken) =>
+          tenantTokens.some((tenantToken) => normalizarBusqueda(tenantToken) === normalizarBusqueda(expedienteToken)),
+        )
+      })
+
+      if (matchingTenant) return `tenant:${matchingTenant.id}`
+
+      const expedienteIdentity =
+        expediente.sujetoObligadoRfc ??
+        expediente.sujetoObligadoId ??
+        expediente.sujetoObligadoNombre ??
+        expediente.claveSujetoObligado
+
+      return expedienteIdentity
+        ? `sujeto:${normalizarBusqueda(expedienteIdentity)}`
+        : `expediente:${normalizarBusqueda(expediente.rfc)}`
+    },
+    [tenantState.tenants],
+  )
 
   const sujetosObligadosDisponibles = useMemo(() => {
-    const mapa = new Map<string, string>()
+    const mapa = new Map<string, { value: string; label: string; expedientesCount: number }>()
+    tenantState.tenants.forEach((tenant) => {
+      mapa.set(`tenant:${tenant.id}`, {
+        value: `tenant:${tenant.id}`,
+        label: `${tenant.razonSocial} · RFC ${tenant.rfc}`,
+        expedientesCount: 0,
+      })
+    })
+
     expedientesDisponibles.forEach((expediente) => {
-      const clave = expediente.claveSujetoObligado ?? expediente.rfc
-      const etiquetaBase = expediente.nombre ?? expediente.rfc
-      if (!mapa.has(clave)) {
-        mapa.set(clave, expediente.claveSujetoObligado ? `${expediente.claveSujetoObligado} – ${etiquetaBase}` : etiquetaBase)
+      const clave = resolveSujetoObligadoOptionValue(expediente)
+      const existing = mapa.get(clave)
+      if (existing) {
+        mapa.set(clave, {
+          ...existing,
+          expedientesCount: existing.expedientesCount + 1,
+        })
+      } else {
+        const label =
+          expediente.sujetoObligadoNombre ??
+          expediente.sujetoObligadoRfc ??
+          expediente.claveSujetoObligado ??
+          "Sujeto obligado sin nombre"
+        mapa.set(clave, {
+          value: clave,
+          label,
+          expedientesCount: 1,
+        })
       }
     })
-    return Array.from(mapa.entries()).map(([value, label]) => ({ value, label }))
-  }, [expedientesDisponibles])
+    return Array.from(mapa.values())
+      .filter((opcion) => opcion.expedientesCount > 0 || opcion.value === `tenant:${activeTenant?.id}`)
+      .sort((a, b) => a.label.localeCompare(b.label, "es"))
+  }, [activeTenant?.id, expedientesDisponibles, resolveSujetoObligadoOptionValue, tenantState.tenants])
 
   const clientesPorSujetoObligado = useMemo(
     () =>
       expedientesDisponibles
         .filter((expediente) => {
           if (!sujetoObligadoOperacion) return true
-          return (expediente.claveSujetoObligado ?? expediente.rfc) === sujetoObligadoOperacion
+          return resolveSujetoObligadoOptionValue(expediente) === sujetoObligadoOperacion
         })
         .map((expediente) => ({
           value: expediente.rfc,
           label: expediente.nombre ?? expediente.rfc,
           actividad: expediente.claveActividadVulnerable,
         })),
-    [expedientesDisponibles, sujetoObligadoOperacion],
+    [expedientesDisponibles, resolveSujetoObligadoOptionValue, sujetoObligadoOperacion],
+  )
+
+  const sujetoObligadoContexto = useMemo(
+    () => sujetosObligadosDisponibles.find((opcion) => opcion.value === sujetoObligadoOperacion) ?? null,
+    [sujetoObligadoOperacion, sujetosObligadosDisponibles],
   )
 
   const actividadRegistroOperacion = useMemo(() => {
@@ -2548,8 +2935,8 @@ export default function ActividadesVulnerablesPage() {
   useEffect(() => {
     if (!personaExpediente) {
       setPersonaAvisoActual(null)
-      setClienteNombre("")
-      setRfc("")
+      setClienteNombre(expedienteActual?.nombre ?? "")
+      setRfc(expedienteActual?.rfc ? expedienteActual.rfc.toUpperCase() : "")
       setColoniasDisponibles([])
       setInmuebleForm((prev) => ({
         ...prev,
@@ -2573,6 +2960,18 @@ export default function ActividadesVulnerablesPage() {
         curp: "",
         pais: BENEFICIARIO_FORM_DEFAULT.pais,
       }))
+      if (expedienteActual?.tipoCliente) {
+        setTipoCliente(expedienteActual.tipoCliente)
+      }
+      if (expedienteActual?.detalleTipoCliente) {
+        setDetalleTipoCliente(expedienteActual.detalleTipoCliente)
+      }
+      if (expedienteActual?.claveSujetoObligado) {
+        setClaveSujetoObligado(expedienteActual.claveSujetoObligado)
+      }
+      if (expedienteActual?.claveActividadVulnerable) {
+        setClaveActividad(expedienteActual.claveActividadVulnerable)
+      }
       return
     }
 
@@ -2673,15 +3072,68 @@ export default function ActividadesVulnerablesPage() {
   }, [personaExpediente, expedienteActual])
 
   useEffect(() => {
-    if (clientesPorSujetoObligado.length === 0) {
-      setClienteOperacionSeleccionado("")
+    if (sujetosObligadosDisponibles.length === 0) {
+      if (sujetoObligadoOperacion) {
+        setSujetoObligadoOperacion("")
+      }
       return
     }
 
-    if (!clientesPorSujetoObligado.some((cliente) => cliente.value === clienteOperacionSeleccionado)) {
-      setClienteOperacionSeleccionado(clientesPorSujetoObligado[0].value)
+    if (sujetosObligadosDisponibles.some((sujeto) => sujeto.value === sujetoObligadoOperacion)) {
+      return
     }
-  }, [clientesPorSujetoObligado, clienteOperacionSeleccionado])
+
+    const activeTenantValue = activeTenant?.id ? `tenant:${activeTenant.id}` : ""
+    const defaultSujeto =
+      sujetosObligadosDisponibles.find((sujeto) => sujeto.value === activeTenantValue) ??
+      sujetosObligadosDisponibles[0]
+    setSujetoObligadoOperacion(defaultSujeto.value)
+  }, [activeTenant?.id, sujetoObligadoOperacion, sujetosObligadosDisponibles])
+
+  useEffect(() => {
+    const clienteActualDisponible = clientesPorSujetoObligado.some(
+      (cliente) => cliente.value === clienteOperacionSeleccionado,
+    )
+
+    if (clientesPorSujetoObligado.length === 0) {
+      if (clienteOperacionSeleccionado) {
+        setClienteOperacionSeleccionado("")
+      }
+      if (expedienteSeleccionado) {
+        setExpedienteSeleccionado(null)
+      }
+      setPersonaExpedienteSeleccionada("")
+      setPersonaAvisoActual(null)
+      return
+    }
+
+    if (clienteActualDisponible) {
+      return
+    }
+
+    if (clientesPorSujetoObligado.length === 1) {
+      setClienteOperacionSeleccionado(clientesPorSujetoObligado[0].value)
+      return
+    }
+
+    if (clienteOperacionSeleccionado) {
+      setClienteOperacionSeleccionado("")
+    }
+    if (expedienteSeleccionado) {
+      setExpedienteSeleccionado(null)
+    }
+    setPersonaExpedienteSeleccionada("")
+    setPersonaAvisoActual(null)
+  }, [clienteOperacionSeleccionado, clientesPorSujetoObligado, expedienteSeleccionado])
+
+  useEffect(() => {
+    if (!clienteOperacionSeleccionado || expedienteSeleccionado === clienteOperacionSeleccionado) return
+    const existeExpediente = expedientesDisponibles.some((expediente) => expediente.rfc === clienteOperacionSeleccionado)
+    if (!existeExpediente) return
+    setExpedienteSeleccionado(clienteOperacionSeleccionado)
+    setPersonaExpedienteSeleccionada("")
+    setPersonaAvisoActual(null)
+  }, [clienteOperacionSeleccionado, expedienteSeleccionado, expedientesDisponibles])
 
   useEffect(() => {
     if (actividadesRegistradasCliente.length === 0) {
@@ -2746,17 +3198,6 @@ export default function ActividadesVulnerablesPage() {
       aviso: actividadSeleccionada.avisoUmbralUma * diaria,
     }
   }, [umaSeleccionada, actividadSeleccionada])
-
-  const actividadesFiltradas = useMemo(() => {
-    const termino = normalizarBusqueda(busquedaActividad)
-    if (!termino) return actividadesVulnerables
-    return actividadesVulnerables.filter((actividad) => {
-      const texto = normalizarBusqueda(
-        `${actividad.fraccion} ${actividad.nombre} ${actividad.descripcion}`,
-      )
-      return texto.includes(termino)
-    })
-  }, [busquedaActividad])
 
   const clientesGuardadosFiltrados = useMemo(() => {
     const termino = normalizarBusqueda(busquedaClienteGuardado)
@@ -2919,6 +3360,25 @@ export default function ActividadesVulnerablesPage() {
     if (!evaluacionActual) return []
     return CONTROLES_ARTICULO_17[evaluacionActual.status] ?? []
   }, [evaluacionActual])
+
+  const revisionPagoRecurrente = useMemo(
+    () =>
+      detectRecurringPaymentReview({
+        actividadKey: actividadSeleccionada?.key ?? "",
+        mesesCubiertos: Number(pagoRecurrenteMeses) || 1,
+        montoMxn: Number(montoOperacion) || 0,
+        mensualidadEsperadaMxn: Number(pagoRecurrenteMensualidad) || undefined,
+        salidaTipo: evaluacionActual?.salida.tipo ?? evaluacionActual?.status,
+      }),
+    [
+      actividadSeleccionada?.key,
+      evaluacionActual?.salida.tipo,
+      evaluacionActual?.status,
+      montoOperacion,
+      pagoRecurrenteMensualidad,
+      pagoRecurrenteMeses,
+    ],
+  )
 
   const satOutputKindActual = useMemo<SatOutputKind>(() => {
     if (sospecha24h) return "aviso_24h"
@@ -3417,6 +3877,99 @@ const satWorkbookStatusLabel = useMemo(
   () => formatSatWorkbookStatus(satWorkbookStatusActual, satMissingRequiredFields.length),
   [satWorkbookStatusActual, satMissingRequiredFields.length],
 )
+const contextClienteLabel = useMemo(
+  () =>
+    clienteOperacionSeleccionado
+      ? clientesPorSujetoObligado.find((cliente) => cliente.value === clienteOperacionSeleccionado)?.label ??
+        clienteNombre
+      : clienteNombre,
+  [clienteOperacionSeleccionado, clienteNombre, clientesPorSujetoObligado],
+)
+const contextActividadSeleccionada = actividadOperacionDetalle ?? actividadSeleccionada ?? null
+const contextSatFormato = useMemo(
+  () => (contextActividadSeleccionada ? resolveSatFormatoForActividad(contextActividadSeleccionada.key) : null),
+  [contextActividadSeleccionada],
+)
+const contextMissingReasons = useMemo(() => {
+  const reasons: Array<{ id: string; label: string; description: string; step: number }> = []
+
+  if (!activeTenant) {
+    reasons.push({
+      id: "context-tenant",
+      label: "Sujeto obligado",
+      description: "Carga o confirma el sujeto obligado que reportará.",
+      step: 0,
+    })
+  }
+  if (!umaSeleccionada) {
+    reasons.push({
+      id: "context-periodo",
+      label: "Periodo",
+      description: "Selecciona un mes con UMA vigente.",
+      step: 0,
+    })
+  }
+  if (!clienteOperacionSeleccionado && !expedienteSeleccionado && !clienteNombre.trim()) {
+    reasons.push({
+      id: "context-cliente",
+      label: "Cliente/EUI",
+      description: "Selecciona un expediente o captura el cliente.",
+      step: 2,
+    })
+  }
+  if (!contextActividadSeleccionada) {
+    reasons.push({
+      id: "context-actividad",
+      label: "Actividad vulnerable",
+      description: "Selecciona la fracción o subformato SAT aplicable.",
+      step: 1,
+    })
+  }
+  if (contextActividadSeleccionada && !contextSatFormato) {
+    reasons.push({
+      id: "context-formato",
+      label: "Formato SAT",
+      description: "Resuelve la plantilla oficial para la fracción seleccionada.",
+      step: 1,
+    })
+  }
+
+  return reasons
+}, [
+  activeTenant,
+  clienteNombre,
+  clienteOperacionSeleccionado,
+  contextActividadSeleccionada,
+  contextSatFormato,
+  expedienteSeleccionado,
+  umaSeleccionada,
+])
+const firstIncompleteStep = useMemo(
+  () => wizardStepDiagnostics.findIndex((diagnostic) => !diagnostic.canContinue),
+  [wizardStepDiagnostics],
+)
+const captureContextStatus =
+  contextMissingReasons.length > 0 ? "Falta" : firstIncompleteStep === -1 ? "Completo" : "Revisar"
+
+const sincronizarContextoOperacion = () => {
+  if (clienteOperacionSeleccionado && expedienteSeleccionado !== clienteOperacionSeleccionado) {
+    setExpedienteSeleccionado(clienteOperacionSeleccionado)
+    setPersonaExpedienteSeleccionada("")
+    setPersonaAvisoActual(null)
+  }
+  if (contextActividadSeleccionada && actividadKey !== contextActividadSeleccionada.key) {
+    setActividadKey(contextActividadSeleccionada.key)
+    setActividadInfoKey(contextActividadSeleccionada.key)
+  }
+  setAnioSeleccionado(anioOperacionCaptura)
+  setMesSeleccionado(mesOperacionCaptura)
+}
+
+const continuarCapturaDesdeContexto = () => {
+  sincronizarContextoOperacion()
+  const targetStep = contextMissingReasons[0]?.step ?? (firstIncompleteStep >= 0 ? firstIncompleteStep : pasoActual)
+  setPasoActual(targetStep)
+}
 
 const limpiarClienteSeleccionado = () => {
   setClienteSeleccionado(null)
@@ -3439,6 +3992,9 @@ const limpiarFormulario = () => {
   setMonedaPersonalizadaCodigo("")
   setMonedaPersonalizadaDescripcion("")
   setFechaOperacion(new Date().toISOString().substring(0, 10))
+  setPagoRecurrenteMeses("1")
+  setPagoRecurrenteMensualidad("")
+  setPagoRecurrenteNota("")
   setDetalleTipoCliente("")
   setCodigoOperacionInmueble("")
   setFiguraClienteInmueble("")
@@ -3450,6 +4006,7 @@ const limpiarFormulario = () => {
   setDraftEvidenceChecklist({})
   setDraftEvidenceJustifications({})
   setDraftEvidenceFiles({})
+  setDraftEvidenceUploads([])
   setInmuebleForm({ ...INMUEBLE_FORM_DEFAULT })
   setLiquidacionForm({ ...LIQUIDACION_FORM_DEFAULT })
   setBeneficiarioForm({ ...BENEFICIARIO_FORM_DEFAULT })
@@ -3511,6 +4068,9 @@ const cargarDemoFraccionXV = () => {
   setFechaOperacion(demo.periodo.fechaOperacion)
   setTipoOperacion(demo.cliente.tipoOperacion)
   setMontoOperacion(demo.cliente.monto)
+  setPagoRecurrenteMeses("1")
+  setPagoRecurrenteMensualidad(demo.cliente.monto)
+  setPagoRecurrenteNota("")
   setMoneda(demo.cliente.moneda)
   setClienteNombre(demo.cliente.nombre)
   setRfc(demo.cliente.rfc)
@@ -3772,7 +4332,17 @@ const agregarOperacion = () => {
     draftEvidenceJustifications,
     requisitosDocumentalesActuales,
   )
+  const requisitosConCargaRapida = new Set(draftEvidenceUploads.map((upload) => upload.requisitoId))
+  const documentosCargaRapida = draftEvidenceUploads.map((upload) => ({
+    id: upload.id,
+    requisito: upload.requisitoLabel,
+    notas: evidencia.trim() || draftEvidenceJustifications[upload.requisitoId]?.trim() || "Archivo cargado en captura guiada.",
+    archivoNombre: upload.archivoNombre,
+    archivoContenido: upload.archivoContenido,
+    fechaRegistro: upload.fechaRegistro,
+  }) satisfies DocumentoSoporte)
   const documentosArchivos = Object.entries(draftEvidenceFiles)
+    .filter(([requisitoId]) => !requisitosConCargaRapida.has(requisitoId))
     .filter(([, archivoNombre]) => archivoNombre.trim())
     .map(([requisitoId, archivoNombre]) => {
       const requisito = requisitosDocumentalesActuales.find((item) => item.id === requisitoId)
@@ -3843,7 +4413,7 @@ const agregarOperacion = () => {
     alerta,
     avisoPresentado: false,
     alertaResuelta: alerta ? false : true,
-    documentosSoporte: [...documentosArchivos, ...documentosJustificados],
+    documentosSoporte: [...documentosCargaRapida, ...documentosArchivos, ...documentosJustificados],
     requisitosChecklist,
     kycIntegrado: false,
     referenciaAviso: esActividadInmuebles ? referenciaAviso.trim() : undefined,
@@ -3878,6 +4448,16 @@ const agregarOperacion = () => {
     pepCargo: pepCargoCliente.trim() || undefined,
     pepDependencia: pepDependenciaCliente.trim() || undefined,
     pepScreening: pepScreeningCliente ?? undefined,
+    pagoRecurrenteMeses: esActividadInmuebles ? Number(pagoRecurrenteMeses) || 1 : undefined,
+    pagoRecurrenteMensualidad:
+      esActividadInmuebles && Number(pagoRecurrenteMensualidad) > 0
+        ? Number(pagoRecurrenteMensualidad)
+        : undefined,
+    posibleFalsoPositivo: revisionPagoRecurrente.requiresReview,
+    falsoPositivoRazon:
+      revisionPagoRecurrente.requiresReview
+        ? pagoRecurrenteNota.trim() || revisionPagoRecurrente.message
+        : undefined,
   }
 
   actualizarOperaciones((prev) => [...prev, nuevaOperacion])
@@ -4334,8 +4914,8 @@ const reutilizarDatosCliente = (operacion: OperacionCliente) => {
   setTabActiva("captura")
   setActividadKey(operacion.actividadKey)
   setActividadInfoKey(operacion.actividadKey)
-  setAnioSeleccionado(operacion.anio)
-  setMesSeleccionado(operacion.mes)
+  setAnioSeleccionado(currentYear)
+  setMesSeleccionado(currentMonth)
   setTipoCliente(operacion.tipoCliente)
   setDetalleTipoCliente(operacion.detalleTipoCliente ?? "")
   setClienteNombre(operacion.cliente)
@@ -4355,7 +4935,12 @@ const reutilizarDatosCliente = (operacion: OperacionCliente) => {
   }
   setFechaOperacion(new Date().toISOString().substring(0, 10))
   setEvidencia(operacion.evidencia)
-  setMontoOperacion("")
+  setMontoOperacion(String(operacion.monto || ""))
+  setPagoRecurrenteMeses("1")
+  setPagoRecurrenteMensualidad(
+    operacion.pagoRecurrenteMensualidad ? String(operacion.pagoRecurrenteMensualidad) : String(operacion.monto || ""),
+  )
+  setPagoRecurrenteNota("")
   setReferenciaAviso(operacion.referenciaAviso ?? "")
   setAlertaCodigo(operacion.alertaCodigo ?? ALERTA_DEFAULT)
   setAlertaDescripcion(operacion.alertaDescripcion ?? "")
@@ -4447,10 +5032,11 @@ const reutilizarDatosCliente = (operacion: OperacionCliente) => {
   if (operacion.personaAviso) {
     setPersonaAvisoActual(operacion.personaAviso)
   }
+  setSatFieldValues(buildReusableSatFieldValues(operacion.satFieldValues))
   setPasoActual(1)
   toast({
-    title: "Datos precargados",
-    description: "Actualiza el monto y confirma la nueva operación del cliente seleccionado.",
+    title: "Plantilla reutilizada",
+    description: "Se copió la operación base. Ajusta fecha, monto o meses cubiertos antes de guardar el nuevo periodo.",
   })
 }
 
@@ -4542,6 +5128,70 @@ const manejarArchivoDocumento = (event: ChangeEvent<HTMLInputElement>) => {
   }
   lector.readAsDataURL(archivo)
   event.target.value = ""
+}
+
+const manejarArchivosEvidenciaRapida = (
+  requisitoId: string,
+  requisitoLabel: string,
+  event: ChangeEvent<HTMLInputElement>,
+) => {
+  const archivos = Array.from(event.target.files ?? [])
+  if (archivos.length === 0) return
+
+  const nombresExistentes = draftEvidenceUploads
+    .filter((upload) => upload.requisitoId === requisitoId)
+    .map((upload) => upload.archivoNombre)
+  const nombres = [...nombresExistentes, ...archivos.map((archivo) => archivo.name)]
+
+  setDraftEvidenceChecklist((prev) => ({ ...prev, [requisitoId]: true }))
+  setDraftEvidenceFiles((prev) => ({ ...prev, [requisitoId]: nombres.join(", ") }))
+
+  archivos.forEach((archivo) => {
+    const uploadBase: DraftEvidenceUpload = {
+      id: typeof crypto !== "undefined" ? crypto.randomUUID() : `${Date.now()}-${archivo.name}`,
+      requisitoId,
+      requisitoLabel,
+      archivoNombre: archivo.name,
+      fechaRegistro: new Date().toISOString().substring(0, 10),
+    }
+    const lector = new FileReader()
+    lector.onload = () => {
+      setDraftEvidenceUploads((prev) => [
+        ...prev,
+        {
+          ...uploadBase,
+          archivoContenido: typeof lector.result === "string" ? lector.result : undefined,
+        },
+      ])
+    }
+    lector.readAsDataURL(archivo)
+  })
+
+  event.target.value = ""
+}
+
+const eliminarEvidenciaRapida = (uploadId: string) => {
+  const upload = draftEvidenceUploads.find((item) => item.id === uploadId)
+  const nextUploads = draftEvidenceUploads.filter((item) => item.id !== uploadId)
+  setDraftEvidenceUploads(nextUploads)
+
+  if (!upload) return
+
+  const remainingNames = nextUploads
+    .filter((item) => item.requisitoId === upload.requisitoId)
+    .map((item) => item.archivoNombre)
+  setDraftEvidenceFiles((prev) => {
+    const next = { ...prev }
+    if (remainingNames.length > 0) {
+      next[upload.requisitoId] = remainingNames.join(", ")
+    } else {
+      delete next[upload.requisitoId]
+    }
+    return next
+  })
+  if (remainingNames.length === 0) {
+    setDraftEvidenceChecklist((prev) => ({ ...prev, [upload.requisitoId]: false }))
+  }
 }
 
 const agregarDocumentoSoporte = () => {
@@ -4813,202 +5463,156 @@ const cambiarMesCalendario = (delta: number) => {
         </TabsContent>
 
         <TabsContent value="captura" className="space-y-4">
-          <Card className="border-emerald-200">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-emerald-600" /> Registro de actos y operaciones
-              </CardTitle>
-              <CardDescription>
-                Reestructura el módulo en dos opciones: consulta de expedientes de identificación existentes o creación de un
-                nuevo expediente antes de capturar operaciones.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Tabs value={registroModo} onValueChange={(value) => setRegistroModo(value as "consulta" | "nuevo")}
-                className="space-y-4"
-              >
-                <TabsList className="grid w-full gap-2 rounded-xl bg-emerald-50 p-1 sm:grid-cols-2">
-                  <TabsTrigger value="consulta" className="text-sm">Opción 1: Consulta expediente de identificación</TabsTrigger>
-                  <TabsTrigger value="nuevo" className="text-sm">Opción 2: Crear nuevo expediente</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="consulta" className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>¿Quién es el sujeto obligado?</Label>
-                      <Select value={sujetoConsulta} onValueChange={setSujetoConsulta}>
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Selecciona un sujeto obligado" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {sujetosObligadosDisponibles.length > 0 ? (
-                            sujetosObligadosDisponibles.map((opcion) => (
-                              <SelectItem key={opcion.value} value={opcion.value}>
-                                {opcion.label}
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <div className="px-3 py-2 text-sm text-muted-foreground">Sin expedientes cargados</div>
-                          )}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Confirma si ya existe un expediente dado de alta antes de continuar con la captura.
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Expediente de identificación</Label>
-                      <Select
-                        value={expedienteConsultaId ?? ""}
-                        onValueChange={(valor) => setExpedienteConsultaId(valor)}
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Selecciona un expediente" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {expedientesDisponibles.length > 0 ? (
-                            expedientesDisponibles.map((expediente) => (
-                              <SelectItem key={expediente.rfc} value={expediente.rfc}>
-                                {expediente.nombre ?? expediente.rfc}
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <div className="px-3 py-2 text-sm text-muted-foreground">No hay expedientes en memoria</div>
-                          )}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">Consulta el expediente antes de registrar actos u operaciones.</p>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>
-                        Checklist documental por tipo de persona
-                        {requisitosDocumentalesActuales[0]?.source ? ` (${requisitosDocumentalesActuales[0].source.split(",")[0]})` : ""}
-                      </Label>
-                      <ScrollArea className="h-32 rounded border bg-slate-50 p-3 text-xs text-slate-700">
-                        <ul className="space-y-1 list-disc pl-4">
-                          {requisitosDocumentalesActuales.slice(0, 8).map((requisito) => (
-                            <li key={requisito.id}>
-                              {requisito.label}
-                              {requisito.critical ? " *" : ""}
-                            </li>
-                          ))}
-                        </ul>
-                      </ScrollArea>
-                      <p className="text-xs text-muted-foreground">
-                        * Evidencia crítica: permite guardar avances, pero bloquea cierre sin documento o justificación.
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Cargar identificación del sujeto obligado</Label>
-                      <Input type="file" className="bg-white" />
-                      <p className="text-xs text-muted-foreground">Carga rápida de la identificación para mantener el expediente completo.</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
-                    <Checkbox
-                      id="relacion-negocios"
-                      checked={relacionNegocios}
-                      onCheckedChange={(valor) => setRelacionNegocios(Boolean(valor))}
-                    />
-                    <div className="space-y-1">
-                      <Label htmlFor="relacion-negocios">¿La actividad vulnerable constituye una relación de negocios?</Label>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <span>Si es afirmativa, se debe actualizar el expediente al menos una vez al año.</span>
-                        <Button variant="link" className="h-auto p-0 text-emerald-700" onClick={() => setRelacionNegociosOpen(true)}>
-                          ¿Qué es relación de negocios?
-                        </Button>
-                      </div>
-                      {relacionNegocios && (
-                        <p className="text-xs text-emerald-700">
-                          Fecha de alta conocida: {fechaBaseConsulta ?? fechaBaseExpediente ?? "Sin registrar"}. Próxima revisión:
-                          {" "}
-                          {siguienteRevisionAnual ?? "programar actualización anual"}.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="nuevo" className="space-y-4">
-                  <p className="text-sm text-slate-700">
-                    Crea un nuevo expediente de identificación antes de capturar operaciones. Este módulo te guía para reunir los
-                    documentos del anexo 3 y vincular la actividad vulnerable correspondiente.
-                  </p>
-                  <div className="rounded-lg border bg-slate-50 p-4 text-sm text-slate-700">
-                    <p className="font-semibold">Pasos sugeridos</p>
-                    <ol className="mt-2 list-decimal space-y-1 pl-4">
-                      <li>Define el sujeto obligado responsable y selecciona la fracción aplicable.</li>
-                      <li>Integra la documentación de identificación y datos fiscales del cliente.</li>
-                      <li>Confirma si existe relación de negocios y establece la vigencia anual.</li>
-                    </ol>
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    <Button asChild>
-                      <Link href="/kyc-expediente">Crear expediente de identificación</Link>
-                    </Button>
-                    <Button
+          <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
+            <div className="border-b border-emerald-100 bg-emerald-50/60 px-5 py-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-base font-semibold text-slate-950">Contexto de operación</h2>
+                    <Badge
                       variant="outline"
-                      onClick={() => {
-                        setTabActiva("captura")
-                        setPasoActual(0)
+                      className={
+                        captureContextStatus === "Completo"
+                          ? "border-emerald-200 bg-white text-emerald-700"
+                          : captureContextStatus === "Revisar"
+                            ? "border-sky-200 bg-white text-sky-700"
+                            : "border-amber-200 bg-white text-amber-700"
+                      }
+                    >
+                      {captureContextStatus}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Define una sola vez sujeto, periodo, expediente y actividad. El wizard reutiliza este contexto.
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={cargarDemoFraccionXV}>
+                    Cargar demo
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={limpiarFormulario}>
+                    Limpiar
+                  </Button>
+                  <Button type="button" size="sm" onClick={continuarCapturaDesdeContexto}>
+                    Continuar captura
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-5">
+              <div className="grid gap-x-5 gap-y-4 lg:grid-cols-2">
+                <div className="min-w-0 space-y-2">
+                  <div className="flex h-5 items-center justify-between gap-2">
+                    <Label className="text-[13px] font-semibold text-slate-800">Sujeto obligado</Label>
+                  </div>
+                  {sujetosObligadosDisponibles.length > 0 ? (
+                    <Select
+                      value={sujetoObligadoOperacion}
+                      onValueChange={(value) => {
+                        setSujetoObligadoOperacion(value)
+                        setClienteOperacionSeleccionado("")
+                        setExpedienteSeleccionado(null)
+                        setPersonaExpedienteSeleccionada("")
+                        setPersonaAvisoActual(null)
                       }}
                     >
-                      Continuar a la captura guiada
-                    </Button>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+                      <SelectTrigger
+                        className="h-11 min-w-0 rounded-xl border-slate-200 bg-white px-4 text-[15px] shadow-sm shadow-slate-100/70 [&>span]:min-w-0 [&>span]:truncate"
+                        title={sujetoObligadoContexto?.label ?? activeTenant?.razonSocial ?? "Selecciona sujeto"}
+                      >
+                        <SelectValue placeholder={activeTenant?.razonSocial ?? "Selecciona sujeto"} />
+                      </SelectTrigger>
+                      <SelectContent className="max-w-[min(760px,calc(100vw-2rem))]">
+                        {sujetosObligadosDisponibles.map((opcion) => (
+                          <SelectItem key={opcion.value} value={opcion.value} className="max-w-full">
+                            <span className="block max-w-[min(680px,calc(100vw-5rem))] truncate">
+                              {opcion.label} · {opcion.expedientesCount} EUI
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
+                      <p className="truncate font-medium">{activeTenant?.razonSocial ?? "Demo PLD Multi-cliente"}</p>
+                      <p className="truncate text-xs text-slate-500">RFC {activeTenant?.rfc ?? "pendiente"}</p>
+                    </div>
+                  )}
+                </div>
 
-          <Card className="border-slate-200">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CalendarDays className="h-5 w-5 text-emerald-600" /> Capturar operaciones del mes
-              </CardTitle>
-              <CardDescription>
-                Define el sujeto obligado que reportará, el cliente relacionado y limita las actividades vulnerables a las que ya
-                están vinculados en el expediente.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>¿Qué sujeto obligado va a capturar la operación?</Label>
+                <div className="min-w-0 space-y-2">
+                  <div className="flex h-5 items-center justify-between gap-2">
+                    <Label className="text-[13px] font-semibold text-slate-800">Periodo</Label>
+                    <span className="truncate text-[11px] font-medium text-slate-400">{buildPeriodo(anioOperacionCaptura, mesOperacionCaptura)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select
+                      value={anioOperacionCaptura.toString()}
+                      onValueChange={(value) => {
+                        const year = Number(value)
+                        setAnioOperacionCaptura(year)
+                        setAnioSeleccionado(year)
+                      }}
+                    >
+                      <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-white px-4 text-[15px] shadow-sm shadow-slate-100/70">
+                        <SelectValue placeholder="Año" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(availableYears.length > 0 ? availableYears : [anioOperacionCaptura]).map((year) => (
+                          <SelectItem key={year} value={year.toString()}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={mesOperacionCaptura.toString()}
+                      onValueChange={(value) => {
+                        const month = Number(value)
+                        setMesOperacionCaptura(month)
+                        setMesSeleccionado(month)
+                      }}
+                    >
+                      <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-white px-4 text-[15px] shadow-sm shadow-slate-100/70">
+                        <SelectValue placeholder="Mes" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MONTHS.map((mes, index) => (
+                          <SelectItem key={mes} value={(index + 1).toString()}>
+                            {mes}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="min-w-0 space-y-2">
+                  <div className="flex h-5 items-center justify-between gap-2">
+                    <Label className="text-[13px] font-semibold text-slate-800">Cliente/EUI</Label>
+                    <span className="truncate text-[11px] font-medium text-slate-400">
+                      {clientesPorSujetoObligado.length === 1
+                        ? "selección automática"
+                        : clientesPorSujetoObligado.length > 1
+                          ? `${clientesPorSujetoObligado.length} expedientes`
+                          : "sin EUI"}
+                    </span>
+                  </div>
                   <Select
-                    value={sujetoObligadoOperacion}
+                    value={clienteOperacionSeleccionado}
                     onValueChange={(value) => {
-                      setSujetoObligadoOperacion(value)
-                      setClienteOperacionSeleccionado("")
+                      setClienteOperacionSeleccionado(value)
+                      setExpedienteSeleccionado(value)
+                      setPersonaExpedienteSeleccionada("")
+                      setPersonaAvisoActual(null)
                     }}
                   >
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="Selecciona un sujeto obligado" />
+                    <SelectTrigger className="h-11 min-w-0 rounded-xl border-slate-200 bg-white px-4 text-[15px] shadow-sm shadow-slate-100/70 [&>span]:min-w-0 [&>span]:truncate">
+                      <SelectValue placeholder="Selecciona expediente" />
                     </SelectTrigger>
-                    <SelectContent>
-                      {sujetosObligadosDisponibles.length > 0 ? (
-                        sujetosObligadosDisponibles.map((opcion) => (
-                          <SelectItem key={opcion.value} value={opcion.value}>
-                            {opcion.label}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <div className="px-3 py-2 text-sm text-muted-foreground">Carga un expediente primero</div>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Selecciona al cliente del sujeto obligado</Label>
-                  <Select value={clienteOperacionSeleccionado} onValueChange={setClienteOperacionSeleccionado}>
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="Elige un cliente" />
-                    </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-72">
                       {clientesPorSujetoObligado.length > 0 ? (
                         clientesPorSujetoObligado.map((cliente) => (
                           <SelectItem key={cliente.value} value={cliente.value}>
@@ -5016,137 +5620,127 @@ const cambiarMesCalendario = (delta: number) => {
                           </SelectItem>
                         ))
                       ) : (
-                        <div className="px-3 py-2 text-sm text-muted-foreground">Sin clientes vinculados</div>
+                        <div className="px-3 py-2 text-sm text-muted-foreground">Sin expedientes vinculados</div>
                       )}
                     </SelectContent>
                   </Select>
+                  <p className="line-clamp-1 text-xs text-slate-500">
+                    {clientesPorSujetoObligado.length === 0
+                      ? "Este sujeto obligado todavía no tiene expedientes EUI vinculados."
+                      : clientesPorSujetoObligado.length === 1
+                        ? "1 expediente disponible; se selecciona automáticamente."
+                        : `${clientesPorSujetoObligado.length} expedientes disponibles para este sujeto obligado.`}
+                  </p>
                 </div>
-              </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>¿Respecto de qué actividad vulnerable vas a registrar la operación?</Label>
-                  <Select
-                    value={actividadOperacionSeleccionada}
-                    onValueChange={setActividadOperacionSeleccionada}
-                    disabled={!clienteOperacionSeleccionado || actividadesRegistradasCliente.length === 0}
-                  >
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="Actividad vinculada en expediente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {actividadesRegistradasCliente.length > 0 ? (
-                        actividadesRegistradasCliente.map((actividad) => (
-                          <SelectItem key={actividad.key} value={actividad.key}>
-                            {actividad.fraccion} – {actividad.nombre}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <div className="px-3 py-2 text-sm text-muted-foreground">
-                          {clienteOperacionSeleccionado
-                            ? "No hay actividades registradas en el expediente. Selecciona una para continuar."
-                            : "Selecciona un cliente para ver actividades disponibles."}
-                        </div>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>¿Con qué cliente realizaste la operación?</Label>
-                  <Input
-                    value={
-                      clienteOperacionSeleccionado
-                        ? clientesPorSujetoObligado.find((cliente) => cliente.value === clienteOperacionSeleccionado)?.label ?? ""
-                        : ""
-                    }
-                    readOnly
-                    placeholder="Cliente seleccionado"
+                <div className="min-w-0 space-y-2">
+                  <div className="flex h-5 items-center justify-between gap-2">
+                    <Label className="text-[13px] font-semibold text-slate-800">Actividad vulnerable</Label>
+                    <span className="truncate text-[11px] font-medium text-slate-400">
+                      {contextActividadSeleccionada?.fraccion ?? "fracción pendiente"}
+                    </span>
+                  </div>
+                  <ActividadVulnerableCombobox
+                    value={actividadOperacionSeleccionada || actividadKey}
+                    options={actividadesRegistradasCliente.length > 0 ? actividadesRegistradasCliente : actividadesVulnerables}
+                    placeholder="Busca fracción o actividad"
+                    disabled={(actividadesRegistradasCliente.length > 0 ? actividadesRegistradasCliente : actividadesVulnerables).length === 0}
+                    triggerClassName="h-11 rounded-xl border-slate-200 px-4 text-[15px] shadow-sm shadow-slate-100/70"
+                    onChange={(value) => {
+                      setActividadOperacionSeleccionada(value)
+                      setActividadKey(value)
+                      setActividadInfoKey(value)
+                    }}
                   />
-                  <p className="text-xs text-muted-foreground">La selección proviene del expediente activo del sujeto obligado.</p>
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Año de la operación</Label>
-                  <Select value={anioOperacionCaptura.toString()} onValueChange={(value) => setAnioOperacionCaptura(Number(value))}>
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="Selecciona año" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(availableYears.length > 0 ? availableYears : [anioOperacionCaptura]).map((year) => (
-                        <SelectItem key={year} value={year.toString()}>
-                          {year}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="min-w-0 rounded-xl border bg-slate-50 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">EUI</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-slate-900">
+                    {contextClienteLabel || "Pendiente"}
+                  </p>
+                  <p className="truncate text-xs text-slate-500">{rfc || clienteOperacionSeleccionado || "Selecciona cliente"}</p>
                 </div>
-                <div className="space-y-2">
-                  <Label>Mes al que corresponde la operación</Label>
-                  <Select value={mesOperacionCaptura.toString()} onValueChange={(value) => setMesOperacionCaptura(Number(value))}>
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="Selecciona mes" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MONTHS.map((mes, index) => (
-                        <SelectItem key={mes} value={(index + 1).toString()}>
-                          {mes}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="min-w-0 rounded-xl border bg-slate-50 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Formato</p>
+                  <p
+                    className="mt-1 line-clamp-2 break-all text-xs font-semibold leading-snug text-slate-900"
+                    title={satTemplateActual?.officialXlsmName ?? contextSatFormato?.nombre ?? "Pendiente"}
+                  >
+                    {satTemplateActual?.officialXlsmName ?? contextSatFormato?.nombre ?? "Pendiente"}
+                  </p>
+                  <p className="mt-1 truncate text-xs text-slate-500">{contextActividadSeleccionada?.fraccion ?? "Sin fracción"}</p>
                 </div>
+                <div className="min-w-0 rounded-xl border bg-slate-50 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Salida preliminar</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-slate-900">{formatSalidaTipo(satOutputKindActual)}</p>
+                  <p className="line-clamp-2 text-xs leading-snug text-slate-500">{satWorkbookStatusLabel}</p>
+                </div>
+                <label className="flex min-w-0 items-start gap-3 rounded-xl border bg-slate-50 p-3 text-sm">
+                  <Checkbox
+                    checked={relacionNegocios}
+                    onCheckedChange={(valor) => setRelacionNegocios(Boolean(valor))}
+                    className="mt-0.5"
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-slate-900">Relación de negocios</span>
+                    <button
+                      type="button"
+                      className="truncate text-left text-xs text-emerald-700 underline-offset-2 hover:underline"
+                      onClick={() => setRelacionNegociosOpen(true)}
+                    >
+                      {relacionNegocios
+                        ? `Revisión ${siguienteRevisionAnual ?? "por programar"}`
+                        : "Marcar si aplica"}
+                    </button>
+                  </span>
+                </label>
               </div>
 
-              <div className="space-y-2 rounded-lg border bg-slate-50 p-4 text-sm text-slate-700">
-                <p className="font-semibold">Vista previa antes de enviar</p>
-                <p>
-                  Cliente: {clienteOperacionSeleccionado
-                    ? clientesPorSujetoObligado.find((cliente) => cliente.value === clienteOperacionSeleccionado)?.label ?? "Pendiente"
-                    : "Pendiente"}
-                </p>
-                <p>
-                  Actividad vulnerable: {actividadOperacionDetalle
-                    ? `${actividadOperacionDetalle.fraccion} – ${actividadOperacionDetalle.nombre}`
-                    : "Selecciona una actividad registrada"}
-                </p>
-                <p>
-                  Periodo: {MONTHS[mesOperacionCaptura - 1]} {anioOperacionCaptura}. Sujeto obligado: {" "}
-                  {sujetoObligadoOperacion || "sin definir"}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  onClick={() => {
-                    if (clienteOperacionSeleccionado) {
-                      setExpedienteSeleccionado(clienteOperacionSeleccionado)
-                      setPersonaExpedienteSeleccionada("")
-                      setPersonaAvisoActual(null)
-                    }
-                    if (actividadOperacionDetalle) {
-                      setActividadKey(actividadOperacionDetalle.key)
-                      setActividadInfoKey(actividadOperacionDetalle.key)
-                    }
-                    setAnioSeleccionado(anioOperacionCaptura)
-                    setMesSeleccionado(mesOperacionCaptura)
-                    setTabActiva("captura")
-                    setPasoActual(0)
-                  }}
-                  disabled={!clienteOperacionSeleccionado || !actividadOperacionDetalle}
-                >
-                  Sincronizar con la captura guiada
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  {actividadRegistroOperacion.tieneRegistro
-                    ? "Solo se muestran actividades vulnerables registradas en el expediente del cliente."
-                    : "Si el expediente no tiene actividad registrada, selecciona una manualmente para sincronizar."}
-                </p>
-              </div>
-          </CardContent>
-        </Card>
+              {contextMissingReasons.length > 0 ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <p className="font-semibold">Qué falta para iniciar sin fricción</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {contextMissingReasons.map((reason) => (
+                      <Badge key={reason.id} variant="outline" className="border-amber-200 bg-white text-amber-800">
+                        {reason.label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                  <span className="font-semibold">Contexto listo. Continúa con el primer paso operativo pendiente.</span>
+                  <span className="text-xs">
+                    {MONTHS[mesOperacionCaptura - 1]} {anioOperacionCaptura} · {contextActividadSeleccionada?.nombre}
+                  </span>
+                </div>
+              )}
+            </div>
+          </section>
 
-          <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)_340px] xl:items-start">
+          <SatOutputSummaryPanel
+            clienteNombre={clienteNombre}
+            rfc={rfc}
+            actividadFraccion={actividadSeleccionada?.fraccion ?? ""}
+            actividadNombre={actividadSeleccionada?.nombre ?? ""}
+            salidaLabel={formatSalidaTipo(satOutputKindActual)}
+            fechaLimiteLabel={
+              operationalCasePreview?.satOutputStatus.fechaLimite
+                ? `Límite ${formatDateDisplay(operationalCasePreview.satOutputStatus.fechaLimite)}`
+                : "Sin fecha ordinaria"
+            }
+            evidenciaLabel={evidenceDecisionActual.canClose ? "Lista para cierre" : "Pendiente"}
+            missingCriticalCount={evidenceDecisionActual.missingCritical.length}
+            workbookStatusLabel={satWorkbookStatusLabel}
+            blockersView={blockingReasonsView}
+            salidaInfo={ACTOS_INFO_HINTS.salidaSat}
+            evidenciaInfo={ACTOS_INFO_HINTS.evidenciaCritica}
+          />
+
+          <div className="grid gap-4 lg:grid-cols-[170px_minmax(0,1fr)] lg:items-start">
             <OperationalProgressRail
               steps={STEPS}
               diagnostics={wizardStepDiagnostics}
@@ -5156,258 +5750,94 @@ const cambiarMesCalendario = (delta: number) => {
 
             <div className="min-w-0 space-y-4">
               {pasoActual === 0 && (
-            <Card className="border-slate-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-slate-600" /> Paso 1. Sujeto obligado y periodo
-                </CardTitle>
-                <CardDescription>
-                  Define el cliente operativo de la plataforma, responsables internos, periodo de reporte y UMA aplicable.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" onClick={cargarDemoFraccionXV}>
-                    Cargar demo Fracción XV
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={limpiarFormulario}>
-                    Limpiar campos
-                  </Button>
-                </div>
-                <div className="rounded border border-emerald-200 bg-emerald-50/50 p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-emerald-700">Sujeto obligado activo</p>
-                      <p className="mt-1 text-lg font-semibold text-slate-800">
-                        {activeTenant?.razonSocial ?? "Demo PLD Multi-cliente"}
-                      </p>
-                      <p className="text-sm text-slate-600">
-                        RFC {activeTenant?.rfc ?? "Pendiente"} · Manual {activeTenant?.manual.version ?? "sin versión"} · Vigente desde {activeTenant?.manual.vigenteDesde ?? "pendiente"}
-                      </p>
-                    </div>
-                    <div className="rounded border bg-white px-3 py-2 text-xs text-slate-700">
-                      <p className="font-semibold">{activeTenant?.representanteCumplimiento.nombre}</p>
-                      <p>{activeTenant?.representanteCumplimiento.cargo}</p>
-                      <p className="mt-1 text-muted-foreground">
-                        {activeTenant?.actividades.length ?? 0} actividades configuradas · {SAT_FORMATOS_ACTIVIDADES.length} formatos SAT en manifiesto
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Actividad vulnerable</Label>
-                    <Select
-                      value={actividadKey}
-                      onValueChange={(value) => {
-                        setActividadKey(value)
-                        setActividadInfoKey(value)
-                      }}
-                      onOpenChange={(open) => {
-                        if (open) {
-                          setBusquedaActividad("")
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="Selecciona una actividad" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <div className="p-2">
-                          <Input
-                            autoFocus
-                            placeholder="Buscar actividad..."
-                            value={busquedaActividad}
-                            onChange={(event) => setBusquedaActividad(event.target.value)}
-                          />
-                        </div>
-                        {actividadesFiltradas.length > 0 ? (
-                          actividadesFiltradas.map((actividad) => (
-                            <SelectItem key={actividad.key} value={actividad.key}>
-                              {actividad.fraccion} – {actividad.nombre}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <div className="px-3 py-2 text-sm text-muted-foreground">
-                            Sin coincidencias
-                          </div>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                      Año
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6"
-                        onClick={() => setInfoModal("uma-validacion")}
-                        aria-label="Información sobre UMA por año"
-                      >
-                        <Info className="h-4 w-4" />
-                      </Button>
-                    </Label>
-                    <Select
-                      value={anioSeleccionado.toString()}
-                      onValueChange={(value) => {
-                        const year = Number(value)
-                        setAnioSeleccionado(year)
-                        const meses = umaVentana
-                          .filter((entry) => entry.year === year)
-                          .map((entry) => entry.month)
-                          .sort((a, b) => a - b)
-                        if (!meses.includes(mesSeleccionado)) {
-                          setMesSeleccionado(meses[0] ?? 1)
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="Selecciona año" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableYears.map((year) => (
-                          <SelectItem key={year} value={year.toString()}>
-                            {year}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Mes</Label>
-                    <Select
-                      value={mesSeleccionado.toString()}
-                      onValueChange={(value) => setMesSeleccionado(Number(value))}
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="Selecciona mes" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {mesesDisponibles.map((mes) => (
-                          <SelectItem key={mes} value={mes.toString()}>
-                            {monthLabel(mes)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="rounded border bg-slate-50 p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700">UMA del mes seleccionado</p>
-                      <p className="text-xs text-muted-foreground">
-                        Se utiliza el valor diario vigente para calcular automáticamente los umbrales en pesos.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-4 rounded border border-emerald-200 bg-white p-4 text-sm text-slate-700">
-                    {umaSeleccionada ? (
-                      <>
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-slate-500">Periodo</p>
-                            <p className="text-lg font-semibold text-slate-800">
-                              {monthLabel(umaSeleccionada.month)} {umaSeleccionada.year}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs uppercase tracking-wide text-emerald-600">UMA diaria</p>
-                            <p className="text-2xl font-bold text-emerald-700">
-                              {formatCurrency(umaSeleccionada.daily)}
-                            </p>
-                          </div>
-                        </div>
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Vigencia del {formatDateDisplay(umaSeleccionada.validFrom)} al {" "}
-                          {formatDateDisplay(umaSeleccionada.validTo)}.
+                <Card className="border-slate-200">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Building2 className="h-5 w-5 text-slate-600" /> Contexto confirmado
+                    </CardTitle>
+                    <CardDescription>
+                      Este paso resume lo que ya definiste arriba. Cambia datos en “Contexto de operación” si hace falta.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="rounded-xl border bg-slate-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sujeto obligado</p>
+                        <p className="mt-1 line-clamp-2 break-words font-semibold leading-snug text-slate-900">
+                          {activeTenant?.razonSocial ?? "Demo PLD Multi-cliente"}
                         </p>
-                      </>
-                    ) : (
-                      <p className="text-xs text-slate-600">
-                        No se encontró UMA para este periodo. Selecciona un mes disponible en el catálogo.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {actividadInfoKey && (
-                  <div className="rounded border bg-white p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-semibold text-slate-700">
-                          {actividadSeleccionada?.fraccion} – {actividadSeleccionada?.nombre}
+                        <p className="text-xs text-slate-500">
+                          RFC {activeTenant?.rfc ?? "pendiente"} · {activeTenant?.representanteCumplimiento.nombre ?? "Responsable pendiente"}
                         </p>
-                        <p className="text-sm text-muted-foreground">{actividadSeleccionada?.descripcion}</p>
                       </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => setActividadInfoKey(null)}
-                        aria-label="Cerrar detalles"
-                      >
-                        <ArrowRight className="h-4 w-4 rotate-180" />
-                      </Button>
+                      <div className="rounded-xl border bg-slate-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Periodo y UMA</p>
+                        <p className="mt-1 font-semibold text-slate-900">
+                          {monthLabel(mesSeleccionado)} {anioSeleccionado}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {umaSeleccionada ? `UMA diaria ${formatCurrency(umaSeleccionada.daily)}` : "UMA pendiente"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border bg-slate-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Actividad vulnerable</p>
+                        <p className="mt-1 font-semibold text-slate-900">
+                          {actividadSeleccionada ? `${actividadSeleccionada.fraccion} · ${actividadSeleccionada.nombre}` : "Pendiente"}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {acumulacionSourceDisplay?.chips.map((chip) => (
+                            <RegulatorySourceChip key={chip.id} chip={chip} />
+                          ))}
+                          {acumulacionSourceDisplay && (
+                            <InfoHint
+                              content={{
+                                id: "acumulacion-fuente",
+                                title: acumulacionRuleActual?.applies ? "Acumula seis meses" : "No acumula seis meses",
+                                summary: acumulacionSourceDisplay.summary,
+                                body: acumulacionSourceDisplay.detail.split("\n").filter(Boolean),
+                                sourceLabel: acumulacionSourceDisplay.chips.find((chip) => chip.sourceUrl)?.label,
+                                sourceUrl: acumulacionSourceDisplay.chips.find((chip) => chip.sourceUrl)?.sourceUrl,
+                              }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border bg-slate-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Formato SAT</p>
+                        <p
+                          className="mt-1 line-clamp-2 break-all font-semibold leading-snug text-slate-900"
+                          title={satTemplateActual?.officialXlsmName ?? satFormatoActual?.nombre ?? "Pendiente"}
+                        >
+                          {satTemplateActual?.officialXlsmName ?? satFormatoActual?.nombre ?? "Pendiente"}
+                        </p>
+                        <p className="mt-1 line-clamp-2 text-xs leading-snug text-slate-500">
+                          {satWorkbookStatusLabel}
+                        </p>
+                      </div>
                     </div>
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                      <div className="rounded border bg-emerald-50 p-3 text-xs text-emerald-800">
-                        <p className="font-semibold">Umbrales en UMA</p>
-                        <p>Identificación: {actividadSeleccionada?.identificacionUmbralUma.toLocaleString("es-MX")}</p>
-                        <p>Aviso: {actividadSeleccionada?.avisoUmbralUma.toLocaleString("es-MX")}</p>
-                      </div>
-                      <div className="rounded border bg-slate-50 p-3 text-xs text-slate-700">
-                        <p className="font-semibold">Criterios UIF</p>
-                        <ul className="mt-1 list-disc space-y-1 pl-4">
-                          {actividadSeleccionada?.criteriosUif.map((criterio) => (
-                            <li key={criterio}>{criterio}</li>
+
+                    {contextMissingReasons.length > 0 ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                        <p className="font-semibold">Completa el contexto antes de avanzar</p>
+                        <ul className="mt-2 space-y-1">
+                          {contextMissingReasons.map((reason) => (
+                            <li key={reason.id}>
+                              <span className="font-semibold">{reason.label}:</span> {reason.description}
+                            </li>
                           ))}
                         </ul>
                       </div>
-                      {acumulacionRuleActual && (
-                        <div
-                          className={`min-w-0 rounded border p-3 text-xs ${
-                            acumulacionRuleActual.applies
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                              : "border-amber-200 bg-amber-50 text-amber-800"
-                          }`}
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            {acumulacionSourceDisplay?.chips.map((chip) => (
-                              <RegulatorySourceChip key={chip.id} chip={chip} />
-                            ))}
-                            {acumulacionSourceDisplay && (
-                              <InfoHint
-                                content={{
-                                  id: "acumulacion-fuente",
-                                  title: acumulacionRuleActual.applies ? "Acumula seis meses" : "No acumula seis meses",
-                                  summary: acumulacionSourceDisplay.summary,
-                                  body: acumulacionSourceDisplay.detail.split("\n").filter(Boolean),
-                                  sourceLabel: acumulacionSourceDisplay.chips.find((chip) => chip.sourceUrl)?.label,
-                                  sourceUrl: acumulacionSourceDisplay.chips.find((chip) => chip.sourceUrl)?.sourceUrl,
-                                }}
-                              />
-                            )}
-                          </div>
-                          <p className="mt-2 font-semibold">
-                            {acumulacionRuleActual.applies ? "Acumula seis meses" : "No acumula seis meses"}
-                          </p>
-                          <p className="mt-1 break-words leading-relaxed">{acumulacionSourceDisplay?.summary}</p>
-                          {acumulacionSourceDisplay?.visibleWarning && (
-                            <p className="mt-1 break-words font-medium leading-relaxed">
-                              {acumulacionSourceDisplay.visibleWarning}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                    ) : (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                        <p className="font-semibold">Contexto completo</p>
+                        <p className="mt-1 text-emerald-800">
+                          El siguiente paso usará este contexto para precargar EUI, plantilla XLSM y salida SAT.
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
           {pasoActual === 5 && (
             <Card className="border-slate-200">
@@ -5768,7 +6198,69 @@ const cambiarMesCalendario = (delta: number) => {
                   )}
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
+                {operacionesReutilizables.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">Operaciones reutilizables</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Usa una operación anterior como plantilla. Se conserva cliente, EUI, SAT y evidencia base; fecha y periodo se actualizan.
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="w-fit bg-slate-50 text-xs">
+                        {operacionesReutilizables.length} disponible(s)
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      {operacionesReutilizables.map((operacion) => (
+                        <button
+                          key={operacion.id}
+                          type="button"
+                          className="flex min-w-0 flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-left transition hover:border-emerald-300 hover:bg-emerald-50/60 md:flex-row md:items-center md:justify-between"
+                          onClick={() => reutilizarDatosCliente(operacion)}
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium text-slate-800">
+                              {operacion.tipoOperacion || operacion.actividadNombre}
+                            </span>
+                            <span className="mt-1 block truncate text-xs text-slate-500">
+                              {operacion.periodo} · {operacion.cliente} · {formatMontoOperacion(operacion)}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-xs font-semibold text-emerald-700">
+                            Usar como plantilla
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {expedienteSeleccionado && clienteNombre && rfc && (
+                  <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 md:flex-row md:items-center md:justify-between">
+                    <div className="min-w-0">
+                      <p className="font-semibold">Cliente/EUI precargado</p>
+                      <p className="mt-1 truncate text-emerald-800">
+                        {clienteNombre} · RFC {rfc} · {formatTipoClienteLabel(tipoCliente, detalleTipoCliente)}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 bg-white"
+                      onClick={() => {
+                        setExpedienteSeleccionado(null)
+                        setPersonaExpedienteSeleccionada("")
+                        setPersonaAvisoActual(null)
+                      }}
+                    >
+                      Cambiar datos
+                    </Button>
+                  </div>
+                )}
+
+                <div className={`${expedienteSeleccionado && clienteNombre && rfc ? "hidden" : "grid"} gap-4 md:grid-cols-3`}>
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
                       Tipo de cliente
@@ -5972,53 +6464,50 @@ const cambiarMesCalendario = (delta: number) => {
                   </div>
                   <div className="space-y-2">
                     <Label>Tipo de operación</Label>
-                    {esActividadInmuebles ? (
+                    {fixedTipoOperacionSat ? (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <p className="text-sm font-semibold text-slate-900">{fixedTipoOperacionSat}</p>
+                        <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                          Valor fijo del XLSM oficial para este formato; no requiere captura ni texto libre.
+                        </p>
+                      </div>
+                    ) : tipoOperacionOptions.length > 0 ? (
                       <div className="space-y-2">
-                        <Select
-                          value={codigoOperacionInmueble}
-                          onValueChange={(value) => {
-                            setCodigoOperacionInmueble(value)
-                            if (value === "otro") {
-                              setTipoOperacion("")
-                              return
+                        <SearchableOptionCombobox
+                          value={tipoOperacion}
+                          options={tipoOperacionOptions}
+                          placeholder="Selecciona opción SAT"
+                          searchPlaceholder="Buscar tipo de operación"
+                          emptyLabel="Sin tipos de operación disponibles"
+                          onChange={(value) => {
+                            setTipoOperacion(value)
+                            const satCode = value.match(/^\s*([^,\s]+)/)?.[1] ?? ""
+                            setCodigoOperacionInmueble(satCode)
+                            if (tipoOperacionSatField) {
+                              actualizarSatField(tipoOperacionSatField.id, value)
                             }
-                            const operacionSeleccionada = INMUEBLE_OPERACIONES.find(
-                              (operacion) => operacion.value === value,
-                            )
-                            setTipoOperacion(operacionSeleccionada?.label ?? "")
                           }}
-                        >
-                          <SelectTrigger className="bg-white">
-                            <SelectValue placeholder="Selecciona código UIF" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {INMUEBLE_OPERACIONES.map((operacion) => (
-                              <SelectItem key={operacion.value} value={operacion.value}>
-                                {operacion.label}
-                              </SelectItem>
-                            ))}
-                            <SelectItem value="otro">Otra operación (especificar)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {codigoOperacionInmueble === "otro" && (
-                          <Input
-                            placeholder="Describe la operación"
-                            value={tipoOperacion}
-                            onChange={(event) => setTipoOperacion(event.target.value)}
-                          />
-                        )}
-                        {codigoOperacionInmueble && codigoOperacionInmueble !== "otro" && (
-                          <p className="text-[11px] text-muted-foreground">
-                            Se utilizará el código {codigoOperacionInmueble} al generar el archivo XML para la UIF.
-                          </p>
-                        )}
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Lista tomada del desplegable del XLSM oficial para esta fracción.
+                        </p>
                       </div>
                     ) : (
-                      <Input
-                        placeholder="Ejemplo: Compra de inmueble"
-                        value={tipoOperacion}
-                        onChange={(event) => setTipoOperacion(event.target.value)}
-                      />
+                      <div className="space-y-2">
+                        <Input
+                          placeholder="Ejemplo: Compra de inmueble"
+                          value={tipoOperacion}
+                          onChange={(event) => {
+                            setTipoOperacion(event.target.value)
+                            if (tipoOperacionSatField) {
+                              actualizarSatField(tipoOperacionSatField.id, event.target.value)
+                            }
+                          }}
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Este XLSM no expone un desplegable oficial para este campo; se permite captura libre y se valida en el cuestionario SAT.
+                        </p>
+                      </div>
                     )}
                   </div>
                   <div className="space-y-2">
@@ -6089,13 +6578,164 @@ const cambiarMesCalendario = (delta: number) => {
                       onChange={(event) => setFechaOperacion(event.target.value)}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>Evidencia o comentarios</Label>
-                    <Textarea
-                      placeholder="Describe brevemente la evidencia documental"
-                      value={evidencia}
-                      onChange={(event) => setEvidencia(event.target.value)}
-                    />
+                  {esActividadInmuebles && (
+                    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 md:col-span-3">
+                      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                          <Label className="text-sm font-semibold text-slate-900">Pago recurrente de arrendamiento</Label>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                            Úsalo cuando un pago cubre varios meses. No apaga la obligación; marca revisión para evitar falsos positivos operativos.
+                          </p>
+                        </div>
+                        {revisionPagoRecurrente.requiresReview && (
+                          <Badge variant="outline" className="w-fit border-amber-200 bg-amber-50 text-xs text-amber-700">
+                            Requiere revisión
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <Label>Meses cubiertos por el pago</Label>
+                          <Select value={pagoRecurrenteMeses} onValueChange={setPagoRecurrenteMeses}>
+                            <SelectTrigger className="bg-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[1, 2, 3, 4, 5, 6].map((meses) => (
+                                <SelectItem key={meses} value={String(meses)}>
+                                  {meses} mes{meses === 1 ? "" : "es"}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Mensualidad esperada</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="Opcional"
+                            value={pagoRecurrenteMensualidad}
+                            onChange={(event) => setPagoRecurrenteMensualidad(event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-3">
+                          <Label>Nota de revisión</Label>
+                          <Input
+                            placeholder="Ej. Pago tardío de enero a marzo conforme al contrato de arrendamiento."
+                            value={pagoRecurrenteNota}
+                            onChange={(event) => setPagoRecurrenteNota(event.target.value)}
+                          />
+                        </div>
+                      </div>
+                      {revisionPagoRecurrente.requiresReview && (
+                        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+                          {revisionPagoRecurrente.message} Equivalente mensual:{" "}
+                          {formatCurrency(revisionPagoRecurrente.monthlyEquivalentMxn ?? 0)}.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:col-span-3">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0">
+                        <Label className="text-sm font-semibold text-slate-900">Evidencia inicial</Label>
+                        <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                          Adjunta soporte de la operación y forma de pago desde aquí. El checklist detallado queda en Evidencias.
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="w-fit bg-white text-xs">
+                        {draftEvidenceUploads.length} archivo(s)
+                      </Badge>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {[
+                        {
+                          requirement: soporteOperacionRequirement,
+                          title: "Soporte del acto",
+                          hint: "Contrato, instrumento, pedido, factura o documento equivalente.",
+                        },
+                        {
+                          requirement: formaPagoRequirement,
+                          title: "Forma de pago",
+                          hint: "Comprobante, SPEI, estado de cuenta, recibo o liquidación.",
+                        },
+                      ].map((item) => {
+                        const uploaded = draftEvidenceUploads.filter(
+                          (upload) => upload.requisitoId === item.requirement.id,
+                        )
+                        return (
+                          <div key={item.requirement.id} className="rounded-lg border bg-white p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-slate-800">{item.title}</p>
+                                <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{item.hint}</p>
+                              </div>
+                              <Badge variant="outline" className="shrink-0 bg-slate-50 text-[10px]">
+                                {uploaded.length || "Pendiente"}
+                              </Badge>
+                            </div>
+                            <div className="mt-3">
+                              <Label
+                                htmlFor={`quick-evidence-${item.requirement.id}`}
+                                className="inline-flex cursor-pointer items-center rounded-md border bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                              >
+                                <Upload className="mr-2 h-4 w-4" />
+                                Subir archivos
+                              </Label>
+                              <input
+                                id={`quick-evidence-${item.requirement.id}`}
+                                type="file"
+                                accept=".pdf,image/*,.xml,.xlsx,.xlsm"
+                                multiple
+                                className="sr-only"
+                                onChange={(event) =>
+                                  manejarArchivosEvidenciaRapida(
+                                    item.requirement.id,
+                                    item.requirement.label,
+                                    event,
+                                  )
+                                }
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {draftEvidenceUploads.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {draftEvidenceUploads.map((upload) => (
+                          <span
+                            key={upload.id}
+                            className="inline-flex max-w-full items-center gap-2 rounded-full border bg-white px-2.5 py-1 text-xs text-slate-700"
+                          >
+                            <Paperclip className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                            <span className="max-w-[220px] truncate">{upload.archivoNombre}</span>
+                            <button
+                              type="button"
+                              className="text-slate-400 hover:text-rose-600"
+                              onClick={() => eliminarEvidenciaRapida(upload.id)}
+                              aria-label={`Quitar ${upload.archivoNombre}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label>Descripción breve</Label>
+                      <Textarea
+                        placeholder="Ej. Contrato preliminar, comprobante SPEI y CFDI de anticipo."
+                        value={evidencia}
+                        onChange={(event) => setEvidencia(event.target.value)}
+                        rows={3}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -6191,6 +6831,7 @@ const cambiarMesCalendario = (delta: number) => {
                   values={satEffectiveFieldValues}
                   missingRequired={satMissingRequiredFields}
                   onChange={actualizarSatField}
+                  editedFieldIds={Object.keys(satFieldValues)}
                   infoHintContent={ACTOS_INFO_HINTS.xlsmSat}
                 />
 
@@ -6942,24 +7583,35 @@ const cambiarMesCalendario = (delta: number) => {
                   </div>
                 )}
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2 rounded border bg-white p-4 text-sm text-slate-700">
-                    <p className="font-semibold">Datos requeridos para aviso SAT</p>
-                    <ul className="mt-2 list-disc space-y-1 pl-4">
-                      <li>RFC del sujeto obligado y del cliente.</li>
-                      <li>Periodo con nomenclatura AAAAMM (ej. {evaluacionActual?.periodo ?? buildPeriodo(anioSeleccionado, mesSeleccionado)}).</li>
-                      <li>Clave de actividad vulnerable conforme al catálogo oficial del SAT.</li>
-                      <li>Detalle del acto u operación, forma de pago, moneda y evidencia documental.</li>
-                    </ul>
-                  </div>
-                  <div className="space-y-2 rounded border bg-slate-50 p-4 text-sm text-slate-700">
-                    <p className="font-semibold">Guía de registro SAT y responsables</p>
-                    <ul className="mt-2 list-disc space-y-1 pl-4">
-                      <li>Datos del representante legal y encargado de cumplimiento.</li>
-                      <li>Documento que acredite representación y RFC activo.</li>
-                      <li>Medios de contacto y domicilio fiscal del sujeto obligado.</li>
-                      <li>Designación de responsable de avisos, alta en el padrón de actividades vulnerables.</li>
-                    </ul>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900">Datos SAT mínimos</p>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                        El sistema ya valida lo esencial para aviso: RFC, periodo, actividad, operación, pago y evidencia.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {["RFC", "Periodo", "Actividad", "Operación", "Pago", "Evidencia"].map((item) => (
+                        <Badge key={item} variant="outline" className="bg-slate-50">
+                          {item}
+                        </Badge>
+                      ))}
+                      <InfoHint
+                        content={{
+                          id: "datos-minimos-aviso-sat",
+                          title: "Datos requeridos para aviso SAT",
+                          summary: "Resumen operativo de los datos que alimentan el Excel y XML SAT.",
+                          body: [
+                            `Periodo en formato AAAAMM: ${evaluacionActual?.periodo ?? buildPeriodo(anioSeleccionado, mesSeleccionado)}.`,
+                            "RFC del sujeto obligado y del cliente o usuario.",
+                            "Clave de actividad vulnerable y subformato SAT cuando aplique.",
+                            "Detalle del acto u operación, monto, moneda, forma de pago y evidencia documental.",
+                            "Representante legal, encargado de cumplimiento, medios de contacto y alta en el padrón se toman de Alta SAT/EUI cuando estén disponibles.",
+                          ],
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -6969,131 +7621,191 @@ const cambiarMesCalendario = (delta: number) => {
           {pasoActual === 1 && (
             <Card className="border-slate-200">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-slate-600" /> Paso 2. Actividad vulnerable y salida SAT
+                <CardTitle className="flex flex-wrap items-center gap-2">
+                  <FileText className="h-5 w-5 text-slate-600" /> Formato SAT y reglas de salida
+                  {actividadSeleccionada?.fraccion && (
+                    <Badge variant="outline" className="bg-slate-50 text-xs">
+                      {actividadSeleccionada.fraccion}
+                    </Badge>
+                  )}
                 </CardTitle>
                 <CardDescription>
-                  Confirma la fracción, umbrales, acumulación y formato oficial que servirá como referencia para el XML local-first.
+                  Revisa la decisión base de la operación. Los detalles normativos quedan disponibles sin saturar la captura.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded border bg-white p-4">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Actividad seleccionada</p>
-                    <p className="mt-2 text-lg font-semibold text-slate-800">
-                      {actividadSeleccionada?.fraccion} · {actividadSeleccionada?.nombre}
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">{actividadSeleccionada?.descripcion}</p>
-                    <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
-                      <div className="rounded border bg-slate-50 p-3">
-                        <p className="text-xs text-muted-foreground">Identificación</p>
-                        <p className="font-semibold">{umbralTexto.identificacion ?? "No aplica"}</p>
+              <CardContent className="space-y-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Actividad seleccionada</p>
+                      <h3 className="mt-1 text-lg font-semibold leading-tight text-slate-950">
+                        {actividadSeleccionada?.nombre ?? "Actividad pendiente"}
+                      </h3>
+                      <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-600">
+                        {actividadSeleccionada?.descripcion ?? "Selecciona una fracción para resolver reglas y plantilla SAT."}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <Badge variant="outline" className="bg-white">
+                        {satOutputKindActual === "aviso_24h" ? "Revisión urgente" : formatSalidaTipo(satOutputKindActual)}
+                      </Badge>
+                      <InfoHint
+                        content={{
+                          id: "salida-sat-paso-actividad",
+                          title: "Salida SAT sugerida",
+                          summary: "La plataforma calcula una salida preliminar con umbral, acumulación, grupo empresarial y sospecha 24h.",
+                          body: [
+                            "Aviso normal: operación objeto de aviso al día 17 del mes inmediato siguiente.",
+                            "Informe en ceros: periodo sin operaciones objeto de aviso ni supuestos 27 Bis.",
+                            "Informe 27 Bis: supuesto exceptuado conforme a reglas aplicables, con evidencia.",
+                            "Aviso 24 horas: indicios o sospecha; no debe retrasarse por evidencia incompleta.",
+                          ],
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="min-w-0 rounded-xl border bg-white p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Umbrales</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">Identificación y aviso</p>
                       </div>
-                      <div className="rounded border bg-slate-50 p-3">
-                        <p className="text-xs text-muted-foreground">Aviso</p>
-                        <p className="font-semibold">{umbralTexto.aviso ?? "No aplica"}</p>
+                      <Badge variant="outline" className="shrink-0 bg-slate-50">
+                        UMA
+                      </Badge>
+                    </div>
+                    <div className="mt-4 grid gap-2 text-sm">
+                      <div className="rounded-lg bg-slate-50 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wide text-slate-500">Identificación</p>
+                        <p className="mt-0.5 line-clamp-2 font-medium text-slate-900">{umbralTexto.identificacion ?? "No aplica"}</p>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wide text-slate-500">Aviso</p>
+                        <p className="mt-0.5 line-clamp-2 font-medium text-slate-900">{umbralTexto.aviso ?? "No aplica"}</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded border bg-slate-50 p-4">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Formato SAT asociado</p>
+                  <div
+                    className={`min-w-0 rounded-xl border p-4 ${
+                      acumulacionRuleActual?.applies
+                        ? "border-emerald-200 bg-emerald-50"
+                        : "border-amber-200 bg-amber-50"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Acumulación</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">
+                          {acumulacionRuleActual?.applies ? "Acumula seis meses" : "No acumula seis meses"}
+                        </p>
+                      </div>
+                      {acumulacionSourceDisplay && (
+                        <InfoHint
+                          content={{
+                            id: "acumulacion-paso-actividad",
+                            title: acumulacionRuleActual?.applies ? "Acumula seis meses" : "No acumula seis meses",
+                            summary: acumulacionSourceDisplay.visibleWarning || acumulacionSourceDisplay.summary,
+                            body: acumulacionSourceDisplay.detail.split("\n").filter(Boolean),
+                            sourceLabel: acumulacionSourceDisplay.chips.find((chip) => chip.sourceUrl)?.label,
+                            sourceUrl: acumulacionSourceDisplay.chips.find((chip) => chip.sourceUrl)?.sourceUrl,
+                          }}
+                        />
+                      )}
+                    </div>
+                    <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-slate-700">
+                      {acumulacionSourceDisplay?.visibleWarning || acumulacionSourceDisplay?.summary || "Selecciona actividad para evaluar acumulación."}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {acumulacionSourceDisplay?.chips.map((chip) => (
+                        <RegulatorySourceChip key={chip.id} chip={chip} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="min-w-0 rounded-xl border bg-white p-4 md:col-span-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Formato SAT</p>
+                        <p
+                          className="mt-1 line-clamp-2 break-all text-sm font-semibold leading-snug text-slate-900"
+                          title={satTemplateActual?.officialXlsmName ?? satFormatoActual?.nombre ?? "Pendiente"}
+                        >
+                          {satTemplateActual?.officialXlsmName ?? satFormatoActual?.nombre ?? "Pendiente"}
+                        </p>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={satWorkbookStatusActual === "listo" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}
+                      >
+                        {satWorkbookStatusActual === "listo" ? "Listo" : "Borrador"}
+                      </Badge>
+                    </div>
+                    <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                      {satLayoutActual
+                        ? `${satLayoutActual.sections.length} hoja(s) y ${satLayoutActual.optionLists.length} lista(s) oficiales.`
+                        : satLayoutsLoaded
+                          ? "Layout pendiente de sincronización local."
+                          : "Cargando layout cacheado..."}
+                    </p>
+                    {satTemplateActual?.requiresVariantSelection && (
+                      <div className="mt-3 space-y-1">
+                        <Label className="text-xs">Subformato SAT</Label>
+                        <Select
+                          value={satTemplateVariantId || satTemplateActual.templateId}
+                          onValueChange={(value) => {
+                            setSatTemplateVariantId(value)
+                            setSatFieldValues({})
+                          }}
+                        >
+                          <SelectTrigger className="bg-white">
+                            <SelectValue placeholder="Selecciona subformato" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            {satTemplateActual.variants.map((variant) => (
+                              <SelectItem key={variant.templateId} value={variant.templateId}>
+                                {variant.label} · {variant.officialXlsmName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     {satFormatoActual ? (
-                      <div className="mt-2 space-y-3 text-sm text-slate-700">
-                        <div>
-                          <p className="font-semibold">{satFormatoActual.nombre}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {satFormatoActual.fraccion} · Actualizado {satFormatoActual.sourceLastVerified}
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {satFormatoActual.outputModes.map((kind) => (
-                            <Badge key={kind} variant="outline" className="bg-white">
-                              {formatSalidaTipo(kind)}
-                            </Badge>
-                          ))}
-                        </div>
-                        {satTemplateActual && (
-                          <div className="rounded border bg-white p-3">
-                            <p className="text-xs font-semibold text-slate-700">Plantilla XLSM que guiará el flujo</p>
-                            <p className="mt-1 text-xs text-muted-foreground">{satTemplateActual.officialXlsmName}</p>
-                            {satTemplateActual.requiresVariantSelection && (
-                              <div className="mt-3 space-y-1">
-                                <Label className="text-xs">Subformato SAT</Label>
-                                <Select
-                                  value={satTemplateVariantId || satTemplateActual.templateId}
-                                  onValueChange={(value) => {
-                                    setSatTemplateVariantId(value)
-                                    setSatFieldValues({})
-                                  }}
-                                >
-                                  <SelectTrigger className="bg-white">
-                                    <SelectValue placeholder="Selecciona subformato" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {satTemplateActual.variants.map((variant) => (
-                                      <SelectItem key={variant.templateId} value={variant.templateId}>
-                                        {variant.label} · {variant.officialXlsmName}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
-                            <p className="mt-2 text-[11px] text-muted-foreground">
-                              {satLayoutActual
-                                ? `${satLayoutActual.sections.length} hoja(s), ${satLayoutActual.optionLists.length} lista(s) oficiales cacheadas.`
-                                : satLayoutsLoaded
-                                  ? "Layout pendiente de sincronización local."
-                                  : "Cargando layout cacheado..."}
-                            </p>
-                          </div>
-                        )}
-                        <div className="grid gap-2 text-xs">
-                          <a className="inline-flex items-center gap-1 text-emerald-700 hover:underline" href={satFormatoActual.avisoUrl ?? satFormatoActual.satPageUrl} target="_blank" rel="noreferrer">
-                            Plantilla aviso <ExternalLink className="h-3 w-3" />
-                          </a>
-                          <a className="inline-flex items-center gap-1 text-emerald-700 hover:underline" href={satFormatoActual.informeCerosUrl ?? satFormatoActual.satPageUrl} target="_blank" rel="noreferrer">
-                            Informe en ceros <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </div>
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                        <a className="inline-flex items-center gap-1 rounded-full border bg-slate-50 px-2.5 py-1 text-slate-700 hover:bg-slate-100" href={satFormatoActual.avisoUrl ?? satFormatoActual.satPageUrl} target="_blank" rel="noreferrer">
+                          Plantilla oficial <ExternalLink className="h-3 w-3" />
+                        </a>
+                        <a className="inline-flex items-center gap-1 rounded-full border bg-slate-50 px-2.5 py-1 text-slate-700 hover:bg-slate-100" href={satFormatoActual.informeCerosUrl ?? satFormatoActual.satPageUrl} target="_blank" rel="noreferrer">
+                          Informe en ceros <ExternalLink className="h-3 w-3" />
+                        </a>
                       </div>
                     ) : (
-                      <p className="mt-2 text-sm text-amber-700">
-                        Esta actividad requiere revisar el manifiesto SAT antes de generar una salida.
+                      <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                        Revisa el manifiesto SAT antes de generar salida.
                       </p>
                     )}
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div
-                    className={`rounded border p-4 text-sm ${
-                      acumulacionRuleActual?.applies
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                        : "border-amber-200 bg-amber-50 text-amber-800"
-                    }`}
-                  >
-                    <p className="font-semibold">
-                      {acumulacionRuleActual?.applies ? "Acumula a seis meses" : "No acumula bajo RCG Art. 19"}
-                    </p>
-                    <p className="mt-1">{acumulacionRuleActual?.rationale}</p>
-                    {acumulacionRuleActual?.warning && (
-                      <p className="mt-2 font-medium">{acumulacionRuleActual.warning}</p>
-                    )}
-                  </div>
-                  <div className="rounded border bg-white p-4 text-sm text-slate-700">
-                    <p className="font-semibold">Decisiones posibles</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Badge variant="outline">Continuar</Badge>
-                      <Badge variant="outline">Cerrar con pendiente justificado</Badge>
-                      <Badge variant="outline">Aviso normal</Badge>
-                      <Badge variant="outline">Informe 27 Bis</Badge>
-                      <Badge variant="outline">Aviso 24 horas</Badge>
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900">Decisión operativa siguiente</p>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                        Captura la operación; el sistema recalculará salida SAT con monto, forma de pago, evidencia, grupo empresarial y señales de alerta.
+                      </p>
                     </div>
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      La salida final se define al combinar umbral, acumulación, evidencia crítica, grupo empresarial y señales de alerta.
-                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {(satFormatoActual?.outputModes ?? [satOutputKindActual]).map((kind) => (
+                        <Badge key={kind} variant="outline" className="bg-slate-50">
+                          {formatSalidaTipo(kind)}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -7247,6 +7959,14 @@ const cambiarMesCalendario = (delta: number) => {
                       : evaluacionActual?.salida.descripcion ?? "Sin fecha de aviso ordinario."}
                   </p>
                 </div>
+                {revisionPagoRecurrente.requiresReview && (
+                  <div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 md:col-span-3">
+                    <p className="font-semibold">Posible falso positivo operativo</p>
+                    <p className="mt-1 text-xs leading-relaxed">
+                      {revisionPagoRecurrente.message} Documenta contrato, meses cubiertos y soporte de pago antes de cerrar.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -7414,24 +8134,6 @@ const cambiarMesCalendario = (delta: number) => {
           </div>
             </div>
 
-            <SatOutputSummaryPanel
-              clienteNombre={clienteNombre}
-              rfc={rfc}
-              actividadFraccion={actividadSeleccionada?.fraccion ?? ""}
-              actividadNombre={actividadSeleccionada?.nombre ?? ""}
-              salidaLabel={formatSalidaTipo(satOutputKindActual)}
-              fechaLimiteLabel={
-                operationalCasePreview?.satOutputStatus.fechaLimite
-                  ? `Límite ${formatDateDisplay(operationalCasePreview.satOutputStatus.fechaLimite)}`
-                  : "Sin fecha ordinaria"
-              }
-              evidenciaLabel={evidenceDecisionActual.canClose ? "Lista para cierre" : "Pendiente"}
-              missingCriticalCount={evidenceDecisionActual.missingCritical.length}
-              workbookStatusLabel={satWorkbookStatusLabel}
-              blockersView={blockingReasonsView}
-              salidaInfo={ACTOS_INFO_HINTS.salidaSat}
-              evidenciaInfo={ACTOS_INFO_HINTS.evidenciaCritica}
-            />
           </div>
         </TabsContent>
 
@@ -7563,7 +8265,7 @@ const cambiarMesCalendario = (delta: number) => {
 
                         <div className="flex flex-wrap items-center gap-2 pl-4 sm:pl-6 lg:justify-end lg:pl-0">
                           <Button size="sm" onClick={() => reutilizarDatosCliente(operacion)}>
-                            Resolver
+                            Reusar
                           </Button>
                           {operacion.umbralStatus === "aviso" && !operacion.avisoPresentado && (
                             <Button size="sm" variant="outline" onClick={() => marcarAvisoPresentado(operacion.id)}>
@@ -7637,7 +8339,7 @@ const cambiarMesCalendario = (delta: number) => {
                           )}
                         </div>
                         <div className="flex flex-wrap items-center gap-2 md:justify-end">
-                          <Button size="sm" onClick={() => reutilizarDatosCliente(operacion)}>Resolver</Button>
+                          <Button size="sm" onClick={() => reutilizarDatosCliente(operacion)}>Reusar</Button>
                           <Button size="sm" variant="outline" onClick={() => actualizarEstadoAlerta(operacion.id, true)}>
                             Atendida
                           </Button>
