@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { AlertTriangle, Database, FileCheck2, History, Search, ShieldAlert } from "lucide-react"
+import { AlertTriangle, Database, FileCheck2, History, Search, ShieldAlert, Trash2 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,9 +17,12 @@ import pepPersonasData from "@/public/data/pep-personas-mx.json"
 import pepReviewQueueData from "@/public/data/pep-review-queue.json"
 import pepSourcesData from "@/public/data/pep-sources-mx.json"
 import {
+  getPepSearchHistoryItemKey,
   normalizeName,
   PEP_INTERNAL_STORAGE_KEY,
+  PEP_SEARCH_HISTORY_CLEAR_ALL,
   PEP_SEARCH_HISTORY_STORAGE_KEY,
+  removePepSearchHistoryItem,
   searchPep,
 } from "@/lib/pld/pep"
 import type {
@@ -257,6 +260,18 @@ export default function PepWhoIsPage() {
     const next = internalRecords.filter((record) => record.id !== id)
     persistInternalRecords(next)
     setInternalRecords(next)
+  }
+
+  function deleteHistoryItem(item: PepSearchResponse) {
+    const next = removePepSearchHistoryItem(history, getPepSearchHistoryItemKey(item))
+    persistSearchHistory(next)
+    setHistory(next)
+  }
+
+  function clearHistory() {
+    const next = removePepSearchHistoryItem(history, PEP_SEARCH_HISTORY_CLEAR_ALL)
+    persistSearchHistory(next)
+    setHistory(next)
   }
 
   return (
@@ -555,20 +570,36 @@ export default function PepWhoIsPage() {
         <TabsContent value="historial">
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl">Historial de consultas</CardTitle>
-              <CardDescription>Últimas consultas guardadas en este navegador.</CardDescription>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-xl">Historial de consultas</CardTitle>
+                  <CardDescription>Últimas consultas guardadas en este navegador.</CardDescription>
+                </div>
+                {history.length > 0 ? (
+                  <Button variant="outline" size="sm" onClick={clearHistory} className="gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Borrar todo
+                  </Button>
+                ) : null}
+              </div>
             </CardHeader>
             <CardContent>
               {history.length > 0 ? (
                 <div className="grid gap-3">
                   {history.map((item) => (
-                    <div key={`${item.checkedAt}-${item.query.nombre}-${item.query.cargo}`} className="rounded-lg border p-4">
+                    <div key={getPepSearchHistoryItemKey(item)} className="rounded-lg border p-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <p className="font-medium">{item.query.nombre || item.query.cargo || "Consulta PEP"}</p>
                           <p className="text-xs text-muted-foreground">{new Date(item.checkedAt).toLocaleString("es-MX")}</p>
                         </div>
-                        <StatusBadge status={item.status} />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusBadge status={item.status} />
+                          <Button variant="ghost" size="sm" onClick={() => deleteHistoryItem(item)} className="gap-2 text-muted-foreground">
+                            <Trash2 className="h-4 w-4" />
+                            Eliminar
+                          </Button>
+                        </div>
                       </div>
                       <p className="mt-2 text-sm text-muted-foreground">{item.recommendation}</p>
                     </div>
@@ -799,6 +830,10 @@ function readSearchHistory(): PepSearchResponse[] {
 }
 
 function persistSearchHistory(history: PepSearchResponse[]) {
+  if (history.length === 0) {
+    window.localStorage.removeItem(PEP_SEARCH_HISTORY_STORAGE_KEY)
+    return
+  }
   window.localStorage.setItem(PEP_SEARCH_HISTORY_STORAGE_KEY, JSON.stringify(history))
 }
 

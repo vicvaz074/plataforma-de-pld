@@ -19,6 +19,7 @@ export const PEP_CARGOS_SOURCE =
 export const PEP_INTERNAL_STORAGE_KEY = "pld-pep-internal-records"
 export const PEP_SEARCH_HISTORY_STORAGE_KEY = "pld-pep-search-history"
 export const PEP_OPENSANCTIONS_SOURCE_URL = "https://www.opensanctions.org/"
+export const PEP_SEARCH_HISTORY_CLEAR_ALL = "__clear_all__"
 
 const COMMON_MX_SURNAME_TOKENS = new Set([
   "AGUILAR",
@@ -199,6 +200,22 @@ export function searchPep(query: PepSearchQuery, catalogs: SearchPepCatalogs = {
     snapshots: catalogs.snapshots,
     recommendation: buildPepRecommendation(results, appliedDecisions),
   })
+}
+
+export function getPepSearchHistoryItemKey(item: PepSearchResponse): string {
+  return [
+    item.checkedAt,
+    item.status,
+    normalizeName(item.query.nombre),
+    normalizeText(item.query.cargo),
+    normalizeText(item.query.dependencia),
+    normalizeText(item.query.relacion),
+  ].join("|")
+}
+
+export function removePepSearchHistoryItem(history: PepSearchResponse[], itemKey: string): PepSearchResponse[] {
+  if (itemKey === PEP_SEARCH_HISTORY_CLEAR_ALL) return []
+  return history.filter((item) => getPepSearchHistoryItemKey(item) !== itemKey)
 }
 
 export function normalizeText(value?: string): string {
