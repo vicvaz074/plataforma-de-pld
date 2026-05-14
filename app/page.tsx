@@ -21,10 +21,10 @@ import {
 import type { LucideIcon } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { translations } from "@/lib/translations"
-import { aliciaTranslations } from "@/lib/alicia-translations"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
+import { PLD_DASHBOARD_MODULES } from "@/lib/pld/navigation"
 
 type HomeOption = {
   name: string
@@ -34,30 +34,34 @@ type HomeOption = {
   external?: boolean
 }
 
-const options: HomeOption[] = [
-  { name: "registroSat", icon: FileCheck, href: "/registro-sat" },
-  { name: "expedienteUnico", icon: Users, href: "/kyc-expediente" },
-  { name: "actividadesVulnerables", icon: Shield, href: "/actividades-vulnerables" },
-  { name: "ebr", icon: ClipboardCheck, href: "/ebr" },
-  { name: "pepWhois", icon: UserSearch, href: "/pep-whois" },
-  { name: "avisosInformes", icon: FileText, href: "/avisos-informes" },
-  { name: "evidenciasTrazabilidad", icon: Database, href: "/evidencias-trazabilidad" },
-  { name: "capacitacionControl", icon: GraduationCap, href: "/capacitacion-control" },
-  { name: "auditoriaVerificacion", icon: Search, href: "/auditoria-verificacion" },
-  { name: "gobernanzaControl", icon: Settings, href: "/gobernanza-control" },
-  { name: "compiladoLeyes", icon: Book, href: "/marco-normativo-aplicable" },
-  {
-    name: "alicia",
-    icon: Sparkles,
-    href: "/alicia",
-    image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/fondo9.png-AqM6pGQFnW7wv6Mud4R4MHeOdJx6s4.jpeg",
-  },
-]
+const homeIcons: Record<string, LucideIcon> = {
+  FileCheck,
+  Users,
+  Shield,
+  ClipboardCheck,
+  UserSearch,
+  FileText,
+  GraduationCap,
+  Search,
+  Database,
+  Settings,
+  Book,
+  Sparkles,
+}
+
+const options: HomeOption[] = PLD_DASHBOARD_MODULES.map((module) => ({
+  name: module.key,
+  icon: homeIcons[module.iconName] ?? FileText,
+  href: module.href,
+  image:
+    module.key === "alicia"
+      ? "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/fondo9.png-AqM6pGQFnW7wv6Mud4R4MHeOdJx6s4.jpeg"
+      : undefined,
+}))
 
 export default function Home() {
   const { language } = useLanguage()
   const t = translations[language]
-  const aliciaT = aliciaTranslations[language]
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const [showWelcome, setShowWelcome] = useState(false)
 
@@ -143,6 +147,9 @@ export default function Home() {
         <PldDemoDataControls />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
           {options.map((option) => {
+            const dashboardModule = PLD_DASHBOARD_MODULES.find((item) => item.key === option.name)
+            const optionTitle = dashboardModule?.title[language] ?? t[option.name] ?? option.name
+            const optionDescription = dashboardModule?.description[language] ?? t[option.name + "Description"] ?? ""
             const CardContent = (
               <Card
                 className="p-6 hover:shadow-lg transition-shadow flex flex-col items-center justify-center h-[200px] cursor-pointer group relative overflow-hidden"
@@ -153,7 +160,7 @@ export default function Home() {
                   <div className="absolute inset-0 w-full h-full">
                     <Image
                       src={option.image || "/placeholder.svg"}
-                      alt={option.name === "alicia" ? aliciaT.alicia : t[option.name]}
+                      alt={optionTitle}
                       fill
                       className="object-cover"
                     />
@@ -179,7 +186,7 @@ export default function Home() {
                       className="object-contain relative z-10"
                       unoptimized
                     />
-                  ) : t[option.name]}
+                  ) : optionTitle}
                 </span>
                 <motion.div
                   className="absolute inset-0 bg-white bg-opacity-90 p-4 flex items-center justify-center text-sm text-gray-700 text-center"
@@ -191,7 +198,7 @@ export default function Home() {
                   transition={{ duration: 0.3 }}
                   style={{ pointerEvents: hoveredCard === option.name ? "auto" : "none" }}
                 >
-                  {option.name === "alicia" ? aliciaT.aliciaDescription : t[option.name + "Description"]}
+                  {optionDescription}
                 </motion.div>
               </Card>
             )

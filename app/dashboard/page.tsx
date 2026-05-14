@@ -3,26 +3,46 @@
 import { useEffect, useState } from "react"
 import { useLanguage } from "@/lib/LanguageContext"
 import { translations } from "@/lib/translations"
-import { sortAlphabetically } from "@/lib/utils"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { motion } from "framer-motion"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { BarChart, LineChart, PieChart } from "@/components/ui/charts"
 import { UserProgressDashboard } from "@/components/user-progress-dashboard"
 import { AdminUserPrivileges } from "@/components/admin-user-privileges"
+import { PLD_DASHBOARD_MODULES } from "@/lib/pld/navigation"
+import Link from "next/link"
+import { AlertTriangle, ArrowRight, CheckCircle2, Database, ShieldCheck, Users } from "lucide-react"
+
+const parseLocalStorageValue = (key: string): unknown => {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "null")
+  } catch {
+    return null
+  }
+}
+
+const countStoredRecords = (value: unknown, arrayKeys: string[] = []) => {
+  if (Array.isArray(value)) return value.length
+  if (!value || typeof value !== "object") return 0
+
+  const record = value as Record<string, unknown>
+  for (const key of arrayKeys) {
+    const candidate = record[key]
+    if (Array.isArray(candidate)) return candidate.length
+  }
+  return Object.keys(record).length > 0 ? 1 : 0
+}
 
 export default function DashboardPage() {
   const { language } = useLanguage()
   const t = translations[language]
   const [userRole, setUserRole] = useState<string | null>(null)
   const [pendingUsers, setPendingUsers] = useState<any[]>([])
-  const [selectedMetric, setSelectedMetric] = useState("users")
   const [dashboardData, setDashboardData] = useState({
-    totalUsers: 0,
-    totalDocuments: 0,
-    pendingReviews: 0,
-    completedActivities: 0,
+    usuariosActivos: 0,
+    usuariosPendientes: 0,
+    sujetosObligados: 0,
+    expedientesEui: 0,
+    operaciones: 0,
+    paquetesSat: 0,
   })
 
   useEffect(() => {
@@ -30,12 +50,18 @@ export default function DashboardPage() {
     const users = JSON.parse(localStorage.getItem("users") || "[]")
     setPendingUsers(users.filter((u: any) => !u.approved))
 
-    // Calcular datos precisos para el dashboard del administrador
+    const registroSat = parseLocalStorageValue("registro-sat-data")
+    const expedientes = parseLocalStorageValue("kyc_expedientes_detalle")
+    const operaciones = parseLocalStorageValue("actividades_vulnerables_operaciones")
+    const paquetesSat = parseLocalStorageValue("pld-sat-output-packages")
+
     setDashboardData({
-      totalUsers: users.filter((u: any) => u.approved).length,
-      totalDocuments: JSON.parse(localStorage.getItem("documents") || "[]").length,
-      pendingReviews: users.filter((u: any) => !u.approved).length,
-      completedActivities: JSON.parse(localStorage.getItem("completedActivities") || "[]").length,
+      usuariosActivos: users.filter((u: any) => u.approved).length,
+      usuariosPendientes: users.filter((u: any) => !u.approved).length,
+      sujetosObligados: countStoredRecords(registroSat, ["sujetosRegistrados", "tenants"]),
+      expedientesEui: countStoredRecords(expedientes, ["expedientes", "items"]),
+      operaciones: countStoredRecords(operaciones, ["operaciones", "items"]),
+      paquetesSat: countStoredRecords(paquetesSat, ["packages", "paquetes", "items"]),
     })
   }, [])
 
@@ -46,8 +72,8 @@ export default function DashboardPage() {
     setPendingUsers(updatedUsers.filter((u: any) => !u.approved))
     setDashboardData((prev) => ({
       ...prev,
-      totalUsers: prev.totalUsers + 1,
-      pendingReviews: prev.pendingReviews - 1,
+      usuariosActivos: prev.usuariosActivos + 1,
+      usuariosPendientes: Math.max(prev.usuariosPendientes - 1, 0),
     }))
   }
 
@@ -58,184 +84,146 @@ export default function DashboardPage() {
     setPendingUsers(updatedUsers.filter((u: any) => !u.approved))
     setDashboardData((prev) => ({
       ...prev,
-      pendingReviews: prev.pendingReviews - 1,
+      usuariosPendientes: Math.max(prev.usuariosPendientes - 1, 0),
     }))
   }
-
-  // Datos de muestra más realistas para el dashboard del usuario
-  const userData = [
-    { name: "Jan", users: 10 },
-    { name: "Feb", users: 15 },
-    { name: "Mar", users: 20 },
-    { name: "Apr", users: 25 },
-    { name: "May", users: 30 },
-    { name: "Jun", users: 35 },
-  ]
-
-  const revenueData = [
-    { name: "Jan", revenue: 1000 },
-    { name: "Feb", revenue: 1500 },
-    { name: "Mar", revenue: 2000 },
-    { name: "Apr", revenue: 2500 },
-    { name: "May", revenue: 3000 },
-    { name: "Jun", revenue: 3500 },
-  ]
-
-  const activityData = [
-    { name: "ROPA", value: 40 },
-    { name: "Documents", value: 30 },
-    { name: "Reviews", value: 20 },
-    { name: "Others", value: 10 },
-  ]
 
   const AdminDashboard = () => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="space-y-4"
+      className="mx-auto max-w-7xl px-4 py-6 text-slate-950 sm:px-6 lg:px-8"
     >
-      <h1 className="text-2xl font-bold">{t.dashboard}</h1>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t.totalUsers}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dashboardData.totalUsers}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t.totalDocuments}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dashboardData.totalDocuments}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t.pendingReviews}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dashboardData.pendingReviews}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t.completedActivities}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dashboardData.completedActivities}</div>
-          </CardContent>
-        </Card>
-      </div>
+      <header className="flex flex-col gap-4 border-b border-slate-200 pb-6 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Administración PLD</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-normal sm:text-3xl">Salud del sistema</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            Vista rápida para decidir si faltan datos, usuarios por aprobar o salidas SAT por cerrar.
+          </p>
+        </div>
+        <Button
+          onClick={() => {
+            const users = JSON.parse(localStorage.getItem("users") || "[]")
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(users))
+            const downloadAnchorNode = document.createElement("a")
+            downloadAnchorNode.setAttribute("href", dataStr)
+            downloadAnchorNode.setAttribute("download", "users.json")
+            document.body.appendChild(downloadAnchorNode)
+            downloadAnchorNode.click()
+            downloadAnchorNode.remove()
+          }}
+          variant="outline"
+          className="shrink-0 bg-transparent"
+        >
+          {t.downloadUserAccounts}
+        </Button>
+      </header>
 
-      <Button
-        onClick={() => {
-          const users = JSON.parse(localStorage.getItem("users") || "[]")
-          const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(users))
-          const downloadAnchorNode = document.createElement("a")
-          downloadAnchorNode.setAttribute("href", dataStr)
-          downloadAnchorNode.setAttribute("download", "users.json")
-          document.body.appendChild(downloadAnchorNode)
-          downloadAnchorNode.click()
-          downloadAnchorNode.remove()
-        }}
-        className="mt-4"
-      >
-        {t.downloadUserAccounts}
-      </Button>
+      <section className="grid gap-6 py-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-xl border border-orange-200 bg-orange-50 p-6 text-slate-950">
+          <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Resumen local</p>
+          <div className="mt-5 grid grid-cols-2 gap-5">
+            {[
+              ["Usuarios", dashboardData.usuariosActivos, Users],
+              ["Pendientes", dashboardData.usuariosPendientes, AlertTriangle],
+              ["Sujetos", dashboardData.sujetosObligados, ShieldCheck],
+              ["EUI", dashboardData.expedientesEui, Database],
+            ].map(([label, value, Icon]) => {
+              const MetricIcon = Icon as typeof Users
+              return (
+                <div key={String(label)} className="min-w-0">
+                  <MetricIcon className="mb-3 h-5 w-5 text-orange-700" />
+                  <p className="text-3xl font-semibold">{String(value)}</p>
+                  <p className="mt-1 text-xs text-slate-600">{String(label)}</p>
+                </div>
+              )
+            })}
+          </div>
+          <div className="mt-6 border-t border-orange-200 pt-5">
+            <p className="text-xs text-orange-700">Operación y SAT</p>
+            <p className="mt-1 text-2xl font-semibold">
+              {dashboardData.operaciones}
+              <span className="text-base text-slate-500"> operación(es)</span>
+            </p>
+            <p className="mt-1 text-sm text-slate-600">{dashboardData.paquetesSat} paquete(s) SAT preparado(s)</p>
+          </div>
+        </div>
 
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-        <h2 className="text-xl font-semibold mt-8 mb-4">{t.pendingApprovals}</h2>
-        {pendingUsers.length === 0 ? (
-          <p>{t.noPendingApprovals}</p>
-        ) : (
-          <div className="space-y-4">
-            {pendingUsers.map((user: any) => (
-              <Card key={user.email}>
-                <CardContent className="flex items-center justify-between p-4">
-                  <div>
-                    <p className="font-semibold">{user.name}</p>
-                    <p className="text-sm text-gray-500">{user.email}</p>
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 px-5 py-4">
+            <h2 className="text-lg font-medium tracking-normal">Pendientes administrativos</h2>
+            <p className="text-sm text-slate-500">Acciones concretas, no métricas decorativas.</p>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {pendingUsers.length > 0 ? (
+              pendingUsers.slice(0, 4).map((user: any) => (
+                <div key={user.email} className="flex min-w-0 flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-medium text-slate-950">Aprobar acceso: {user.name}</p>
+                    <p className="break-words text-xs text-slate-500">{user.email}</p>
                   </div>
-                  <div className="space-x-2">
-                    <Button onClick={() => handleApprove(user.email)} variant="outline">
+                  <div className="flex shrink-0 gap-2">
+                    <Button size="sm" variant="outline" onClick={() => handleApprove(user.email)}>
                       {t.approve}
                     </Button>
-                    <Button onClick={() => handleReject(user.email)} variant="destructive">
+                    <Button size="sm" variant="destructive" onClick={() => handleReject(user.email)}>
                       {t.reject}
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              ))
+            ) : (
+              <div className="flex items-center gap-3 px-5 py-6 text-sm text-slate-600">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                No hay usuarios pendientes de aprobación.
+              </div>
+            )}
+            {!dashboardData.sujetosObligados ? (
+              <Link href="/registro-sat" className="flex items-center justify-between gap-3 px-5 py-4 transition hover:bg-slate-50">
+                <span>
+                  <span className="block text-sm font-medium text-slate-950">Falta sujeto obligado demo/productivo</span>
+                  <span className="text-xs text-slate-500">Registra alta SAT para habilitar flujo EUI y operaciones.</span>
+                </span>
+                <ArrowRight className="h-4 w-4 text-slate-400" />
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-8 border-y border-slate-200 py-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <div>
+          <h2 className="text-lg font-medium tracking-normal">Cobertura por módulo</h2>
+          <div className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+            {PLD_DASHBOARD_MODULES.map((module) => (
+              <Link key={module.key} href={module.href} className="flex min-w-0 items-center justify-between gap-3 px-4 py-3 transition hover:bg-slate-50">
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-slate-950">{module.title[language]}</span>
+                  <span className="block truncate text-xs text-slate-500">{module.description[language]}</span>
+                </span>
+                <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />
+              </Link>
             ))}
           </div>
-        )}
-      </motion.div>
-      <AdminUserPrivileges />
+        </div>
+        <details className="rounded-xl border border-slate-200 bg-white p-5">
+          <summary className="cursor-pointer text-lg font-medium tracking-normal text-slate-950">
+            Administración de accesos por módulo
+          </summary>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Usa este detalle solo cuando necesites auditar o ajustar permisos por usuario.
+          </p>
+          <AdminUserPrivileges />
+        </details>
+      </section>
     </motion.div>
   )
 
-  const AnalyticsDashboard = () => (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">{t.dashboard}</h1>
-
-      <Select onValueChange={setSelectedMetric} defaultValue={selectedMetric}>
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder={t.selectMetric} />
-        </SelectTrigger>
-        <SelectContent>
-          {sortAlphabetically(
-            [
-              { value: "users", label: t.users },
-              { value: "revenue", label: t.revenue },
-              { value: "activities", label: t.activities },
-            ],
-            (opt) => opt.label
-          ).map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              {opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t.dailyUsers}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BarChart data={userData} xKey="name" yKey="users" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t.monthlyRevenue}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <LineChart data={revenueData} xKey="name" yKey="revenue" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t.activityDistribution}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PieChart data={activityData} />
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
-
-  // Si el usuario es administrador, mostrar el dashboard de administrador
-  // Si es un usuario regular, mostrar el panel de progreso de usuario
   if (userRole === "admin") {
     return (
-      <div className="container mx-auto py-10">
+      <div className="w-full">
         <AdminDashboard />
       </div>
     )
