@@ -457,9 +457,11 @@ test("WhoIs PEP avoids surname-only alerts for very common Mexican surnames", ()
   assert.equal(result.status, "sin_coincidencia")
 })
 
-test("WhoIs PEP public Mexico snapshot includes former Mexican presidents since 2000", () => {
+test("WhoIs PEP public Mexico snapshot includes former Mexican presidents since Salinas", () => {
   const snapshot = pepPublicMxSnapshot as { entities: PepEntity[] }
   const names = [
+    "Carlos Salinas de Gortari",
+    "Ernesto Zedillo Ponce de Leon",
     "Vicente Fox Quesada",
     "Felipe Calderon Hinojosa",
     "Enrique Pena Nieto",
