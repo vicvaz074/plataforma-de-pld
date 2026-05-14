@@ -1,390 +1,475 @@
 "use client"
 
+import { useMemo, useState } from "react"
 import Link from "next/link"
+import {
+  ArrowRight,
+  BookOpen,
+  CalendarDays,
+  ExternalLink,
+  FileText,
+  GitBranch,
+  ListFilter,
+  Search,
+  ShieldCheck,
+} from "lucide-react"
+
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLanguage } from "@/lib/LanguageContext"
+import {
+  filterNormativeDocuments,
+  filterNormativeObligations,
+  groupObligationsByModule,
+  LEGAL_AUTHORITIES,
+  LEGAL_SECTORS,
+  LEGAL_SOURCE_REVIEWED_AT,
+  LEGAL_STATUSES,
+  normativeDocuments,
+  normativeObligations,
+  normativeUpdates,
+  type NormativeAuthority,
+  type NormativeSector,
+  type NormativeStatus,
+  type OperationalStatus,
+} from "@/lib/pld/legal-framework"
 import { translations } from "@/lib/translations"
 
-type Law = {
-  id: number
-  ley: string
-  caracteristicas: string
-  links?: string[]
-  nota?: string
+const statusLabel: Record<NormativeStatus, string> = {
+  vigente: "Vigente",
+  reformado: "Reformado",
+  pendiente_rcg: "Pendiente RCG",
+  criterio_sat: "Criterio SAT",
+  referencia_sectorial: "Referencia sectorial",
+  internacional: "Internacional",
 }
 
-const leyesGenerales: Law[] = [
-  {
-    id: 1,
-    ley: "Ley Federal para la Prevención e Identificación de Operaciones con Recursos de Procedencia Ilícita",
-    caracteristicas:
-      "Ley que establece de manera general las obligaciones para el Sistema Financiero y establece de manera particular las obligaciones para Actividades Vulnerables. Define conceptos clave en la materia.",
-    links: ["https://www.diputados.gob.mx/LeyesBiblio/pdf/LFPIORPI.pdf"],
-  },
-  {
-    id: 2,
-    ley: "Reglamento de la Ley Federal para la Prevención e Identificación de Operaciones con Recursos de Procedencia Ilícita",
-    caracteristicas:
-      "Ley que reglamenta las obligaciones y las facultades de la autoridad establecidas en la LFPIORPI",
-    links: ["https://www.diputados.gob.mx/LeyesBiblio/regley/Reg_LFPIORPI.pdf"],
-  },
-  {
-    id: 3,
-    ley: "Art 400 Bis y 400 Bis 1 del Código Penal Federal",
-    caracteristicas: "Definición de operaciones con recursos de procedencia ilícita.",
-    links: ["https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/art400bis_400bis_1.pdf"],
-  },
-  {
-    id: 4,
-    ley: "Art 139, 139 Bis y 239 Ter del Código Penal Federal",
-    caracteristicas: "Definición de terrorismo",
-    links: ["https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/art139_139bis_139ter.pdf"],
-  },
-  {
-    id: 5,
-    ley: "Art 139 Quarter y 139 Quinqui del Código Penal Federal",
-    caracteristicas: "Definición de financiamiento al terrorismo",
-    links: ["https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/art139quater_139quinquies.pdf"],
-  },
-  {
-    id: 6,
-    ley: "Art 148 Bis, 148 Ter y 148 Quarter",
-    caracteristicas: "Definición de terrorismo internacional",
-    links: ["https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/art148bis_148ter_148quater.pdf"],
-  },
-]
-
-const actividadesVulnerables: Law[] = [
-  {
-    id: 1,
-    ley: "Reglas de Carácter General a que se refiere la Ley Federal para la Prevención e Identificación de Operaciones con Recursos de Procedencia Ilícita",
-    caracteristicas:
-      "Establece las medidas y procedimientos que deben de observar quienes realicen actividades vulnerables.",
-    links: ["https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/compilado_rcg_reforma30nov2020.pdf"],
-    nota: "Nota: se actualizará en el futuro próximo para que vaya de acuerdo a la reforma a la LFPIORPI",
-  },
-  {
-    id: 2,
-    ley: "Resolución por la que se expide el formato para el alta y registro de quienes realicen Actividades Vulnerables",
-    caracteristicas:
-      "Establece el procedimiento de alta y registro de quienes realicen Actividades Vulnerables",
-    links: ["https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/compilado_formatoaltaregistro_reforma2016.pdf"],
-  },
-  {
-    id: 3,
-    ley: "Resolución por la que se expiden los formatos oficiales de los avisos e informes que deben presentar quienes realicen Actividades Vulnerables",
-    caracteristicas:
-      "Establece los formatos que deben de seguir las personas que realicen las actividades vulnerables para dar avisos o informes.",
-    links: ["https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/compilado_formatosofic_24mayo2021.pdf"],
-  },
-  {
-    id: 4,
-    ley: "Reglamento Interior de SHCP",
-    caracteristicas:
-      "Establece las obligaciones que tiene esta autoridad en materia de PLD.",
-    links: ["https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/compilado_rcg_reforma30nov2020.pdf"],
-  },
-  {
-    id: 5,
-    ley: "Atribuciones de la Unidad de Inteligencia Financiera conforme al nuevo Reglamento Interior de la Secretaría de Hacienda y Crédito Público, publicado el 06 de marzo de 2023 en el Diario Oficial de la Federación.",
-    caracteristicas: "Establece las atribuciones que la UIF tiene en materia de PLD.",
-    links: ["https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/atribucionesuif_art15_rishcp.pdf"],
-  },
-]
-
-const sistemaFinanciero = {
-  general: [
-    {
-      id: 1,
-      ley: "GUÍA PARA LA ELABORACIÓN DE UNA METODOLOGÍA DE EVALUACIÓN DE RIESGOS EN MATERIA DE PREVENCIÓN DE OPERACIONES CON RECURSOS DE PROCEDENCIA ILÍCITA Y FINANCIAMIENTO AL TERRORISMO",
-      caracteristicas:
-        "Guía que las instituciones financieras deben de seguir para evaluar el riesgo en materia de PLD",
-      links: [
-        "https://www.gob.mx/cms/uploads/attachment/file/491487/Guia_para_la_Metodologia_de_Evaluacion_2019.pdf",
-      ],
-    },
-  ],
-  institucionesCredito: [
-    {
-      id: 1,
-      ley: "Art 115, 115 Bis, 116, 116 bis y 116 Bis 1 de la Ley de Instituciones de Crédito",
-      caracteristicas:
-        "Establece las obligaciones que las Instituciones de crédito deben de hacer en materia de PLD y consecuencias.",
-      nota: "Disponible en Carpeta LIC 135-139",
-    },
-    {
-      id: 2,
-      ley: "DISPOSICIONES DE CARÁCTER GENERAL APLICABLES A LAS INSTITUCIONES DE CRÉDITO",
-      caracteristicas:
-        "Establece las medidas y procedimientos mínimos que las IC tienen que seguir en materia de PLD.",
-      links: [
-        "https://www.cnbv.gob.mx/Normatividad/Disposiciones%20de%20car%C3%A1cter%20general%20aplicables%20a%20las%20instituciones%20de%20cr%C3%A9dito.pdf",
-      ],
-    },
-  ],
-  institucionesTecnologia: [
-    {
-      id: 1,
-      ley: "Artículo 58 de la Ley para Regular las Instituciones de Tecnología Financiera",
-      caracteristicas:
-        "Artículo que establece las obligaciones en materia de PLD que las ITF deben de seguir",
-      nota: "Disponible en Carpeta como LRITF 27-30",
-    },
-    {
-      id: 2,
-      ley: "DISPOSICIONES DE CARÁCTER GENERAL A QUE SE REFIERE EL ARTÍCULO 58 DE LA LEY PARA REGULAR LAS INSTITUCIONES DE TECNOLOGÍA FINANCIERA",
-      caracteristicas:
-        "Establece las medidas y procedimientos mínimos que las IFT tienen que seguir en materia de PLD.",
-      links: [
-        "https://www.gob.mx/cms/uploads/attachment/file/909810/DCG_Instituciones_de_Tecnolog_a_Financiera__2018.pdf",
-      ],
-    },
-  ],
-  segurosFianza: [
-    {
-      id: 1,
-      ley: "Artículo 492 y 493 de la Ley de Instituciones de Seguros y Fianza",
-      caracteristicas:
-        "Artículo que establece las obligaciones en materia de PLD que las instituciones de seguro y fianza deben de seguir",
-      nota: "Disponible en Carpeta como LISF 243- 244.",
-    },
-    {
-      id: 2,
-      ley: "Circular única de Seguros y Fianza y anexos 27",
-      caracteristicas:
-        "Establece los procedimientos que las instituciones de seguros y fianza deben de seguir en materia de PLD",
-      links: ["https://www.gob.mx/cnsf/documentos/circular-unica-de-seguros-y-fianzas"],
-    },
-  ],
-  afores: [
-    {
-      id: 1,
-      ley: "Artículo 108 Bis de la Ley de los Sistemas para el Retiro",
-      caracteristicas:
-        "Artículo que establece las obligaciones en materia de PLD que las instituciones de seguro y fianza deben de seguir",
-      nota: "Disponible en Carpeta como LSAR 63-65",
-    },
-    {
-      id: 2,
-      ley: "DISPOSICIONES DE CARACTER GENERAL A QUE SE REFIEREN LOS ARTICULOS 108 BIS DE LA LEY DE LOS SISTEMAS DE AHORRO PARA EL RETIRO Y 91 DE LA LEY DE SOCIEDADES DE INVERSION",
-      caracteristicas:
-        "Establece los procedimientos que las AFORES deben de seguir en materia de PLD",
-      nota: "Disponible en Carpeta como AFORES Disposiciones",
-    },
-  ],
-  casasBolsas: [
-    {
-      id: 1,
-      ley: "Artículos 212 y 226 Bis de la Ley de Mercado de Valores",
-      caracteristicas:
-        "Artículos que refieren a las obligaciones que las casas de bolsas en materia de prevención de lavado de dinero",
-      nota: "Disponible en Carpeta como LMV 114-116 y LMV 125-126",
-    },
-    {
-      id: 2,
-      ley: "DISPOSICIONES DE CARÁCTER GENERAL A QUE SE REFIERE EL ARTÍCULO 212 DE LA LEY DEL MERCADO DE VALORES",
-      caracteristicas:
-        "Establece los procedimientos que las Casas de Bolsas deben de seguir en materia de PLD",
-      links: [
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5158508&fecha=09/09/2010#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5377881&fecha=31/12/2014#gsc.tab=0",
-      ],
-    },
-  ],
-  auxiliaresCredito: [
-    {
-      id: 1,
-      ley: "Artículos 95 y 95 Bis Ley General de Organizaciones y Actividades Auxiliares del Crédito",
-      caracteristicas:
-        "Establece los obligaciones que las auxiliares de crédito (SOFOMES, Centros cambiarias y transmisores de dinero) deben de realizar en materia de PLD",
-      nota: "Disponible en Carpeta como LGOAAC 88-94",
-    },
-    {
-      id: 2,
-      ley: "DISPOSICIONES DE CARACTER GENERAL A QUE SE REFIERE EL ARTICULO 95 BIS DE LA LEY GENERAL DE ORGANIZACIONES Y ACTIVIDADES AUXILIARES DEL CREDITO, APLICABLES A LOS TRANSMISORES DE DINERO A QUE SE REFIERE EL ARTICULO 81-A BIS DEL MISMO ORDENAMIENTO",
-      caracteristicas:
-        "Establece los procedimientos que los transmisores de dinero deben de realizar en materia de PLD.",
-      links: [
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5554685&fecha=20/03/2019#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5475646&fecha=09/03/2017#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5377884&fecha=31/12/2014#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5242565&fecha=10/04/2012#gsc.tab=0",
-      ],
-    },
-    {
-      id: 3,
-      ley: "DISPOSICIONES DE CARÁCTER GENERAL A QUE SE REFIERE EL ARTÍCULO 95 BIS DE LA LEY GENERAL DE ORGANIZACIONES Y ACTIVIDADES AUXILIARES DEL CRÉDITO APLICABLES A LOS CENTROS CAMBIARIOS A QUE SE REFIERE EL ARTÍCULO 81-A DEL MISMO ORDENAMIENTO.",
-      caracteristicas:
-        "Establece los procedimientos que los Centros cambiaros deben de realizar en materia de PLD.",
-      links: [
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5242564&fecha=10/04/2012#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5377889&fecha=31/12/2014#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5421590&fecha=29/12/2015#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5475643&fecha=09/03/2017#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5554684&fecha=20/03/2019#gsc.tab=0",
-      ],
-    },
-    {
-      id: 4,
-      ley: "DISPOSICIONES DE CARÁCTER GENERAL A QUE SE REFIEREN LOS ARTÍCULOS 115 DE LA LEY DE INSTITUCIONES DE CRÉDITO EN RELACIÓN CON EL 87-D DE LA LEY GENERAL DE ORGANIZACIONES Y ACTIVIDADES AUXILIARES DEL CRÉDITO Y 95-BIS DE ESTE ÚLTIMO ORDENAMIENTO, APLICABLES A LAS SOCIEDADES FINANCIERAS DE OBJETO MÚLTIPLE",
-      caracteristicas:
-        "Establece los procedimientos que las SOFOM deben de realizar en materia de PLD.",
-      links: [
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5182183&fecha=17/03/2011#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5226549&fecha=23/12/2011#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5377883&fecha=31/12/2014#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5475644&fecha=09/03/2017#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5554779&fecha=21/03/2019#gsc.tab=0",
-      ],
-    },
-  ],
-  unionesCredito: [
-    {
-      id: 1,
-      ley: "Artículo 129 de la Ley de Uniones de Crédito",
-      caracteristicas: "Establece las obligaciones en materia de PLD de las uniones de crédito.",
-      nota: "Disponible en Carpeta como LUC 56-58",
-    },
-    {
-      id: 2,
-      ley: "DISPOSICIONES DE CARÁCTER GENERAL A QUE SE REFIERE EL ARTÍCULO 129 DE LA LEY DE UNIONES DE CRÉDITO",
-      caracteristicas:
-        "Establece los procedimientos que las uniones de crédito deben de realizar en materia de PLD.",
-      links: [
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5275522&fecha=26/10/2012#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5478021&fecha=30/03/2017#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5554906&fecha=22/03/2019#gsc.tab=0",
-      ],
-    },
-  ],
-  sociedadesFinancierasPopulares: [
-    {
-      id: 1,
-      ley: "Artículo 124 de la Ley de Ahorro y Crédito Popular",
-      caracteristicas:
-        "Establece las obligaciones en materia de PLD de las sociedades financieras populares.",
-      nota: "Disponible en Carpeta como LACP 80-83",
-    },
-  ],
-  fondosInversion: [
-    {
-      id: 1,
-      ley: "Artículo 91 de la Ley de Fondos de Inversión",
-      caracteristicas:
-        "Establece las obligaciones en materia de PLD de los fondos de inversión.",
-      nota: "Esta en Carpeta como LFI 93-95",
-    },
-    {
-      id: 2,
-      ley: "DISPOSICIONES DE CARÁCTER GENERAL A QUE SE REFIERE EL ARTÍCULO 91 DE LA LEY DE FONDOS DE INVERSIÓN",
-      caracteristicas:
-        "Establece los procedimientos que los fondos de inversión deben de realizar en materia de PLD.",
-      links: [
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5377886&fecha=31/12/2014#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5477324&fecha=23/03/2017#gsc.tab=0",
-        "https://www.dof.gob.mx/nota_detalle.php?codigo=5566218&fecha=22/07/2019#gsc.tab=0",
-      ],
-    },
-  ],
+const statusTone: Record<NormativeStatus, string> = {
+  vigente: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  reformado: "border-orange-200 bg-orange-50 text-orange-700",
+  pendiente_rcg: "border-amber-200 bg-amber-50 text-amber-800",
+  criterio_sat: "border-sky-200 bg-sky-50 text-sky-700",
+  referencia_sectorial: "border-slate-200 bg-slate-50 text-slate-700",
+  internacional: "border-violet-200 bg-violet-50 text-violet-700",
 }
 
-const seccionesFinancieras = [
-  { key: "general", titulo: "General", leyes: sistemaFinanciero.general },
-  {
-    key: "institucionesCredito",
-    titulo: "Instituciones de Crédito",
-    leyes: sistemaFinanciero.institucionesCredito,
-  },
-  {
-    key: "institucionesTecnologia",
-    titulo: "Instituciones de Tecnología Financiera",
-    leyes: sistemaFinanciero.institucionesTecnologia,
-  },
-  { key: "segurosFianza", titulo: "Seguros y Fianzas", leyes: sistemaFinanciero.segurosFianza },
-  { key: "afores", titulo: "Afores", leyes: sistemaFinanciero.afores },
-  { key: "casasBolsas", titulo: "Casas de Bolsa", leyes: sistemaFinanciero.casasBolsas },
-  { key: "auxiliaresCredito", titulo: "Auxiliares de Crédito", leyes: sistemaFinanciero.auxiliaresCredito },
-  { key: "unionesCredito", titulo: "Uniones de Crédito", leyes: sistemaFinanciero.unionesCredito },
-  {
-    key: "sociedadesFinancierasPopulares",
-    titulo: "Sociedades Financieras Populares",
-    leyes: sistemaFinanciero.sociedadesFinancierasPopulares,
-  },
-  { key: "fondosInversion", titulo: "Fondos de Inversión", leyes: sistemaFinanciero.fondosInversion },
-]
+const operationalLabel: Record<OperationalStatus, string> = {
+  vigente: "Activo",
+  parcial: "En integracion",
+  pendiente_rcg: "Pendiente RCG",
+  referencia: "Referencia",
+}
+
+const operationalTone: Record<OperationalStatus, string> = {
+  vigente: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  parcial: "border-orange-200 bg-orange-50 text-orange-700",
+  pendiente_rcg: "border-amber-200 bg-amber-50 text-amber-800",
+  referencia: "border-slate-200 bg-slate-50 text-slate-700",
+}
+
+const sectorTone: Record<NormativeSector, string> = {
+  "Actividades Vulnerables": "bg-orange-50 text-orange-700",
+  "Sistema financiero": "bg-sky-50 text-sky-700",
+  "Legislacion secundaria": "bg-slate-100 text-slate-700",
+  Internacional: "bg-violet-50 text-violet-700",
+}
 
 export default function MarcoNormativoAplicablePage() {
   const { language } = useLanguage()
   const t = translations[language]
+  const [query, setQuery] = useState("")
+  const [sector, setSector] = useState<NormativeSector | "todos">("todos")
+  const [authority, setAuthority] = useState<NormativeAuthority | "todos">("todos")
+  const [status, setStatus] = useState<NormativeStatus | "todos">("todos")
+  const [obligationQuery, setObligationQuery] = useState("")
 
-  const renderLaw = (law: Law) => (
-    <details key={law.id} className="group border rounded-lg transition-colors hover:border-orange-200">
-      <summary className="cursor-pointer flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <span className="font-semibold text-sm sm:text-base text-gray-800">
-          {law.id}. {law.ley}
-        </span>
-        {law.links && law.links.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {law.links.map((link, idx) => (
-              <Link
-                key={idx}
-                href={link}
-                target="_blank"
-                className="bg-orange-500 text-white text-xs px-3 py-1 rounded-md hover:bg-orange-600"
-              >
-                Ver documento {idx + 1}
-              </Link>
+  const filteredDocuments = useMemo(
+    () =>
+      filterNormativeDocuments(normativeDocuments, {
+        query,
+        sector,
+        authority,
+        status,
+      }),
+    [authority, query, sector, status],
+  )
+
+  const filteredObligations = useMemo(
+    () => filterNormativeObligations(normativeObligations, obligationQuery),
+    [obligationQuery],
+  )
+
+  const obligationsByModule = useMemo(
+    () => Object.entries(groupObligationsByModule(filteredObligations)),
+    [filteredObligations],
+  )
+
+  const documentIndex = useMemo(
+    () => new Map(normativeDocuments.map((document) => [document.id, document])),
+    [],
+  )
+
+  const resetFilters = () => {
+    setQuery("")
+    setSector("todos")
+    setAuthority("todos")
+    setStatus("todos")
+  }
+
+  return (
+    <main className="mx-auto max-w-7xl px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
+      <header className="border-b border-slate-200 pb-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Marco legal PLD Mexico</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-normal sm:text-3xl">{t.compiladoLeyes}</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              Biblioteca normativa y mapa operativo para Actividades Vulnerables, sistema financiero y referencias internacionales PLD/FT.
+            </p>
+          </div>
+          <div className="min-w-0 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Ultima revision normativa</p>
+            <p className="mt-1 text-lg font-semibold text-slate-950">{LEGAL_SOURCE_REVIEWED_AT}</p>
+            <p className="mt-1 text-xs leading-5 text-slate-600">Fuentes oficiales SAT, SPPLD, DOF, UIF, CNBV, CNSF, CONSAR y GAFI/ONU.</p>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-3 border-y border-slate-200 py-4 sm:grid-cols-3">
+          <Metric icon={BookOpen} label="Documentos" value={normativeDocuments.length} />
+          <Metric icon={GitBranch} label="Obligaciones mapeadas" value={normativeObligations.length} />
+          <Metric icon={CalendarDays} label="Reformas y criterios" value={normativeUpdates.length} />
+        </div>
+      </header>
+
+      <section className="border-b border-slate-200 py-5">
+        <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+          <CalendarDays className="h-4 w-4 text-orange-600" />
+          Linea de tiempo 2025-2026
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-5">
+          {normativeUpdates.map((update) => (
+            <article key={update.id} className="min-w-0 border-l-2 border-orange-200 pl-3">
+              <p className="text-xs font-semibold text-orange-700">{update.date}</p>
+              <h2 className="mt-1 break-words text-sm font-semibold leading-5 text-slate-950">{update.title}</h2>
+              <p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-600">{update.impact}</p>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <StatusBadge status={update.status} />
+                <Link href={update.sourceUrl} target="_blank" className="shrink-0 text-xs font-medium text-orange-700 hover:text-orange-800">
+                  Fuente
+                </Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <Tabs defaultValue="biblioteca" className="mt-6">
+        <TabsList className="grid h-auto w-full grid-cols-2 bg-slate-100 p-1 lg:w-[520px]">
+          <TabsTrigger value="biblioteca" className="gap-2 data-[state=active]:bg-white">
+            <BookOpen className="h-4 w-4" />
+            Biblioteca normativa
+          </TabsTrigger>
+          <TabsTrigger value="mapa" className="gap-2 data-[state=active]:bg-white">
+            <GitBranch className="h-4 w-4" />
+            Mapa operativo
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="biblioteca" className="mt-6">
+          <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+            <aside className="h-fit border-b border-slate-200 pb-4 lg:border-b-0 lg:border-r lg:pr-5">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                <ListFilter className="h-4 w-4 text-orange-600" />
+                Filtros
+              </div>
+
+              <div className="mt-4 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Buscar</label>
+                  <div className="flex items-center gap-2 rounded-md border bg-white px-3">
+                    <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                    <Input
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="PEP, 27 Bis, CNBV..."
+                      className="h-10 border-0 px-0 shadow-none focus-visible:ring-0"
+                    />
+                  </div>
+                </div>
+
+                <FilterGroup
+                  label="Sector"
+                  options={["todos", ...LEGAL_SECTORS]}
+                  value={sector}
+                  onChange={(value) => setSector(value as NormativeSector | "todos")}
+                />
+                <FilterGroup
+                  label="Autoridad"
+                  options={["todos", ...LEGAL_AUTHORITIES]}
+                  value={authority}
+                  onChange={(value) => setAuthority(value as NormativeAuthority | "todos")}
+                />
+                <FilterGroup
+                  label="Estado"
+                  options={["todos", ...LEGAL_STATUSES]}
+                  value={status}
+                  getLabel={(value) => (value === "todos" ? "Todos" : statusLabel[value as NormativeStatus])}
+                  onChange={(value) => setStatus(value as NormativeStatus | "todos")}
+                />
+
+                <Button type="button" variant="outline" className="w-full justify-center bg-white" onClick={resetFilters}>
+                  Limpiar filtros
+                </Button>
+              </div>
+            </aside>
+
+            <section className="min-w-0">
+              <div className="flex flex-col gap-2 pb-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold tracking-normal">Biblioteca normativa</h2>
+                  <p className="text-sm text-slate-500">{filteredDocuments.length} documento(s) encontrados de {normativeDocuments.length}.</p>
+                </div>
+                <p className="text-xs text-slate-500">Enlaces oficiales; sin llamadas runtime externas.</p>
+              </div>
+
+              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <div className="hidden grid-cols-[1.3fr_160px_150px_130px] gap-4 border-b bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:grid">
+                  <span>Documento</span>
+                  <span>Autoridad</span>
+                  <span>Sector</span>
+                  <span>Estado</span>
+                </div>
+                {filteredDocuments.length > 0 ? (
+                  filteredDocuments.map((document) => <DocumentRow key={document.id} document={document} />)
+                ) : (
+                  <div className="px-4 py-12 text-center">
+                    <p className="text-sm font-medium text-slate-950">Sin coincidencias</p>
+                    <p className="mt-1 text-sm text-slate-500">Prueba con otra palabra o limpia los filtros.</p>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="mapa" className="mt-6">
+          <section className="grid gap-6 lg:grid-cols-[300px_1fr]">
+            <aside className="h-fit border-b border-slate-200 pb-4 lg:border-b-0 lg:border-r lg:pr-5">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                <ShieldCheck className="h-4 w-4 text-orange-600" />
+                Lectura operativa
+              </div>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Cada obligacion conecta un fundamento con el modulo donde se trabaja. No cambia reglas ejecutables; solo hace visible el mapa normativo.
+              </p>
+              <div className="mt-4 space-y-2">
+                {(["vigente", "parcial", "pendiente_rcg", "referencia"] as OperationalStatus[]).map((item) => (
+                  <div key={item} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-slate-600">{operationalLabel[item]}</span>
+                    <OperationalBadge status={item} />
+                  </div>
+                ))}
+              </div>
+            </aside>
+
+            <div className="min-w-0">
+              <div className="flex flex-col gap-3 pb-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold tracking-normal">Mapa operativo de cumplimiento</h2>
+                  <p className="text-sm text-slate-500">Alta SAT, EUI, Actos, EBR, Evidencias, Avisos, Capacitacion, Auditoria y Gobernanza.</p>
+                </div>
+                <div className="flex w-full items-center gap-2 rounded-md border bg-white px-3 lg:w-80">
+                  <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                  <Input
+                    value={obligationQuery}
+                    onChange={(event) => setObligationQuery(event.target.value)}
+                    placeholder="Buscar obligacion o modulo"
+                    className="h-10 border-0 px-0 shadow-none focus-visible:ring-0"
+                  />
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                {obligationsByModule.length > 0 ? (
+                  obligationsByModule.map(([module, obligations]) => (
+                    <section key={module} className="border-t border-slate-200 first:border-t-0">
+                      <div className="flex flex-col gap-1 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <h3 className="font-semibold text-slate-950">{module}</h3>
+                        <span className="text-xs text-slate-500">{obligations.length} obligacion(es)</span>
+                      </div>
+                      <div className="divide-y divide-slate-100">
+                        {obligations.map((obligation) => (
+                          <article key={obligation.id} className="grid gap-4 px-4 py-4 lg:grid-cols-[1fr_220px]">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <OperationalBadge status={obligation.status} />
+                                {obligation.tags.slice(0, 3).map((tag) => (
+                                  <span key={tag} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                              <p className="mt-2 break-words text-sm font-medium leading-6 text-slate-950">{obligation.obligation}</p>
+                              <p className="mt-1 break-words text-xs leading-5 text-slate-500">{obligation.foundation}</p>
+                              <p className="mt-2 break-words text-sm leading-6 text-slate-600">{obligation.impact}</p>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {obligation.sourceDocumentIds.map((id) => {
+                                  const source = documentIndex.get(id)
+                                  if (!source) return null
+                                  return (
+                                    <Link
+                                      key={id}
+                                      href={source.url}
+                                      target="_blank"
+                                      className="inline-flex max-w-full items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 hover:border-orange-200 hover:text-orange-700"
+                                    >
+                                      <FileText className="h-3 w-3 shrink-0" />
+                                      <span className="truncate">{source.title}</span>
+                                    </Link>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                            <div className="flex items-start lg:justify-end">
+                              <Button asChild variant="outline" className="w-full justify-between bg-white text-orange-700 hover:text-orange-800 lg:w-48">
+                                <Link href={obligation.moduleHref}>
+                                  Abrir modulo
+                                  <ArrowRight className="h-4 w-4" />
+                                </Link>
+                              </Button>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  ))
+                ) : (
+                  <div className="px-4 py-12 text-center">
+                    <p className="text-sm font-medium text-slate-950">Sin obligaciones encontradas</p>
+                    <p className="mt-1 text-sm text-slate-500">Prueba con otra palabra clave.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        </TabsContent>
+      </Tabs>
+    </main>
+  )
+}
+
+function Metric({ icon: Icon, label, value }: { icon: typeof BookOpen; label: string; value: number }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-700">
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-2xl font-semibold text-slate-950">{value}</p>
+        <p className="truncate text-xs text-slate-500">{label}</p>
+      </div>
+    </div>
+  )
+}
+
+function FilterGroup({
+  label,
+  options,
+  value,
+  getLabel = (item) => (item === "todos" ? "Todos" : item),
+  onChange,
+}: {
+  label: string
+  options: string[]
+  value: string
+  getLabel?: (value: string) => string
+  onChange: (value: string) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <div className="flex flex-wrap gap-2 lg:block lg:space-y-2">
+        {options.map((option) => {
+          const active = value === option
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onChange(option)}
+              className={`w-auto rounded-full border px-3 py-1.5 text-left text-xs transition lg:w-full lg:rounded-md ${
+                active
+                  ? "border-orange-300 bg-orange-50 font-medium text-orange-700"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-orange-200 hover:text-orange-700"
+              }`}
+            >
+              <span className="line-clamp-2">{getLabel(option)}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function DocumentRow({ document }: { document: (typeof normativeDocuments)[number] }) {
+  return (
+    <details className="group border-t border-slate-200 first:border-t-0">
+      <summary className="grid cursor-pointer gap-3 px-4 py-4 transition hover:bg-slate-50 lg:grid-cols-[1.3fr_160px_150px_130px] lg:items-center">
+        <div className="min-w-0">
+          <p className="break-words text-sm font-semibold leading-6 text-slate-950">{document.title}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{document.operationalImpact}</p>
+        </div>
+        <span className="text-sm text-slate-600">{document.authority}</span>
+        <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-medium ${sectorTone[document.sector]}`}>{document.sector}</span>
+        <StatusBadge status={document.status} />
+      </summary>
+      <div className="grid gap-4 border-t border-slate-100 bg-slate-50/60 px-4 py-4 lg:grid-cols-[1fr_260px]">
+        <div className="min-w-0">
+          <p className="break-words text-sm leading-6 text-slate-700">{document.summary}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">Tipo: {document.hierarchy}</span>
+            {document.lastReform ? <span className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">Reforma: {document.lastReform}</span> : null}
+            <span className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">Revision: {document.reviewedAt}</span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {document.tags.map((tag) => (
+              <span key={tag} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-500">
+                {tag}
+              </span>
             ))}
           </div>
-        )}
-      </summary>
-      <div className="px-4 pb-3">
-        <p className="py-2 text-sm leading-relaxed text-gray-700">{law.caracteristicas}</p>
-        {law.nota && <p className="pb-1 text-xs text-gray-500">{law.nota}</p>}
+        </div>
+        <div className="min-w-0 space-y-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Modulos relacionados</p>
+            <p className="mt-1 break-words text-sm leading-6 text-slate-700">{document.relatedModules.join(", ")}</p>
+          </div>
+          <Button asChild className="w-full justify-between bg-[#F7941D] text-white hover:bg-[#D97808]">
+            <Link href={document.url} target="_blank">
+              Abrir fuente oficial
+              <ExternalLink className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
       </div>
     </details>
   )
+}
 
+function StatusBadge({ status }: { status: NormativeStatus }) {
   return (
-    <div className="container mx-auto py-10 space-y-8">
-      <h1 className="text-3xl font-bold" style={{ fontFamily: "Futura Std, sans-serif" }}>
-        {t.compiladoLeyes}
-      </h1>
+    <Badge variant="outline" className={`w-fit ${statusTone[status]}`}>
+      {statusLabel[status]}
+    </Badge>
+  )
+}
 
-      <div className="space-y-6">
-        <details className="rounded-xl border shadow-sm">
-          <summary className="cursor-pointer select-none px-6 py-4 text-lg font-semibold text-gray-800">
-            Normativa de aplicación general
-          </summary>
-          <div className="px-6 pb-6">
-            <div className="space-y-4">{leyesGenerales.map(renderLaw)}</div>
-          </div>
-        </details>
-
-        <details className="rounded-xl border shadow-sm">
-          <summary className="cursor-pointer select-none px-6 py-4 text-lg font-semibold text-gray-800">
-            Actividades Vulnerables
-          </summary>
-          <div className="px-6 pb-6">
-            <div className="space-y-4">{actividadesVulnerables.map(renderLaw)}</div>
-          </div>
-        </details>
-
-        <details className="rounded-xl border shadow-sm">
-          <summary className="cursor-pointer select-none px-6 py-4 text-lg font-semibold text-gray-800">
-            Sistema financiero
-          </summary>
-          <div className="px-6 pb-6 space-y-6">
-            {seccionesFinancieras.map((seccion) => (
-              <section key={seccion.key} className="space-y-3">
-                <h3 className="text-base font-semibold text-gray-700">
-                  {seccion.titulo}
-                </h3>
-                <div className="space-y-4">{seccion.leyes.map(renderLaw)}</div>
-              </section>
-            ))}
-          </div>
-        </details>
-      </div>
-    </div>
+function OperationalBadge({ status }: { status: OperationalStatus }) {
+  return (
+    <Badge variant="outline" className={`w-fit ${operationalTone[status]}`}>
+      {operationalLabel[status]}
+    </Badge>
   )
 }
