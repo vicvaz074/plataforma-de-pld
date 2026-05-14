@@ -17,8 +17,10 @@ import {
   pepCargoFixtures,
   PEP_SEARCH_HISTORY_CLEAR_ALL,
   removePepSearchHistoryItem,
+  resolveSatFormatoForActividad,
   searchPep,
 } from "../lib/pld"
+import { actividadesVulnerables } from "../lib/data/actividades"
 import type { PepEntity, PepInternalRecord, PepSearchResponse } from "../lib/pld"
 import pepPublicMxSnapshot from "../public/data/pep-public-mx.json"
 
@@ -37,6 +39,13 @@ test("Article 17 catalog keeps customs services under fraction XIV", () => {
   assert.equal(customs?.fraccion, "Fracción XIV")
   assert.equal(customs?.nombre, "Servicios de comercio exterior - vehículos")
   assert.equal(customs?.avisoSiempre, true)
+})
+
+test("UI activity catalog keys resolve in the PLD and SAT engines", () => {
+  for (const actividad of actividadesVulnerables) {
+    assert.doesNotThrow(() => getAcumulacionRuleForActividad(actividad.key), actividad.key)
+    assert.doesNotThrow(() => resolveSatFormatoForActividad(actividad.key), actividad.key)
+  }
 })
 
 test("ordinary notices are due on the 17th day of the following month", () => {
