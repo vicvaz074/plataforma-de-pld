@@ -1,5 +1,6 @@
 import type {
   PepAmbito,
+  PepCargoVerificationRecord,
   PepCargo,
   PepCargoDefinition,
   PepCoverageReport,
@@ -28,6 +29,7 @@ interface PepCoverageInput {
   personas: PepPersonRecord[]
   sources: PepSourceRecord[]
   now: string
+  cargoVerifications?: PepCargoVerificationRecord[]
 }
 
 const DEFAULT_DEPENDENCIA = "NO ESPECIFICADA"
@@ -174,6 +176,11 @@ export function buildPepCoverageReport(input: PepCoverageInput): PepCoverageRepo
       .filter((person) => person.resolutionStatus === "resolved")
       .flatMap((person) => person.cargoIds),
   )
+  const verifiedCargoIds = new Set(
+    (input.cargoVerifications ?? [])
+      .filter((record) => record.status === "verified_no_nominal_source" || record.status === "verified_obsolete" || record.status === "verified_collective")
+      .map((record) => record.cargoId),
+  )
   const coverageByAmbito = Object.fromEntries(
     AMBITOS.map((ambito) => [ambito, { total: 0, resolved: 0, unresolved: 0 }]),
   ) as PepCoverageReport["coverageByAmbito"]
@@ -189,6 +196,8 @@ export function buildPepCoverageReport(input: PepCoverageInput): PepCoverageRepo
     }
 
     bucket.unresolved += 1
+    if (verifiedCargoIds.has(cargo.id)) continue
+
     reviewQueue.push({
       id: `review-${cargo.id}`,
       cargoId: cargo.id,
@@ -214,13 +223,19 @@ export function buildPepCoverageReport(input: PepCoverageInput): PepCoverageRepo
   }
 
   const cargosConTitular = resolvedCargoIds.size
+  const cargosVerificadosSinTitular = [...verifiedCargoIds].filter((cargoId) =>
+    input.cargos.some((cargo) => cargo.id === cargoId && !resolvedCargoIds.has(cargoId)),
+  ).length
   const cargosSinTitular = Math.max(0, input.cargos.length - cargosConTitular)
+  const cargosPendientesRevision = Math.max(0, cargosSinTitular - cargosVerificadosSinTitular)
 
   return {
     generatedAt: input.now,
     totalCargos: input.cargos.length,
     cargosConTitular,
     cargosSinTitular,
+    cargosVerificadosSinTitular,
+    cargosPendientesRevision,
     personasResueltas: input.personas.filter((person) => person.resolutionStatus === "resolved").length,
     staleSources: stale,
     freshSources: fresh,
@@ -229,7 +244,8 @@ export function buildPepCoverageReport(input: PepCoverageInput): PepCoverageRepo
     warnings: [
       "Snapshot local-first: no equivale a consulta oficial en tiempo real.",
       ...(stale.length ? ["Existen fuentes vencidas que deben actualizarse antes de cierre productivo."] : []),
-      ...(cargosSinTitular ? ["Hay cargos PEP sin titular nominal resuelto; usar revisión humana y evidencia adicional."] : []),
+      ...(cargosPendientesRevision ? ["Hay cargos PEP sin titular nominal resuelto; usar revisión humana y evidencia adicional."] : []),
+      ...(cargosVerificadosSinTitular ? ["Hay cargos PEP verificados sin fuente nominal cargada; conservar justificación y no tratar como coincidencia nominal."] : []),
     ],
   }
 }

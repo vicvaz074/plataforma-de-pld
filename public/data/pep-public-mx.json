@@ -3,7 +3,7 @@
   "sourceLabel": "PEP México - fuentes públicas verificadas",
   "sourceUrl": "local-public-snapshot",
   "syncedAt": "2026-05-11T00:00:00.000Z",
-  "count": 13,
+  "count": 16,
   "license": "Compilación local de datos públicos para apoyo PLD; verificar fuente oficial antes de decisión definitiva.",
   "entities": [
     {
@@ -254,6 +254,64 @@
       "dataset": "pep-public-mx-curated",
       "lastSeen": "2026-05-13",
       "topics": ["role.pep", "mx.former-president"]
+    },
+    {
+      "id": "public-mx-fidel-maldonado-lopez-asipona-altamira",
+      "name": "Fidel Maldonado López",
+      "aliases": ["Fidel Maldonado Lopez", "Vicealmirante Fidel Maldonado López", "Vicealmirante Fidel Maldonado Lopez"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Director General",
+          "dependencia": "Administración del Sistema Portuario Nacional Altamira, S.A. de C.V."
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "DOF/SEMAR - autorización tarifaria Altamira",
+      "sourceUrl": "https://www.dof.gob.mx/2025/SEMAR/3210_2025.pdf",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-14",
+      "cargoIds": ["pep-cargo-estatal-administracion-portuaria-integral-de-altamira-s-a-de-c-v-ver-observacion-en-el-diccionario-de-datos"],
+      "topics": ["role.pep", "mx.public-official", "mx.asipona"]
+    },
+    {
+      "id": "public-mx-martin-zepeda-anguiano-asipona-coatzacoalcos",
+      "name": "Martín Zepeda Anguiano",
+      "aliases": ["Martin Zepeda Anguiano", "Vicealmirante Martín Zepeda Anguiano", "Vicealmirante Martin Zepeda Anguiano"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Director General",
+          "dependencia": "Administración del Sistema Portuario Nacional Coatzacoalcos, S.A. de C.V."
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "ASIPONA Coatzacoalcos - comunicado oficial 2026",
+      "sourceUrl": "https://www.puertocoatzacoalcos.com.mx/noticias/861",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-14",
+      "cargoIds": ["pep-cargo-estatal-administracion-portuaria-integral-de-coatzacoalcos-s-a-de-c-v-ver-observacion-en-el-diccionario-de-datos"],
+      "topics": ["role.pep", "mx.public-official", "mx.asipona"]
+    },
+    {
+      "id": "public-mx-hugo-daniel-torres-may-asipona-dos-bocas",
+      "name": "Hugo Daniel Torres May",
+      "aliases": ["Cap. de Alt. Hugo Daniel Torres May", "Capitán de Altura Hugo Daniel Torres May", "Capitan de Altura Hugo Daniel Torres May"],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Director General",
+          "dependencia": "Administración del Sistema Portuario Nacional Dos Bocas, S.A. de C.V.",
+          "desde": "2025-07-17"
+        }
+      ],
+      "source": "public-mx",
+      "sourceLabel": "ASIPONA Dos Bocas - directorio oficial 2026",
+      "sourceUrl": "https://www.puertodosbocas.com.mx/puerto",
+      "dataset": "pep-public-mx-curated",
+      "lastSeen": "2026-05-14",
+      "cargoIds": ["pep-cargo-estatal-administracion-portuaria-integral-de-dos-bocas-s-a-de-c-v-ver-observacion-en-el-diccionario-de-datos"],
+      "topics": ["role.pep", "mx.public-official", "mx.asipona", "manual-review-optional"]
     }
   ]
 }

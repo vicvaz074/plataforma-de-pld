@@ -12,11 +12,14 @@ import {
   getAcumulacionRuleForActividad,
   getDocumentRequirementsForCliente,
   getUmaForDate,
+  getPepSearchHistoryItemKey,
   matchPepCargo,
   pepCargoFixtures,
+  PEP_SEARCH_HISTORY_CLEAR_ALL,
+  removePepSearchHistoryItem,
   searchPep,
 } from "../lib/pld"
-import type { PepEntity, PepInternalRecord } from "../lib/pld"
+import type { PepEntity, PepInternalRecord, PepSearchResponse } from "../lib/pld"
 import pepPublicMxSnapshot from "../public/data/pep-public-mx.json"
 
 test("UMA 2026 uses official INEGI daily, monthly and annual values", () => {
@@ -480,5 +483,43 @@ test("WhoIs PEP public Mexico snapshot includes former Mexican presidents since 
     assert.equal(result.status, "coincidencia_alta", nombre)
     assert.equal(result.results[0]?.entity.positions?.[0]?.cargo, "Expresidente de los Estados Unidos Mexicanos", nombre)
     assert.equal(result.results[0]?.matchedFields.includes("nombre"), true, nombre)
+  }
+})
+
+test("WhoIs PEP public Mexico snapshot includes ASIPONA Altamira, Coatzacoalcos and Dos Bocas directors", () => {
+  const snapshot = pepPublicMxSnapshot as { entities: PepEntity[] }
+  const directors = [
+    {
+      nombre: "Fidel Maldonado Lopez",
+      dependencia: "Administración del Sistema Portuario Nacional Altamira, S.A. de C.V.",
+    },
+    {
+      nombre: "Martin Zepeda Anguiano",
+      dependencia: "Administración del Sistema Portuario Nacional Coatzacoalcos, S.A. de C.V.",
+    },
+    {
+      nombre: "Hugo Daniel Torres May",
+      dependencia: "Administración del Sistema Portuario Nacional Dos Bocas, S.A. de C.V.",
+    },
+  ]
+
+  for (const director of directors) {
+    const result = searchPep(
+      {
+        nombre: director.nombre,
+        relacion: "cliente",
+      },
+      {
+        entities: snapshot.entities,
+        cargos: pepCargoFixtures,
+        internalRecords: [],
+      },
+      "2026-05-14T12:00:00.000Z",
+    )
+
+    assert.equal(result.status, "coincidencia_alta", director.nombre)
+    assert.equal(result.results[0]?.entity.positions?.[0]?.cargo, "Director General", director.nombre)
+    assert.equal(result.results[0]?.entity.positions?.[0]?.dependencia, director.dependencia, director.nombre)
+    assert.equal(result.results[0]?.matchedFields.includes("nombre"), true, director.nombre)
   }
 })
