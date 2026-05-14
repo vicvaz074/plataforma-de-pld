@@ -1,6 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate"
 
-import { excelSerialFromDate } from "./sat-xml"
+import { excelSerialFromDate, satDate } from "./sat-xml"
 import type {
   SatDynamicOperationForm,
   SatFilledWorkbookResult,
@@ -28,6 +28,13 @@ type CellMap = Record<string, string>
 type ResolvedWorkbookCellValue = {
   value: string
   dataType?: SatXlsmField["dataType"]
+  writeDateAsText?: boolean
+}
+
+type WorkbookStyleKind = "text" | "date" | "other"
+type PostalCatalogEntry = {
+  estado: string
+  municipio: string
 }
 
 const SHEET_COMBOS = "Combos"
@@ -183,6 +190,12 @@ export function fillSatXlsmTemplate(
   const zip = unzipSync(input)
   const workbook = parseWorkbook(zip)
   const layout = options.layout ? normalizeSatXlsmLayout(options.layout) : undefined
+  const styleKinds = parseWorkbookStyleKinds(readZipText(zip, "xl/styles.xml"))
+  let postalCatalog: Map<string, PostalCatalogEntry> | undefined
+  const getPostalCatalog = () => {
+    postalCatalog = postalCatalog || extractPostalCatalog(zip, workbook)
+    return postalCatalog
+  }
   const cellValues = resolveWorkbookCellValues(options.values, layout)
   const writtenCells: string[] = []
 
@@ -192,9 +205,10 @@ export function fillSatXlsmTemplate(
     const xml = readZipText(zip, sheet.path)
     let updatedXml = xml
     for (const [cell, cellValue] of valuesForSheet) {
-      updatedXml = setCellValue(updatedXml, cell, cellValue)
+      updatedXml = setCellValue(updatedXml, cell, cellValue, styleKinds)
       writtenCells.push(`${sheet.name}!${cell}`)
     }
+    updatedXml = refreshPostalFormulaCaches(updatedXml, workbook.sharedStrings, getPostalCatalog)
     zip[sheet.path] = strToU8(updatedXml)
   }
 
@@ -263,9 +277,10 @@ export function buildSatWorkbookDownloadValues(input: {
   const isArrendamientoTemplate = Boolean(input.satTemplateId?.includes("fraccion-xv-arrendamiento"))
   if (!isInmueblesTemplate && !isArrendamientoTemplate) return values
 
+  const normalizedInputPeriod = normalizeSatPeriod(input.periodo) || input.periodo
   const setIfEmpty = (key: string, value: unknown) => {
     if (values[key] || value === undefined || value === null || value === "") return
-    values[key] = normalizeSatDownloadValue(value)
+    values[key] = normalizeSatDownloadValueForKey(key, value)
   }
 
   const isDemoPackage =
@@ -279,8 +294,8 @@ export function buildSatWorkbookDownloadValues(input: {
     /\b(S\.?A\.?|SAPI|S\.? DE R\.?L\.?|S\.?C\.?|A\.?C\.?|CV|C\.V\.)\b/i.test(clienteNombre)
 
   setIfEmpty("persona_aviso.sujeto_obligado_rfc", input.tenantRfc)
-  setIfEmpty("persona_aviso.periodo", input.periodo)
-  setIfEmpty("persona_aviso.referencia", buildFallbackReferencia(input.packageId, input.periodo))
+  setIfEmpty("persona_aviso.periodo", normalizedInputPeriod)
+  setIfEmpty("persona_aviso.referencia", buildFallbackReferencia(input.packageId, normalizedInputPeriod))
   setIfEmpty(
     "persona_aviso.prioridad",
     input.outputKind === "aviso_24h" ? "2,24 HORAS CON OPERACIONES" : "1,NORMAL",
@@ -337,6 +352,10 @@ export function buildSatWorkbookDownloadValues(input: {
     setIfEmpty("instrumento.entidad", "19,NUEVO LEÓN")
   }
 
+  for (const [key, value] of Object.entries(values)) {
+    values[key] = normalizeSatDownloadValueForKey(key, value)
+  }
+
   return values
 }
 
@@ -347,6 +366,35 @@ function normalizeSatDownloadValue(value: unknown): string {
   return normalized
 }
 
+function normalizeSatDownloadValueForKey(key: string, value: unknown): string {
+  const normalized = normalizeSatDownloadValue(value)
+  if (isSatPeriodKey(key)) return normalizeSatPeriod(normalized) || normalized
+  if (isPostalCodeKey(key)) return normalizePostalCode(normalized) || normalized
+  return normalized
+}
+
+function normalizeSatPeriod(value: unknown): string {
+  const text = String(value ?? "").trim()
+  if (!text) return ""
+  const sixDigits = text.match(/^(\d{4})(0[1-9]|1[0-2])$/)
+  if (sixDigits) return `${sixDigits[1]}${sixDigits[2]}`
+  const yearMonth = text.match(/^(\d{4})[-/](\d{1,2})(?:[-/]\d{1,2})?$/)
+  if (yearMonth) return `${yearMonth[1]}${yearMonth[2].padStart(2, "0")}`
+  const dmy = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (dmy) return `${dmy[3]}${dmy[2].padStart(2, "0")}`
+  return ""
+}
+
+function normalizePostalCode(value: unknown): string {
+  const text = String(value ?? "").trim()
+  if (!text) return ""
+  const exact = text.match(/^\d{4,5}$/)
+  if (exact) return text.padStart(5, "0")
+  const candidates = [...text.matchAll(/\b\d{4,5}\b/g)].map((match) => match[0])
+  const postal = [...candidates].reverse().find((candidate) => candidate.length === 5) || candidates.at(-1)
+  return postal ? postal.padStart(5, "0") : ""
+}
+
 function buildFallbackReferencia(packageId?: string, periodo?: string): string {
   const raw = packageId || `AVISO-${periodo || "SAT"}`
   return raw
@@ -354,6 +402,41 @@ function buildFallbackReferencia(packageId?: string, periodo?: string): string {
     .replace(/[^a-z0-9-]+/gi, "-")
     .slice(0, 60)
     .toUpperCase()
+}
+
+function parseWorkbookStyleKinds(stylesXml: string): Map<string, WorkbookStyleKind> {
+  const customFormats = new Map<string, string>()
+  for (const tag of matchTags(stylesXml, "numFmt")) {
+    const id = getAttr(tag, "numFmtId")
+    const code = getAttr(tag, "formatCode")
+    if (id && code) customFormats.set(id, code)
+  }
+
+  const styleKinds = new Map<string, WorkbookStyleKind>()
+  const cellXfs = stylesXml.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/)?.[1] || ""
+  matchTags(cellXfs, "xf").forEach((tag, index) => {
+    const numFmtId = getAttr(tag, "numFmtId")
+    const formatCode = customFormats.get(numFmtId) || builtinNumberFormatCode(numFmtId)
+    styleKinds.set(String(index), classifyNumberFormat(formatCode))
+  })
+  return styleKinds
+}
+
+function builtinNumberFormatCode(numFmtId: string): string {
+  if (numFmtId === "14") return "m/d/yy"
+  if (numFmtId === "15") return "d-mmm-yy"
+  if (numFmtId === "16") return "d-mmm"
+  if (numFmtId === "17") return "mmm-yy"
+  if (numFmtId === "22") return "m/d/yy h:mm"
+  if (numFmtId === "49") return "@"
+  return ""
+}
+
+function classifyNumberFormat(formatCode: string): WorkbookStyleKind {
+  const normalized = formatCode.trim().toLowerCase()
+  if (normalized === "@") return "text"
+  if (/[dmy]/.test(normalized) && !normalized.includes("@")) return "date"
+  return "other"
 }
 
 function parseWorkbook(zip: Record<string, Uint8Array>): ParsedWorkbook {
@@ -686,14 +769,11 @@ function getManualFields(templateId: string, sheetName: string, optionLists: Sat
         sectionKind: "persona_objeto",
         requiredFirstRow: false,
         columns: [
-          ["estado", "Entidad federativa", "B", "texto"],
-          ["municipio", "Municipio o alcaldía", "C", "texto"],
-          ["ciudad", "Ciudad o población", "D", "texto"],
+          ["codigo_postal", "Código postal", "B", "texto"],
           ["colonia", "Colonia", "E", "texto"],
           ["calle", "Calle, avenida o vía", "F", "texto"],
           ["numero_exterior", "Número exterior", "G", "texto"],
           ["numero_interior", "Número interior", "H", "texto"],
-          ["codigo_postal", "Código postal", "I", "texto"],
         ],
         field,
       }),
@@ -1177,7 +1257,13 @@ function resolveWorkbookCellValues(
 ): Map<string, Map<string, ResolvedWorkbookCellValue>> {
   const result = new Map<string, Map<string, ResolvedWorkbookCellValue>>()
   const fieldMap = new Map<string, SatXlsmField>()
-  layout?.sections.flatMap((section) => section.fields).forEach((field) => fieldMap.set(field.id, field))
+  const cellMap = new Map<string, SatXlsmField>()
+  layout?.sections
+    .flatMap((section) => section.fields)
+    .forEach((field) => {
+      fieldMap.set(field.id, field)
+      cellMap.set(`${field.sheetName}!${field.cell.toUpperCase()}`, field)
+    })
 
   for (const [key, rawValue] of Object.entries(values)) {
     if (rawValue === undefined || rawValue === null || rawValue === "") continue
@@ -1186,6 +1272,7 @@ function resolveWorkbookCellValues(
     let field: SatXlsmField | undefined
     if (key.includes("!")) {
       ;[sheetName, cell] = key.split("!")
+      field = cellMap.get(`${sheetName}!${cell.toUpperCase()}`)
     } else {
       field = fieldMap.get(key)
       if (!field) continue
@@ -1194,15 +1281,46 @@ function resolveWorkbookCellValues(
     }
     if (!sheetName || !cell) continue
     if (!result.has(sheetName)) result.set(sheetName, new Map())
+    const value = normalizeWorkbookValue(key, rawValue, field)
     result.get(sheetName)?.set(cell.toUpperCase(), {
-      value: String(rawValue),
-      dataType: field?.dataType,
+      value,
+      dataType: workbookDataTypeForField(field),
+      writeDateAsText: shouldWriteDateAsText(field),
     })
   }
   return result
 }
 
-function setCellValue(xml: string, cellRef: string, cellValue: ResolvedWorkbookCellValue): string {
+function normalizeWorkbookValue(key: string, value: unknown, field?: SatXlsmField): string {
+  const normalized = normalizeSatDownloadValue(value)
+  if (isSatPeriodField(field) || isSatPeriodKey(key)) return normalizeSatPeriod(normalized) || normalized
+  if (isPostalCodeField(field) || isPostalCodeKey(key)) return normalizePostalCode(normalized) || normalized
+  return normalized
+}
+
+function workbookDataTypeForField(field?: SatXlsmField): SatXlsmField["dataType"] | undefined {
+  if (isPostalCodeField(field)) return "numero"
+  return field?.dataType
+}
+
+function shouldWriteDateAsText(field?: SatXlsmField): boolean {
+  return field?.dataType === "fecha"
+}
+
+function setCellValue(
+  xml: string,
+  cellRef: string,
+  cellValue: ResolvedWorkbookCellValue,
+  styleKinds: Map<string, WorkbookStyleKind>,
+): string {
+  if (
+    cellValue.dataType === "fecha" &&
+    cellValue.writeDateAsText &&
+    getStyleKindForCell(xml, cellRef, styleKinds) === "text"
+  ) {
+    const dateText = formatDateForWorkbookText(cellValue.value)
+    return setCellInlineString(xml, cellRef, dateText || cellValue.value)
+  }
   const numericValue = normalizeTypedNumber(cellValue)
   if (numericValue !== null) return setCellNumber(xml, cellRef, numericValue)
   return setCellInlineString(xml, cellRef, cellValue.value)
@@ -1220,12 +1338,49 @@ function normalizeTypedNumber(cellValue: ResolvedWorkbookCellValue): string | nu
   return null
 }
 
+function formatDateForWorkbookText(value: string): string {
+  const normalized = satDate(value)
+  if (!/^\d{8}$/.test(normalized)) return value
+  return `${normalized.slice(6, 8)}/${normalized.slice(4, 6)}/${normalized.slice(0, 4)}`
+}
+
+function isSatPeriodField(field?: SatXlsmField): boolean {
+  if (!field) return false
+  return isSatPeriodKey(field.id) || slug(field.label).includes("periodo-reportado")
+}
+
+function isSatPeriodKey(key: string): boolean {
+  const normalized = slug(key)
+  return normalized.endsWith("periodo") || normalized.includes("periodo-reportado")
+}
+
+function isPostalCodeField(field?: SatXlsmField): boolean {
+  if (!field) return false
+  return isPostalCodeKey(field.id) || slug(field.label).includes("codigo-postal")
+}
+
+function isPostalCodeKey(key: string): boolean {
+  const normalized = slug(key)
+  return normalized.includes("codigo-postal")
+}
+
+function getStyleKindForCell(
+  xml: string,
+  cellRef: string,
+  styleKinds: Map<string, WorkbookStyleKind>,
+): WorkbookStyleKind | undefined {
+  const cellRegex = new RegExp(`<c\\b([^>]*\\br="${cellRef}"[^>]*)`)
+  const attrs = xml.match(cellRegex)?.[1] || ""
+  const style = getAttr(attrs, "s")
+  return style ? styleKinds.get(style) : undefined
+}
+
 function setCellNumber(xml: string, cellRef: string, value: string): string {
   const rowNumber = Number(cellRef.match(/\d+/)?.[0])
-  const cellRegex = new RegExp(`<c\\b([^>]*\\br="${cellRef}"[^>]*)>([\\s\\S]*?)<\\/c>|<c\\b([^>]*\\br="${cellRef}"[^>]*)\\/>`)
+  const cellRegex = cellReplacementRegex(cellRef)
   const existing = xml.match(cellRegex)
   if (existing) {
-    const attrs = existing[1] || existing[3] || ""
+    const attrs = existing[1] || existing[2] || ""
     const style = getAttr(attrs, "s")
     const styleAttr = style ? ` s="${style}"` : ""
     return xml.replace(cellRegex, `<c r="${cellRef}"${styleAttr}><v>${escapeXml(value)}</v></c>`)
@@ -1246,10 +1401,10 @@ function setCellNumber(xml: string, cellRef: string, value: string): string {
 function setCellInlineString(xml: string, cellRef: string, value: string): string {
   const rowNumber = Number(cellRef.match(/\d+/)?.[0])
   const escaped = escapeXml(value)
-  const cellRegex = new RegExp(`<c\\b([^>]*\\br="${cellRef}"[^>]*)>([\\s\\S]*?)<\\/c>|<c\\b([^>]*\\br="${cellRef}"[^>]*)\\/>`)
+  const cellRegex = cellReplacementRegex(cellRef)
   const existing = xml.match(cellRegex)
   if (existing) {
-    const attrs = existing[1] || existing[3] || ""
+    const attrs = existing[1] || existing[2] || ""
     const style = getAttr(attrs, "s")
     const styleAttr = style ? ` s="${style}"` : ""
     return xml.replace(cellRegex, `<c r="${cellRef}"${styleAttr} t="inlineStr"><is><t>${escaped}</t></is></c>`)
@@ -1265,6 +1420,74 @@ function setCellInlineString(xml: string, cellRef: string, value: string): strin
   }
 
   return xml.replace("</sheetData>", `<row r="${rowNumber}">${cellXml}</row></sheetData>`)
+}
+
+function cellReplacementRegex(cellRef: string): RegExp {
+  return new RegExp(`<c\\b([^>]*\\br="${cellRef}"[^>]*)\\/>|<c\\b([^>]*\\br="${cellRef}"[^>]*)>([\\s\\S]*?)<\\/c>`)
+}
+
+function extractPostalCatalog(zip: Record<string, Uint8Array>, workbook: ParsedWorkbook): Map<string, PostalCatalogEntry> {
+  const combosSheet = workbook.sheets.find((sheet) => sheet.name === SHEET_COMBOS)
+  if (!combosSheet?.path) return new Map()
+  const xml = readZipText(zip, combosSheet.path, true)
+  if (!xml) return new Map()
+
+  const result = new Map<string, PostalCatalogEntry>()
+  const rowRegex = /<row\b[^>]*\br="(\d+)"[^>]*>([\s\S]*?)<\/row>/g
+  let rowMatch: RegExpExecArray | null
+  while ((rowMatch = rowRegex.exec(xml))) {
+    const row = rowMatch[1]
+    const body = rowMatch[2]
+    const cp = normalizePostalCode(readCellByRef(body, `N${row}`, workbook.sharedStrings))
+    if (!cp) continue
+    const estado = readCellByRef(body, `O${row}`, workbook.sharedStrings)
+    const municipio = readCellByRef(body, `P${row}`, workbook.sharedStrings)
+    if (!estado && !municipio) continue
+    result.set(cp, { estado, municipio })
+  }
+  return result
+}
+
+function readCellByRef(rowXml: string, cellRef: string, sharedStrings: string[]): string {
+  const cellRegex = new RegExp(`<c\\b([^>]*\\br="${cellRef}"[^>]*)(?:\\/>|>([\\s\\S]*?)<\\/c>)`)
+  const match = rowXml.match(cellRegex)
+  if (!match) return ""
+  return readCellValue(match[1] || "", match[2] || "", sharedStrings)
+}
+
+function refreshPostalFormulaCaches(
+  xml: string,
+  sharedStrings: string[],
+  getPostalCatalog: () => Map<string, PostalCatalogEntry>,
+): string {
+  if (!xml.includes("VLOOKUP") || !xml.includes("Combos!$N$1:$P$")) return xml
+  const sheetCells = parseSheetCells(xml, sharedStrings)
+  let postalCatalog: Map<string, PostalCatalogEntry> | undefined
+
+  return xml.replace(/<c\b([^>]*\br="([A-Z]+\d+)"[^>]*)>([\s\S]*?)<\/c>/g, (match, attrs, _cellRef, body) => {
+    const formula = decodeXml((body.match(/<f\b[^>]*>([\s\S]*?)<\/f>/) || [])[1] || "")
+    const lookup = formula.match(/VLOOKUP\(([A-Z]+\d+),Combos!\$N\$1:\$P\$\d+,([23]),0\)/)
+    if (!lookup) return match
+
+    const cp = normalizePostalCode(sheetCells[lookup[1]])
+    if (!cp) return match
+    postalCatalog = postalCatalog || getPostalCatalog()
+    const catalogEntry = postalCatalog.get(cp)
+    if (!catalogEntry) return match
+
+    const value = lookup[2] === "2" ? catalogEntry.estado : catalogEntry.municipio
+    if (!value) return match
+
+    const nextAttrs = attrs.includes(' t="')
+      ? attrs.replace(/\s+t="[^"]*"/, ' t="str"')
+      : `${attrs} t="str"`
+    const escapedValue = escapeXml(value)
+    const nextBody = body.includes("<v>")
+      ? body.replace(/<v>[\s\S]*?<\/v>/, `<v>${escapedValue}</v>`)
+      : body.replace(/(<\/f>)/, `$1<v>${escapedValue}</v>`)
+
+    return `<c${nextAttrs}>${nextBody}</c>`
+  })
 }
 
 function insertCellSorted(body: string, cellRef: string, cellXml: string): string {
@@ -1517,7 +1740,8 @@ function inferPersonFieldPrefill(
 }
 
 function inferDomicilioFieldPrefill(label: string, col: string, prefill: Record<string, unknown>): unknown {
-  if (label.includes("pais") || col === "B") return prefill.clientePais || "MEXICO,MX"
+  if (label.includes("codigo-postal")) return prefill.clienteCodigoPostal || prefill.codigoPostal
+  if (label.includes("pais")) return prefill.clientePais || "MEXICO,MX"
   if (label.includes("estado") || label.includes("entidad") || col === "C") return prefill.clienteEstado
   if (label.includes("municipio")) return prefill.clienteMunicipio
   if (label.includes("ciudad") || label.includes("poblacion") || col === "D") return prefill.clienteCiudad
@@ -1525,7 +1749,7 @@ function inferDomicilioFieldPrefill(label: string, col: string, prefill: Record<
   if (label.includes("calle") || label.includes("avenida") || col === "F") return prefill.clienteCalle
   if (label.includes("numero-exterior") || col === "G") return prefill.clienteNumeroExterior
   if (label.includes("numero-interior") || col === "H") return prefill.clienteNumeroInterior
-  if (label.includes("codigo-postal") || col === "I" || col === "J") return prefill.clienteCodigoPostal
+  if (col === "I" || col === "J") return prefill.clienteCodigoPostal || prefill.codigoPostal
   return undefined
 }
 

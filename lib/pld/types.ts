@@ -485,6 +485,51 @@ export interface SatTemplateCatalogItem {
   sourceLastVerified: string
 }
 
+export interface SatWorkbookCellExpectation {
+  sheetName: string
+  cell: string
+  value?: string | number | boolean
+  formattedValue?: string
+  dataType?: string
+  formula?: string
+  numberFormat?: string
+}
+
+export interface SatWorkbookGoldenFixture {
+  id: string
+  label: string
+  templateId: string
+  fixtureFileName: string
+  xmlFixtureFileName?: string
+  source: string
+}
+
+export interface SatWorkbookComparisonResult {
+  equivalent: boolean
+  differences: string[]
+}
+
+export interface SatTemplateDemoScenario {
+  id: string
+  templateId: string
+  actividadKey: string
+  label: string
+  periodo: string
+  tenantRfc: string
+  tenantName: string
+  clienteNombre: string
+  clienteRfc: string
+  fechaOperacion: string
+  montoMxn: number
+  formaPago: string
+  template: SatTemplateCatalogItem
+  satFieldValues: Record<string, string>
+  satCellValues?: Record<string, string>
+  completedEvidence: Record<string, boolean>
+  workbookValidationStatus: "golden_fixture" | "strict_synthetic"
+  goldenFixtureId?: string
+}
+
 export interface SatXlsmOptionList {
   id: string
   label: string
@@ -667,6 +712,9 @@ export interface SatOutputPackage {
   satMissingRequiredFields?: string[]
   satWorkbookStatus?: "pendiente" | "borrador_bloqueado" | "listo"
   satWorkbookFileName?: string
+  workbookValidationStatus?: "golden_fixture" | "strict_synthetic" | "pending"
+  goldenFixtureId?: string
+  satDemoScenarioId?: string
   satOutputOverride?: SatOutputOverride
   validation: SatOutputValidation
   downloads: SatDownloadOption[]
@@ -825,6 +873,9 @@ export interface PldOperationalCase {
   satCellValues?: Record<string, string>
   satMissingRequiredFields?: string[]
   satWorkbookStatus?: "pendiente" | "borrador_bloqueado" | "listo"
+  workbookValidationStatus?: "golden_fixture" | "strict_synthetic" | "pending"
+  goldenFixtureId?: string
+  satDemoScenarioId?: string
   clienteId: string
   clienteNombre: string
   clienteRfc?: string

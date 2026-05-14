@@ -22,6 +22,81 @@ import {
 import { buildPldDemoDataset } from "../lib/demo/pld-demo-data"
 
 const repoRoot = process.cwd()
+const f4594MacFixturePath = path.join(
+  repoRoot,
+  "tests/fixtures/sat/f4594-arrendamiento-av202505-mac-xmlfix.xlsm",
+)
+
+const F4594_MAC_CELL_EXPECTATIONS: Record<string, string[]> = {
+  "Persona Objeto del aviso": [
+    "C4",
+    "C5",
+    "C6",
+    "E6",
+    "C7",
+    "B33",
+    "C33",
+    "D33",
+    "E33",
+    "B46",
+    "C46",
+    "D46",
+    "E46",
+    "G46",
+    "B60",
+    "C60",
+    "D60",
+    "E60",
+    "F60",
+    "G60",
+    "C86",
+    "D86",
+  ],
+  "Acto u operación": [
+    "C4",
+    "C5",
+    "B12",
+    "C12",
+    "D12",
+    "E12",
+    "F12",
+    "G12",
+    "H12",
+    "I12",
+    "K12",
+    "L12",
+    "M12",
+    "B27",
+    "C27",
+    "D27",
+    "E27",
+    "F27",
+  ],
+}
+
+function cellSnapshot(workbook: XLSX.WorkBook, sheetName: string, cellRef: string) {
+  const cell = workbook.Sheets[sheetName]?.[cellRef] as XLSX.CellObject | undefined
+  if (!cell) return null
+  return {
+    t: cell.t,
+    v: cell.v ?? "",
+    w: cell.w ?? "",
+    z: cell.z ?? "",
+    f: cell.f ?? "",
+  }
+}
+
+function assertWorkbookCellsEquivalentToFixture(actual: XLSX.WorkBook, expected: XLSX.WorkBook) {
+  for (const [sheetName, cells] of Object.entries(F4594_MAC_CELL_EXPECTATIONS)) {
+    for (const cellRef of cells) {
+      assert.deepEqual(
+        cellSnapshot(actual, sheetName, cellRef),
+        cellSnapshot(expected, sheetName, cellRef),
+        `${sheetName}!${cellRef} debe coincidir con el XLSM F4594 Mac xmlfix`,
+      )
+    }
+  }
+}
 
 const completedEvidence = {
   "pm-acta-constitutiva": true,
@@ -150,7 +225,19 @@ test("F4594 values fill the official Arrendamiento workbook cells with SAT-compa
     layout,
   })
   const zip = unzipSync(filled.workbook)
-  const workbook = XLSX.read(Buffer.from(filled.workbook), { type: "buffer", bookVBA: true, cellFormula: true })
+  const workbook = XLSX.read(Buffer.from(filled.workbook), {
+    type: "buffer",
+    bookVBA: true,
+    cellFormula: true,
+    cellNF: true,
+    cellStyles: true,
+  })
+  const expectedWorkbook = XLSX.readFile(f4594MacFixturePath, {
+    bookVBA: true,
+    cellFormula: true,
+    cellNF: true,
+    cellStyles: true,
+  })
   const persona = workbook.Sheets["Persona Objeto del aviso"]
   const acto = workbook.Sheets["Acto u operación"]
 
@@ -161,18 +248,23 @@ test("F4594 values fill the official Arrendamiento workbook cells with SAT-compa
   assert.equal(persona.C5.v, "202505")
   assert.equal(persona.C6.v, "AV202505")
   assert.equal(persona.B33.v, "LOGISALL MEXICO S DE RL DE CV")
-  assert.equal(persona.C33.v, 42699)
-  assert.equal(persona.B60.v, "66650")
+  assert.equal(persona.C33.v, "25/11/2016")
+  assert.equal(persona.B60.v, 66650)
+  assert.equal(persona.C60.v, "NUEVO LEON")
+  assert.equal(persona.D60.v, "PESQUERIA")
   assert.equal(persona.E60.v, "PESQUERIA")
   assert.equal(acto.C4.v, 45803)
   assert.equal(acto.C5.v, "1501,Arrendamiento de inmuebles")
   assert.equal(acto.B12.v, "11,Nave Industrial")
   assert.equal(acto.C12.v, 58569267)
-  assert.equal(acto.D12.v, "66679")
+  assert.equal(acto.D12.v, 66679)
+  assert.equal(acto.E12.v, "NUEVO LEON")
+  assert.equal(acto.F12.v, "PESQUERIA")
   assert.equal(acto.L12.v, 45778)
   assert.equal(acto.M12.v, 45808)
   assert.equal(acto.B27.v, 45803)
   assert.equal(acto.F27.v, 148092.99)
+  assertWorkbookCellsEquivalentToFixture(workbook, expectedWorkbook)
 })
 
 test("demo dataset includes the F4594 SAT validation scenario", () => {
