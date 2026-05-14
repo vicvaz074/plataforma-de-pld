@@ -94,10 +94,10 @@ const DECISION_OPTIONS: Array<{ value: Decision; label: string }> = [
 ]
 
 const STATUS_COPY: Record<PepWhoIsStatus, { label: string; className: string }> = {
-  coincidencia_alta: { label: "Coincidencia alta", className: "bg-rose-100 text-rose-700" },
-  posible_coincidencia: { label: "Posible coincidencia", className: "bg-amber-100 text-amber-700" },
-  requiere_revision: { label: "Requiere revisión", className: "bg-sky-100 text-sky-700" },
-  sin_coincidencia: { label: "Sin coincidencia", className: "bg-emerald-100 text-emerald-700" },
+  coincidencia_alta: { label: "Coincidencia alta", className: "border-rose-200 bg-rose-50 text-rose-700" },
+  posible_coincidencia: { label: "Posible coincidencia", className: "border-amber-200 bg-amber-50 text-amber-800" },
+  requiere_revision: { label: "Requiere revisión", className: "border-sky-200 bg-sky-50 text-sky-700" },
+  sin_coincidencia: { label: "Sin coincidencia", className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
 }
 
 const VERDICT_COPY: Record<PepWhoIsStatus, { title: string; message: string; className: string }> = {
@@ -281,7 +281,7 @@ export default function PepWhoIsPage() {
       <section className="flex flex-col gap-4 border-b pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-900 text-white">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-orange-200 bg-orange-50 text-orange-700">
               <ShieldAlert className="h-5 w-5" />
             </div>
             <div>
@@ -329,7 +329,7 @@ export default function PepWhoIsPage() {
                   }}
                   placeholder="Ej. Alberto Mendoza Diaz"
                 />
-                <Button className="h-12 w-full max-w-none" onClick={runSearch}>
+                <Button className="h-12 w-full max-w-none bg-[#F7941D] text-white hover:bg-[#D97808]" onClick={runSearch}>
                   Buscar PEP
                 </Button>
               </div>
@@ -469,7 +469,7 @@ export default function PepWhoIsPage() {
                   <Label>Evidencia / criterio</Label>
                   <Textarea value={decisionEvidence} onChange={(event) => setDecisionEvidence(event.target.value)} placeholder="Fuente, documento o criterio de descarte/confirmación" />
                 </div>
-                <Button className="w-full max-w-none" disabled={(!selectedResult && !query.nombre?.trim()) || !evidenceReady} onClick={saveDecision}>
+                <Button className="w-full max-w-none bg-[#F7941D] text-white hover:bg-[#D97808]" disabled={(!selectedResult && !query.nombre?.trim()) || !evidenceReady} onClick={saveDecision}>
                   Guardar decisión
                 </Button>
               </CardContent>
@@ -530,7 +530,7 @@ export default function PepWhoIsPage() {
                 <Label>Evidencia</Label>
                 <Textarea value={manualEvidence} onChange={(event) => setManualEvidence(event.target.value)} />
               </div>
-              <Button className="w-full max-w-none" disabled={!manualReady} onClick={saveManualRecord}>
+              <Button className="w-full max-w-none bg-[#F7941D] text-white hover:bg-[#D97808]" disabled={!manualReady} onClick={saveManualRecord}>
                 Guardar en base interna
               </Button>
             </CardContent>
@@ -720,7 +720,7 @@ function ResultCard({ result, active, onSelect }: { result: PepSearchResult; act
     <button
       type="button"
       onClick={onSelect}
-      className={`w-full rounded-lg border p-4 text-left transition-colors ${active ? "border-slate-900 bg-slate-50" : "hover:bg-slate-50"}`}
+      className={`w-full rounded-lg border p-4 text-left transition-colors ${active ? "border-orange-300 bg-orange-50/70" : "hover:bg-slate-50"}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -759,7 +759,11 @@ function ResultCard({ result, active, onSelect }: { result: PepSearchResult; act
 
 function StatusBadge({ status }: { status: PepWhoIsStatus }) {
   const item = STATUS_COPY[status]
-  return <Badge className={item.className}>{item.label}</Badge>
+  return (
+    <Badge variant="outline" className={item.className}>
+      {item.label}
+    </Badge>
+  )
 }
 
 function SourcePill({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "info" | "ok" | "warning" }) {

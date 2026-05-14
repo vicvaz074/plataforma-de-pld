@@ -9,34 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useLanguage } from "@/lib/LanguageContext"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
-
-const MODULES = [
-  {
-    key: "registro",
-    restricted: true,
-    name: { es: "Registro de sistemas de IA", en: "AI systems registry" },
-  },
-  {
-    key: "evaluaciones",
-    restricted: true,
-    name: { es: "Evaluaciones", en: "Evaluations" },
-  },
-  {
-    key: "comite",
-    restricted: true,
-    name: { es: "Comité de gobernanza", en: "Governance committee" },
-  },
-  {
-    key: "indicadores",
-    restricted: true,
-    name: { es: "Indicadores de cumplimiento", en: "Compliance indicators" },
-  },
-  {
-    key: "politicas",
-    restricted: false,
-    name: { es: "Políticas y concientización", en: "Policies and awareness" },
-  },
-]
+import { PLD_DASHBOARD_MODULES } from "@/lib/pld/navigation"
 
 const PRIVILEGE_OPTIONS = [
   { key: "admin", labelKey: "administration" },
@@ -50,13 +23,13 @@ const PRIVILEGE_OPTIONS = [
 const statusColor = (status: string) => {
   switch (status) {
     case "green":
-      return "bg-green-500"
+      return "border-emerald-200 bg-emerald-50 text-emerald-800"
     case "yellow":
-      return "bg-yellow-500"
+      return "border-amber-200 bg-amber-50 text-amber-900"
     case "red":
-      return "bg-red-500"
+      return "border-rose-200 bg-rose-50 text-rose-800"
     default:
-      return "bg-gray-300"
+      return "border-slate-200 bg-slate-50 text-slate-700"
   }
 }
 
@@ -95,24 +68,27 @@ export function AdminUserPrivileges() {
   }
 
   return (
-    <div className="space-y-4 mt-8">
-      <h2 className="text-xl font-semibold">{t.userAccessPanel}</h2>
+    <div className="mt-8 min-w-0 space-y-4 text-slate-900">
+      <h2 className="text-xl font-semibold tracking-normal text-slate-950">{t.userAccessPanel}</h2>
       {users.map((user) => (
-        <Card key={user.email}>
+        <Card key={user.email} className="min-w-0 overflow-hidden">
           <CardHeader>
-            <CardTitle>
+            <CardTitle className="break-words text-base font-medium text-slate-900">
               {user.name} ({user.email})
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {MODULES.map((m) => {
+            {PLD_DASHBOARD_MODULES.map((m) => {
               const privilege = user.privileges?.[m.key] || {}
-              const status = privilege.status || (m.restricted ? "yellow" : "green")
+              const status = privilege.status || (m.adminRestricted ? "yellow" : "green")
               return (
-                <div key={m.key} className="border p-4 rounded-md space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span>{m.name[language]}</span>
-                    {m.restricted ? (
+                <div key={m.key} className="min-w-0 space-y-4 rounded-md border border-slate-200 p-4">
+                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <span className="block break-words text-sm font-medium text-slate-800">{m.title[language]}</span>
+                      <span className="mt-1 block break-words text-xs text-slate-500">{m.description[language]}</span>
+                    </div>
+                    {m.adminRestricted ? (
                       <Select
                         value={status}
                         onValueChange={(val) =>
@@ -121,7 +97,7 @@ export function AdminUserPrivileges() {
                       >
                         <SelectTrigger
                           className={cn(
-                            "w-28 text-white",
+                            "h-9 w-32 shrink-0",
                             statusColor(status)
                           )}
                         >
@@ -134,12 +110,12 @@ export function AdminUserPrivileges() {
                         </SelectContent>
                       </Select>
                     ) : (
-                      <span className="px-2 py-1 rounded text-white bg-green-500">
+                      <span className="shrink-0 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800">
                         {t.noRestriction}
                       </span>
                     )}
                   </div>
-                  {m.restricted && (
+                  {m.adminRestricted && (
                     <div className="space-y-2">
                       <div>
                         <Label>{t.justification}</Label>
