@@ -12,11 +12,14 @@ import {
   getAcumulacionRuleForActividad,
   getDocumentRequirementsForCliente,
   getUmaForDate,
+  getPepSearchHistoryItemKey,
   matchPepCargo,
   pepCargoFixtures,
+  PEP_SEARCH_HISTORY_CLEAR_ALL,
+  removePepSearchHistoryItem,
   searchPep,
 } from "../lib/pld"
-import type { PepEntity, PepInternalRecord } from "../lib/pld"
+import type { PepEntity, PepInternalRecord, PepSearchResponse } from "../lib/pld"
 import pepPublicMxSnapshot from "../public/data/pep-public-mx.json"
 
 test("UMA 2026 uses official INEGI daily, monthly and annual values", () => {
