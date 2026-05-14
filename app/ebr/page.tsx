@@ -5,9 +5,12 @@ import Link from "next/link";
 import { jsPDF } from "jspdf";
 import {
   AlertTriangle,
+  Check,
+  ChevronsUpDown,
   CircleHelp,
   ClipboardCheck,
   FileText,
+  Search,
   ShieldCheck,
 } from "lucide-react";
 
@@ -23,6 +26,11 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -1259,25 +1267,6 @@ function QuestionnaireForm({
     onChange: (next: string[]) => void,
   ) => void;
 }) {
-  const [countrySearch, setCountrySearch] = useState("");
-
-  const filteredCountries = useMemo(() => {
-    const query = normalizeCountryName(countrySearch);
-    if (!query) return PAISES;
-    const queryTerms = query.split(" ");
-
-    return PAISES.filter((pais) =>
-      queryTerms.every((term) => {
-        const normalizedLabel = normalizeCountryName(pais.label);
-        const normalizedCode = normalizeCountryName(pais.code);
-
-        return (
-          normalizedLabel.includes(term) || normalizedCode.includes(term)
-        );
-      }),
-    );
-  }, [countrySearch]);
-
   useEffect(() => {
     const countryName =
       PAISES.find((pais) => pais.code === answers.nationalityCountryCode)?.label ??
@@ -1301,39 +1290,16 @@ function QuestionnaireForm({
         />
         <div className="space-y-2">
           <Label>País de nacionalidad ({titlePrefix})</Label>
-          <Input
-            value={countrySearch}
-            onChange={(event) => setCountrySearch(event.target.value)}
-            placeholder="Buscar país"
-          />
-          <Select
+          <CountryCombobox
             value={answers.nationalityCountryCode}
-            onValueChange={(value) =>
+            onChange={(value) =>
               setAnswers((prev) => ({
                 ...prev,
                 nationalityCountryCode: value,
               }))
             }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecciona país" />
-            </SelectTrigger>
-            <SelectContent className="max-h-72">
-              <div className="max-h-72 overflow-y-auto">
-                {filteredCountries.length > 0 ? (
-                  filteredCountries.map((pais) => (
-                    <SelectItem key={pais.code} value={pais.code}>
-                      {pais.label}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <div className="px-2 py-2 text-sm text-muted-foreground">
-                    No se encontraron países
-                  </div>
-                )}
-              </div>
-            </SelectContent>
-          </Select>
+            placeholder="Busca y selecciona país"
+          />
           <p className="text-xs text-muted-foreground">
             El nivel de riesgo se asigna automáticamente según el país
             seleccionado. Si el país no pertenece a una lista especial, se
@@ -1483,6 +1449,125 @@ function ResultCard({
       </div>
       <p className="text-sm text-muted-foreground mt-2">{result.reason}</p>
     </div>
+  );
+}
+
+function CountryCombobox({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selectedCountry = PAISES.find((pais) => pais.code === value);
+  const normalizedQuery = normalizeCountryName(query);
+
+  const filteredCountries = useMemo(() => {
+    if (!normalizedQuery) return PAISES;
+    const queryTerms = normalizedQuery.split(" ");
+
+    return PAISES.filter((pais) =>
+      queryTerms.every((term) => {
+        const normalizedLabel = normalizeCountryName(pais.label);
+        const normalizedCode = normalizeCountryName(pais.code);
+
+        return (
+          normalizedLabel.includes(term) || normalizedCode.includes(term)
+        );
+      }),
+    );
+  }, [normalizedQuery]);
+
+  const visibleCountries = filteredCountries.slice(0, 80);
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setQuery("");
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="h-auto min-h-10 w-full min-w-0 justify-between gap-2 bg-white px-3 py-2 text-left font-normal"
+        >
+          <span
+            className={
+              selectedCountry
+                ? "min-w-0 flex-1 truncate text-slate-800"
+                : "min-w-0 flex-1 truncate text-muted-foreground"
+            }
+          >
+            {selectedCountry
+              ? `${selectedCountry.label} · ${selectedCountry.code}`
+              : placeholder}
+          </span>
+          <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[min(560px,calc(100vw-2rem))] p-0"
+      >
+        <div className="border-b p-2">
+          <div className="flex items-center gap-2 rounded-md border bg-white px-2">
+            <Search className="h-4 w-4 shrink-0 text-slate-400" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Buscar país o código ISO"
+              className="h-9 border-0 px-0 shadow-none focus-visible:ring-0"
+            />
+          </div>
+        </div>
+        <div className="max-h-72 overflow-y-auto p-1">
+          {visibleCountries.length > 0 ? (
+            visibleCountries.map((pais) => (
+              <button
+                key={pais.code}
+                type="button"
+                className="flex w-full min-w-0 items-start gap-2 rounded px-2 py-2 text-left text-sm hover:bg-orange-50"
+                onClick={() => {
+                  onChange(pais.code);
+                  setOpen(false);
+                  setQuery("");
+                }}
+              >
+                <Check
+                  className={`mt-0.5 h-4 w-4 shrink-0 ${
+                    value === pais.code ? "text-orange-700" : "text-transparent"
+                  }`}
+                />
+                <span className="min-w-0 flex-1 break-words leading-snug text-slate-700">
+                  {pais.label}
+                </span>
+                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                  {pais.code}
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+              No se encontraron países.
+            </div>
+          )}
+        </div>
+        <div className="border-t px-3 py-2 text-[11px] text-muted-foreground">
+          {filteredCountries.length > visibleCountries.length
+            ? `Mostrando ${visibleCountries.length} de ${filteredCountries.length}. Escribe para filtrar.`
+            : `${filteredCountries.length} país(es) encontrados.`}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
