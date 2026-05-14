@@ -124,7 +124,15 @@ export interface PepCargo {
 }
 
 export type PepRelacion = "cliente" | "beneficiario-controlador" | "representante" | "familiar" | "socio" | "otro"
-export type PepEntitySource = "shcp-uif-cargos" | "cnbv" | "opensanctions" | "public-mx" | "internal"
+export type PepEntitySource =
+  | "shcp-uif-cargos"
+  | "cnbv"
+  | "opensanctions"
+  | "public-mx"
+  | "nomina-apf"
+  | "legislativo-mx"
+  | "gobernadores-mx"
+  | "internal"
 export type PepWhoIsStatus = "coincidencia_alta" | "posible_coincidencia" | "sin_coincidencia" | "requiere_revision"
 export type PepAmbito = "federal" | "estatal" | "municipal" | "partido" | "autonomo" | "paraestatal" | "desconocido"
 export type PepPoder = "ejecutivo" | "legislativo" | "judicial" | "autonomo" | "partido" | "paraestatal" | "desconocido"
@@ -133,6 +141,7 @@ export type PepSourceType =
   | "official-csv"
   | "official-pdf"
   | "official-directory"
+  | "official-payroll"
   | "official-web"
   | "opensanctions"
   | "manual-review"
@@ -174,6 +183,23 @@ export interface PepPersonRecord extends PepEntity {
   evidenceUrl?: string
 }
 
+export interface PepCargoVerificationRecord {
+  cargoId: string
+  status: "verified_no_nominal_source" | "verified_obsolete" | "verified_collective" | "requires_external_source"
+  category:
+    | "collective"
+    | "obsolete"
+    | "state-local"
+    | "judicial"
+    | "party-candidate"
+    | "autonomous"
+    | "institutional-admin"
+    | "source-gap"
+  verifiedAt: string
+  sourceIds: string[]
+  note: string
+}
+
 export interface PepReviewQueueItem {
   id: string
   cargoId?: string
@@ -191,6 +217,8 @@ export interface PepCoverageReport {
   totalCargos: number
   cargosConTitular: number
   cargosSinTitular: number
+  cargosVerificadosSinTitular: number
+  cargosPendientesRevision: number
   personasResueltas: number
   staleSources: PepSourceRecord[]
   freshSources: PepSourceRecord[]

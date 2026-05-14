@@ -55,6 +55,8 @@ const personasSnapshot = pepPersonasData as unknown as {
     totalCargos: number
     cargosConTitular: number
     cargosSinTitular: number
+    cargosVerificadosSinTitular?: number
+    cargosPendientesRevision?: number
     personasResueltas: number
   }
   personas: PepPersonRecord[]
@@ -276,7 +278,7 @@ export default function PepWhoIsPage() {
         <div className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
           <SourcePill label="Titulares resueltos" value={`${personasSnapshot.count} personas`} />
           <SourcePill label="SHCP/UIF cargos" value={`${cargosSnapshot.count} cargos`} />
-          <SourcePill label="Pendientes" value={`${reviewQueueSnapshot.count} revisiones`} />
+          <SourcePill label="Pendientes" value={`${reviewQueueSnapshot.count} revisiones`} tone={reviewQueueSnapshot.count ? "warning" : "ok"} />
           <SourcePill label="Base interna" value={`${internalRecords.length} decisiones`} tone={internalRecords.length ? "info" : "neutral"} />
         </div>
       </section>
@@ -645,17 +647,17 @@ function DataHealthPanel() {
         <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="Cargos mapeados" value={`${coverage?.totalCargos ?? cargosSnapshot.count}`} />
           <Metric label="Con titular" value={`${coverage?.cargosConTitular ?? 0} (${resolvedPct}%)`} />
-          <Metric label="Fuentes vigentes" value={`${sourcesSnapshot.health?.fresh ?? sourcesSnapshot.sources.length}`} />
-          <Metric label="Fuentes vencidas" value={`${sourcesSnapshot.health?.stale ?? staleSources.length}`} tone={staleSources.length ? "danger" : "ok"} />
+          <Metric label="Verificados sin titular" value={`${coverage?.cargosVerificadosSinTitular ?? 0}`} tone="info" />
+          <Metric label="Pendientes" value={`${coverage?.cargosPendientesRevision ?? reviewQueueSnapshot.count}`} tone={reviewQueueSnapshot.count ? "danger" : "ok"} />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
-            <AlertTriangle className="h-5 w-5" /> Revisión pendiente
+            <AlertTriangle className="h-5 w-5" /> Revisión y límites
           </CardTitle>
-          <CardDescription>La cobertura estatal, municipal y partidista se muestra sin fingir certeza nominal.</CardDescription>
+          <CardDescription>Los cargos sin titular nominal quedan justificados sin fingir coincidencia por nombre.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {topPending.length > 0 ? (
@@ -729,22 +731,32 @@ function StatusBadge({ status }: { status: PepWhoIsStatus }) {
   return <Badge className={item.className}>{item.label}</Badge>
 }
 
-function SourcePill({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "info" }) {
+function SourcePill({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "info" | "ok" | "warning" }) {
+  const toneClass =
+    tone === "info"
+      ? "border-sky-200 bg-sky-50"
+      : tone === "ok"
+        ? "border-emerald-200 bg-emerald-50"
+        : tone === "warning"
+          ? "border-amber-200 bg-amber-50"
+          : "bg-white"
   return (
-    <div className={`rounded-lg border px-4 py-3 ${tone === "info" ? "border-sky-200 bg-sky-50" : "bg-white"}`}>
+    <div className={`rounded-lg border px-4 py-3 ${toneClass}`}>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="font-semibold">{value}</p>
     </div>
   )
 }
 
-function Metric({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "ok" | "danger" }) {
+function Metric({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "ok" | "danger" | "info" }) {
   const className =
     tone === "ok"
       ? "border-emerald-200 bg-emerald-50 text-emerald-950"
       : tone === "danger"
         ? "border-rose-200 bg-rose-50 text-rose-950"
-        : "border-slate-200 bg-white"
+        : tone === "info"
+          ? "border-sky-200 bg-sky-50 text-sky-950"
+          : "border-slate-200 bg-white"
 
   return (
     <div className={`rounded-lg border p-3 ${className}`}>

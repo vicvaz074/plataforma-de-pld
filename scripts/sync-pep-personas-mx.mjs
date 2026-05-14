@@ -11,6 +11,10 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const DATA_DIR = join(ROOT, "public", "data")
 const CARGOS_PATH = join(DATA_DIR, "pep-cargos-mx.json")
 const PUBLIC_MX_PATH = join(DATA_DIR, "pep-public-mx.json")
+const NOMINA_APF_PATH = join(DATA_DIR, "pep-nomina-apf-mx.json")
+const LEGISLATIVO_MX_PATH = join(DATA_DIR, "pep-legislativo-mx.json")
+const GOBERNADORES_MX_PATH = join(DATA_DIR, "pep-gobernadores-mx.json")
+const CARGO_VERIFICATION_PATH = join(DATA_DIR, "pep-cargo-verification-mx.json")
 const OPEN_SANCTIONS_PATH = join(DATA_DIR, "pep-open-sanctions-mx.json")
 const PERSONAS_OUTPUT_PATH = join(DATA_DIR, "pep-personas-mx.json")
 const SOURCES_OUTPUT_PATH = join(DATA_DIR, "pep-sources-mx.json")
@@ -19,14 +23,35 @@ const syncedAt = new Date().toISOString()
 
 const cargosSnapshot = await readJson(CARGOS_PATH, { cargos: [] })
 const publicMxSnapshot = await readJson(PUBLIC_MX_PATH, { entities: [], syncedAt })
+const nominaApfSnapshot = await readJson(NOMINA_APF_PATH, { entities: [], syncedAt })
+const legislativoMxSnapshot = await readJson(LEGISLATIVO_MX_PATH, { entities: [], syncedAt })
+const gobernadoresMxSnapshot = await readJson(GOBERNADORES_MX_PATH, { entities: [], syncedAt })
+const cargoVerificationSnapshot = await readJson(CARGO_VERIFICATION_PATH, { verifications: [], verifiedAt: syncedAt })
 const openSanctionsSnapshot = await readJson(OPEN_SANCTIONS_PATH, { entities: [], syncedAt })
 const cargos = cargosSnapshot.cargos ?? []
 const personas = mergePersonRecords([
   ...snapshotEntitiesToPersons(publicMxSnapshot, cargos, "public-mx"),
+  ...snapshotEntitiesToPersons(nominaApfSnapshot, cargos, "nomina-apf"),
+  ...snapshotEntitiesToPersons(legislativoMxSnapshot, cargos, "legislativo-mx"),
+  ...snapshotEntitiesToPersons(gobernadoresMxSnapshot, cargos, "gobernadores-mx"),
   ...snapshotEntitiesToPersons(openSanctionsSnapshot, cargos, "opensanctions"),
 ])
-const sources = buildSources({ cargosSnapshot, publicMxSnapshot, openSanctionsSnapshot, syncedAt })
-const coverage = buildPepCoverageReport({ cargos, personas, sources, now: syncedAt })
+const sources = buildSources({
+  cargosSnapshot,
+  publicMxSnapshot,
+  nominaApfSnapshot,
+  legislativoMxSnapshot,
+  gobernadoresMxSnapshot,
+  openSanctionsSnapshot,
+  syncedAt,
+})
+const coverage = buildPepCoverageReport({
+  cargos,
+  personas,
+  sources,
+  now: syncedAt,
+  cargoVerifications: cargoVerificationSnapshot.verifications ?? [],
+})
 
 await mkdir(DATA_DIR, { recursive: true })
 await writeJson(PERSONAS_OUTPUT_PATH, {
@@ -40,6 +65,8 @@ await writeJson(PERSONAS_OUTPUT_PATH, {
     totalCargos: coverage.totalCargos,
     cargosConTitular: coverage.cargosConTitular,
     cargosSinTitular: coverage.cargosSinTitular,
+    cargosVerificadosSinTitular: coverage.cargosVerificadosSinTitular,
+    cargosPendientesRevision: coverage.cargosPendientesRevision,
     personasResueltas: coverage.personasResueltas,
   },
   notes: [
@@ -74,7 +101,7 @@ function snapshotEntitiesToPersons(snapshot, cargos, fallbackSourceId) {
   const syncedAt = snapshot.syncedAt || new Date().toISOString()
 
   return (snapshot.entities ?? []).map((entity) => {
-    const cargoIds = resolveCargoIds(entity, cargos)
+    const cargoIds = unique([...(entity.cargoIds ?? []), ...resolveCargoIds(entity, cargos)])
     return {
       ...entity,
       cargoIds,
@@ -162,7 +189,15 @@ function resolveCargoIds(entity, cargos) {
   return [...matches]
 }
 
-function buildSources({ cargosSnapshot, publicMxSnapshot, openSanctionsSnapshot, syncedAt }) {
+function buildSources({
+  cargosSnapshot,
+  publicMxSnapshot,
+  nominaApfSnapshot,
+  legislativoMxSnapshot,
+  gobernadoresMxSnapshot,
+  openSanctionsSnapshot,
+  syncedAt,
+}) {
   const sources = [
     {
       sourceId: "shcp-uif-csv",
@@ -193,6 +228,46 @@ function buildSources({ cargosSnapshot, publicMxSnapshot, openSanctionsSnapshot,
       maxAgeDays: 90,
       status: "active",
       notes: "Snapshot nominal curado desde fuentes oficiales públicas.",
+    },
+    {
+      sourceId: nominaApfSnapshot.sourceId || "nomina-apf",
+      sourceLabel: nominaApfSnapshot.sourceLabel || "Nómina Transparente APF",
+      sourceUrl: nominaApfSnapshot.sourceUrl || "https://nominatransparente.rhnet.gob.mx/",
+      sourceType: "official-payroll",
+      lastSyncedAt: nominaApfSnapshot.syncedAt || syncedAt,
+      maxAgeDays: 45,
+      status: "active",
+      notes: nominaApfSnapshot.payrollPeriod || "Snapshot APF local generado desde Nómina Transparente.",
+    },
+    {
+      sourceId: legislativoMxSnapshot.sourceId || "legislativo-mx",
+      sourceLabel: legislativoMxSnapshot.sourceLabel || "Congreso de la Unión",
+      sourceUrl: legislativoMxSnapshot.sourceUrl || "https://www.congreso.gob.mx/",
+      sourceType: "official-directory",
+      lastSyncedAt: legislativoMxSnapshot.syncedAt || syncedAt,
+      maxAgeDays: 45,
+      status: "active",
+      notes: `Diputados: ${legislativoMxSnapshot.coverage?.diputados ?? 0}; senadores: ${legislativoMxSnapshot.coverage?.senadores ?? 0}.`,
+    },
+    {
+      sourceId: gobernadoresMxSnapshot.sourceId || "gobernadores-mx",
+      sourceLabel: gobernadoresMxSnapshot.sourceLabel || "CONAGO - Gobernadores",
+      sourceUrl: gobernadoresMxSnapshot.sourceUrl || "https://www.conago.org.mx/gobernadores/historicos",
+      sourceType: "official-directory",
+      lastSyncedAt: gobernadoresMxSnapshot.syncedAt || syncedAt,
+      maxAgeDays: 45,
+      status: "active",
+      notes: `Gobernadores vigentes: ${gobernadoresMxSnapshot.coverage?.governors ?? 0}.`,
+    },
+    {
+      sourceId: cargoVerificationSnapshot.sourceId || "pep-cargo-verification-mx",
+      sourceLabel: cargoVerificationSnapshot.sourceLabel || "Verificación operativa de cargos PEP sin titular nominal",
+      sourceUrl: cargoVerificationSnapshot.sourceUrl || "local://public/data/pep-cargo-verification-mx.json",
+      sourceType: "manual-review",
+      lastSyncedAt: cargoVerificationSnapshot.verifiedAt || syncedAt,
+      maxAgeDays: 45,
+      status: "active",
+      notes: `Cargos revisados sin titular nominal: ${cargoVerificationSnapshot.count ?? 0}.`,
     },
     {
       sourceId: openSanctionsSnapshot.sourceId || "opensanctions",

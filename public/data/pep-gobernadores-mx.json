@@ -1,0 +1,673 @@
+{
+  "schemaVersion": 1,
+  "sourceId": "gobernadores-mx",
+  "sourceLabel": "CONAGO - Gobernadores",
+  "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+  "syncedAt": "2026-05-14T16:53:45.303Z",
+  "count": 21,
+  "coverage": {
+    "governors": 21,
+    "cargoIds": [
+      "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+      "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+      "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+    ]
+  },
+  "notes": [
+    "Snapshot de gobernadoras y gobernadores vigentes derivado del listado histórico público de CONAGO.",
+    "Se consideran vigentes los mandatos cuyo rango de fechas contiene la fecha de sincronización."
+  ],
+  "entities": [
+    {
+      "id": "gobernadores-mx-michoacan-alfredo-ramirez-bedolla",
+      "name": "Alfredo Ramírez Bedolla",
+      "aliases": [
+        "Alfredo Ramírez Bedolla"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Michoacán",
+          "desde": "2021-10-01",
+          "hasta": "2027-09-30"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-tamaulipas-americo-villarreal-anaya",
+      "name": "Américo Villarreal Anaya",
+      "aliases": [
+        "Américo Villarreal Anaya"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Tamaulipas",
+          "desde": "2022-10-01",
+          "hasta": "2028-09-30"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-zacatecas-david-monreal-avila",
+      "name": "David Monreal Ávila",
+      "aliases": [
+        "David Monreal Ávila"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Zacatecas",
+          "desde": "2021-09-12",
+          "hasta": "2027-09-11"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-guerrero-evelyn-cecia-salgado-pineda",
+      "name": "Evelyn Cecia Salgado Pineda",
+      "aliases": [
+        "Evelyn Cecia Salgado Pineda"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Guerrero",
+          "desde": "2021-10-15",
+          "hasta": "2027-10-14"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-sonora-francisco-alfonso-durazo-montano",
+      "name": "Francisco Alfonso Durazo Montaño",
+      "aliases": [
+        "Francisco Alfonso Durazo Montaño"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Sonora",
+          "desde": "2021-09-13",
+          "hasta": "2027-09-12"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-colima-indira-vizcaino-silva",
+      "name": "Indira Vizcaíno Silva",
+      "aliases": [
+        "Indira Vizcaíno Silva"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Colima",
+          "desde": "2021-11-01",
+          "hasta": "2027-10-31"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-san-luis-potosi-jose-ricardo-gallardo-cardona",
+      "name": "José Ricardo Gallardo Cardona",
+      "aliases": [
+        "José Ricardo Gallardo Cardona"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "San Luis Potosí",
+          "desde": "2021-09-26",
+          "hasta": "2027-09-25"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-hidalgo-julio-ramon-menchaca-salazar",
+      "name": "Julio Ramón Menchaca Salazar",
+      "aliases": [
+        "Julio Ramón Menchaca Salazar"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Hidalgo",
+          "desde": "2022-09-05",
+          "hasta": "2028-09-04"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-campeche-layda-elena-sansores-san-roman",
+      "name": "Layda Elena Sansores San Román",
+      "aliases": [
+        "Layda Elena Sansores San Román"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Campeche",
+          "desde": "2021-09-16",
+          "hasta": "2027-09-15"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-tlaxcala-lorena-cuellar-cisneros",
+      "name": "Lorena Cuéllar Cisneros",
+      "aliases": [
+        "Lorena Cuéllar Cisneros"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Tlaxcala",
+          "desde": "2021-08-31",
+          "hasta": "2027-08-30"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-durango-m-c-esteban-alejandro-villegas-villarreal",
+      "name": "M.C. Esteban Alejandro Villegas Villarreal",
+      "aliases": [
+        "M.C. Esteban Alejandro Villegas Villarreal"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Durango",
+          "desde": "2022-09-15",
+          "hasta": "2028-09-14"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-quintana-roo-maria-elena-lezama-espinosa",
+      "name": "María Elena Lezama Espinosa",
+      "aliases": [
+        "María Elena Lezama Espinosa"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Quintana Roo",
+          "desde": "2022-09-25",
+          "hasta": "2028-09-24"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-chihuahua-maria-eugenia-campos-galvan",
+      "name": "María Eugenia Campos Galván",
+      "aliases": [
+        "María Eugenia Campos Galván"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Chihuahua",
+          "desde": "2021-09-08",
+          "hasta": "2027-09-07"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-aguascalientes-maria-teresa-jimenez-esquivel",
+      "name": "María Teresa Jiménez Esquivel",
+      "aliases": [
+        "María Teresa Jiménez Esquivel"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Aguascalientes",
+          "desde": "2022-10-01",
+          "hasta": "2028-09-30"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-baja-california-marina-del-pilar-avila-olmeda",
+      "name": "Marina del Pilar Ávila Olmeda",
+      "aliases": [
+        "Marina del Pilar Ávila Olmeda"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Baja California",
+          "desde": "2021-11-01",
+          "hasta": "2027-10-31"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-queretaro-mauricio-kuri-gonzalez",
+      "name": "Mauricio Kuri González",
+      "aliases": [
+        "Mauricio Kuri González"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Querétaro",
+          "desde": "2021-10-01",
+          "hasta": "2027-09-30"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-nayarit-med-miguel-angel-navarro-quintero",
+      "name": "Med. Miguel Ángel Navarro Quintero",
+      "aliases": [
+        "Med. Miguel Ángel Navarro Quintero"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Nayarit",
+          "desde": "2021-09-19",
+          "hasta": "2027-09-18"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-sinaloa-ruben-rocha-moya",
+      "name": "Rubén Rocha Moya",
+      "aliases": [
+        "Rubén Rocha Moya"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Sinaloa",
+          "desde": "2021-11-01",
+          "hasta": "2027-10-31"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-oaxaca-salomon-jara-cruz",
+      "name": "Salomón Jara Cruz",
+      "aliases": [
+        "Salomón Jara Cruz"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Oaxaca",
+          "desde": "2022-12-01",
+          "hasta": "2028-11-30"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-nuevo-leon-samuel-alejandro-garcia-sepulveda",
+      "name": "Samuel Alejandro García Sepúlveda",
+      "aliases": [
+        "Samuel Alejandro García Sepúlveda"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Nuevo León",
+          "desde": "2021-10-03",
+          "hasta": "2027-10-02"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    },
+    {
+      "id": "gobernadores-mx-baja-california-sur-victor-manuel-castro-cosio",
+      "name": "Víctor Manuel Castro Cosío",
+      "aliases": [
+        "Víctor Manuel Castro Cosío"
+      ],
+      "country": "mx",
+      "positions": [
+        {
+          "cargo": "Gobernadora/Gobernador constitucional",
+          "dependencia": "Baja California Sur",
+          "desde": "2021-09-10",
+          "hasta": "2027-09-09"
+        }
+      ],
+      "source": "gobernadores-mx",
+      "sourceLabel": "CONAGO",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "dataset": "conago-gobernadores-historicos",
+      "lastSeen": "2026-05-14",
+      "cargoIds": [
+        "pep-cargo-estatal-gobiernos-estatales-gobernadores",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-gobernadores-de-los-estados",
+        "pep-cargo-estatal-poder-ejecutivo-estatal-y-del-distrito-federal-jefe-de-gobierno-del-distrito-federal"
+      ],
+      "topics": [
+        "role.pep",
+        "mx.gobernadores",
+        "mx.ejecutivo-estatal"
+      ]
+    }
+  ]
+}
