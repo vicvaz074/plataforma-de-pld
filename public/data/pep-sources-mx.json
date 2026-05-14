@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-05-11T22:14:56.067Z",
-  "count": 5,
+  "generatedAt": "2026-05-14T17:00:23.980Z",
+  "count": 9,
   "sources": [
     {
       "sourceId": "shcp-uif-csv",
@@ -18,7 +18,7 @@
       "sourceLabel": "CNBV/SHCP Personas Políticamente Expuestas Nacionales",
       "sourceUrl": "https://www.gob.mx/cnbv/documentos/personas-politicamente-expuestas-nacionales",
       "sourceType": "official-web",
-      "lastSyncedAt": "2026-05-11T22:14:56.067Z",
+      "lastSyncedAt": "2026-05-14T17:00:23.980Z",
       "maxAgeDays": 180,
       "status": "active",
       "notes": "Página pública que contextualiza la lista enunciativa de cargos PEP nacionales."
@@ -34,11 +34,51 @@
       "notes": "Snapshot nominal curado desde fuentes oficiales públicas."
     },
     {
+      "sourceId": "nomina-apf",
+      "sourceLabel": "Nómina Transparente APF",
+      "sourceUrl": "https://nominatransparente.rhnet.gob.mx/",
+      "sourceType": "official-payroll",
+      "lastSyncedAt": "2026-05-14T16:36:11.971Z",
+      "maxAgeDays": 45,
+      "status": "active",
+      "notes": "Periodo de información del 16 al 30 de abril de 2026"
+    },
+    {
+      "sourceId": "legislativo-mx",
+      "sourceLabel": "Congreso de la Unión",
+      "sourceUrl": "https://www.congreso.gob.mx/",
+      "sourceType": "official-directory",
+      "lastSyncedAt": "2026-05-14T16:49:07.340Z",
+      "maxAgeDays": 45,
+      "status": "active",
+      "notes": "Diputados: 501; senadores: 128."
+    },
+    {
+      "sourceId": "gobernadores-mx",
+      "sourceLabel": "CONAGO - Gobernadores",
+      "sourceUrl": "https://www.conago.org.mx/gobernadores/historicos",
+      "sourceType": "official-directory",
+      "lastSyncedAt": "2026-05-14T16:53:45.303Z",
+      "maxAgeDays": 45,
+      "status": "active",
+      "notes": "Gobernadores vigentes: 21."
+    },
+    {
+      "sourceId": "pep-cargo-verification-mx",
+      "sourceLabel": "Verificación operativa de cargos PEP sin titular nominal",
+      "sourceUrl": "local://public/data/pep-cargo-verification-mx.json",
+      "sourceType": "manual-review",
+      "lastSyncedAt": "2026-05-14T16:59:35.868Z",
+      "maxAgeDays": 45,
+      "status": "active",
+      "notes": "Cargos revisados sin titular nominal: 396."
+    },
+    {
       "sourceId": "opensanctions",
       "sourceLabel": "OpenSanctions PEP México",
       "sourceUrl": "https://www.opensanctions.org/",
       "sourceType": "opensanctions",
-      "lastSyncedAt": "2026-05-11T00:00:00.000Z",
+      "lastSyncedAt": "2026-05-14T15:40:34.457Z",
       "maxAgeDays": 30,
       "status": "active",
       "license": "OpenSanctions data license applies to synchronized exports; verify commercial terms before production use.",
@@ -56,7 +96,7 @@
     }
   ],
   "health": {
-    "fresh": 5,
+    "fresh": 9,
     "stale": 0
   }
 }

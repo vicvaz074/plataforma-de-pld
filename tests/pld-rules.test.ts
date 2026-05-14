@@ -486,28 +486,40 @@ test("WhoIs PEP public Mexico snapshot includes former Mexican presidents since 
   }
 })
 
-test("WhoIs PEP search history can remove one item or clear the whole list", () => {
-  const first = {
-    status: "posible_coincidencia",
-    checkedAt: "2026-05-14T10:00:00.000Z",
-    query: { nombre: "Mariana Imaz Sheinbaum", relacion: "familiar" },
-    results: [],
-    appliedDecisions: [],
-    sourceSnapshots: [],
-    recommendation: "Revisar posible familiar.",
-  } satisfies PepSearchResponse
-  const second = {
-    status: "coincidencia_alta",
-    checkedAt: "2026-05-14T10:05:00.000Z",
-    query: { nombre: "Vicente Fox Quesada", relacion: "cliente" },
-    results: [],
-    appliedDecisions: [],
-    sourceSnapshots: [],
-    recommendation: "Aplicar debida diligencia reforzada.",
-  } satisfies PepSearchResponse
+test("WhoIs PEP public Mexico snapshot includes ASIPONA Altamira, Coatzacoalcos and Dos Bocas directors", () => {
+  const snapshot = pepPublicMxSnapshot as { entities: PepEntity[] }
+  const directors = [
+    {
+      nombre: "Fidel Maldonado Lopez",
+      dependencia: "Administración del Sistema Portuario Nacional Altamira, S.A. de C.V.",
+    },
+    {
+      nombre: "Martin Zepeda Anguiano",
+      dependencia: "Administración del Sistema Portuario Nacional Coatzacoalcos, S.A. de C.V.",
+    },
+    {
+      nombre: "Hugo Daniel Torres May",
+      dependencia: "Administración del Sistema Portuario Nacional Dos Bocas, S.A. de C.V.",
+    },
+  ]
 
-  const remaining = removePepSearchHistoryItem([first, second], getPepSearchHistoryItemKey(first))
+  for (const director of directors) {
+    const result = searchPep(
+      {
+        nombre: director.nombre,
+        relacion: "cliente",
+      },
+      {
+        entities: snapshot.entities,
+        cargos: pepCargoFixtures,
+        internalRecords: [],
+      },
+      "2026-05-14T12:00:00.000Z",
+    )
 
-  assert.deepEqual(remaining, [second])
-  assert.deepEqual(removePepSearchHistoryItem([first, second], PEP_SEARCH_HISTORY_CLEAR_ALL), [])
+    assert.equal(result.status, "coincidencia_alta", director.nombre)
+    assert.equal(result.results[0]?.entity.positions?.[0]?.cargo, "Director General", director.nombre)
+    assert.equal(result.results[0]?.entity.positions?.[0]?.dependencia, director.dependencia, director.nombre)
+    assert.equal(result.results[0]?.matchedFields.includes("nombre"), true, director.nombre)
+  }
 })

@@ -10,6 +10,9 @@ import {
 } from "../lib/pld"
 import type { PepCargo, PepPersonRecord, PepSourceRecord } from "../lib/pld"
 import pepCargosSnapshot from "../public/data/pep-cargos-mx.json"
+import { parseCurrentConagoGovernors } from "../scripts/pep-gobernadores-utils.mjs"
+import { parseDiputadosMembers, parseSenadoMembers } from "../scripts/pep-legislativo-utils.mjs"
+import { parseNominaApfRecord } from "../scripts/pep-nomina-apf-utils.mjs"
 
 const pdfTextFixture = `
 SECCIÓN I.- ÁMBITO FEDERAL
@@ -135,6 +138,38 @@ test("PEP coverage report tracks resolved holders, stale sources and review queu
   assert.equal(coverage.reviewQueue.some((item) => item.reason === "sin_titular_resuelto"), true)
 })
 
+test("PEP coverage report excludes verified non-nominal cargos from pending review queue", () => {
+  const cargos = extractPepCargoDefinitionsFromText(pdfTextFixture, {
+    sourceId: "shcp-pdf-2020",
+    sourceLabel: "Lista PEP 2020",
+    sourceUrl: "file:///Lista_PEPS_2020.pdf",
+    extractedAt: "2026-05-11T00:00:00.000Z",
+  })
+  const governors = cargos.find((cargo) => cargo.cargo === "GOBERNADORES")
+  assert.ok(governors)
+
+  const coverage = buildPepCoverageReport({
+    cargos,
+    personas: [],
+    sources: [],
+    now: "2026-05-11T00:00:00.000Z",
+    cargoVerifications: [
+      {
+        cargoId: governors.id,
+        status: "verified_no_nominal_source",
+        category: "collective",
+        verifiedAt: "2026-05-11T00:00:00.000Z",
+        sourceIds: ["conago"],
+        note: "Cargo colectivo; fuente nominal estatal parcial cargada por separado.",
+      },
+    ],
+  })
+
+  assert.equal(coverage.cargosVerificadosSinTitular, 1)
+  assert.equal(coverage.cargosPendientesRevision, cargos.length - 1)
+  assert.equal(coverage.reviewQueue.some((item) => item.cargoId === governors.id), false)
+})
+
 test("PEP source freshness validation marks stale and active sources", () => {
   const sources: PepSourceRecord[] = [
     {
@@ -199,4 +234,77 @@ test("WhoIs PEP uses resolved PepPersonRecord snapshots before cargo-only matche
   assert.equal(result.status, "coincidencia_alta")
   assert.equal(result.results[0]?.entity.id, "mx-federal-se-marcelo-ebrard")
   assert.equal(result.results[0]?.entity.positions?.[0]?.cargo, "Secretario de Economía")
+})
+
+test("Nómina APF parser preserves positions when institution names contain unquoted commas", () => {
+  const row = [
+    "FIDEL MALDONADO LOPEZ",
+    "ADMINISTRACIÓN DEL SISTEMA PORTUARIO NACIONAL ALTAMIRA",
+    " S.A. DE C.V.",
+    "DIRECTOR GENERAL DE LA ADMINISTRACION DEL SISTEMA PORTUARIO NACIONAL ALTAMIRA",
+    " S.A DE C.V",
+    "150822",
+    "104821.2890625",
+  ]
+
+  const record = parseNominaApfRecord(row, {
+    nombre: 0,
+    institucion: 1,
+    puesto: 2,
+  }, "Administración del Sistema Portuario Nacional Altamira, S.A. de C.V.")
+
+  assert.equal(record.nombre, "FIDEL MALDONADO LOPEZ")
+  assert.equal(record.institucion, "Administración del Sistema Portuario Nacional Altamira, S.A. de C.V.")
+  assert.equal(
+    record.puesto,
+    "DIRECTOR GENERAL DE LA ADMINISTRACION DEL SISTEMA PORTUARIO NACIONAL ALTAMIRA, S.A DE C.V",
+  )
+})
+
+test("Legislative parser extracts Senate and Chamber member names from official HTML", () => {
+  const senadoHtml = `
+    <h2>Grupo Parlamentario Morena</h2>
+    <p>Sonora</p>
+    <h4><a>Sen. Heriberto Marcelo Aguilar Castillo</a></h4>
+    <tr><td>2</td><td>Álvarez Lima, José Antonio Cruz</td><td>MORENA</td></tr>
+    <p>Ciudad de México</p>
+    <h4><a>Sen. Adán Augusto López Hernández</a></h4>
+  `
+  const diputadosHtml = `
+    <a href="curricula.php?dipt=1">1 Abreu Artiñano Rocío Adriana</a> Campeche Circ. 3
+    <a href="curricula.php?dipt=2">2 Acosta Islas Anabel</a> Sonora Dtto. 6
+  `
+
+  const senadores = parseSenadoMembers(senadoHtml)
+  const diputados = parseDiputadosMembers(diputadosHtml)
+
+  assert.deepEqual(
+    senadores.map((member) => member.name).sort((first, second) => first.localeCompare(second, "es")),
+    ["Adán Augusto López Hernández", "Heriberto Marcelo Aguilar Castillo", "José Antonio Cruz Álvarez Lima"],
+  )
+  assert.deepEqual(
+    diputados.map((member) => member.name),
+    ["Abreu Artiñano Rocío Adriana", "Acosta Islas Anabel"],
+  )
+})
+
+test("CONAGO parser extracts only current governors for the requested date", () => {
+  const html = `
+    #### Mtra. María Teresa Jiménez Esquivel
+    01/10/2022 a 30/09/2028
+    Aguascalientes
+    #### C.P. Martín Orozco Sandoval
+    01/12/2016 a 30/09/2022
+    Aguascalientes
+    #### Lic. Clara Marina Brugada Molina
+    05/10/2024 a 04/10/2030
+    Ciudad de México
+  `
+
+  const governors = parseCurrentConagoGovernors(html, "2026-05-14")
+
+  assert.deepEqual(
+    governors.map((governor) => `${governor.name} · ${governor.state}`),
+    ["María Teresa Jiménez Esquivel · Aguascalientes", "Clara Marina Brugada Molina · Ciudad de México"],
+  )
 })

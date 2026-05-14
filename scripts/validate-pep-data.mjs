@@ -16,10 +16,17 @@ const now = new Date().toISOString()
 const cargosSnapshot = await readRequiredJson(join(DATA_DIR, "pep-cargos-mx.json"))
 const personasSnapshot = await readRequiredJson(join(DATA_DIR, "pep-personas-mx.json"))
 const sourcesSnapshot = await readRequiredJson(join(DATA_DIR, "pep-sources-mx.json"))
+const cargoVerificationSnapshot = await readOptionalJson(join(DATA_DIR, "pep-cargo-verification-mx.json"), { verifications: [] })
 const cargos = cargosSnapshot.cargos ?? []
 const personas = personasSnapshot.personas ?? []
 const sources = sourcesSnapshot.sources ?? []
-const coverage = buildPepCoverageReport({ cargos, personas, sources, now })
+const coverage = buildPepCoverageReport({
+  cargos,
+  personas,
+  sources,
+  now,
+  cargoVerifications: cargoVerificationSnapshot.verifications ?? [],
+})
 const resolvedCoverage = coverage.totalCargos ? coverage.cargosConTitular / coverage.totalCargos : 0
 const errors = []
 
@@ -50,13 +57,18 @@ if (errors.length > 0) {
 }
 
 console.log(
-  `Validación PEP OK: ${cargos.length} cargos, ${personas.length} personas, ${(resolvedCoverage * 100).toFixed(2)}% cargos con titular resuelto, ${coverage.reviewQueue.length} pendientes.`,
+  `Validación PEP OK: ${cargos.length} cargos, ${personas.length} personas, ${(resolvedCoverage * 100).toFixed(2)}% cargos con titular resuelto, ${coverage.cargosVerificadosSinTitular} verificados sin titular nominal, ${coverage.reviewQueue.length} pendientes.`,
 )
 
 async function readRequiredJson(path) {
   if (!existsSync(path)) {
     throw new Error(`No existe ${path}. Ejecuta sync:pep:cargos y sync:pep:personas.`)
   }
+  return JSON.parse(await readFile(path, "utf8"))
+}
+
+async function readOptionalJson(path, fallback) {
+  if (!existsSync(path)) return fallback
   return JSON.parse(await readFile(path, "utf8"))
 }
 
