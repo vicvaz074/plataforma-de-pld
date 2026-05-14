@@ -11,6 +11,14 @@ const documentosBase = [
   "Declaracion de beneficiario controlador cuando corresponda.",
 ]
 
+const ACTIVIDAD_KEY_ALIASES: Record<string, string> = {
+  "fraccion-ii-vales": "fraccion-ii-instrumentos-valor",
+}
+
+export function normalizeActividadKey(key: string): string {
+  return ACTIVIDAD_KEY_ALIASES[key] ?? key
+}
+
 function activity(
   key: string,
   fraccion: string,
@@ -106,7 +114,8 @@ export const ACTIVIDADES_VULNERABLES_ARTICULO_17: ActividadVulnerableCatalogItem
 ]
 
 export function findActividadByKey(key: string): ActividadVulnerableCatalogItem {
-  const activity = ACTIVIDADES_VULNERABLES_ARTICULO_17.find((item) => item.key === key)
+  const normalizedKey = normalizeActividadKey(key)
+  const activity = ACTIVIDADES_VULNERABLES_ARTICULO_17.find((item) => item.key === normalizedKey)
 
   if (!activity) {
     throw new Error(`Actividad vulnerable no encontrada: ${key}`)
