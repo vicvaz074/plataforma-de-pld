@@ -28,8 +28,10 @@ import { CLIENTE_TIPOS, findClienteTipoLabel } from "@/lib/data/tipos-cliente"
 import { PAISES, findPaisByCodigo } from "@/lib/data/paises"
 import {
   findCodigoPostalInfo,
+  findCodigoPostalInfoInCatalog,
   registerCodigoPostalInfo,
   type CodigoPostalInfo,
+  type CodigoPostalSnapshot,
 } from "@/lib/data/codigos-postales"
 
 const EXPEDIENTE_TIPOS = [
@@ -485,6 +487,24 @@ interface SujetoObligadoResumen {
 const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
 const SEPOMEX_API_BASE = "https://api.zippopotam.us/mx"
 const SEPOMEX_STORAGE_PREFIX = "codigo_postal_cache_"
+let satPostalCatalogPromise: Promise<CodigoPostalInfo[]> | null = null
+
+function loadSatPostalCatalog() {
+  if (!satPostalCatalogPromise) {
+    satPostalCatalogPromise = fetch("/data/sat-postal-catalog-mx.json")
+      .then((response) => {
+        if (!response.ok) throw new Error(`No se pudo cargar el catálogo postal SAT (${response.status})`)
+        return response.json() as Promise<CodigoPostalSnapshot>
+      })
+      .then((snapshot) => (Array.isArray(snapshot.records) ? snapshot.records : []))
+      .catch((error) => {
+        console.error("No se pudo cargar el catálogo postal SAT:", error)
+        satPostalCatalogPromise = null
+        return []
+      })
+  }
+  return satPostalCatalogPromise
+}
 
 function createDireccion(pais = "MX"): DireccionState {
   return {
@@ -1082,7 +1102,12 @@ function KycExpedienteContent() {
   const actualizarDireccionDesdeCodigoPostal = useCallback(
     async (codigo: string, setter: (update: DireccionState) => void, direccionActual: DireccionState) => {
       const limpio = codigo.replace(/[^0-9]/g, "").slice(0, 5)
-      let info = limpio.length === 5 ? findCodigoPostalInfo(limpio) : undefined
+      let info: CodigoPostalInfo | undefined
+
+      if (limpio.length === 5) {
+        const catalogoSat = await loadSatPostalCatalog()
+        info = findCodigoPostalInfoInCatalog(catalogoSat, limpio) ?? findCodigoPostalInfo(limpio)
+      }
 
       if (!info && limpio.length === 5) {
         const cacheKey = `${SEPOMEX_STORAGE_PREFIX}${limpio}`
