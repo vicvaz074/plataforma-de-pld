@@ -28,6 +28,20 @@ test("SAT postal catalog extracted from XLSM Combos includes Miguel Hidalgo CP e
   assert.deepEqual(cp11280?.asentamientos, ["TORRE BLANCA"])
 })
 
+test("SAT postal catalog supplies municipality and city for KYC address autofill", () => {
+  const snapshotPath = path.join(repoRoot, "public/data/sat-postal-catalog-mx.json")
+  const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8")) as { records: CodigoPostalInfo[] }
+
+  const monterrey = findCodigoPostalInfoInCatalog(snapshot.records, "64000")
+  assert.equal(monterrey?.municipio, "MONTERREY")
+  assert.equal(monterrey?.ciudad, "MONTERREY")
+
+  const sanPedro = findCodigoPostalInfoInCatalog(snapshot.records, "66260")
+  assert.equal(sanPedro?.municipio, "SAN PEDRO GARZA GARCIA")
+  assert.equal(sanPedro?.ciudad, "SAN PEDRO GARZA GARCIA")
+  assert.ok(sanPedro?.asentamientos.includes("DEL VALLE ORIENTE"))
+})
+
 test("postal helpers match SAT address values against official dropdown labels", () => {
   const catalog: CodigoPostalInfo[] = [
     {
