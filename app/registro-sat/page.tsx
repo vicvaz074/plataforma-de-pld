@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -19,7 +20,7 @@ import { findCodigoPostalInfo, registerCodigoPostalInfo, type CodigoPostalInfo }
 import { PAISES, findPaisByNombre } from "@/lib/data/paises"
 import { readFileAsDataUrl } from "@/lib/storage/read-file"
 import { cn } from "@/lib/utils"
-import { Building2, ClipboardList, FileText, Paperclip, ShieldCheck, Upload, UserCog } from "lucide-react"
+import { Building2, Check, ChevronsUpDown, ClipboardList, FileText, Paperclip, Search, ShieldCheck, Upload, UserCog } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
 interface RequiredDataField {
@@ -618,6 +619,91 @@ const normalizarBusqueda = (texto: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
 
+interface PaisComboboxProps {
+  id: string
+  value: string
+  onValueChange: (value: string) => void
+}
+
+function PaisCombobox({ id, value, onValueChange }: PaisComboboxProps) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const selected = PAISES.find((pais) => pais.code === value)
+  const normalizedQuery = normalizarBusqueda(query.trim())
+  const filteredCountries = normalizedQuery
+    ? PAISES.filter((pais) => normalizarBusqueda(`${pais.label} ${pais.code}`).includes(normalizedQuery))
+    : PAISES
+
+  const updateQuery = (nextQuery: string) => {
+    setQuery(nextQuery)
+    const normalized = normalizarBusqueda(nextQuery.trim())
+    if (normalized.length < 3) return
+
+    const prefixMatches = PAISES.filter((pais) => normalizarBusqueda(pais.label).startsWith(normalized))
+    if (prefixMatches.length === 1) onValueChange(prefixMatches[0].code)
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen)
+        if (!nextOpen) setQuery("")
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          id={id}
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between bg-background px-3 font-normal"
+        >
+          <span className={cn("truncate", !selected && "text-muted-foreground")}>
+            {selected?.label ?? "Selecciona un país"}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[--radix-popover-trigger-width] overflow-hidden p-0">
+        <div className="border-b p-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => updateQuery(event.target.value)}
+              placeholder="Escribe para buscar un país"
+              className="h-9 pl-8"
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="max-h-72 overflow-y-auto overscroll-contain p-1">
+          {filteredCountries.length ? (
+            filteredCountries.map((pais) => (
+              <button
+                key={pais.code}
+                type="button"
+                className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none"
+                onClick={() => {
+                  onValueChange(pais.code)
+                  setOpen(false)
+                }}
+              >
+                <Check className={cn("mr-2 h-4 w-4", pais.code === value ? "opacity-100" : "opacity-0")} />
+                {pais.label}
+              </button>
+            ))
+          ) : (
+            <p className="p-4 text-center text-sm text-muted-foreground">No se encontró ningún país.</p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 const obtenerCodigoPais = (pais?: string) => {
   if (!pais) return ""
   const encontrado = findPaisByNombre(pais)?.code
@@ -959,7 +1045,9 @@ async function fetchCodigoPostalInfo(codigo: string): Promise<CodigoPostalInfo |
     return {
       codigo,
       estado: place.state ?? "",
-      municipio: place.province ?? place.state ?? "",
+      // Zippopotam devuelve la alcaldía/municipio en `community`; `province`
+      // suele repetir la entidad (por ejemplo, Distrito Federal/CDMX).
+      municipio: place.community ?? place.province ?? place.state ?? "",
       ciudad: place.community ?? "",
       asentamientos,
     }
@@ -1102,7 +1190,7 @@ export default function RegistroSATPage() {
               : null
 
             const registroCompleto =
-              item.registroCompleto === true || (detalle !== null && acuse !== null && aceptacion !== null)
+              item.registroCompleto === true || (detalle !== null && (acuse !== null || aceptacion !== null))
             const identificacionRaw = toRecord(item.identificacion)
             const representanteRaw = toRecord(item.representante)
             const representanteContactoRaw = toRecord(representanteRaw.contacto)
@@ -1450,7 +1538,7 @@ export default function RegistroSATPage() {
     tipoSujeto !== "none" && nombreSujeto.trim() && resumenActividades.trim(),
   )
   const documentosRequeridosCompletos =
-    !!documentosRegistro.detalle && !!documentosRegistro.acuse && !!documentosRegistro.aceptacion
+    !!documentosRegistro.detalle && !!(documentosRegistro.acuse || documentosRegistro.aceptacion)
 
   const limpiarFormulario = () => {
     setTipoSujeto("none")
@@ -1506,7 +1594,7 @@ export default function RegistroSATPage() {
   ) => {
     if (tipoSujeto === "none" || !nombreSujeto.trim() || !resumenActividades.trim()) return false
 
-    const registroCompleto = !!(docs.detalle && docs.acuse && docs.aceptacion)
+    const registroCompleto = !!(docs.detalle && (docs.acuse || docs.aceptacion))
     if (!registroCompleto && !opciones?.permitirIncompleto) return false
 
     const camposChecklist = datosAltaRegistro
@@ -1633,7 +1721,10 @@ export default function RegistroSATPage() {
       const documento = await crearDocumentoDesdeArchivo(file, tipoDoc)
       setDocumentos((prev) => [documento, ...prev])
       setDocumentosRegistro((prev) => {
-        const actualizado = { ...prev, [tipoDoc]: documento }
+        const actualizado =
+          tipoDoc === "acuse"
+            ? { ...prev, acuse: documento, aceptacion: documento }
+            : { ...prev, [tipoDoc]: documento }
         registrarSujeto(actualizado)
         return actualizado
       })
@@ -2256,23 +2347,28 @@ export default function RegistroSATPage() {
                     <div className="space-y-3">
                       <p className="text-sm font-semibold">Documentos cargados</p>
                       <div className="grid gap-3 md:grid-cols-3">
-                        {(Object.entries(sujetoSeleccionado.documentos) as [RegistroDocumentKey, DocumentUpload | null][]).map(
-                          ([key, doc]) => (
+                        {(Object.entries(sujetoSeleccionado.documentos) as [RegistroDocumentKey, DocumentUpload | null][])
+                          .filter(([key]) => key !== "aceptacion")
+                          .map(([key, doc]) => {
+                            const documento = key === "acuse" ? doc || sujetoSeleccionado.documentos.aceptacion : doc
+                            return (
                             <div key={key} className="rounded-lg border p-3 space-y-1">
-                              <p className="text-xs text-muted-foreground uppercase">{key}</p>
-                              {doc ? (
+                              <p className="text-xs text-muted-foreground uppercase">
+                                {key === "acuse" ? "Acuse del SAT / Aceptación de designación" : key}
+                              </p>
+                              {documento ? (
                                 <>
-                                  <p className="font-medium break-words">{doc.name}</p>
+                                  <p className="font-medium break-words">{documento.name}</p>
                                   <p className="text-xs text-muted-foreground">
-                                    {doc.uploadDate.toLocaleDateString()} · {(doc.size / 1024).toFixed(1)} KB
+                                    {documento.uploadDate.toLocaleDateString()} · {(documento.size / 1024).toFixed(1)} KB
                                   </p>
                                 </>
                               ) : (
                                 <p className="text-sm text-muted-foreground">Pendiente de carga</p>
                               )}
                             </div>
-                          ),
-                        )}
+                            )
+                          })}
                       </div>
                     </div>
 
@@ -2411,41 +2507,21 @@ export default function RegistroSATPage() {
                   {(tipoSujeto === "fisica" || tipoSujeto === "fideicomiso") && (
                     <div className="space-y-2">
                       <Label htmlFor="pais-nacionalidad">País de Nacionalidad</Label>
-                      <Select
+                      <PaisCombobox
+                        id="pais-nacionalidad"
                         value={identificacion.paisNacionalidad}
                         onValueChange={(value) => actualizarIdentificacionCampo("paisNacionalidad", value)}
-                      >
-                        <SelectTrigger id="pais-nacionalidad">
-                          <SelectValue placeholder="Selecciona un país" />
-                        </SelectTrigger>
-                        <SelectContent position="popper">
-                          {PAISES.map((pais) => (
-                            <SelectItem key={pais.code} value={pais.code}>
-                              {pais.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      />
                     </div>
                   )}
                   {tipoSujeto === "fisica" && (
                     <div className="space-y-2">
                       <Label htmlFor="pais-nacimiento">País de Nacimiento</Label>
-                      <Select
+                      <PaisCombobox
+                        id="pais-nacimiento"
                         value={identificacion.paisNacimiento}
                         onValueChange={(value) => actualizarIdentificacionCampo("paisNacimiento", value)}
-                      >
-                        <SelectTrigger id="pais-nacimiento">
-                          <SelectValue placeholder="Selecciona un país" />
-                        </SelectTrigger>
-                        <SelectContent position="popper">
-                          {PAISES.map((pais) => (
-                            <SelectItem key={pais.code} value={pais.code}>
-                              {pais.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      />
                     </div>
                   )}
                   {tipoSujeto === "fisica" && (
@@ -2827,21 +2903,11 @@ export default function RegistroSATPage() {
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="rec-pais">País de Nacionalidad</Label>
-                          <Select
+                          <PaisCombobox
+                            id="rec-pais"
                             value={representante.paisNacionalidad}
                             onValueChange={(value) => actualizarRepresentanteCampo("paisNacionalidad", value)}
-                          >
-                            <SelectTrigger id="rec-pais">
-                              <SelectValue placeholder="Selecciona un país" />
-                            </SelectTrigger>
-                            <SelectContent position="popper">
-                              {PAISES.map((pais) => (
-                                <SelectItem key={pais.code} value={pais.code}>
-                                  {pais.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="rec-fecha-designacion">Fecha de Designación</Label>
@@ -3009,7 +3075,7 @@ export default function RegistroSATPage() {
                 <div className="space-y-1">
                   <CardTitle>Documentos obligatorios del alta</CardTitle>
                 <CardDescription>
-                  Carga detalle, acuse y aceptación de designación de encargado. Si faltan, podrás guardar el registro y quedará
+                  Carga el detalle y el Acuse del SAT / Aceptación de designación. Si faltan, podrás guardar el registro y quedará
                   marcado como incompleto.
                 </CardDescription>
               </div>
@@ -3027,15 +3093,17 @@ export default function RegistroSATPage() {
                 </p>
               </div>
             </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-3">
+            <CardContent className="grid gap-4 md:grid-cols-2">
               {(
                 [
                   { id: "detalle", label: "Detalle de alta" },
-                  { id: "acuse", label: "Acuse del SAT" },
-                  { id: "aceptacion", label: "Aceptación de designación" },
+                  { id: "acuse", label: "Acuse del SAT / Aceptación de designación" },
                 ] as { id: RegistroDocumentKey; label: string }[]
               ).map((doc) => {
-                const documento = documentosRegistro[doc.id]
+                const documento =
+                  doc.id === "acuse"
+                    ? documentosRegistro.acuse || documentosRegistro.aceptacion
+                    : documentosRegistro[doc.id]
                 return (
                   <div key={doc.id} className="rounded-lg border p-4 space-y-3">
                     <div className="flex items-center justify-between">
@@ -3072,7 +3140,7 @@ export default function RegistroSATPage() {
                   </div>
                 )
               })}
-              <div className="md:col-span-3 grid gap-3 rounded-lg border bg-muted/40 p-4">
+              <div className="md:col-span-2 grid gap-3 rounded-lg border bg-muted/40 p-4">
                 <div className="flex flex-wrap items-start gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
                     <ClipboardList className="h-5 w-5 text-primary" />
