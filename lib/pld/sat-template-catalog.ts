@@ -253,11 +253,11 @@ export function resolveSatTemplateForActividad(
 ): SatTemplateCatalogItem {
   const formato = resolveSatFormatoForActividad(actividadKey)
   const base = fromFormato(formato)
+  const eligibleVariants = base.variants.filter((item) => item.actividadKeys.includes(actividadKey))
   const variant =
-    base.variants.find((item) => item.variantId === variantId) ||
-    base.variants.find((item) => item.templateId === variantId) ||
-    base.variants.find((item) => item.actividadKeys.includes(actividadKey)) ||
-    base.variants[0]
+    eligibleVariants.find((item) => item.variantId === variantId) ||
+    eligibleVariants.find((item) => item.templateId === variantId) ||
+    eligibleVariants[0]
 
   if (!variant) return base
 
@@ -268,8 +268,8 @@ export function resolveSatTemplateForActividad(
     sourceZipUrl: variant.sourceZipUrl,
     localPath: variant.localPath,
     actividadKeys: variant.actividadKeys,
-    variants: base.variants,
-    requiresVariantSelection: base.variants.length > 1,
+    variants: eligibleVariants,
+    requiresVariantSelection: eligibleVariants.length > 1,
   }
 }
 

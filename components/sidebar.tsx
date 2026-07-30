@@ -46,9 +46,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <Image
               src="/logo-davara-governance/logo-davara-governance-white.png"
               alt="Davara Governance"
-              width={170}
-              height={44}
-              className="h-11 w-auto object-contain"
+              width={860}
+              height={200}
+              className="h-auto w-[170px] object-contain"
               style={{ filter: "brightness(0) invert(1)" }}
               priority
             />
@@ -85,9 +85,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     <Image
                       src="/Alicia_Sin_Despachos.png"
                       alt="Alicia"
-                      width={collapsed ? 74 : 98}
-                      height={collapsed ? 22 : 30}
-                      className={`object-contain transition-all ${isActive ? "brightness-0 contrast-200" : ""}`}
+                      width={645}
+                      height={248}
+                      className={`h-auto object-contain transition-all ${
+                        collapsed ? "w-[74px]" : "w-[98px]"
+                      } ${isActive ? "brightness-0 contrast-200" : ""}`}
                       unoptimized
                     />
                   ) : (

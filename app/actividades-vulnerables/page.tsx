@@ -73,6 +73,13 @@ import { CIUDADES_MEXICO, findCodigoPostalInfo } from "@/lib/data/codigos-postal
 import { demoFraccionXV } from "@/lib/demo/fraccion-xv"
 import { PAISES, findPaisByCodigo, findPaisByNombre } from "@/lib/data/paises"
 import {
+  createLegacyExpedienteId,
+  getPrimaryExpedienteIdentifier,
+  normalizeExpedienteIdentifiers,
+  validateExpedienteIdentifiers,
+  type ExpedienteIdentifiers,
+} from "@/lib/pld/expediente-eui"
+import {
   buildChecklistFromRequirements,
   buildDefaultPldTenants,
   buildPldOperationalCase,
@@ -99,6 +106,8 @@ import {
   resolveSatFormatoForActividad,
   resolveSatTemplateForActividad,
   expandSatFieldValuesForDuplicateFields,
+  isSatXlsmFieldRequired,
+  pruneInactiveSatFieldValues,
   satFieldValuesToWorkbookCells,
   sanitizePldTenant,
   type AvisoSalidaTipo,
@@ -651,6 +660,7 @@ interface PersonaAvisoOperacion {
   apellidoMaterno?: string
   fechaNacimiento?: string
   rfc?: string
+  nif?: string
   curp?: string
   representante?: RepresentanteAviso | null
   domicilio?: DomicilioAviso | null
@@ -773,8 +783,13 @@ interface ExpedientePersona {
   id?: string
   tipo?: "persona_moral" | "persona_fisica"
   denominacion?: string
+  nombre?: string
+  apellidoPaterno?: string
+  apellidoMaterno?: string
+  fechaNacimiento?: string
   fechaConstitucion?: string
   rfc?: string
+  nif?: string
   curp?: string
   pais?: string
   giro?: string
@@ -791,7 +806,21 @@ interface ExpedientePersona {
 }
 
 interface ExpedienteDetalle {
+  schemaVersion: number
+  expedienteId: string
   rfc: string
+  identifiers: ExpedienteIdentifiers
+  activityKey?: string
+  activityLabel?: string
+  ocupacion?: {
+    code: string
+    label: string
+  }
+  operationContext?: {
+    tipoActoOperacion?: string
+    fechaActoOperacion?: string
+    relacionNegocios?: string
+  }
   nombre?: string
   tipoCliente?: string
   detalleTipoCliente?: string
@@ -806,6 +835,8 @@ interface ExpedienteDetalle {
   perfilOperaciones?: Record<string, string>
   documentacion?: Record<string, string>
   personas?: ExpedientePersona[]
+  beneficiariosControladores?: ExpedientePersona[]
+  expedienteEui?: Record<string, any>
   actualizadoEn?: string
 }
 
@@ -856,6 +887,8 @@ interface OperacionCliente {
   claveSujetoObligado?: string
   claveActividadVulnerable?: string
   expedienteReferenciado?: string
+  expedienteIdentifiers?: ExpedienteIdentifiers
+  expedienteEui?: Record<string, any>
   personaExpedienteId?: string
   personaAviso?: PersonaAvisoOperacion | null
   inmueble?: DatosInmuebleOperacion | null
@@ -1437,6 +1470,14 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
       typeof raw.claveActividadVulnerable === "string" ? raw.claveActividadVulnerable : undefined,
     expedienteReferenciado:
       typeof raw.expedienteReferenciado === "string" ? raw.expedienteReferenciado : undefined,
+    expedienteIdentifiers:
+      raw.expedienteIdentifiers && typeof raw.expedienteIdentifiers === "object"
+        ? normalizeExpedienteIdentifiers(raw.expedienteIdentifiers)
+        : undefined,
+    expedienteEui:
+      raw.expedienteEui && typeof raw.expedienteEui === "object"
+        ? { ...raw.expedienteEui }
+        : undefined,
     personaExpedienteId:
       typeof raw.personaExpedienteId === "string" ? raw.personaExpedienteId : undefined,
     personaAviso: personaAviso ?? null,
@@ -1561,9 +1602,14 @@ function sanitizeExpedientePersona(raw: any): ExpedientePersona | null {
     id: typeof raw.id === "string" ? raw.id : undefined,
     tipo,
     denominacion: typeof raw.denominacion === "string" ? raw.denominacion : undefined,
+    nombre: typeof raw.nombre === "string" ? raw.nombre : undefined,
+    apellidoPaterno: typeof raw.apellidoPaterno === "string" ? raw.apellidoPaterno : undefined,
+    apellidoMaterno: typeof raw.apellidoMaterno === "string" ? raw.apellidoMaterno : undefined,
+    fechaNacimiento: typeof raw.fechaNacimiento === "string" ? raw.fechaNacimiento : undefined,
     fechaConstitucion:
       typeof raw.fechaConstitucion === "string" ? raw.fechaConstitucion : undefined,
     rfc: typeof raw.rfc === "string" ? raw.rfc : undefined,
+    nif: typeof raw.nif === "string" ? raw.nif : undefined,
     curp: typeof raw.curp === "string" ? raw.curp : undefined,
     pais:
       typeof raw.pais === "string"
@@ -1577,20 +1623,195 @@ function sanitizeExpedientePersona(raw: any): ExpedientePersona | null {
   }
 }
 
+function buildExpedientePersonaFromEui(raw: any): ExpedientePersona | null {
+  if (!raw || typeof raw !== "object" || !raw.cliente || typeof raw.cliente !== "object") return null
+  const cliente = raw.cliente
+  const tipo = raw.tipoExpediente === "persona_fisica" ? "persona_fisica" : "persona_moral"
+  const denominacion =
+    tipo === "persona_fisica"
+      ? [cliente.nombres, cliente.apellidoPaterno, cliente.apellidoMaterno]
+          .filter((item) => typeof item === "string" && item.trim())
+          .join(" ")
+      : typeof cliente.denominacion === "string"
+        ? cliente.denominacion
+        : typeof cliente.nombre === "string"
+          ? cliente.nombre
+          : ""
+  const domicilio = raw.domicilioCliente && typeof raw.domicilioCliente === "object"
+    ? raw.domicilioCliente
+    : null
+  const contacto = raw.contactoCliente && typeof raw.contactoCliente === "object"
+    ? raw.contactoCliente
+    : null
+
+  return sanitizeExpedientePersona({
+    id: `cliente-${raw.expedienteId || cliente.rfc || cliente.nif || cliente.curp || "eui"}`,
+    tipo,
+    denominacion,
+    nombre: cliente.nombres,
+    apellidoPaterno: cliente.apellidoPaterno,
+    apellidoMaterno: cliente.apellidoMaterno,
+    fechaNacimiento: cliente.fechaNacimiento,
+    fechaConstitucion: cliente.fechaConstitucion,
+    rfc: cliente.rfc,
+    nif: cliente.nif,
+    curp: cliente.curp,
+    pais: cliente.paisNacionalidad || cliente.paisNacimiento,
+    giro: cliente.ocupacion || cliente.actividad,
+    rolRelacion: "Cliente",
+    representante: raw.representante,
+    domicilio,
+    contacto: contacto
+      ? {
+          clavePais: contacto.clavePais || domicilio?.pais,
+          telefono: contacto.telefonoMovil || contacto.telefonoFijo || contacto.telefono,
+          correo: contacto.correo,
+        }
+      : null,
+  })
+}
+
+function buildBeneficiarioPersonaFromEui(raw: any, index: number): ExpedientePersona | null {
+  if (!raw || typeof raw !== "object") return null
+  return sanitizeExpedientePersona({
+    id: typeof raw.id === "string" ? raw.id : `beneficiario-eui-${index}`,
+    tipo: raw.tipo === "persona_moral" ? "persona_moral" : "persona_fisica",
+    denominacion:
+      typeof raw.denominacion === "string"
+        ? raw.denominacion
+        : [raw.nombres, raw.apellidoPaterno, raw.apellidoMaterno]
+            .filter((item) => typeof item === "string" && item.trim())
+            .join(" "),
+    nombre: raw.nombres || raw.nombre,
+    apellidoPaterno: raw.apellidoPaterno,
+    apellidoMaterno: raw.apellidoMaterno,
+    fechaNacimiento: raw.fechaNacimiento,
+    rfc: raw.rfc,
+    nif: raw.nif,
+    curp: raw.curp,
+    pais: raw.pais || raw.paisNacionalidad,
+    giro: raw.giro,
+    rolRelacion: raw.rolRelacion || "Beneficiario controlador",
+    domicilio: raw.domicilio,
+    contacto: raw.contacto,
+  })
+}
+
 function sanitizeExpediente(raw: any): ExpedienteDetalle | null {
   if (!raw || typeof raw !== "object") return null
 
-  const rfc = typeof raw.rfc === "string" ? raw.rfc : ""
-  if (!rfc) return null
+  const expedienteEui =
+    raw.expedienteEui && typeof raw.expedienteEui === "object"
+      ? raw.expedienteEui
+      : undefined
+  const clienteEui =
+    expedienteEui?.cliente && typeof expedienteEui.cliente === "object"
+      ? expedienteEui.cliente
+      : {}
+  const identifiers = normalizeExpedienteIdentifiers({
+    rfc:
+      typeof raw.identifiers?.rfc === "string"
+        ? raw.identifiers.rfc
+        : typeof raw.rfc === "string"
+          ? raw.rfc
+          : clienteEui.rfc,
+    nif:
+      typeof raw.identifiers?.nif === "string"
+        ? raw.identifiers.nif
+        : clienteEui.nif,
+    curp:
+      typeof raw.identifiers?.curp === "string"
+        ? raw.identifiers.curp
+        : clienteEui.curp,
+  })
+  const primaryIdentifier = getPrimaryExpedienteIdentifier(identifiers)
+  const nombre =
+    typeof raw.nombre === "string" && raw.nombre.trim()
+      ? raw.nombre
+      : typeof clienteEui.denominacion === "string"
+        ? clienteEui.denominacion
+        : typeof clienteEui.nombre === "string"
+          ? clienteEui.nombre
+          : [clienteEui.nombres, clienteEui.apellidoPaterno, clienteEui.apellidoMaterno]
+              .filter((item) => typeof item === "string" && item.trim())
+              .join(" ")
+  if (!nombre && !primaryIdentifier) return null
+  const expedienteId =
+    typeof raw.expedienteId === "string" && raw.expedienteId.trim()
+      ? raw.expedienteId
+      : typeof expedienteEui?.expedienteId === "string" && expedienteEui.expedienteId.trim()
+        ? expedienteEui.expedienteId
+        : createLegacyExpedienteId(primaryIdentifier, nombre)
+  const activityKey =
+    typeof raw.activityKey === "string" && raw.activityKey
+      ? raw.activityKey
+      : typeof expedienteEui?.activityKey === "string" && expedienteEui.activityKey
+        ? expedienteEui.activityKey
+        : typeof raw.claveActividadVulnerable === "string"
+          ? raw.claveActividadVulnerable
+          : undefined
 
   const personasRaw: unknown[] = Array.isArray(raw.personas) ? raw.personas : []
-  const personas = personasRaw
+  const personasSanitizadas = personasRaw
     .map((item) => sanitizeExpedientePersona(item))
+    .filter((item): item is ExpedientePersona => Boolean(item))
+  const personaEui = buildExpedientePersonaFromEui(expedienteEui)
+  const personas = personasSanitizadas.length > 0
+    ? personasSanitizadas
+    : personaEui
+      ? [personaEui]
+      : []
+  const beneficiariosRaw: unknown[] = Array.isArray(raw.beneficiariosControladores)
+    ? raw.beneficiariosControladores
+    : [expedienteEui?.beneficiario1, expedienteEui?.beneficiario2].filter(Boolean)
+  const beneficiariosControladores = beneficiariosRaw
+    .map((item, index) => buildBeneficiarioPersonaFromEui(item, index))
     .filter((item): item is ExpedientePersona => Boolean(item))
 
   return {
-    rfc,
-    nombre: typeof raw.nombre === "string" ? raw.nombre : undefined,
+    schemaVersion: Number(raw.schemaVersion) || 1,
+    expedienteId,
+    rfc: identifiers.rfc,
+    identifiers,
+    activityKey,
+    activityLabel:
+      typeof raw.activityLabel === "string"
+        ? raw.activityLabel
+        : typeof expedienteEui?.activityLabel === "string"
+          ? expedienteEui.activityLabel
+          : undefined,
+    ocupacion:
+      raw.ocupacion && typeof raw.ocupacion === "object"
+        ? {
+            code: typeof raw.ocupacion.code === "string" ? raw.ocupacion.code : "",
+            label: typeof raw.ocupacion.label === "string" ? raw.ocupacion.label : "",
+          }
+        : typeof clienteEui.ocupacion === "string" && clienteEui.ocupacion
+          ? { code: clienteEui.ocupacion, label: clienteEui.ocupacion }
+          : typeof clienteEui.actividad === "string" && clienteEui.actividad
+            ? { code: clienteEui.actividad, label: clienteEui.actividad }
+            : undefined,
+    operationContext: {
+      tipoActoOperacion:
+        typeof raw.operationContext?.tipoActoOperacion === "string"
+          ? raw.operationContext.tipoActoOperacion
+          : typeof expedienteEui?.tipoActoOperacion === "string"
+            ? expedienteEui.tipoActoOperacion
+            : undefined,
+      fechaActoOperacion:
+        typeof raw.operationContext?.fechaActoOperacion === "string"
+          ? raw.operationContext.fechaActoOperacion
+          : typeof expedienteEui?.fechaActoOperacion === "string"
+            ? expedienteEui.fechaActoOperacion
+            : undefined,
+      relacionNegocios:
+        typeof raw.operationContext?.relacionNegocios === "string"
+          ? raw.operationContext.relacionNegocios
+          : typeof expedienteEui?.relacionNegocios === "string"
+            ? expedienteEui.relacionNegocios
+            : undefined,
+    },
+    nombre: nombre || primaryIdentifier || "Expediente sin nombre",
     tipoCliente: typeof raw.tipoCliente === "string" ? normalizarTipoCliente(raw.tipoCliente) : undefined,
     detalleTipoCliente:
       typeof raw.detalleTipoCliente === "string" ? raw.detalleTipoCliente : undefined,
@@ -1616,7 +1837,7 @@ function sanitizeExpediente(raw: any): ExpedienteDetalle | null {
     claveSujetoObligado:
       typeof raw.claveSujetoObligado === "string" ? raw.claveSujetoObligado : undefined,
     claveActividadVulnerable:
-      typeof raw.claveActividadVulnerable === "string" ? raw.claveActividadVulnerable : undefined,
+      activityKey,
     identificacion: typeof raw.identificacion === "object" ? raw.identificacion ?? undefined : undefined,
     datosFiscales: typeof raw.datosFiscales === "object" ? raw.datosFiscales ?? undefined : undefined,
     perfilOperaciones:
@@ -1624,6 +1845,8 @@ function sanitizeExpediente(raw: any): ExpedienteDetalle | null {
     documentacion:
       typeof raw.documentacion === "object" ? raw.documentacion ?? undefined : undefined,
     personas,
+    beneficiariosControladores,
+    expedienteEui,
     actualizadoEn: typeof raw.actualizadoEn === "string" ? raw.actualizadoEn : undefined,
   }
 }
@@ -1635,11 +1858,12 @@ function buildPersonaAvisoFromExpediente(persona: ExpedientePersona | null | und
   if (tipo === "persona_moral") {
     return {
       tipo,
-      denominacion: persona.denominacion ?? persona.rfc ?? "Persona moral",
+      denominacion: persona.denominacion ?? persona.rfc ?? persona.nif ?? "Persona moral",
       fechaConstitucion: persona.fechaConstitucion,
       pais: persona.pais,
       giro: persona.giro,
       rfc: persona.rfc,
+      nif: persona.nif,
       curp: persona.curp,
       representante: persona.representante ?? null,
       domicilio: persona.domicilio ?? null,
@@ -1654,18 +1878,18 @@ function buildPersonaAvisoFromExpediente(persona: ExpedientePersona | null | und
     }
   }
 
-  const nombreCompleto = persona.denominacion?.split(" ") ?? []
-  const nombre = persona.representante?.nombre ?? nombreCompleto[0] ?? ""
-  const apellidoPaterno =
-    persona.representante?.apellidoPaterno ?? nombreCompleto.slice(1).join(" ") ?? ""
+  const nombreCompleto = persona.denominacion?.split(/\s+/).filter(Boolean) ?? []
+  const nombre = persona.nombre ?? nombreCompleto[0] ?? ""
+  const apellidoPaterno = persona.apellidoPaterno ?? nombreCompleto[1] ?? ""
 
   return {
     tipo,
     nombre,
     apellidoPaterno,
-    apellidoMaterno: persona.representante?.apellidoMaterno,
-    fechaNacimiento: persona.representante?.fechaNacimiento,
+    apellidoMaterno: persona.apellidoMaterno ?? nombreCompleto.slice(2).join(" "),
+    fechaNacimiento: persona.fechaNacimiento,
     rfc: persona.rfc,
+    nif: persona.nif,
     curp: persona.curp,
     pais: persona.pais,
     domicilio: persona.domicilio ?? null,
@@ -1774,6 +1998,7 @@ function sanitizePersonaAviso(raw: any): PersonaAvisoOperacion | null {
     fechaNacimiento:
       typeof raw.fechaNacimiento === "string" ? raw.fechaNacimiento : undefined,
     rfc: typeof raw.rfc === "string" ? raw.rfc : undefined,
+    nif: typeof raw.nif === "string" ? raw.nif : undefined,
     curp: typeof raw.curp === "string" ? raw.curp : undefined,
     representante,
     domicilio,
@@ -1939,6 +2164,8 @@ export default function ActividadesVulnerablesPage() {
   const [personaExpedienteSeleccionada, setPersonaExpedienteSeleccionada] = useState<string>("")
 
   const [personaAvisoActual, setPersonaAvisoActual] = useState<PersonaAvisoOperacion | null>(null)
+  const [editandoDatosEui, setEditandoDatosEui] = useState(false)
+  const [datosEuiConfirmados, setDatosEuiConfirmados] = useState(false)
   const [codigoOperacionInmueble, setCodigoOperacionInmueble] = useState<string>("")
   const [figuraClienteInmueble, setFiguraClienteInmueble] = useState<string>("")
   const [figuraSujetoObligadoInmueble, setFiguraSujetoObligadoInmueble] = useState<string>("")
@@ -2282,7 +2509,7 @@ export default function ActividadesVulnerablesPage() {
           if (sane.length > 0) {
             const mapa = new Map<string, ExpedienteDetalle>()
             sane.forEach((expediente) => {
-              mapa.set(expediente.rfc, expediente)
+              mapa.set(expediente.expedienteId, expediente)
             })
             setExpedientesDetalle(Object.fromEntries(mapa))
           }
@@ -2442,6 +2669,11 @@ export default function ActividadesVulnerablesPage() {
     [actividadKey],
   )
 
+  const expedienteActual = useMemo(
+    () => (expedienteSeleccionado ? expedientesDetalle[expedienteSeleccionado] ?? null : null),
+    [expedienteSeleccionado, expedientesDetalle],
+  )
+
   const requisitosDocumentalesActuales = useMemo<DocumentRequirement[]>(
     () => getDocumentRequirementsForCliente(tipoCliente, actividadSeleccionada?.key),
     [tipoCliente, actividadSeleccionada?.key],
@@ -2550,13 +2782,17 @@ export default function ActividadesVulnerablesPage() {
         clienteApellidoPaterno: personaAvisoActual?.apellidoPaterno,
         clienteApellidoMaterno: personaAvisoActual?.apellidoMaterno,
         clienteRazonSocial: personaAvisoActual?.denominacion,
-        clienteRfc: rfc,
+        clienteRfc: personaAvisoActual?.rfc ?? expedienteActual?.identifiers.rfc ?? "",
         clienteFechaNacimiento: personaAvisoActual?.fechaNacimiento,
         clienteFechaConstitucion: personaAvisoActual?.fechaConstitucion,
         clienteCurp: personaAvisoActual?.curp,
         clientePais: paisSatOption(personaAvisoActual?.pais),
         clienteGiro: personaAvisoActual?.giro,
         clienteActividadEconomica: personaAvisoActual?.giro,
+        clienteOcupacion:
+          expedienteActual?.ocupacion?.code && expedienteActual?.ocupacion?.label
+            ? `${expedienteActual.ocupacion.code},${expedienteActual.ocupacion.label}`
+            : expedienteActual?.ocupacion?.code || expedienteActual?.ocupacion?.label,
         clienteEstado: personaAvisoActual?.domicilio?.entidad,
         clienteMunicipio: personaAvisoActual?.domicilio?.municipio,
         clienteCiudad: personaAvisoActual?.domicilio?.ciudad,
@@ -2618,6 +2854,7 @@ export default function ActividadesVulnerablesPage() {
     monedaPersonalizadaCodigo,
     montoOperacion,
     personaAvisoActual,
+    expedienteActual,
     prioridadAviso,
     referenciaAviso,
     rfc,
@@ -2662,11 +2899,16 @@ export default function ActividadesVulnerablesPage() {
   )
 
   const satEffectiveFieldValues = useMemo(
-    () =>
-      expandSatFieldValuesForDuplicateFields({
+    () => {
+      const expandedValues = expandSatFieldValuesForDuplicateFields({
         fields: satAllFieldsActual,
         values: satRawEffectiveFieldValues,
-      }),
+      })
+      return pruneInactiveSatFieldValues({
+        fields: satAllFieldsActual,
+        values: expandedValues,
+      })
+    },
     [satAllFieldsActual, satRawEffectiveFieldValues],
   )
 
@@ -2677,13 +2919,14 @@ export default function ActividadesVulnerablesPage() {
 
   const satMissingRequiredFields = useMemo(() => {
     if (!satDynamicFormActual) return []
-    const missingRequiredIds = satDynamicFormActual.requiredFieldIds.filter((fieldId) => {
-      const value = satEffectiveFieldValues[fieldId]
-      return !value || !value.trim()
-    })
+    const missingRequiredIds = satAllFieldsActual
+      .filter((field) => isSatXlsmFieldRequired(field, satEffectiveFieldValues))
+      .filter((field) => !(satEffectiveFieldValues[field.id] ?? "").trim())
+      .map((field) => field.id)
     return getActionableSatMissingFieldIds({
       fields: satAllFieldsActual,
       missingRequiredIds,
+      values: satEffectiveFieldValues,
     })
   }, [satAllFieldsActual, satDynamicFormActual, satEffectiveFieldValues])
 
@@ -2728,15 +2971,13 @@ export default function ActividadesVulnerablesPage() {
     }
   }, [satLayouts, satTemplateActual])
 
-  const expedienteActual = useMemo(
-    () => (expedienteSeleccionado ? expedientesDetalle[expedienteSeleccionado] ?? null : null),
-    [expedienteSeleccionado, expedientesDetalle],
-  )
-
   const expedientesDisponibles = useMemo(
     () =>
       Object.values(expedientesDetalle).sort((a, b) =>
-        (a.nombre ?? a.rfc).localeCompare(b.nombre ?? b.rfc, "es"),
+        (a.nombre ?? getPrimaryExpedienteIdentifier(a.identifiers) ?? a.expedienteId).localeCompare(
+          b.nombre ?? getPrimaryExpedienteIdentifier(b.identifiers) ?? b.expedienteId,
+          "es",
+        ),
       ),
     [expedientesDetalle],
   )
@@ -2783,7 +3024,7 @@ export default function ActividadesVulnerablesPage() {
 
       return expedienteIdentity
         ? `sujeto:${normalizarBusqueda(expedienteIdentity)}`
-        : `expediente:${normalizarBusqueda(expediente.rfc)}`
+        : `expediente:${normalizarBusqueda(expediente.expedienteId)}`
     },
     [tenantState.tenants],
   )
@@ -2832,9 +3073,12 @@ export default function ActividadesVulnerablesPage() {
           return resolveSujetoObligadoOptionValue(expediente) === sujetoObligadoOperacion
         })
         .map((expediente) => ({
-          value: expediente.rfc,
-          label: expediente.nombre ?? expediente.rfc,
-          actividad: expediente.claveActividadVulnerable,
+          value: expediente.expedienteId,
+          label:
+            expediente.nombre ??
+            getPrimaryExpedienteIdentifier(expediente.identifiers) ??
+            expediente.expedienteId,
+          actividad: expediente.activityKey ?? expediente.claveActividadVulnerable,
         })),
     [expedientesDisponibles, resolveSujetoObligadoOptionValue, sujetoObligadoOperacion],
   )
@@ -2849,7 +3093,7 @@ export default function ActividadesVulnerablesPage() {
       return { actividades: [], tieneRegistro: false }
     }
     const expedienteCliente = expedientesDisponibles.find(
-      (expediente) => expediente.rfc === clienteOperacionSeleccionado,
+      (expediente) => expediente.expedienteId === clienteOperacionSeleccionado,
     )
     if (!expedienteCliente) {
       return { actividades: [], tieneRegistro: false }
@@ -2870,7 +3114,7 @@ export default function ActividadesVulnerablesPage() {
   const expedienteClienteOperacion = useMemo(
     () =>
       expedientesDisponibles.find(
-        (expediente) => expediente.rfc === clienteOperacionSeleccionado,
+        (expediente) => expediente.expedienteId === clienteOperacionSeleccionado,
       ) ?? null,
     [clienteOperacionSeleccionado, expedientesDisponibles],
   )
@@ -2914,6 +3158,215 @@ export default function ActividadesVulnerablesPage() {
 
   const personaExpediente = personaExpedienteSeleccionadaInfo?.persona ?? null
 
+  const sincronizarDatosConExpediente = useCallback(() => {
+    if (!expedienteActual || !personaAvisoActual || typeof window === "undefined") return
+
+    const identifiers = normalizeExpedienteIdentifiers({
+      rfc: personaAvisoActual.rfc,
+      nif: personaAvisoActual.nif,
+      curp: personaAvisoActual.curp,
+    })
+    const identifierError = validateExpedienteIdentifiers(
+      identifiers,
+      personaAvisoActual.tipo === "persona_fisica",
+    )
+    if (identifierError) {
+      toast({
+        title: "Revisa los identificadores",
+        description: identifierError,
+        variant: "destructive",
+      })
+      return
+    }
+    const denominacion =
+      personaAvisoActual.tipo === "persona_moral"
+        ? personaAvisoActual.denominacion ?? clienteNombre
+        : [
+            personaAvisoActual.nombre,
+            personaAvisoActual.apellidoPaterno,
+            personaAvisoActual.apellidoMaterno,
+          ]
+            .filter(Boolean)
+            .join(" ")
+    const personaActualizada: ExpedientePersona = {
+      ...(personaExpediente ?? {}),
+      id: personaExpedienteSeleccionadaInfo?.id,
+      tipo: personaAvisoActual.tipo,
+      denominacion,
+      nombre: personaAvisoActual.nombre,
+      apellidoPaterno: personaAvisoActual.apellidoPaterno,
+      apellidoMaterno: personaAvisoActual.apellidoMaterno,
+      fechaNacimiento: personaAvisoActual.fechaNacimiento,
+      fechaConstitucion: personaAvisoActual.fechaConstitucion,
+      rfc: identifiers.rfc,
+      nif: identifiers.nif,
+      curp: identifiers.curp,
+      pais: personaAvisoActual.pais,
+      giro: personaAvisoActual.giro,
+      representante: personaAvisoActual.representante,
+      domicilio: personaAvisoActual.domicilio,
+      contacto: personaAvisoActual.contacto,
+    }
+    const personas = (expedienteActual.personas ?? []).some(
+      (persona) => persona.id === personaActualizada.id,
+    )
+      ? (expedienteActual.personas ?? []).map((persona) =>
+          persona.id === personaActualizada.id ? personaActualizada : persona,
+        )
+      : [...(expedienteActual.personas ?? []), personaActualizada]
+    const beneficiarioActualizado: ExpedientePersona = {
+      ...(expedienteActual.beneficiariosControladores?.[0] ?? {}),
+      id:
+        expedienteActual.beneficiariosControladores?.[0]?.id ??
+        `beneficiario-${expedienteActual.expedienteId}-1`,
+      tipo: beneficiarioForm.tipo,
+      denominacion:
+        beneficiarioForm.tipo === "persona_moral"
+          ? beneficiarioForm.nombre
+          : [
+              beneficiarioForm.nombre,
+              beneficiarioForm.apellidoPaterno,
+              beneficiarioForm.apellidoMaterno,
+            ]
+              .filter(Boolean)
+              .join(" "),
+      nombre: beneficiarioForm.nombre,
+      apellidoPaterno: beneficiarioForm.apellidoPaterno,
+      apellidoMaterno: beneficiarioForm.apellidoMaterno,
+      fechaNacimiento: beneficiarioForm.fechaNacimiento,
+      rfc: beneficiarioForm.rfc,
+      curp: beneficiarioForm.curp,
+      pais: beneficiarioForm.pais,
+      rolRelacion: "Beneficiario controlador",
+    }
+    const beneficiariosControladores = beneficiarioForm.nombre.trim()
+      ? [
+          beneficiarioActualizado,
+          ...(expedienteActual.beneficiariosControladores?.slice(1) ?? []),
+        ]
+      : expedienteActual.beneficiariosControladores ?? []
+    const actualizadoEn = new Date().toISOString()
+    let rawRecords: any[] = []
+    try {
+      const rawStored = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
+      const storedRecords = rawStored ? JSON.parse(rawStored) : []
+      rawRecords = Array.isArray(storedRecords) ? storedRecords : []
+    } catch (_error) {
+      toast({
+        title: "No se pudo leer el expediente",
+        description: "Los datos locales no tienen un formato válido. Abre el expediente y vuelve a guardarlo.",
+        variant: "destructive",
+      })
+      return
+    }
+    const baseRaw =
+      rawRecords.find(
+        (item: any) =>
+          item?.expedienteId === expedienteActual.expedienteId ||
+          (expedienteActual.rfc && item?.rfc === expedienteActual.rfc),
+      ) ?? expedienteActual
+    const expedienteEui = baseRaw.expedienteEui && typeof baseRaw.expedienteEui === "object"
+      ? baseRaw.expedienteEui
+      : {}
+    const clienteEui = expedienteEui.cliente && typeof expedienteEui.cliente === "object"
+      ? expedienteEui.cliente
+      : {}
+    const updatedRaw = {
+      ...baseRaw,
+      schemaVersion: 2,
+      expedienteId: expedienteActual.expedienteId,
+      rfc: identifiers.rfc,
+      identifiers,
+      activityKey: expedienteActual.activityKey,
+      activityLabel: expedienteActual.activityLabel,
+      nombre: denominacion,
+      personas,
+      beneficiariosControladores,
+      operationContext: {
+        tipoActoOperacion: tipoOperacion,
+        fechaActoOperacion: fechaOperacion,
+        relacionNegocios: relacionNegocios ? "si" : "no",
+      },
+      actualizadoEn,
+      expedienteEui: {
+        ...expedienteEui,
+        schemaVersion: 2,
+        expedienteId: expedienteActual.expedienteId,
+        activityKey: expedienteActual.activityKey,
+        activityLabel: expedienteActual.activityLabel,
+        identifiers,
+        tipoActoOperacion: tipoOperacion,
+        fechaActoOperacion: fechaOperacion,
+        relacionNegocios: relacionNegocios ? "si" : "no",
+        cliente: {
+          ...clienteEui,
+          denominacion:
+            personaAvisoActual.tipo === "persona_moral" ? denominacion : clienteEui.denominacion,
+          nombres:
+            personaAvisoActual.tipo === "persona_fisica" ? personaAvisoActual.nombre : clienteEui.nombres,
+          apellidoPaterno:
+            personaAvisoActual.tipo === "persona_fisica"
+              ? personaAvisoActual.apellidoPaterno
+              : clienteEui.apellidoPaterno,
+          apellidoMaterno:
+            personaAvisoActual.tipo === "persona_fisica"
+              ? personaAvisoActual.apellidoMaterno
+              : clienteEui.apellidoMaterno,
+          rfc: identifiers.rfc,
+          nif: identifiers.nif,
+          curp: identifiers.curp,
+        },
+      },
+    }
+    const updatedRecords = rawRecords.some(
+      (item: any) =>
+        item?.expedienteId === expedienteActual.expedienteId ||
+        (expedienteActual.rfc && item?.rfc === expedienteActual.rfc),
+    )
+      ? rawRecords.map((item: any) =>
+          item?.expedienteId === expedienteActual.expedienteId ||
+          (expedienteActual.rfc && item?.rfc === expedienteActual.rfc)
+            ? updatedRaw
+            : item,
+        )
+      : [...rawRecords, updatedRaw]
+    try {
+      window.localStorage.setItem(EXPEDIENTE_DETALLE_STORAGE_KEY, JSON.stringify(updatedRecords))
+    } catch (_error) {
+      toast({
+        title: "No se pudo sincronizar",
+        description: "El almacenamiento local no está disponible o no tiene espacio suficiente.",
+        variant: "destructive",
+      })
+      return
+    }
+    const sanitized = sanitizeExpediente(updatedRaw)
+    if (sanitized) {
+      setExpedientesDetalle((current) => ({
+        ...current,
+        [sanitized.expedienteId]: sanitized,
+      }))
+    }
+    setRfc(getPrimaryExpedienteIdentifier(identifiers))
+    setEditandoDatosEui(false)
+    setDatosEuiConfirmados(true)
+    toast({
+      title: "Expediente sincronizado",
+      description: "Los cambios se guardaron en el Expediente único y en el borrador del acto.",
+    })
+  }, [
+    beneficiarioForm,
+    clienteNombre,
+    expedienteActual,
+    fechaOperacion,
+    personaAvisoActual,
+    personaExpediente,
+    personaExpedienteSeleccionadaInfo?.id,
+    relacionNegocios,
+    tipoOperacion,
+    toast,
+  ])
+
   useEffect(() => {
     if (personasExpedienteOpciones.length === 0) {
       if (personaExpedienteSeleccionada !== "") {
@@ -2933,23 +3386,16 @@ export default function ActividadesVulnerablesPage() {
   }, [personasExpedienteOpciones, personaExpedienteSeleccionada])
 
   useEffect(() => {
+    setEditandoDatosEui(false)
+    setDatosEuiConfirmados(false)
     if (!personaExpediente) {
       setPersonaAvisoActual(null)
       setClienteNombre(expedienteActual?.nombre ?? "")
-      setRfc(expedienteActual?.rfc ? expedienteActual.rfc.toUpperCase() : "")
-      setColoniasDisponibles([])
-      setInmuebleForm((prev) => ({
-        ...prev,
-        pais: INMUEBLE_FORM_DEFAULT.pais,
-        entidad: "",
-        municipio: "",
-        ciudad: "",
-        colonia: "",
-        codigoPostal: "",
-        calle: "",
-        numeroExterior: "",
-        numeroInterior: "",
-      }))
+      setRfc(
+        expedienteActual
+          ? getPrimaryExpedienteIdentifier(expedienteActual.identifiers).toUpperCase()
+          : "",
+      )
       setBeneficiarioForm((prev) => ({
         ...prev,
         nombre: "",
@@ -2969,8 +3415,11 @@ export default function ActividadesVulnerablesPage() {
       if (expedienteActual?.claveSujetoObligado) {
         setClaveSujetoObligado(expedienteActual.claveSujetoObligado)
       }
-      if (expedienteActual?.claveActividadVulnerable) {
-        setClaveActividad(expedienteActual.claveActividadVulnerable)
+      if (expedienteActual?.activityKey || expedienteActual?.claveActividadVulnerable) {
+        const expedienteActivityKey =
+          expedienteActual.activityKey ?? expedienteActual.claveActividadVulnerable ?? ""
+        setActividadKey(expedienteActivityKey)
+        setClaveActividad(expedienteActivityKey)
       }
       return
     }
@@ -2987,62 +3436,26 @@ export default function ActividadesVulnerablesPage() {
       : ""
     setClienteNombre(nombreCliente)
 
-    const rfcPersona = personaAviso?.rfc ?? expedienteActual?.rfc ?? ""
-    setRfc(rfcPersona ? rfcPersona.toUpperCase() : "")
+    const identificadorPersona =
+      personaAviso?.rfc ||
+      personaAviso?.nif ||
+      personaAviso?.curp ||
+      (expedienteActual ? getPrimaryExpedienteIdentifier(expedienteActual.identifiers) : "")
+    setRfc(identificadorPersona ? identificadorPersona.toUpperCase() : "")
 
-    const domicilio = personaAviso?.domicilio ?? null
-    if (domicilio) {
-      setInmuebleForm((prev) => ({
-        ...prev,
-        pais: domicilio.pais ?? prev.pais ?? INMUEBLE_FORM_DEFAULT.pais,
-        entidad: domicilio.entidad ?? "",
-        municipio: domicilio.municipio ?? "",
-        ciudad: domicilio.ciudad ?? "",
-        colonia: domicilio.colonia ?? "",
-        codigoPostal: domicilio.codigoPostal ?? "",
-        calle: domicilio.calle ?? "",
-        numeroExterior: domicilio.numeroExterior ?? "",
-        numeroInterior: domicilio.numeroInterior ?? "",
-      }))
-
-      if (domicilio.codigoPostal) {
-        const info = findCodigoPostalInfo(domicilio.codigoPostal)
-        setColoniasDisponibles(info?.asentamientos ?? [])
-        if (info?.ciudad) {
-          setInmuebleForm((prev) => ({
-            ...prev,
-            ciudad: prev.ciudad || info.ciudad || "",
-          }))
-        }
-      } else {
-        setColoniasDisponibles([])
-      }
-    } else {
-      setInmuebleForm((prev) => ({
-        ...prev,
-        pais: INMUEBLE_FORM_DEFAULT.pais,
-        entidad: "",
-        municipio: "",
-        colonia: "",
-        codigoPostal: "",
-        calle: "",
-        numeroExterior: "",
-        numeroInterior: "",
-      }))
-      setColoniasDisponibles([])
-    }
-
-    if (personaAviso?.representante) {
+    const beneficiarioExpediente = expedienteActual?.beneficiariosControladores?.[0]
+    if (beneficiarioExpediente) {
+      const nombreCompleto = beneficiarioExpediente.denominacion?.split(/\s+/).filter(Boolean) ?? []
       setBeneficiarioForm((prev) => ({
         ...prev,
-        tipo: "persona_fisica",
-        nombre: personaAviso.representante?.nombre ?? "",
-        apellidoPaterno: personaAviso.representante?.apellidoPaterno ?? "",
-        apellidoMaterno: personaAviso.representante?.apellidoMaterno ?? "",
-        fechaNacimiento: personaAviso.representante?.fechaNacimiento ?? "",
-        rfc: personaAviso.representante?.rfc ?? "",
-        curp: personaAviso.representante?.curp ?? "",
-        pais: personaAviso.representante?.pais ?? BENEFICIARIO_FORM_DEFAULT.pais,
+        tipo: beneficiarioExpediente.tipo === "persona_moral" ? "persona_moral" : "persona_fisica",
+        nombre: beneficiarioExpediente.nombre ?? nombreCompleto[0] ?? beneficiarioExpediente.denominacion ?? "",
+        apellidoPaterno: beneficiarioExpediente.apellidoPaterno ?? nombreCompleto[1] ?? "",
+        apellidoMaterno: beneficiarioExpediente.apellidoMaterno ?? nombreCompleto.slice(2).join(" "),
+        fechaNacimiento: beneficiarioExpediente.fechaNacimiento ?? "",
+        rfc: beneficiarioExpediente.rfc ?? beneficiarioExpediente.nif ?? "",
+        curp: beneficiarioExpediente.curp ?? "",
+        pais: beneficiarioExpediente.pais ?? BENEFICIARIO_FORM_DEFAULT.pais,
       }))
     } else {
       setBeneficiarioForm((prev) => ({
@@ -3066,8 +3479,20 @@ export default function ActividadesVulnerablesPage() {
     if (expedienteActual?.claveSujetoObligado) {
       setClaveSujetoObligado(expedienteActual.claveSujetoObligado)
     }
-    if (expedienteActual?.claveActividadVulnerable) {
-      setClaveActividad(expedienteActual.claveActividadVulnerable)
+    if (expedienteActual?.activityKey || expedienteActual?.claveActividadVulnerable) {
+      const expedienteActivityKey =
+        expedienteActual.activityKey ?? expedienteActual.claveActividadVulnerable ?? ""
+      setActividadKey(expedienteActivityKey)
+      setClaveActividad(expedienteActivityKey)
+    }
+    if (expedienteActual?.operationContext?.tipoActoOperacion) {
+      setTipoOperacion(expedienteActual.operationContext.tipoActoOperacion)
+    }
+    if (expedienteActual?.operationContext?.fechaActoOperacion) {
+      setFechaOperacion(expedienteActual.operationContext.fechaActoOperacion)
+    }
+    if (expedienteActual?.operationContext?.relacionNegocios) {
+      setRelacionNegocios(expedienteActual.operationContext.relacionNegocios === "si")
     }
   }, [personaExpediente, expedienteActual])
 
@@ -3128,7 +3553,9 @@ export default function ActividadesVulnerablesPage() {
 
   useEffect(() => {
     if (!clienteOperacionSeleccionado || expedienteSeleccionado === clienteOperacionSeleccionado) return
-    const existeExpediente = expedientesDisponibles.some((expediente) => expediente.rfc === clienteOperacionSeleccionado)
+    const existeExpediente = expedientesDisponibles.some(
+      (expediente) => expediente.expedienteId === clienteOperacionSeleccionado,
+    )
     if (!existeExpediente) return
     setExpedienteSeleccionado(clienteOperacionSeleccionado)
     setPersonaExpedienteSeleccionada("")
@@ -3425,7 +3852,7 @@ export default function ActividadesVulnerablesPage() {
               : undefined,
           beneficiarioControladorIdentificado:
             tipoCliente.startsWith("pf") ||
-            Boolean(beneficiarioForm.nombre.trim() || personaAvisoActual?.representante),
+            Boolean(beneficiarioForm.nombre.trim()),
           listasRestrictivas: "sin-coincidencia",
           congruenciaTransaccional:
             evaluacionActual?.status === "aviso" || sospecha24h ? "inusual" : "esperada",
@@ -3852,7 +4279,11 @@ const wizardStepDiagnostics = useMemo<OperationalWizardStepDiagnostics[]>(
   ],
 )
 const pasoDiagnostics = wizardStepDiagnostics[pasoActual]
-const pasoValido = pasoDiagnostics?.canContinue ?? false
+const requiereConfirmacionEui =
+  pasoActual === 3 && Boolean(expedienteActual && personaAvisoActual)
+const pasoValido =
+  (pasoDiagnostics?.canContinue ?? false) &&
+  (!requiereConfirmacionEui || datosEuiConfirmados)
 const blockingReasonsView = useMemo(
   () =>
     buildBlockingReasonsView({
@@ -4436,6 +4867,8 @@ const agregarOperacion = () => {
     claveSujetoObligado: claveSujetoObligado.trim() || undefined,
     claveActividadVulnerable: claveActividad.trim() || undefined,
     expedienteReferenciado: expedienteSeleccionado ?? undefined,
+    expedienteIdentifiers: expedienteActual?.identifiers,
+    expedienteEui: expedienteActual?.expedienteEui,
     personaExpedienteId: personaExpedienteSeleccionada || undefined,
     personaAviso: personaAvisoSnapshot ?? null,
     inmueble: inmuebleOperacion,
@@ -6127,8 +6560,10 @@ const cambiarMesCalendario = (delta: number) => {
                           <SelectContent>
                             <SelectItem value={MANUAL_EXPEDIENTE_VALUE}>Capturar manualmente</SelectItem>
                             {expedientesDisponibles.map((expediente) => (
-                              <SelectItem key={expediente.rfc} value={expediente.rfc}>
-                                {expediente.nombre ?? expediente.rfc}
+                              <SelectItem key={expediente.expedienteId} value={expediente.expedienteId}>
+                                {expediente.nombre ??
+                                  getPrimaryExpedienteIdentifier(expediente.identifiers) ??
+                                  expediente.expedienteId}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -6181,7 +6616,14 @@ const cambiarMesCalendario = (delta: number) => {
                                 .join(" ") || "Sin nombre registrado"}
                         </p>
                         <p>
-                          <span className="font-semibold">RFC:</span> {personaAvisoActual.rfc ?? expedienteActual?.rfc ?? "Sin RFC"}
+                          <span className="font-semibold">RFC / NIF / CURP:</span>{" "}
+                          {personaAvisoActual.rfc ||
+                            personaAvisoActual.nif ||
+                            personaAvisoActual.curp ||
+                            (expedienteActual
+                              ? getPrimaryExpedienteIdentifier(expedienteActual.identifiers)
+                              : "") ||
+                            "Sin identificador"}
                         </p>
                         <p>
                           <span className="font-semibold">País de nacionalidad:</span>{" "}
@@ -6411,9 +6853,9 @@ const cambiarMesCalendario = (delta: number) => {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>RFC</Label>
+                    <Label>Identificador (RFC, NIF o CURP)</Label>
                     <Input
-                      placeholder="RFC del cliente"
+                      placeholder="Identificador del cliente"
                       value={rfc}
                       onChange={(event) => {
                         if (clienteSeleccionado) {
@@ -7823,6 +8265,103 @@ const cambiarMesCalendario = (delta: number) => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {expedienteActual && personaAvisoActual && (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-emerald-900">
+                            Persona y beneficiario prellenados desde el EUI
+                          </p>
+                          <Badge variant="outline" className="bg-white text-emerald-700">
+                            {datosEuiConfirmados ? "Confirmado" : "Pendiente de confirmar"}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-emerald-800">
+                          {clienteNombre || "Persona sin nombre"} ·{" "}
+                          {getPrimaryExpedienteIdentifier(expedienteActual.identifiers) || "Identificador faltante"} ·{" "}
+                          {beneficiarioForm.nombre || "Beneficiario faltante"}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="bg-white"
+                          onClick={() => setEditandoDatosEui((current) => !current)}
+                        >
+                          {editandoDatosEui ? "Cancelar" : "Editar"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() =>
+                            editandoDatosEui
+                              ? sincronizarDatosConExpediente()
+                              : setDatosEuiConfirmados(true)
+                          }
+                        >
+                          {editandoDatosEui ? "Guardar y sincronizar EUI" : "Confirmar datos"}
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" asChild>
+                          <Link href={`/kyc-expediente?expediente=${encodeURIComponent(expedienteActual.expedienteId)}`}>
+                            Abrir expediente
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                    {editandoDatosEui && (
+                      <div className="mt-4 grid gap-4 rounded-lg bg-white p-4 md:grid-cols-3">
+                        {[
+                          ["rfc", "RFC"],
+                          ["nif", "NIF"],
+                          ["curp", "CURP"],
+                        ].map(([field, label]) => (
+                          <div key={field} className="space-y-2">
+                            <Label>{label}</Label>
+                            <Input
+                              value={String(personaAvisoActual[field as keyof PersonaAvisoOperacion] ?? "")}
+                              onChange={(event) =>
+                                setPersonaAvisoActual((current) =>
+                                  current
+                                    ? { ...current, [field]: event.target.value.toUpperCase() }
+                                    : current,
+                                )
+                              }
+                            />
+                          </div>
+                        ))}
+                        <div className="space-y-2">
+                          <Label>Beneficiario controlador</Label>
+                          <Input
+                            value={beneficiarioForm.nombre}
+                            onChange={(event) => actualizarBeneficiarioForm("nombre", event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>RFC/NIF del beneficiario</Label>
+                          <Input
+                            value={beneficiarioForm.rfc}
+                            onChange={(event) =>
+                              actualizarBeneficiarioForm("rfc", event.target.value.toUpperCase())
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>CURP del beneficiario</Label>
+                          <Input
+                            value={beneficiarioForm.curp}
+                            onChange={(event) =>
+                              actualizarBeneficiarioForm("curp", event.target.value.toUpperCase())
+                            }
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
                     <Label>Cargo público declarado o detectado</Label>

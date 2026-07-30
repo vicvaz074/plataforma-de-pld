@@ -1,6 +1,11 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate"
 
 import { excelSerialFromDate, satDate } from "./sat-xml"
+import {
+  isSatXlsmFieldActive,
+  isSatXlsmFieldRequired,
+  pruneInactiveSatFieldValues,
+} from "./ui-workflow"
 import type {
   SatDynamicOperationForm,
   SatFilledWorkbookResult,
@@ -118,7 +123,7 @@ export function buildSatDynamicOperationForm(input: {
     initialValues,
     requiredFieldIds: layout.sections
       .flatMap((section) => section.fields)
-      .filter((field) => field.required)
+      .filter((field) => field.required || Boolean(field.requiredWhen?.length))
       .map((field) => field.id),
     sourceLayoutGeneratedAt: layout.generatedAt,
   }
@@ -146,7 +151,9 @@ export function normalizeSatXlsmLayout(layout: SatXlsmLayout): SatXlsmLayout {
   }))
 
   const hasManualAuthoritativeMap =
-    layout.templateId.includes("fraccion-v-inmuebles") || layout.templateId.includes("fraccion-xv-arrendamiento")
+    layout.templateId.includes("fraccion-v-inmuebles") ||
+    layout.templateId.includes("fraccion-xv-arrendamiento") ||
+    layout.templateId.includes("fraccion-xi-b-administracion")
 
   if (!hasManualAuthoritativeMap) {
     return {
@@ -159,9 +166,12 @@ export function normalizeSatXlsmLayout(layout: SatXlsmLayout): SatXlsmLayout {
     ...layout,
     sections: sectionsWithoutAuxiliaryFields.map((section) => {
       const manualFields = getManualFields(layout.templateId, section.sheetName, layout.optionLists)
+      const sourceFields = layout.templateId.includes("fraccion-xi-b-administracion")
+        ? filterXiBExtractedFields(section.sheetName, section.fields, manualFields)
+        : section.fields
       const fields = mergeFields([
         ...manualFields,
-        ...section.fields.map((field) =>
+        ...sourceFields.map((field) =>
           field.source === "manual-sat-map" ? field : { ...field, required: false },
         ),
       ])
@@ -196,7 +206,16 @@ export function fillSatXlsmTemplate(
     postalCatalog = postalCatalog || extractPostalCatalog(zip, workbook)
     return postalCatalog
   }
-  const cellValues = resolveWorkbookCellValues(options.values, layout)
+  const normalizedValues = Object.fromEntries(
+    Object.entries(options.values).map(([key, value]) => [key, normalizeString(value)]),
+  )
+  const activeValues = layout
+    ? pruneInactiveSatFieldValues({
+        fields: layout.sections.flatMap((section) => section.fields),
+        values: normalizedValues,
+      })
+    : normalizedValues
+  const cellValues = resolveWorkbookCellValues(activeValues, layout)
   const writtenCells: string[] = []
 
   for (const sheet of workbook.sheets) {
@@ -215,11 +234,11 @@ export function fillSatXlsmTemplate(
   const missingRequiredFields = layout
     ? layout.sections
         .flatMap((section) => section.fields)
-        .filter((field) => field.required)
+        .filter((field) => isSatXlsmFieldRequired(field, activeValues))
         .filter((field) => {
           const sheetValues = cellValues.get(field.sheetName)
-          const byField = normalizeString(options.values[field.id])
-          const byCell = normalizeString(options.values[`${field.sheetName}!${field.cell}`])
+          const byField = normalizeString(activeValues[field.id])
+          const byCell = normalizeString(activeValues[`${field.sheetName}!${field.cell}`])
           return !normalizeString(sheetValues?.get(field.cell)?.value) && !byField && !byCell
         })
         .map((field) => field.id)
@@ -242,14 +261,19 @@ export function satFieldValuesToWorkbookCells(
   const cells: Record<string, string> = {}
   const normalizedLayout = normalizeSatXlsmLayout(layout)
   const fields = normalizedLayout.sections.flatMap((section) => section.fields)
+  const normalizedValues = Object.fromEntries(
+    Object.entries(values).map(([key, value]) => [key, normalizeString(value)]),
+  )
+  const activeValues = pruneInactiveSatFieldValues({ fields, values: normalizedValues })
 
   for (const field of fields) {
-    const value = values[field.id]
+    if (!isSatXlsmFieldActive(field, activeValues)) continue
+    const value = activeValues[field.id]
     if (value === undefined || value === null || value === "") continue
     cells[`${field.sheetName}!${field.cell}`] = String(value)
   }
 
-  for (const [key, value] of Object.entries(values)) {
+  for (const [key, value] of Object.entries(activeValues)) {
     if (!key.includes("!") || value === undefined || value === null || value === "") continue
     cells[key] = String(value)
   }
@@ -554,11 +578,16 @@ function parseDefinedNameRange(formula: string): { sheetName: string; range: str
 
 function parseDataValidations(xml: string): Array<{ sqref: string[]; optionListId?: string; inlineOptions?: string[] }> {
   const validations: Array<{ sqref: string[]; optionListId?: string; inlineOptions?: string[] }> = []
-  const regex = /<dataValidation\b([^>]*)(?:\/>|>([\s\S]*?)<\/dataValidation>)/g
+  // Keep the self-closing alternative separate. A single greedy attribute
+  // capture can otherwise consume `/>` and pair that validation with the body
+  // of a later node.
+  const regex =
+    /<dataValidation\b([^>]*)\/>|<dataValidation\b([^>]*)>([\s\S]*?)<\/dataValidation>/g
   let match: RegExpExecArray | null
   while ((match = regex.exec(xml))) {
-    const attrs = match[1] || ""
-    const body = match[2] || ""
+    const attrs = match[1] || match[2] || ""
+    const body = match[3] || ""
+    if ((getAttr(attrs, "type") || "").toLowerCase() !== "list") continue
     const sqref = (getAttr(attrs, "sqref") || "")
       .split(/\s+/)
       .map((item) => item.trim())
@@ -644,6 +673,9 @@ function inferDataType(label: string): SatXlsmField["dataType"] {
 }
 
 function getManualFields(templateId: string, sheetName: string, optionLists: SatXlsmOptionList[]): SatXlsmField[] {
+  if (templateId.includes("fraccion-xi-b-administracion")) {
+    return getServiciosProfesionalesAdministracionManualFields(sheetName, optionLists)
+  }
   if (templateId.includes("fraccion-xv-arrendamiento")) return getArrendamientoManualFields(sheetName, optionLists)
   if (!templateId.includes("fraccion-v-inmuebles")) return []
   const optionMap = new Map(optionLists.map((list) => [list.id, list.options]))
@@ -986,6 +1018,363 @@ function getManualFields(templateId: string, sheetName: string, optionLists: Sat
       field,
     }),
   ]
+}
+
+function getServiciosProfesionalesAdministracionManualFields(
+  sheetName: string,
+  optionLists: SatXlsmOptionList[],
+): SatXlsmField[] {
+  const optionMap = new Map(optionLists.map((list) => [list.id, list.options]))
+  const field = (
+    id: string,
+    label: string,
+    cell: string,
+    dataType: SatXlsmField["dataType"],
+    optionListId?: string,
+    required = true,
+    extras: Partial<SatXlsmField> = {},
+  ): SatXlsmField => ({
+    id,
+    label,
+    sheetName,
+    cell,
+    required,
+    dataType,
+    optionListId,
+    options: optionListId ? optionMap.get(optionListId) || [] : undefined,
+    source: "manual-sat-map",
+    targetCell: `${sheetName}!${cell}`,
+    ...extras,
+  })
+
+  const condition = (fieldId: string, ...equals: string[]) => [{ fieldId, equals }]
+
+  if (sheetName === "Persona Objeto del aviso") {
+    return [
+      field(
+        "persona_aviso.ocupacion",
+        "Ocupación de quien presta el servicio profesional",
+        "E4",
+        "catalogo",
+        "CATALOGO_DE_OCUPACION",
+        true,
+        { sectionKind: "alta_sat" },
+      ),
+      field(
+        "persona_aviso.ocupacion_otro",
+        "Descripción de otra ocupación",
+        "E5",
+        "texto",
+        undefined,
+        false,
+        {
+          sectionKind: "alta_sat",
+          activeWhen: condition("persona_aviso.ocupacion", "99"),
+          requiredWhen: condition("persona_aviso.ocupacion", "99"),
+        },
+      ),
+    ]
+  }
+
+  if (sheetName === "Acto u operación") {
+    const activoSelectorId = "acto.activo_administrado"
+    const inmuebleWhen = condition(activoSelectorId, "9")
+    const instrumentoFinancieroWhen = condition(activoSelectorId, "10")
+    return [
+      field("acto.fecha_operacion", "Fecha de operación", "D4", "fecha", undefined, true, {
+        sectionKind: "acto_operacion",
+      }),
+      field(
+        "acto.operaciones_financieras_count",
+        "Número de operaciones financieras a reportar",
+        "D5",
+        "numero",
+        undefined,
+        true,
+        { sectionKind: "acto_operacion" },
+      ),
+      field(
+        "acto.area_servicio",
+        "Área de servicio",
+        "B124",
+        "catalogo",
+        "CATALOGO_SP1103_AREA_DE_SERVICIO",
+        true,
+        { sectionKind: "acto_operacion" },
+      ),
+      field(
+        "acto.area_servicio_otro",
+        "Descripción de otra área de servicio",
+        "C124",
+        "texto",
+        undefined,
+        false,
+        {
+          sectionKind: "acto_operacion",
+          activeWhen: condition("acto.area_servicio", "99"),
+          requiredWhen: condition("acto.area_servicio", "99"),
+        },
+      ),
+      field(
+        activoSelectorId,
+        "Activo administrado",
+        "E124",
+        "catalogo",
+        "CATALOGO_SP1103_ACTIVO_ADMINISTRADO",
+        true,
+        { sectionKind: "acto_operacion" },
+      ),
+      field(
+        "acto.activo_administrado_otro",
+        "Descripción de otro activo administrado",
+        "F124",
+        "texto",
+        undefined,
+        false,
+        {
+          sectionKind: "acto_operacion",
+          activeWhen: condition(activoSelectorId, "99"),
+          requiredWhen: condition(activoSelectorId, "99"),
+        },
+      ),
+      field("acto.numero_empleados", "Número de empleados", "H124", "numero", undefined, true, {
+        sectionKind: "acto_operacion",
+      }),
+      field(
+        "acto.descripcion_activo_administrado",
+        "Descripción del activo administrado",
+        "B179",
+        "texto",
+        undefined,
+        true,
+        { sectionKind: "acto_operacion" },
+      ),
+      field(
+        "activo_inmueble.tipo",
+        "Tipo de inmueble administrado",
+        "B14",
+        "catalogo",
+        "CATALOGO_TIPO_DE_INMUEBLE",
+        true,
+        { sectionKind: "acto_operacion", activeWhen: inmuebleWhen },
+      ),
+      field(
+        "activo_inmueble.valor_referencia",
+        "Valor de referencia del inmueble administrado",
+        "C14",
+        "moneda",
+        undefined,
+        true,
+        { sectionKind: "acto_operacion", activeWhen: inmuebleWhen },
+      ),
+      field(
+        "activo_inmueble.codigo_postal",
+        "Código postal del inmueble administrado",
+        "D14",
+        "texto",
+        undefined,
+        true,
+        { sectionKind: "acto_operacion", activeWhen: inmuebleWhen },
+      ),
+      field(
+        "activo_inmueble.colonia",
+        "Colonia del inmueble administrado",
+        "G14",
+        "catalogo",
+        "COLONIA_SP03_INM_001",
+        true,
+        { sectionKind: "acto_operacion", activeWhen: inmuebleWhen },
+      ),
+      field(
+        "activo_inmueble.calle",
+        "Calle, avenida o vía del inmueble administrado",
+        "H14",
+        "texto",
+        undefined,
+        true,
+        { sectionKind: "acto_operacion", activeWhen: inmuebleWhen },
+      ),
+      field(
+        "activo_inmueble.numero_exterior",
+        "Número exterior del inmueble administrado",
+        "I14",
+        "texto",
+        undefined,
+        true,
+        { sectionKind: "acto_operacion", activeWhen: inmuebleWhen },
+      ),
+      field(
+        "activo_inmueble.numero_interior",
+        "Número interior del inmueble administrado",
+        "J14",
+        "texto",
+        undefined,
+        false,
+        { sectionKind: "acto_operacion", activeWhen: inmuebleWhen },
+      ),
+      field(
+        "activo_inmueble.folio_real",
+        "Folio real del inmueble administrado",
+        "K14",
+        "texto",
+        undefined,
+        true,
+        { sectionKind: "acto_operacion", activeWhen: inmuebleWhen },
+      ),
+      field(
+        "activo_financiero.estatus_manejo",
+        "Estatus del manejo",
+        "B69",
+        "catalogo",
+        "CATALOGO_SP1103_ESTATUS_DE_MANEJO",
+        true,
+        { sectionKind: "acto_operacion", activeWhen: instrumentoFinancieroWhen },
+      ),
+      field(
+        "activo_financiero.tipo_institucion",
+        "Tipo de institución financiera",
+        "C69",
+        "catalogo",
+        "CATALOGO_SP1103_INSTITUCIONES_FINANCIERAS",
+        true,
+        { sectionKind: "acto_operacion", activeWhen: instrumentoFinancieroWhen },
+      ),
+      field(
+        "activo_financiero.nombre_institucion",
+        "Nombre de la institución financiera",
+        "E69",
+        "texto",
+        undefined,
+        true,
+        { sectionKind: "acto_operacion", activeWhen: instrumentoFinancieroWhen },
+      ),
+      field(
+        "activo_financiero.cuenta_contrato_poliza",
+        "Número de cuenta, contrato o póliza",
+        "G69",
+        "texto",
+        undefined,
+        true,
+        { sectionKind: "acto_operacion", activeWhen: instrumentoFinancieroWhen },
+      ),
+    ]
+  }
+
+  if (sheetName === "Operaciones financieras") {
+    const instrumentoSelectorId = "operacion_financiera.instrumento_monetario"
+    const virtualWhen = condition(instrumentoSelectorId, "16")
+    const monedaWhen = condition(
+      instrumentoSelectorId,
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "99",
+    )
+    return [
+      field(
+        "operacion_financiera.monto",
+        "Monto de la operación financiera",
+        "B7",
+        "moneda",
+        undefined,
+        true,
+        { sectionKind: "liquidacion" },
+      ),
+      field(
+        instrumentoSelectorId,
+        "Instrumento monetario",
+        "C7",
+        "catalogo",
+        "CATALOGO_INSTRUMENTO_MONETARIO",
+        true,
+        { sectionKind: "liquidacion" },
+      ),
+      field(
+        "operacion_financiera.moneda",
+        "Moneda o divisa",
+        "D7",
+        "catalogo",
+        "CATALOGO_DE_MONEDAS",
+        true,
+        { sectionKind: "liquidacion", activeWhen: monedaWhen },
+      ),
+      field(
+        "operacion_financiera.activo_virtual",
+        "Activo virtual",
+        "E7",
+        "catalogo",
+        "CATALOGO_DE_ACTIVOS_VIRTUALES",
+        true,
+        { sectionKind: "liquidacion", activeWhen: virtualWhen },
+      ),
+      field(
+        "operacion_financiera.activo_virtual_otro",
+        "Descripción de otro activo virtual",
+        "F7",
+        "texto",
+        undefined,
+        false,
+        {
+          sectionKind: "liquidacion",
+          activeWhen: [
+            ...virtualWhen,
+            ...condition("operacion_financiera.activo_virtual", "999999"),
+          ],
+          requiredWhen: [
+            ...virtualWhen,
+            ...condition("operacion_financiera.activo_virtual", "999999"),
+          ],
+        },
+      ),
+      field(
+        "operacion_financiera.activo_virtual_cantidad",
+        "Cantidad de activo virtual operado",
+        "G7",
+        "numero",
+        undefined,
+        true,
+        { sectionKind: "liquidacion", activeWhen: virtualWhen },
+      ),
+    ]
+  }
+
+  return []
+}
+
+function filterXiBExtractedFields(
+  sheetName: string,
+  fields: SatXlsmField[],
+  manualFields: SatXlsmField[],
+): SatXlsmField[] {
+  const manualCells = new Set(manualFields.map((field) => field.cell.toUpperCase()))
+  return fields.filter((field) => {
+    const cell = field.cell.toUpperCase()
+    const normalizedLabel = slug(field.label)
+    if (manualCells.has(cell)) return false
+    if (field.optionListId === "CATALOGO_DE_OCUPACION") return false
+    if (/^(persona-objeto-del-aviso|acto-u-operacion)-[a-z]+\d+$/.test(normalizedLabel)) return false
+    if (/^r\d+$/.test(normalizedLabel)) return false
+
+    if (sheetName === "Acto u operación") {
+      const row = Number(cell.match(/\d+/)?.[0] ?? 0)
+      if (row >= 13 && row <= 68) return false
+      if (row >= 123 && row <= 179) return false
+    }
+    if (sheetName === "Operaciones financieras") return false
+    return true
+  })
 }
 
 function getArrendamientoManualFields(sheetName: string, optionLists: SatXlsmOptionList[]): SatXlsmField[] {
@@ -1512,6 +1901,7 @@ function prefillValueForField(field: SatXlsmField, prefill: Record<string, unkno
     "persona_aviso.prioridad": prefill.prioridadAviso || "1,NORMAL",
     "persona_aviso.tipo_alerta": prefill.alertaCodigo || "100,Sin alerta.",
     "persona_aviso.descripcion_alerta": prefill.alertaDescripcion,
+    "persona_aviso.ocupacion": prefill.clienteOcupacion,
     "persona_aviso.pf.nombre": prefill.clienteNombreSat || prefill.clienteNombrePf || clienteNombrePartes.nombre,
     "persona_aviso.pf.apellido_paterno": prefill.clienteApellidoPaterno || clienteNombrePartes.apellidoPaterno,
     "persona_aviso.pf.apellido_materno": prefill.clienteApellidoMaterno || clienteNombrePartes.apellidoMaterno,
@@ -1591,6 +1981,9 @@ function prefillValueForField(field: SatXlsmField, prefill: Record<string, unkno
     "instrumento.entidad": prefill.instrumentoEntidad,
     "instrumento.valor_avaluo": prefill.instrumentoValorAvaluo,
     "instrumento.fecha_contrato": prefill.instrumentoFechaContrato,
+    "operacion_financiera.monto": prefill.montoMxn,
+    "operacion_financiera.instrumento_monetario": prefill.instrumentoMonetario || prefill.instrumento,
+    "operacion_financiera.moneda": prefill.monedaSat || prefill.moneda,
     "persona.rfc": prefill.clienteRfc,
     "persona.nombre": prefill.clienteNombre,
   }

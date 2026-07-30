@@ -72,6 +72,81 @@ export function getFixedSatTipoOperacion(templateId: string | undefined): string
   return FIXED_SAT_TIPO_OPERACION_BY_TEMPLATE[templateId]
 }
 
+export function getSatCatalogValueCode(value: unknown): string {
+  const normalized = String(value ?? "").trim()
+  if (!normalized) return ""
+  return (normalized.split("||")[0] ?? normalized).split(",")[0]?.trim().toLowerCase() ?? ""
+}
+
+function normalizeSatConditionalValue(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+}
+
+function matchesSatFieldConditions(
+  conditions: SatXlsmField["activeWhen"] | SatXlsmField["requiredWhen"],
+  values: Record<string, string>,
+): boolean {
+  if (!conditions?.length) return true
+
+  return conditions.every((condition) => {
+    const currentValue = values[condition.fieldId] ?? ""
+    const currentCode = getSatCatalogValueCode(currentValue)
+    const currentNormalized = normalizeSatConditionalValue(currentValue)
+
+    return condition.equals.some((candidate) => {
+      const candidateCode = getSatCatalogValueCode(candidate)
+      const candidateNormalized = normalizeSatConditionalValue(candidate)
+      return (
+        (candidateCode && currentCode === candidateCode) ||
+        (candidateNormalized && currentNormalized === candidateNormalized)
+      )
+    })
+  })
+}
+
+export function isSatXlsmFieldActive(
+  field: SatXlsmField,
+  values: Record<string, string>,
+): boolean {
+  return matchesSatFieldConditions(field.activeWhen, values)
+}
+
+export function isSatXlsmFieldRequired(
+  field: SatXlsmField,
+  values: Record<string, string>,
+): boolean {
+  if (!isSatXlsmFieldActive(field, values)) return false
+  if (field.requiredWhen?.length) return matchesSatFieldConditions(field.requiredWhen, values)
+  return field.required
+}
+
+export function filterActiveSatXlsmFields(
+  fields: SatXlsmField[],
+  values: Record<string, string>,
+): SatXlsmField[] {
+  return fields.filter((field) => isSatXlsmFieldActive(field, values))
+}
+
+export function pruneInactiveSatFieldValues(input: {
+  fields: SatXlsmField[]
+  values: Record<string, string>
+}): Record<string, string> {
+  const fieldIds = new Set(input.fields.map((field) => field.id))
+  const activeFieldIds = new Set(
+    input.fields
+      .filter((field) => isSatXlsmFieldActive(field, input.values))
+      .map((field) => field.id),
+  )
+
+  return Object.fromEntries(
+    Object.entries(input.values).filter(([fieldId]) => !fieldIds.has(fieldId) || activeFieldIds.has(fieldId)),
+  )
+}
+
 export function chooseSatTipoOperacionField(fields: SatXlsmField[]): SatXlsmField | undefined {
   const candidates = fields.filter((field) => {
     const text = normalizeSatFieldText(`${field.id} ${field.label} ${field.optionListId ?? ""}`)
@@ -100,14 +175,14 @@ export function buildSatQuestionnaireFieldView(input: {
   const autoFilledFieldIds: string[] = []
   const optionalHiddenFieldIds: string[] = []
 
-  for (const field of input.fields) {
+  for (const field of input.fields.filter((item) => isSatXlsmFieldActive(item, input.values))) {
     const value = (input.values[field.id] ?? "").trim()
     const initialValue = (input.initialValues?.[field.id] ?? "").trim()
     const isMissing = missingSet.has(field.id)
     const isResolved = Boolean(value) && !isMissing
     const isEditedByUser = editedSet.has(field.id)
     const isAutoFilled = isResolved && !isEditedByUser && Boolean(initialValue) && value === initialValue
-    const isEmptyOptional = !field.required && !value
+    const isEmptyOptional = !isSatXlsmFieldRequired(field, input.values) && !value
 
     if (isAutoFilled) autoFilledFieldIds.push(field.id)
     if (isEmptyOptional) optionalHiddenFieldIds.push(field.id)
@@ -243,12 +318,21 @@ export function expandSatFieldValuesForDuplicateFields(input: {
 export function getActionableSatMissingFieldIds(input: {
   fields: SatXlsmField[]
   missingRequiredIds: string[]
+  values?: Record<string, string>
 }): string[] {
-  const fieldById = new Map(input.fields.map((field) => [field.id, field] as const))
+  const allFieldById = new Map(input.fields.map((field) => [field.id, field] as const))
+  const activeFields = input.values
+    ? input.fields.filter((field) => isSatXlsmFieldActive(field, input.values ?? {}))
+    : input.fields
+  const fieldById = new Map(activeFields.map((field) => [field.id, field] as const))
   const missingFields = input.missingRequiredIds
     .map((fieldId) => fieldById.get(fieldId))
     .filter((field): field is SatXlsmField => Boolean(field))
-    .filter((field) => !isSatFieldManagedByPrimaryCapture(field))
+    .filter((field) => {
+      if (!isSatFieldManagedByPrimaryCapture(field)) return true
+      if (!input.values) return false
+      return !(input.values[field.id] ?? "").trim()
+    })
   const deduped = buildSatQuestionnaireDedupedFieldView({
     fields: missingFields,
     values: {},
@@ -256,8 +340,7 @@ export function getActionableSatMissingFieldIds(input: {
   })
   const knownIds = new Set(deduped.missingRequiredIds)
   const unknownIds = input.missingRequiredIds.filter((fieldId) => {
-    const field = fieldById.get(fieldId)
-    return !field
+    return !allFieldById.has(fieldId)
   })
 
   return [...unknownIds, ...deduped.fields.map((field) => field.id).filter((fieldId) => knownIds.has(fieldId))]
