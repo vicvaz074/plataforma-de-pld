@@ -10,8 +10,11 @@ import {
   chooseSatTipoOperacionField,
   getActionableSatMissingFieldIds,
   getFixedSatTipoOperacion,
+  isSatXlsmFieldActive,
+  isSatXlsmFieldRequired,
   isSatFieldManagedByPrimaryCapture,
   expandSatFieldValuesForDuplicateFields,
+  pruneInactiveSatFieldValues,
   buildOperationalStepDiagnostics,
   buildRegulatorySourceDisplay,
   buildSatPackageActionView,
@@ -19,6 +22,51 @@ import {
   type SatOutputPackage,
   type SatXlsmField,
 } from "../lib/pld"
+
+test("SAT conditional fields activate, require and prune dependent branches by catalog code", () => {
+  const fields: SatXlsmField[] = [
+    {
+      id: "selector",
+      label: "Selector",
+      sheetName: "Acto",
+      cell: "A1",
+      required: true,
+      dataType: "catalogo",
+      source: "manual-sat-map",
+    },
+    {
+      id: "otro",
+      label: "Descripción otro",
+      sheetName: "Acto",
+      cell: "B1",
+      required: false,
+      requiredWhen: [{ fieldId: "selector", equals: ["99"] }],
+      activeWhen: [{ fieldId: "selector", equals: ["99"] }],
+      dataType: "texto",
+      source: "manual-sat-map",
+    },
+  ]
+
+  assert.equal(isSatXlsmFieldActive(fields[1], { selector: "1,Normal" }), false)
+  assert.equal(isSatXlsmFieldRequired(fields[1], { selector: "1,Normal" }), false)
+  assert.equal(isSatXlsmFieldActive(fields[1], { selector: "99,Otro" }), true)
+  assert.equal(isSatXlsmFieldRequired(fields[1], { selector: "99,Otro" }), true)
+  assert.deepEqual(
+    pruneInactiveSatFieldValues({
+      fields,
+      values: { selector: "1,Normal", otro: "valor obsoleto", externo: "se conserva" },
+    }),
+    { selector: "1,Normal", externo: "se conserva" },
+  )
+  assert.deepEqual(
+    getActionableSatMissingFieldIds({
+      fields,
+      values: { selector: "1,Normal", otro: "" },
+      missingRequiredIds: ["otro"],
+    }),
+    [],
+  )
+})
 
 test("SAT questionnaire hides auto-filled EUI fields and keeps pending Excel fields actionable", () => {
   const fields = [
@@ -203,6 +251,19 @@ test("SAT questionnaire treats duplicated EUI and payment fields as managed by t
       missingRequiredIds: fields.map((field) => field.id),
     }),
     ["acto.linea_negocio"],
+  )
+  assert.deepEqual(
+    getActionableSatMissingFieldIds({
+      fields: [...fields],
+      values: Object.fromEntries(fields.map((field) => [field.id, ""])),
+      missingRequiredIds: fields.map((field) => field.id),
+    }),
+    [
+      "acto.linea_negocio",
+      "acto.monto_operacion",
+      "acto.moneda",
+      "persona.nombre",
+    ],
   )
 })
 

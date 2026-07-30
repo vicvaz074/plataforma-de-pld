@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "rea
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -18,27 +17,28 @@ import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
 import { actividadesVulnerables } from "@/lib/data/actividades"
 import { findCodigoPostalInfo, registerCodigoPostalInfo, type CodigoPostalInfo } from "@/lib/data/codigos-postales"
 import { PAISES, findPaisByNombre } from "@/lib/data/paises"
+import {
+  evaluateRegistroChecklist,
+  separateLegacyRegistroDocuments as separarDocumentosRegistro,
+  type RegistroChecklistItem,
+  type RegistroChecklistSection,
+} from "@/lib/pld/registro-checklist"
 import { readFileAsDataUrl } from "@/lib/storage/read-file"
 import { cn } from "@/lib/utils"
-import { Building2, Check, ChevronsUpDown, ClipboardList, FileText, Paperclip, Search, ShieldCheck, Upload, UserCog } from "lucide-react"
-import type { LucideIcon } from "lucide-react"
-
-interface RequiredDataField {
-  id: string
-  label: string
-  description: string
-  required: boolean
-  tips?: string[]
-}
-
-interface RequiredDataSection {
-  id: string
-  title: string
-  description: string
-  icon: LucideIcon
-  fields: RequiredDataField[]
-  appliesTo: SubjectType[]
-}
+import {
+  AlertCircle,
+  Building2,
+  Check,
+  ChevronsUpDown,
+  ClipboardList,
+  FileText,
+  MinusCircle,
+  Paperclip,
+  Search,
+  ShieldCheck,
+  Upload,
+  UserCog,
+} from "lucide-react"
 
 type SubjectType = "none" | "fisica" | "moral" | "fideicomiso"
 type RegistroDocumentKey = "detalle" | "acuse" | "aceptacion"
@@ -61,6 +61,10 @@ interface SujetoRegistrado {
   creadoEn: Date
   documentos: Record<RegistroDocumentKey, DocumentUpload | null>
   checklistCampos: string[]
+  checklistNotas?: Record<string, string>
+  checklistVersion?: number
+  datosCompletos?: boolean
+  documentosCompletos?: boolean
   registroCompleto: boolean
   identificacion: IdentificacionSujeto
   contactos: ContactoSujeto[]
@@ -68,7 +72,7 @@ interface SujetoRegistrado {
   representante: RepresentanteCumplimiento | null
 }
 
-type DatosChecklistState = Record<string, { completed: boolean; notes: string }>
+type DatosChecklistState = Record<string, { notes: string }>
 
 interface IdentificacionSujeto {
   fecha: string
@@ -148,151 +152,6 @@ interface EjemploSujetoObligado {
   representante?: RepresentanteCumplimiento | null
 }
 
-const datosAltaRegistro: RequiredDataSection[] = [
-  {
-    id: "actividad-vulnerable",
-    title: "Actividad vulnerable declarada",
-    description: "Pregunta central del checklist: ¿qué actividad vulnerable realizarás?",
-    icon: ShieldCheck,
-    appliesTo: ["fisica", "moral", "fideicomiso"],
-    fields: [
-      {
-        id: "actividad-descripcion",
-        label: "Actividad vulnerable a realizar",
-        description: "Describe la fracción seleccionada y la operación que se realizará.",
-        required: true,
-        tips: ["Redacta la fracción del artículo 17 y el giro concreto."],
-      },
-      {
-        id: "actividad-ubicacion",
-        label: "Domicilio donde se ejecuta la actividad",
-        description: "Dirección completa para identificar el lugar de operaciones.",
-        required: true,
-      },
-    ],
-  },
-  {
-    id: "persona-fisica-identificacion",
-    title: "Identificación de persona física (Anexo 1)",
-    description: "Datos solicitados por el SAT para sujetos obligados personas físicas.",
-    icon: ClipboardList,
-    appliesTo: ["fisica"],
-    fields: [
-      {
-        id: "pf-nombre",
-        label: "Nombre completo",
-        description: "Tal como aparece en la identificación oficial y RFC.",
-        required: true,
-      },
-      {
-        id: "pf-rfc",
-        label: "RFC",
-        description: "Clave de RFC activa con homoclave.",
-        required: true,
-      },
-      {
-        id: "pf-curp",
-        label: "CURP",
-        description: "Identificador de población asociado a la persona física.",
-        required: true,
-      },
-      {
-        id: "pf-domicilio",
-        label: "Domicilio fiscal",
-        description: "Calle, número, colonia, municipio y código postal.",
-        required: true,
-      },
-    ],
-  },
-  {
-    id: "persona-moral-identidad",
-    title: "Identidad de la persona moral (Anexo 2)",
-    description: "Datos societarios para el alta de sujetos obligados personas morales.",
-    icon: Building2,
-    appliesTo: ["moral"],
-    fields: [
-      {
-        id: "pm-denominacion",
-        label: "Denominación o razón social",
-        description: "Nombre legal completo conforme al acta constitutiva.",
-        required: true,
-      },
-      {
-        id: "pm-rfc",
-        label: "RFC de la sociedad",
-        description: "Registro Federal de Contribuyentes activo.",
-        required: true,
-      },
-      {
-        id: "pm-representante",
-        label: "Representante legal",
-        description: "Nombre completo y cargo del representante acreditado.",
-        required: true,
-      },
-      {
-        id: "pm-domicilio",
-        label: "Domicilio fiscal",
-        description: "Domicilio registrado ante el SAT para la sociedad.",
-        required: true,
-      },
-    ],
-  },
-  {
-    id: "fideicomiso-datos",
-    title: "Datos del fideicomiso",
-    description: "Información clave para sujetos obligados constituidos como fideicomiso.",
-    icon: ClipboardList,
-    appliesTo: ["fideicomiso"],
-    fields: [
-      {
-        id: "fid-nombre",
-        label: "Nombre del fideicomiso",
-        description: "Denominación utilizada en el contrato de fideicomiso.",
-        required: true,
-      },
-      {
-        id: "fid-fiduciario",
-        label: "Fiduciario",
-        description: "Institución fiduciaria responsable.",
-        required: true,
-      },
-      {
-        id: "fid-fideicomitente",
-        label: "Fideicomitente y fideicomisario",
-        description: "Identifica a quienes aportan y reciben beneficios.",
-        required: true,
-      },
-    ],
-  },
-  {
-    id: "rec-datos",
-    title: "Datos del encargado de cumplimiento",
-    description: "Información del representante o encargado designado.",
-    icon: UserCog,
-    appliesTo: ["moral", "fideicomiso"],
-    fields: [
-      {
-        id: "rec-nombre",
-        label: "Nombre completo",
-        description: "Persona designada ante el SAT/UIF.",
-        required: true,
-      },
-      {
-        id: "rec-correo",
-        label: "Correo de contacto",
-        description: "Medio oficial para recibir notificaciones.",
-        required: true,
-      },
-      {
-        id: "rec-telefono",
-        label: "Teléfono de contacto",
-        description: "Número directo o con extensión.",
-        required: false,
-      },
-    ],
-  },
-]
-
 const evidenciasRecomendadas = [
   {
     id: "acta-constitutiva",
@@ -311,22 +170,15 @@ const evidenciasRecomendadas = [
   },
 ]
 
-const datosChecklistIndex = datosAltaRegistro.reduce<
-  Record<string, { sectionId: string; sectionTitle: string; field: RequiredDataField }>
->((acc, section) => {
-  section.fields.forEach((field) => {
-    acc[field.id] = { sectionId: section.id, sectionTitle: section.title, field }
-  })
-  return acc
-}, {})
+const createDefaultDatosChecklistState = (): DatosChecklistState => ({})
 
-const createDefaultDatosChecklistState = (): DatosChecklistState =>
-  datosAltaRegistro.reduce<DatosChecklistState>((acc, section) => {
-    section.fields.forEach((field) => {
-      acc[field.id] = { completed: false, notes: "" }
-    })
-    return acc
-  }, {})
+const checklistSectionIcons: Record<RegistroChecklistSection["id"], typeof ClipboardList> = {
+  identificacion: ClipboardList,
+  contacto: UserCog,
+  actividades: ShieldCheck,
+  representante: UserCog,
+  documentos: FileText,
+}
 
 const createDefaultIdentificacion = (): IdentificacionSujeto => ({
   fecha: "",
@@ -408,6 +260,30 @@ const opcionesAutoridad = ["SAT", "SHCP", "CNBV", "UIF", "Otra"]
 const SEPOMEX_API_BASE = "https://api.zippopotam.us/mx"
 const SEPOMEX_STORAGE_PREFIX = "codigo_postal_cache_"
 const actividadEjemplo = actividadesVulnerables[0]?.key ?? ""
+const actividadLabels = Object.fromEntries(
+  actividadesVulnerables.map((actividad) => [
+    actividad.key,
+    `${actividad.fraccion} · ${actividad.nombre}`,
+  ]),
+)
+
+const evaluarSujetoRegistrado = (sujeto: {
+  tipo: SubjectType
+  identificacion: IdentificacionSujeto
+  contactos: ContactoSujeto[]
+  actividades: ActividadSujeto[]
+  representante: RepresentanteCumplimiento | null
+  documentos: Record<RegistroDocumentKey, DocumentUpload | null>
+}) =>
+  evaluateRegistroChecklist({
+    tipoSujeto: sujeto.tipo,
+    identificacion: sujeto.identificacion,
+    contactos: sujeto.contactos,
+    actividades: sujeto.actividades,
+    representante: sujeto.representante,
+    documentos: separarDocumentosRegistro(sujeto.documentos),
+    actividadLabels,
+  })
 
 const ejemplosSujetosObligados: EjemploSujetoObligado[] = [
   {
@@ -1084,29 +960,31 @@ export default function RegistroSATPage() {
   )
   const [registroStorageReady, setRegistroStorageReady] = useState(false)
 
-  const seccionesAplicables = useMemo(() => {
-    if (tipoSujeto === "none") return []
-    return datosAltaRegistro.filter((section) => section.appliesTo.includes(tipoSujeto))
-  }, [tipoSujeto])
-
-  const datosChecklistResumen = useMemo(() => {
-    const total = seccionesAplicables.reduce((acc, section) => acc + section.fields.length, 0)
-    const completados = seccionesAplicables.reduce(
-      (acc, section) => acc + section.fields.filter((field) => datosChecklistState[field.id]?.completed).length,
-      0,
-    )
-    const progreso = total === 0 ? 0 : Math.round((completados / total) * 100)
-    return { total, completados, progreso }
-  }, [datosChecklistState, seccionesAplicables])
+  const resultadoChecklist = useMemo(
+    () =>
+      evaluateRegistroChecklist({
+        tipoSujeto,
+        identificacion,
+        contactos,
+        actividades,
+        representante:
+          tipoSujeto === "moral" || tipoSujeto === "fideicomiso" ? representante : null,
+        documentos: documentosRegistro,
+        actividadLabels,
+      }),
+    [actividades, contactos, documentosRegistro, identificacion, representante, tipoSujeto],
+  )
+  const seccionesAplicables = resultadoChecklist.sections
+  const datosChecklistResumen = {
+    total: resultadoChecklist.summary.total,
+    completados: resultadoChecklist.summary.complete,
+    faltantes: resultadoChecklist.summary.missing,
+    noAplican: resultadoChecklist.summary.notApplicable,
+    progreso: resultadoChecklist.summary.progress,
+  }
 
   const catalogoActividades = useMemo(
-    () =>
-      new Map(
-        actividadesVulnerables.map((actividad) => [
-          actividad.key,
-          `${actividad.fraccion} · ${actividad.nombre}`,
-        ]),
-      ),
+    () => new Map(Object.entries(actividadLabels)),
     [],
   )
 
@@ -1156,10 +1034,9 @@ export default function RegistroSATPage() {
       const checklist = createDefaultDatosChecklistState()
       if (data.datosChecklist && typeof data.datosChecklist === "object") {
         Object.entries(data.datosChecklist as Record<string, unknown>).forEach(([key, value]) => {
-          if (typeof value === "object" && value !== null && key in checklist) {
+          if (typeof value === "object" && value !== null) {
             const registro = value as Record<string, unknown>
             checklist[key] = {
-              completed: registro.completed === true || registro.completed === "true",
               notes: typeof registro.notes === "string" ? registro.notes : "",
             }
           }
@@ -1205,6 +1082,12 @@ export default function RegistroSATPage() {
               checklistCampos: Array.isArray(item.checklistCampos)
                 ? item.checklistCampos.map((campo) => String(campo))
                 : [],
+              checklistNotas: Object.fromEntries(
+                Object.entries(toRecord(item.checklistNotas))
+                  .filter(([, value]) => typeof value === "string")
+                  .map(([key, value]) => [key, String(value)]),
+              ),
+              checklistVersion: 2,
               documentos: {
                 detalle,
                 acuse,
@@ -1295,7 +1178,7 @@ export default function RegistroSATPage() {
           })
         : []
 
-      const documentosRegistroGuardados =
+      const documentosRegistroGuardadosSinSeparar =
         data.documentosRegistro && typeof data.documentosRegistro === "object"
           ? (Object.entries(data.documentosRegistro) as [RegistroDocumentKey, Partial<DocumentUpload>][]).reduce<
               Record<RegistroDocumentKey, DocumentUpload | null>
@@ -1314,6 +1197,7 @@ export default function RegistroSATPage() {
               return acc
             }, { detalle: null, acuse: null, aceptacion: null })
           : { detalle: null, acuse: null, aceptacion: null }
+      const documentosRegistroGuardados = separarDocumentosRegistro(documentosRegistroGuardadosSinSeparar)
 
       const identificacionRaw = (data.identificacion ?? {}) as Record<string, unknown>
       const identificacionCargada: IdentificacionSujeto = {
@@ -1403,10 +1287,26 @@ export default function RegistroSATPage() {
         },
       }
 
+      const sujetosNormalizados = (sujetosCargados as SujetoRegistrado[]).map((sujeto) => {
+        const documentosSeparados = separarDocumentosRegistro(sujeto.documentos)
+        const evaluacion = evaluarSujetoRegistrado({ ...sujeto, documentos: documentosSeparados })
+        return {
+          ...sujeto,
+          documentos: documentosSeparados,
+          checklistVersion: 2,
+          checklistCampos: evaluacion.items
+            .filter((item) => item.status === "complete")
+            .map((item) => item.label),
+          datosCompletos: evaluacion.dataComplete,
+          documentosCompletos: evaluacion.documentsComplete,
+          registroCompleto: evaluacion.overallComplete,
+        }
+      })
+
       setDocumentos(documentosGuardados as DocumentUpload[])
       setDatosChecklistState(checklist)
-      setSujetosRegistrados(sujetosCargados as SujetoRegistrado[])
-      setSujetoSeleccionadoId(sujetosCargados[0]?.id ?? null)
+      setSujetosRegistrados(sujetosNormalizados)
+      setSujetoSeleccionadoId(sujetosNormalizados[0]?.id ?? null)
       setTipoSujeto((data.tipoSujeto as SubjectType) ?? "none")
       setIdentificacion(identificacionCargada)
       setContactos(contactosNormalizados)
@@ -1427,18 +1327,36 @@ export default function RegistroSATPage() {
   useEffect(() => {
     if (!registroStorageReady) return
 
+    const datosChecklist = Object.fromEntries([
+      ...Object.entries(datosChecklistState).map(([id, value]) => [
+        id,
+        { completed: false, notes: value.notes },
+      ]),
+      ...resultadoChecklist.items.map((item) => [
+        item.id,
+        {
+          completed: item.status === "complete",
+          notes: datosChecklistState[item.id]?.notes ?? "",
+        },
+      ]),
+    ])
     const data = {
+      schemaVersion: 2,
       documentos,
-      datosChecklist: datosChecklistState,
+      datosChecklist,
       sujetosRegistrados,
       tipoSujeto,
       identificacion,
       contactos,
       actividades,
       representante,
-      documentosRegistro,
+      documentosRegistro: separarDocumentosRegistro(documentosRegistro),
     }
-    localStorage.setItem("registro-sat-data", JSON.stringify(data))
+    try {
+      localStorage.setItem("registro-sat-data", JSON.stringify(data))
+    } catch (error) {
+      console.error("No se pudo guardar el registro SAT en este navegador", error)
+    }
   }, [
     documentos,
     datosChecklistState,
@@ -1450,6 +1368,7 @@ export default function RegistroSATPage() {
     representante,
     documentosRegistro,
     registroStorageReady,
+    resultadoChecklist,
   ])
 
   const crearDocumentoDesdeArchivo = async (file: File, tipo: string): Promise<DocumentUpload> => {
@@ -1492,53 +1411,28 @@ export default function RegistroSATPage() {
     return textoCompleto
   }
 
-
-  const actualizarEstatusDatoChecklist = (id: string, completed: boolean) => {
-    setDatosChecklistState((prev) => ({
-      ...prev,
-      [id]: {
-        completed,
-        notes: prev[id]?.notes ?? "",
-      },
-    }))
-  }
-
   const actualizarNotasDatoChecklist = (id: string, notas: string) => {
     setDatosChecklistState((prev) => ({
       ...prev,
       [id]: {
-        completed: prev[id]?.completed ?? false,
         notes: notas,
       },
     }))
   }
 
-  const obtenerChecklistDesdeCamposConfirmados = (
-    camposConfirmados: string[],
-    tipo: SubjectType,
-  ): DatosChecklistState => {
-    const checklist = createDefaultDatosChecklistState()
-
-    datosAltaRegistro
-      .filter((section) => section.appliesTo.includes(tipo))
-      .flatMap((section) => section.fields)
-      .forEach((field) => {
-        if (camposConfirmados.includes(field.label)) {
-          checklist[field.id] = {
-            completed: true,
-            notes: checklist[field.id]?.notes ?? "",
-          }
-        }
-      })
-
-    return checklist
+  const enfocarDatoFaltante = (item: RegistroChecklistItem) => {
+    if (!item.targetId || item.status !== "missing") return
+    setActiveTab("nuevo")
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(item.targetId ?? "")
+      if (!target) return
+      target.scrollIntoView({ behavior: "smooth", block: "center" })
+      target.focus({ preventScroll: true })
+    })
   }
 
-  const camposObligatoriosCapturados = Boolean(
-    tipoSujeto !== "none" && nombreSujeto.trim() && resumenActividades.trim(),
-  )
-  const documentosRequeridosCompletos =
-    !!documentosRegistro.detalle && !!(documentosRegistro.acuse || documentosRegistro.aceptacion)
+  const camposObligatoriosCapturados = resultadoChecklist.dataComplete
+  const documentosRequeridosCompletos = resultadoChecklist.documentsComplete
 
   const limpiarFormulario = () => {
     setTipoSujeto("none")
@@ -1594,14 +1488,28 @@ export default function RegistroSATPage() {
   ) => {
     if (tipoSujeto === "none" || !nombreSujeto.trim() || !resumenActividades.trim()) return false
 
-    const registroCompleto = !!(docs.detalle && (docs.acuse || docs.aceptacion))
+    const documentosSeparados = separarDocumentosRegistro(docs)
+    const evaluacion = evaluateRegistroChecklist({
+      tipoSujeto,
+      identificacion,
+      contactos,
+      actividades,
+      representante:
+        tipoSujeto === "moral" || tipoSujeto === "fideicomiso" ? representante : null,
+      documentos: documentosSeparados,
+      actividadLabels,
+    })
+    const registroCompleto = evaluacion.overallComplete
     if (!registroCompleto && !opciones?.permitirIncompleto) return false
 
-    const camposChecklist = datosAltaRegistro
-      .filter((section) => section.appliesTo.includes(tipoSujeto))
-      .flatMap((section) => section.fields)
-      .filter((field) => datosChecklistState[field.id]?.completed)
-      .map((field) => field.label)
+    const camposChecklist = evaluacion.items
+      .filter((item) => item.status === "complete")
+      .map((item) => item.label)
+    const checklistNotas = Object.fromEntries(
+      Object.entries(datosChecklistState)
+        .filter(([, value]) => value.notes.trim().length > 0)
+        .map(([id, value]) => [id, value.notes]),
+    )
 
     const sujetoExistente = sujetosRegistrados.find((item) => item.id === sujetoEnEdicionId)
     const nuevoSujeto: SujetoRegistrado = {
@@ -1611,11 +1519,11 @@ export default function RegistroSATPage() {
       actividad: resumenActividades.trim(),
       creadoEn: sujetoExistente?.creadoEn ?? new Date(),
       checklistCampos: camposChecklist,
-      documentos: {
-        detalle: docs.detalle,
-        acuse: docs.acuse,
-        aceptacion: docs.aceptacion,
-      },
+      checklistNotas,
+      checklistVersion: 2,
+      documentos: documentosSeparados,
+      datosCompletos: evaluacion.dataComplete,
+      documentosCompletos: evaluacion.documentsComplete,
       registroCompleto,
       identificacion,
       contactos,
@@ -1647,8 +1555,8 @@ export default function RegistroSATPage() {
       description: sujetoExistente
         ? "Los datos y documentos del sujeto se guardaron con los cambios realizados."
         : registroCompleto
-          ? "Los documentos de detalle, acuse y aceptación registraron al sujeto automáticamente."
-          : "Los documentos obligatorios están pendientes. Completa el expediente para finalizar el alta.",
+          ? "Los datos y documentos aplicables quedaron completos."
+          : "Los documentos obligatorios están pendientes. El checklist se seguirá actualizando automáticamente.",
     })
     return registroCompleto
   }
@@ -1720,14 +1628,7 @@ export default function RegistroSATPage() {
 
       const documento = await crearDocumentoDesdeArchivo(file, tipoDoc)
       setDocumentos((prev) => [documento, ...prev])
-      setDocumentosRegistro((prev) => {
-        const actualizado =
-          tipoDoc === "acuse"
-            ? { ...prev, acuse: documento, aceptacion: documento }
-            : { ...prev, [tipoDoc]: documento }
-        registrarSujeto(actualizado)
-        return actualizado
-      })
+      setDocumentosRegistro((prev) => ({ ...prev, [tipoDoc]: documento }))
 
       toast({
         title: `Documento ${tipoDoc === "detalle" ? "detalle" : tipoDoc} cargado`,
@@ -1761,9 +1662,11 @@ export default function RegistroSATPage() {
       sujetoSeleccionado.actividades?.length ? sujetoSeleccionado.actividades : [createDefaultActividad()],
     )
     setRepresentante(sujetoSeleccionado.representante ?? createDefaultRepresentante())
-    setDocumentosRegistro(sujetoSeleccionado.documentos)
+    setDocumentosRegistro(separarDocumentosRegistro(sujetoSeleccionado.documentos))
     setDatosChecklistState(
-      obtenerChecklistDesdeCamposConfirmados(sujetoSeleccionado.checklistCampos, sujetoSeleccionado.tipo),
+      Object.fromEntries(
+        Object.entries(sujetoSeleccionado.checklistNotas ?? {}).map(([id, notes]) => [id, { notes }]),
+      ),
     )
     setSujetoEnEdicionId(sujetoSeleccionado.id)
     setActiveTab("nuevo")
@@ -2137,7 +2040,10 @@ export default function RegistroSATPage() {
   }
 
   const sujetoSeleccionado = sujetosRegistrados.find((item) => item.id === sujetoSeleccionadoId)
-  const documentosCompletados = (Object.values(documentosRegistro).filter(Boolean) as DocumentUpload[]).length
+  const documentosAplicables = resultadoChecklist.items.filter(
+    (item) => item.sectionId === "documentos" && item.status !== "not-applicable",
+  )
+  const documentosCompletados = documentosAplicables.filter((item) => item.status === "complete").length
   const enEdicion = Boolean(sujetoEnEdicionId)
 
   return (
@@ -2169,7 +2075,7 @@ export default function RegistroSATPage() {
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground">Sujetos obligados registrados</p>
               <p className="text-3xl font-bold">{sujetosRegistrados.length}</p>
-              <p className="text-xs text-muted-foreground">Cada carga con detalle, acuse y aceptación crea un registro.</p>
+              <p className="text-xs text-muted-foreground">Los registros se confirman desde el formulario de alta.</p>
             </CardContent>
           </Card>
           <Card>
@@ -2187,8 +2093,10 @@ export default function RegistroSATPage() {
           <Card>
             <CardContent className="space-y-2 pt-6">
               <p className="text-sm text-muted-foreground">Documentos del alta cargados</p>
-              <p className="text-3xl font-bold">{documentosCompletados} / 3</p>
-              <p className="text-xs text-muted-foreground">Detalle, acuse y aceptación de designación.</p>
+              <p className="text-3xl font-bold">
+                {documentosCompletados} / {documentosAplicables.length}
+              </p>
+              <p className="text-xs text-muted-foreground">Detalle, acuse y aceptación cuando sea aplicable.</p>
             </CardContent>
           </Card>
           <Card className="sm:col-span-2 xl:col-span-1">
@@ -2196,7 +2104,7 @@ export default function RegistroSATPage() {
               <p className="text-sm font-semibold">Guía rápida</p>
               <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
                 <li>Selecciona el tipo de sujeto y completa la identificación.</li>
-                <li>Adjunta detalle, acuse y aceptación (botones abajo).</li>
+                <li>Adjunta detalle, acuse y, cuando aplique, aceptación.</li>
                 <li>Usa el botón Registrar sujeto para confirmar.</li>
               </ul>
             </CardContent>
@@ -2327,6 +2235,12 @@ export default function RegistroSATPage() {
                         <Badge variant={sujetoSeleccionado.registroCompleto ? "secondary" : "destructive"}>
                           {sujetoSeleccionado.registroCompleto ? "Completo" : "Incompleto"}
                         </Badge>
+                        <Badge variant={sujetoSeleccionado.datosCompletos ? "secondary" : "outline"}>
+                          Datos {sujetoSeleccionado.datosCompletos ? "completos" : "pendientes"}
+                        </Badge>
+                        <Badge variant={sujetoSeleccionado.documentosCompletos ? "secondary" : "outline"}>
+                          Documentos {sujetoSeleccionado.documentosCompletos ? "completos" : "pendientes"}
+                        </Badge>
                         <Badge variant="secondary">
                           Registrado {sujetoSeleccionado.creadoEn.toLocaleDateString()}
                         </Badge>
@@ -2347,15 +2261,19 @@ export default function RegistroSATPage() {
                     <div className="space-y-3">
                       <p className="text-sm font-semibold">Documentos cargados</p>
                       <div className="grid gap-3 md:grid-cols-3">
-                        {(Object.entries(sujetoSeleccionado.documentos) as [RegistroDocumentKey, DocumentUpload | null][])
-                          .filter(([key]) => key !== "aceptacion")
-                          .map(([key, doc]) => {
-                            const documento = key === "acuse" ? doc || sujetoSeleccionado.documentos.aceptacion : doc
+                        {(
+                          [
+                            { key: "detalle", label: "Detalle de alta" },
+                            { key: "acuse", label: "Acuse del SAT" },
+                            { key: "aceptacion", label: "Aceptación de designación" },
+                          ] as { key: RegistroDocumentKey; label: string }[]
+                        ).map(({ key, label }) => {
+                            const documento = sujetoSeleccionado.documentos[key]
+                            const noAplica =
+                              key === "aceptacion" && sujetoSeleccionado.tipo === "fisica"
                             return (
                             <div key={key} className="rounded-lg border p-3 space-y-1">
-                              <p className="text-xs text-muted-foreground uppercase">
-                                {key === "acuse" ? "Acuse del SAT / Aceptación de designación" : key}
-                              </p>
+                              <p className="text-xs text-muted-foreground uppercase">{label}</p>
                               {documento ? (
                                 <>
                                   <p className="font-medium break-words">{documento.name}</p>
@@ -2363,6 +2281,8 @@ export default function RegistroSATPage() {
                                     {documento.uploadDate.toLocaleDateString()} · {(documento.size / 1024).toFixed(1)} KB
                                   </p>
                                 </>
+                              ) : noAplica ? (
+                                <p className="text-sm text-muted-foreground">No aplica</p>
                               ) : (
                                 <p className="text-sm text-muted-foreground">Pendiente de carga</p>
                               )}
@@ -3075,8 +2995,8 @@ export default function RegistroSATPage() {
                 <div className="space-y-1">
                   <CardTitle>Documentos obligatorios del alta</CardTitle>
                 <CardDescription>
-                  Carga el detalle y el Acuse del SAT / Aceptación de designación. Si faltan, podrás guardar el registro y quedará
-                  marcado como incompleto.
+                  Carga cada evidencia por separado. La aceptación de designación sólo aplica cuando existe representante encargado
+                  de cumplimiento.
                 </CardDescription>
               </div>
               <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
@@ -3093,39 +3013,53 @@ export default function RegistroSATPage() {
                 </p>
               </div>
             </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
+            <CardContent className="grid gap-4 md:grid-cols-3">
               {(
                 [
                   { id: "detalle", label: "Detalle de alta" },
-                  { id: "acuse", label: "Acuse del SAT / Aceptación de designación" },
+                  { id: "acuse", label: "Acuse del SAT" },
+                  { id: "aceptacion", label: "Aceptación de designación" },
                 ] as { id: RegistroDocumentKey; label: string }[]
               ).map((doc) => {
-                const documento =
-                  doc.id === "acuse"
-                    ? documentosRegistro.acuse || documentosRegistro.aceptacion
-                    : documentosRegistro[doc.id]
+                const documento = documentosRegistro[doc.id]
+                const noAplica = doc.id === "aceptacion" && tipoSujeto === "fisica"
                 return (
-                  <div key={doc.id} className="rounded-lg border p-4 space-y-3">
+                  <div
+                    id={`documento-${doc.id}-card`}
+                    key={doc.id}
+                    tabIndex={-1}
+                    className="rounded-lg border p-4 space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-semibold">{doc.label}</p>
                         <p className="text-xs text-muted-foreground">PDF o XML</p>
                       </div>
                       <Badge variant={documento ? "default" : "outline"}>
-                        {documento ? "Cargado" : "Pendiente"}
+                        {documento ? "Cargado" : noAplica ? "No aplica" : "Pendiente"}
                       </Badge>
                     </div>
-                    <Button variant="outline" className="w-full" asChild>
-                      <label className="flex cursor-pointer items-center justify-center gap-2">
-                        <Upload className="h-4 w-4" />
-                        {documento ? "Reemplazar archivo" : "Subir archivo"}
-                        <input
-                          type="file"
-                          className="sr-only"
-                          onChange={(event) => manejarCargaDocumentoRegistro(event, doc.id)}
-                        />
-                      </label>
-                    </Button>
+                    {noAplica ? (
+                      <p className="text-sm text-muted-foreground">
+                        No se requiere para personas físicas.
+                      </p>
+                    ) : (
+                      <Button variant="outline" className="w-full" asChild>
+                        <label
+                          htmlFor={`documento-${doc.id}-input`}
+                          className="flex cursor-pointer items-center justify-center gap-2"
+                        >
+                          <Upload className="h-4 w-4" />
+                          {documento ? "Reemplazar archivo" : "Subir archivo"}
+                          <input
+                            id={`documento-${doc.id}-input`}
+                            type="file"
+                            className="sr-only"
+                            onChange={(event) => manejarCargaDocumentoRegistro(event, doc.id)}
+                          />
+                        </label>
+                      </Button>
+                    )}
                     {documento && (
                       <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground space-y-1">
                         <div className="flex items-center gap-2">
@@ -3140,7 +3074,7 @@ export default function RegistroSATPage() {
                   </div>
                 )
               })}
-              <div className="md:col-span-2 grid gap-3 rounded-lg border bg-muted/40 p-4">
+              <div className="md:col-span-3 grid gap-3 rounded-lg border bg-muted/40 p-4">
                 <div className="flex flex-wrap items-start gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
                     <ClipboardList className="h-5 w-5 text-primary" />
@@ -3162,25 +3096,37 @@ export default function RegistroSATPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Checklist guiado por anexos</CardTitle>
+              <CardTitle>Checklist automático por anexos</CardTitle>
               <CardDescription>
-                Marca los datos solicitados por el anexo correspondiente para evitar consultar las reglas manualmente.
+                El sistema reconoce lo ya capturado. Los estados se recalculan al editar el formulario; las notas no
+                sustituyen un dato obligatorio.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Avance</span>
+                  <span className="text-sm font-medium">Avance global</span>
                   <span className="text-sm font-semibold">{datosChecklistResumen.progreso}%</span>
                 </div>
                 <Progress value={datosChecklistResumen.progreso} className="h-2" />
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <Badge variant="secondary">{datosChecklistResumen.completados} completos</Badge>
+                  <Badge variant={datosChecklistResumen.faltantes > 0 ? "destructive" : "outline"}>
+                    {datosChecklistResumen.faltantes} faltantes
+                  </Badge>
+                  <Badge variant="outline">{datosChecklistResumen.noAplican} no aplican</Badge>
+                </div>
               </div>
 
               <div className="space-y-4">
                 {seccionesAplicables.map((section) => {
-                  const completados = section.fields.filter((field) => datosChecklistState[field.id]?.completed).length
-                  const progresoSeccion = Math.round((completados / section.fields.length) * 100)
-                  const Icon = section.icon
+                  const aplicables = section.items.filter(
+                    (item) => item.required && item.status !== "not-applicable",
+                  )
+                  const completados = aplicables.filter((item) => item.status === "complete").length
+                  const progresoSeccion =
+                    aplicables.length === 0 ? 100 : Math.round((completados / aplicables.length) * 100)
+                  const Icon = checklistSectionIcons[section.id]
 
                   return (
                     <Card key={section.id} className="border-dashed">
@@ -3197,53 +3143,99 @@ export default function RegistroSATPage() {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        {section.fields.map((field) => (
-                          <div
-                            key={field.id}
-                            className="space-y-3 rounded-lg border border-dashed bg-muted/30 p-4"
-                          >
-                            <div className="flex items-start gap-3">
-                              <Checkbox
-                                id={`dato-${field.id}`}
-                                checked={datosChecklistState[field.id]?.completed ?? false}
-                                onCheckedChange={(checked) => actualizarEstatusDatoChecklist(field.id, checked === true)}
-                                className="mt-1"
-                              />
-                              <div className="flex-1 space-y-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Label htmlFor={`dato-${field.id}`} className="font-medium">
-                                    {field.label}
-                                  </Label>
-                                  <Badge variant={field.required ? "default" : "secondary"}>
-                                    {field.required ? "Obligatorio" : "Opcional"}
-                                  </Badge>
+                        {section.items.map((item) => {
+                          const StatusIcon =
+                            item.status === "complete"
+                              ? Check
+                              : item.status === "missing"
+                                ? AlertCircle
+                                : MinusCircle
+                          return (
+                            <div
+                              key={item.id}
+                              data-checklist-status={item.status}
+                              className={cn(
+                                "space-y-3 rounded-lg border p-4",
+                                item.status === "complete" && "border-emerald-200 bg-emerald-50/50",
+                                item.status === "missing" && "border-amber-200 bg-amber-50/40",
+                                item.status === "not-applicable" && "border-dashed bg-muted/30",
+                              )}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div
+                                  className={cn(
+                                    "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                                    item.status === "complete" && "bg-emerald-100 text-emerald-700",
+                                    item.status === "missing" && "bg-amber-100 text-amber-700",
+                                    item.status === "not-applicable" && "bg-muted text-muted-foreground",
+                                  )}
+                                >
+                                  <StatusIcon className="h-4 w-4" />
                                 </div>
-                                <p className="text-sm text-muted-foreground">{field.description}</p>
-                                {field.tips && field.tips.length > 0 && (
-                                  <ul className="ml-5 list-disc space-y-1 text-xs text-muted-foreground">
-                                    {field.tips.map((tip) => (
-                                      <li key={tip}>{tip}</li>
-                                    ))}
-                                  </ul>
+                                <div className="min-w-0 flex-1 space-y-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="font-medium">{item.label}</p>
+                                    <Badge
+                                      variant={
+                                        item.status === "missing"
+                                          ? "destructive"
+                                          : item.status === "complete"
+                                            ? "secondary"
+                                            : "outline"
+                                      }
+                                    >
+                                      {item.status === "complete"
+                                        ? "Completo"
+                                        : item.status === "missing"
+                                          ? "Faltante"
+                                          : "No aplica"}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">{item.description}</p>
+                                  <p className="text-xs text-muted-foreground">Origen: {item.source}</p>
+                                  {item.status === "complete" && item.valueSummary && (
+                                    <p className="break-words text-sm text-emerald-800">
+                                      Detectado: {item.valueSummary}
+                                    </p>
+                                  )}
+                                  {item.status === "missing" && (
+                                    <p className="text-sm text-amber-900">
+                                      Falta: {item.missingFields.join(", ")}
+                                    </p>
+                                  )}
+                                  {item.status === "not-applicable" && (
+                                    <p className="text-sm text-muted-foreground">{item.valueSummary}</p>
+                                  )}
+                                </div>
+                                {item.status === "missing" && item.targetId && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => enfocarDatoFaltante(item)}
+                                  >
+                                    Completar
+                                  </Button>
                                 )}
                               </div>
+                              <div className="ml-10 space-y-2">
+                                <Label
+                                  htmlFor={`dato-notas-${item.id}`}
+                                  className="text-xs font-semibold uppercase text-muted-foreground"
+                                >
+                                  Notas y referencias
+                                </Label>
+                                <Textarea
+                                  id={`dato-notas-${item.id}`}
+                                  value={datosChecklistState[item.id]?.notes ?? ""}
+                                  onChange={(event) => actualizarNotasDatoChecklist(item.id, event.target.value)}
+                                  placeholder="Opcional: anota folios, responsables o ubicación del respaldo."
+                                  rows={2}
+                                />
+                              </div>
                             </div>
-                            <div className="ml-7 space-y-2">
-                              <Label
-                                htmlFor={`dato-notas-${field.id}`}
-                                className="text-xs font-semibold uppercase text-muted-foreground"
-                              >
-                                Notas y referencias
-                              </Label>
-                              <Textarea
-                                id={`dato-notas-${field.id}`}
-                                value={datosChecklistState[field.id]?.notes ?? ""}
-                                onChange={(event) => actualizarNotasDatoChecklist(field.id, event.target.value)}
-                                placeholder="Anota folios, responsables o ubicación del respaldo."
-                              />
-                            </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </CardContent>
                     </Card>
                   )

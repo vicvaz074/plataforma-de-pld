@@ -20,7 +20,10 @@ import {
 import {
   buildSatQuestionnaireDedupedFieldView,
   buildSatQuestionnaireFieldView,
+  filterActiveSatXlsmFields,
   getActionableSatMissingFieldIds,
+  isSatXlsmFieldActive,
+  isSatXlsmFieldRequired,
   isSatFieldManagedByPrimaryCapture,
   type InfoHintContent,
   type SatDynamicOperationForm,
@@ -146,9 +149,14 @@ export function SatDynamicOperationFormView({
     )
   }, [form])
 
+  const activeFields = useMemo(
+    () => filterActiveSatXlsmFields(allFields, values),
+    [allFields, values],
+  )
+
   const availableSteps = useMemo(
-    () => SAT_STEPS.filter((step) => allFields.some((field) => field.sectionKind === step.id)),
-    [allFields],
+    () => SAT_STEPS.filter((step) => activeFields.some((field) => field.sectionKind === step.id)),
+    [activeFields],
   )
 
   useEffect(() => {
@@ -173,6 +181,13 @@ export function SatDynamicOperationFormView({
     }
   }, [])
 
+  useEffect(() => {
+    for (const field of allFields) {
+      if (isSatXlsmFieldActive(field, values)) continue
+      if ((values[field.id] ?? "").trim()) onChange(field.id, "")
+    }
+  }, [allFields, onChange, values])
+
   if (!form) {
     return (
       <div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -187,11 +202,16 @@ export function SatDynamicOperationFormView({
   const actionableMissingRequired = getActionableSatMissingFieldIds({
     fields: allFields,
     missingRequiredIds: missingRequired,
+    values,
   })
   const activeStep = availableSteps.find((step) => step.id === activeStepId) ?? availableSteps[0]
-  const activeStepFields = activeStep ? allFields.filter((field) => field.sectionKind === activeStep.id) : []
+  const activeStepFields = activeStep ? activeFields.filter((field) => field.sectionKind === activeStep.id) : []
   const valueFor = (field: SatXlsmField) => values[field.id] ?? form.initialValues[field.id] ?? ""
   const managedByPrimaryCapture = activeStepFields.filter(isSatFieldManagedByPrimaryCapture)
+  const actionableMissingSet = new Set(actionableMissingRequired)
+  const missingManagedByPrimaryCapture = managedByPrimaryCapture.filter((field) =>
+    actionableMissingSet.has(field.id),
+  )
   const questionnaireFields = activeStepFields.filter((field) => !isSatFieldManagedByPrimaryCapture(field))
   const dedupedQuestionnaire = buildSatQuestionnaireDedupedFieldView({
     fields: questionnaireFields,
@@ -302,10 +322,11 @@ export function SatDynamicOperationFormView({
           <p className="px-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Secciones del Excel</p>
           <div className="mt-3 flex min-w-0 gap-1 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0">
           {availableSteps.map((step) => {
-            const stepFields = allFields.filter((field) => field.sectionKind === step.id)
+            const stepFields = activeFields.filter((field) => field.sectionKind === step.id)
             const pending = getActionableSatMissingFieldIds({
               fields: stepFields,
               missingRequiredIds: missingRequired.filter((fieldId) => stepFields.some((field) => field.id === fieldId)),
+              values,
             }).length
             return (
               <button
@@ -416,6 +437,14 @@ export function SatDynamicOperationFormView({
                     </Button>
                   )}
                 </div>
+                {missingManagedByPrimaryCapture.length > 0 && (
+                  <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+                    <p className="font-semibold">Faltan datos que deberían venir del expediente o de la operación.</p>
+                    <p className="mt-1">
+                      {missingManagedByPrimaryCapture.map((field) => field.label).join(" · ")}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {plainFields.length > 0 && (
@@ -427,6 +456,7 @@ export function SatDynamicOperationFormView({
                       value={valueForQuestionnaire(field)}
                       allValues={values}
                       isMissing={dedupedQuestionnaire.missingRequiredIds.includes(field.id)}
+                      isRequired={isSatXlsmFieldRequired(field, values)}
                       onChange={updateQuestionnaireField}
                       duplicateCount={dedupedQuestionnaire.duplicateFieldIdsByRepresentative[field.id]?.length ?? 0}
                       postalCatalog={postalCatalog}
@@ -505,6 +535,7 @@ export function SatDynamicOperationFormView({
                                     value={valueForQuestionnaire(field)}
                                     allValues={values}
                                     isMissing={dedupedQuestionnaire.missingRequiredIds.includes(field.id)}
+                                    isRequired={isSatXlsmFieldRequired(field, values)}
                                     onChange={updateQuestionnaireField}
                                     duplicateCount={dedupedQuestionnaire.duplicateFieldIdsByRepresentative[field.id]?.length ?? 0}
                                     postalCatalog={postalCatalog}
@@ -533,6 +564,7 @@ function SatFieldControl({
   value,
   allValues,
   isMissing,
+  isRequired,
   onChange,
   duplicateCount = 0,
   postalCatalog,
@@ -541,6 +573,7 @@ function SatFieldControl({
   value: string
   allValues: Record<string, string>
   isMissing: boolean
+  isRequired: boolean
   onChange: (fieldId: string, value: string) => void
   duplicateCount?: number
   postalCatalog: CodigoPostalInfo[]
@@ -576,7 +609,7 @@ function SatFieldControl({
       <Label className="block min-w-0 break-words text-xs leading-relaxed">
         <span>
           {field.label}
-          {field.required ? <span className="text-rose-600"> *</span> : null}
+          {isRequired ? <span className="text-rose-600"> *</span> : null}
         </span>
       </Label>
       {options.length > 0 ? (

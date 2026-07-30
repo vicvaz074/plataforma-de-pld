@@ -538,6 +538,15 @@ export interface SatXlsmOptionList {
   options: string[]
 }
 
+export interface SatXlsmFieldCondition {
+  fieldId: string
+  /**
+   * Values are compared by their SAT catalog code first (the segment before
+   * `,` or `||`) and by their normalized full value as a fallback.
+   */
+  equals: string[]
+}
+
 export interface SatXlsmField {
   id: string
   label: string
@@ -561,6 +570,8 @@ export interface SatXlsmField {
     | "contraparte"
     | "evidencia"
   conditionalGroup?: string
+  activeWhen?: SatXlsmFieldCondition[]
+  requiredWhen?: SatXlsmFieldCondition[]
   targetCell?: string
   readOnly?: boolean
   placeholder?: string

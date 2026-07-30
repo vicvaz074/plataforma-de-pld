@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -33,6 +33,19 @@ import {
   type CodigoPostalInfo,
   type CodigoPostalSnapshot,
 } from "@/lib/data/codigos-postales"
+import {
+  ARRENDAMIENTO_ACTIVITY_KEY,
+  EXPEDIENTE_EUI_SCHEMA_VERSION,
+  SAT_TIPOS_INMUEBLE,
+  createLegacyExpedienteId,
+  getActividadEuiLabel,
+  getPrimaryExpedienteIdentifier,
+  loadSatEuiCatalogs,
+  normalizeExpedienteIdentifiers,
+  validateExpedienteIdentifiers,
+  type ExpedienteIdentifiers,
+  type SatEuiCatalogOption,
+} from "@/lib/pld/expediente-eui"
 
 const EXPEDIENTE_TIPOS = [
   { value: "persona_moral", label: "Persona Moral" },
@@ -119,38 +132,6 @@ const ACTO_OPERACION_PMDP = [
   "Fracción XIV - Servicios de comercio exterior",
   "Fracción XV - Derechos personales de uso o goce de inmuebles (Arrendamiento)",
   "Fracción XVI - Intercambio de activos virtuales",
-]
-
-const TIPO_INMUEBLE_OPCIONES = [
-  "Casa habitación",
-  "Departamento",
-  "Terreno",
-  "Local comercial",
-  "Oficina",
-  "Nave industrial",
-  "Otro",
-]
-
-const TIPO_INMUEBLE_PMDP = [
-  "1, Casa /Casa en condominio",
-  "2, Departamento",
-  "3, Edificio habitacional",
-  "4, Edificio comercial",
-  "5, Edificio oficinas",
-  "6, Local comercial independiente",
-  "7, Local en centro comercial",
-  "8, Oficina",
-  "9, Bodega comercial",
-  "10, Bodega industrial",
-  "11, Nave Industrial",
-  "12, Terreno urbano habitacional",
-  "13, Terreno no urbano habitacional",
-  "14, Terreno urbano comercial o industrial",
-  "15, Terreno no urbano comercial o industrial",
-  "16, Terreno ejidal",
-  "17, Rancho/Hacienda/Quinta",
-  "18, Huerta",
-  "99, Otro",
 ]
 
 const IDENTIFICACION_OPCIONES = [
@@ -290,8 +271,13 @@ interface BeneficiarioState {
 }
 
 interface ExpedienteEuiPersonaMoral {
+  schemaVersion: number
+  expedienteId: string
   fechaRegistro: string
   tipoExpediente: string
+  activityKey: string
+  activityLabel: string
+  identifiers: ExpedienteIdentifiers
   sujetoObligadoId: string
   sujetoObligadoNombre: string
   tipoCliente: string
@@ -303,6 +289,7 @@ interface ExpedienteEuiPersonaMoral {
     fechaConstitucion: string
     paisNacionalidad: string
     rfc: string
+    nif: string
     actividad: string
   }
   domicilioCliente: DireccionState
@@ -311,7 +298,13 @@ interface ExpedienteEuiPersonaMoral {
   identificacionRepresentante: IdentificacionState
   beneficiario1: BeneficiarioState
   beneficiario2?: BeneficiarioState | null
-  inmueble: {
+  inmueble?: {
+    tipo: string
+    valorReferencia: string
+    folioReal: string
+    ubicacion: DireccionState
+  }
+  inmuebleDraft?: {
     tipo: string
     valorReferencia: string
     folioReal: string
@@ -321,8 +314,13 @@ interface ExpedienteEuiPersonaMoral {
 }
 
 interface ExpedienteEuiPersonaFisica {
+  schemaVersion: number
+  expedienteId: string
   fechaRegistro: string
   tipoExpediente: string
+  activityKey: string
+  activityLabel: string
+  identifiers: ExpedienteIdentifiers
   sujetoObligadoNombre: string
   sujetoObligadoRfc: string
   tipoCliente: string
@@ -338,6 +336,7 @@ interface ExpedienteEuiPersonaFisica {
     paisNacionalidad: string
     curp: string
     rfc: string
+    nif: string
     ocupacion: string
   }
   domicilioCliente: DireccionState
@@ -359,8 +358,13 @@ interface ExpedienteEuiPersonaFisica {
 }
 
 interface ExpedienteEuiPersonaMoralDerechoPublico {
+  schemaVersion: number
+  expedienteId: string
   fechaRegistro: string
   tipoExpediente: string
+  activityKey: string
+  activityLabel: string
+  identifiers: ExpedienteIdentifiers
   sujetoObligadoNombre: string
   sujetoObligadoRfc: string
   tipoActoOperacion: string
@@ -370,6 +374,7 @@ interface ExpedienteEuiPersonaMoralDerechoPublico {
     nombre: string
     fechaConstitucion: string
     rfc: string
+    nif: string
     actividad: string
   }
   domicilioCliente: DireccionState
@@ -381,12 +386,18 @@ interface ExpedienteEuiPersonaMoralDerechoPublico {
   }
   servidorPublico1: ServidorPublicoState
   servidorPublico2: ServidorPublicoState
-  inmueble: {
+  inmueble?: {
     tipo: string
     valorReferencia: string
     folioReal: string
   }
-  ubicacionInmueble: DireccionState
+  inmuebleDraft?: {
+    tipo: string
+    valorReferencia: string
+    folioReal: string
+  }
+  ubicacionInmueble?: DireccionState
+  ubicacionInmuebleDraft?: DireccionState
   documentacion: Record<string, boolean>
 }
 
@@ -396,6 +407,7 @@ interface ExpedientePersonaResumen {
   denominacion?: string
   fechaConstitucion?: string
   rfc?: string
+  nif?: string
   curp?: string
   pais?: string
   giro?: string
@@ -426,7 +438,21 @@ interface ExpedientePersonaResumen {
 }
 
 interface ExpedienteDetalle {
+  schemaVersion: number
+  expedienteId: string
   rfc: string
+  identifiers: ExpedienteIdentifiers
+  activityKey: string
+  activityLabel: string
+  ocupacion?: {
+    code: string
+    label: string
+  }
+  operationContext: {
+    tipoActoOperacion: string
+    fechaActoOperacion: string
+    relacionNegocios: RespuestaSiNo
+  }
   nombre: string
   tipoCliente?: string
   detalleTipoCliente?: string
@@ -434,11 +460,14 @@ interface ExpedienteDetalle {
   sujetoObligadoNombre?: string
   expedienteEui?: ExpedienteEuiPersonaMoral | ExpedienteEuiPersonaFisica | ExpedienteEuiPersonaMoralDerechoPublico
   personas?: ExpedientePersonaResumen[]
+  beneficiariosControladores?: ExpedientePersonaResumen[]
   actualizadoEn?: string
 }
 
 interface ExpedienteResumen {
+  expedienteId: string
   rfc: string
+  identificador: string
   nombre: string
   tipoCliente: string
 }
@@ -453,6 +482,12 @@ interface SujetoObligadoResumen {
   nombre: string
   tipo: string
   actividad: string
+  actividades: Array<{
+    activityKey: string
+    label: string
+    folioDocumento?: string
+    domicilio: DireccionState
+  }>
   folioDocumento?: string
   identificacion: {
     rfc: string
@@ -635,25 +670,135 @@ function normalizarBusqueda(valor: string) {
 
 function sanitizeDetalle(raw: any): ExpedienteDetalle | null {
   if (!raw || typeof raw !== "object") return null
-  const rfc = typeof raw.rfc === "string" ? raw.rfc : ""
-  if (!rfc) return null
+  const expedienteRaw = raw.expedienteEui && typeof raw.expedienteEui === "object" ? raw.expedienteEui : null
+  const clienteRaw = expedienteRaw?.cliente && typeof expedienteRaw.cliente === "object" ? expedienteRaw.cliente : {}
+  const identifiers = normalizeExpedienteIdentifiers({
+    rfc:
+      typeof raw.identifiers?.rfc === "string"
+        ? raw.identifiers.rfc
+        : typeof raw.rfc === "string"
+          ? raw.rfc
+          : clienteRaw.rfc,
+    nif: typeof raw.identifiers?.nif === "string" ? raw.identifiers.nif : clienteRaw.nif,
+    curp: typeof raw.identifiers?.curp === "string" ? raw.identifiers.curp : clienteRaw.curp,
+  })
+  const primaryIdentifier = getPrimaryExpedienteIdentifier(identifiers)
+  const nombre =
+    typeof raw.nombre === "string" && raw.nombre.trim()
+      ? raw.nombre
+      : typeof clienteRaw.denominacion === "string"
+        ? clienteRaw.denominacion
+        : typeof clienteRaw.nombre === "string"
+          ? clienteRaw.nombre
+          : primaryIdentifier
+  if (!nombre && !primaryIdentifier) return null
+  const expedienteId =
+    typeof raw.expedienteId === "string" && raw.expedienteId
+      ? raw.expedienteId
+      : typeof expedienteRaw?.expedienteId === "string" && expedienteRaw.expedienteId
+        ? expedienteRaw.expedienteId
+        : createLegacyExpedienteId(primaryIdentifier, nombre)
+  const activityKey =
+    typeof raw.activityKey === "string"
+      ? raw.activityKey
+      : typeof expedienteRaw?.activityKey === "string"
+        ? expedienteRaw.activityKey
+        : ""
+  const activityLabel =
+    typeof raw.activityLabel === "string" && raw.activityLabel
+      ? raw.activityLabel
+      : typeof expedienteRaw?.activityLabel === "string" && expedienteRaw.activityLabel
+        ? expedienteRaw.activityLabel
+        : activityKey
+          ? getActividadEuiLabel(activityKey)
+          : ""
+  const expedienteEui = expedienteRaw
+    ? ({
+        ...expedienteRaw,
+        schemaVersion: EXPEDIENTE_EUI_SCHEMA_VERSION,
+        expedienteId,
+        activityKey,
+        activityLabel,
+        identifiers,
+        cliente: {
+          ...clienteRaw,
+          rfc: identifiers.rfc,
+          nif: identifiers.nif,
+          ...(expedienteRaw.tipoExpediente === "persona_fisica" ? { curp: identifiers.curp } : {}),
+        },
+        ...(activityKey === ARRENDAMIENTO_ACTIVITY_KEY
+          ? {
+              inmueble: expedienteRaw.inmueble ?? expedienteRaw.inmuebleDraft,
+              ubicacionInmueble:
+                expedienteRaw.ubicacionInmueble ?? expedienteRaw.ubicacionInmuebleDraft,
+            }
+          : {
+              inmueble: undefined,
+              inmuebleDraft: expedienteRaw.inmuebleDraft ?? expedienteRaw.inmueble,
+              ubicacionInmueble: undefined,
+              ubicacionInmuebleDraft:
+                expedienteRaw.ubicacionInmuebleDraft ?? expedienteRaw.ubicacionInmueble,
+            }),
+      } as ExpedienteDetalle["expedienteEui"])
+    : undefined
   return {
-    rfc,
-    nombre: typeof raw.nombre === "string" ? raw.nombre : rfc,
+    schemaVersion: EXPEDIENTE_EUI_SCHEMA_VERSION,
+    expedienteId,
+    rfc: identifiers.rfc,
+    identifiers,
+    activityKey,
+    activityLabel,
+    ocupacion:
+      raw.ocupacion && typeof raw.ocupacion === "object"
+        ? {
+            code: typeof raw.ocupacion.code === "string" ? raw.ocupacion.code : "",
+            label: typeof raw.ocupacion.label === "string" ? raw.ocupacion.label : "",
+          }
+        : typeof clienteRaw.ocupacion === "string" && clienteRaw.ocupacion
+          ? { code: clienteRaw.ocupacion, label: clienteRaw.ocupacion }
+          : typeof clienteRaw.actividad === "string" && clienteRaw.actividad
+            ? { code: clienteRaw.actividad, label: clienteRaw.actividad }
+            : undefined,
+    operationContext: {
+      tipoActoOperacion:
+        typeof raw.operationContext?.tipoActoOperacion === "string"
+          ? raw.operationContext.tipoActoOperacion
+          : typeof expedienteRaw?.tipoActoOperacion === "string"
+            ? expedienteRaw.tipoActoOperacion
+            : activityLabel,
+      fechaActoOperacion:
+        typeof raw.operationContext?.fechaActoOperacion === "string"
+          ? raw.operationContext.fechaActoOperacion
+          : typeof expedienteRaw?.fechaActoOperacion === "string"
+            ? expedienteRaw.fechaActoOperacion
+            : "",
+      relacionNegocios:
+        raw.operationContext?.relacionNegocios === "si" || raw.operationContext?.relacionNegocios === "no"
+          ? raw.operationContext.relacionNegocios
+          : expedienteRaw?.relacionNegocios === "si" || expedienteRaw?.relacionNegocios === "no"
+            ? expedienteRaw.relacionNegocios
+            : "",
+    },
+    nombre: nombre || primaryIdentifier || "Expediente sin nombre",
     tipoCliente: typeof raw.tipoCliente === "string" ? raw.tipoCliente : undefined,
     detalleTipoCliente: typeof raw.detalleTipoCliente === "string" ? raw.detalleTipoCliente : undefined,
     sujetoObligadoId: typeof raw.sujetoObligadoId === "string" ? raw.sujetoObligadoId : undefined,
     sujetoObligadoNombre: typeof raw.sujetoObligadoNombre === "string" ? raw.sujetoObligadoNombre : undefined,
-    expedienteEui: typeof raw.expedienteEui === "object" ? (raw.expedienteEui as ExpedienteDetalle["expedienteEui"]) : undefined,
+    expedienteEui,
     personas: Array.isArray(raw.personas) ? (raw.personas as ExpedientePersonaResumen[]) : undefined,
+    beneficiariosControladores: Array.isArray(raw.beneficiariosControladores)
+      ? (raw.beneficiariosControladores as ExpedientePersonaResumen[])
+      : undefined,
     actualizadoEn: typeof raw.actualizadoEn === "string" ? raw.actualizadoEn : undefined,
   }
 }
 
 function buildResumen(detalle: ExpedienteDetalle): ExpedienteResumen {
   return {
+    expedienteId: detalle.expedienteId,
     rfc: detalle.rfc,
-    nombre: detalle.nombre ?? detalle.rfc,
+    identificador: getPrimaryExpedienteIdentifier(detalle.identifiers) || detalle.expedienteId,
+    nombre: detalle.nombre ?? getPrimaryExpedienteIdentifier(detalle.identifiers),
     tipoCliente: detalle.tipoCliente ?? (CLIENTE_TIPOS[0]?.value ?? ""),
   }
 }
@@ -667,13 +812,15 @@ function formatearFechaActualizacion(fecha?: string) {
 
 function buildPersonasDesdeExpediente(expediente: ExpedienteEuiPersonaMoral): ExpedientePersonaResumen[] {
   const representante = expediente.representante
+  const primaryIdentifier = getPrimaryExpedienteIdentifier(expediente.identifiers) || expediente.expedienteId
   return [
     {
-      id: `cliente-${expediente.cliente.rfc}`,
+      id: `cliente-${primaryIdentifier}`,
       tipo: "persona_moral",
       denominacion: expediente.cliente.denominacion,
       fechaConstitucion: expediente.cliente.fechaConstitucion,
       rfc: expediente.cliente.rfc,
+      nif: expediente.cliente.nif,
       pais: expediente.cliente.paisNacionalidad,
       giro: expediente.cliente.actividad,
       rolRelacion: "Cliente",
@@ -706,6 +853,49 @@ function buildPersonasDesdeExpediente(expediente: ExpedienteEuiPersonaMoral): Ex
   ]
 }
 
+function buildCatalogSelection(value: string, options: SatEuiCatalogOption[]) {
+  const option = options.find((item) => item.value === value)
+  return {
+    code: option?.code || value,
+    label: option?.label || value,
+  }
+}
+
+function buildBeneficiarioResumen(
+  beneficiario: BeneficiarioState,
+  expedienteId: string,
+  index: number,
+): ExpedientePersonaResumen | null {
+  const denominacion =
+    `${beneficiario.nombres} ${beneficiario.apellidoPaterno} ${beneficiario.apellidoMaterno}`.trim()
+  if (!denominacion && !beneficiario.rfc && !beneficiario.curp) return null
+  return {
+    id: `beneficiario-${expedienteId}-${index}`,
+    tipo: "persona_fisica",
+    denominacion,
+    rfc: beneficiario.rfc,
+    curp: beneficiario.curp,
+    pais: beneficiario.paisNacionalidad,
+    rolRelacion: "Beneficiario controlador",
+    domicilio: {
+      codigoPostal: beneficiario.domicilio.codigoPostal,
+      tipoVialidad: beneficiario.domicilio.tipoVialidad,
+      nombreVialidad: beneficiario.domicilio.nombreVialidad,
+      numeroExterior: beneficiario.domicilio.numeroExterior,
+      numeroInterior: beneficiario.domicilio.numeroInterior,
+      colonia: beneficiario.domicilio.colonia,
+      alcaldia: beneficiario.domicilio.alcaldia,
+      entidad: beneficiario.domicilio.entidad,
+      pais: beneficiario.domicilio.pais,
+    },
+    contacto: {
+      clavePais: beneficiario.domicilio.pais,
+      telefono: beneficiario.contacto.telefonoMovil || beneficiario.contacto.telefonoFijo,
+      correo: beneficiario.contacto.correo,
+    },
+  }
+}
+
 export default function KycExpedientePage() {
   return (
     <Suspense
@@ -726,7 +916,10 @@ function KycExpedienteContent() {
   const searchParams = useSearchParams()
   const [sujetosRegistrados, setSujetosRegistrados] = useState<SujetoObligadoResumen[]>([])
   const [tipoExpediente, setTipoExpediente] = useState<string>(EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral")
+  const [expedienteIdActual, setExpedienteIdActual] = useState("")
   const [sujetoObligadoId, setSujetoObligadoId] = useState("")
+  const [activityKey, setActivityKey] = useState("")
+  const previousActivityLabelRef = useRef("")
   const [sujetoObligadoNombrePf, setSujetoObligadoNombrePf] = useState("")
   const [sujetoObligadoRfcPf, setSujetoObligadoRfcPf] = useState("")
   const [tipoCliente, setTipoCliente] = useState<string>(CLIENTE_TIPOS[0]?.value ?? "")
@@ -737,6 +930,7 @@ function KycExpedienteContent() {
   const [clienteFechaConstitucion, setClienteFechaConstitucion] = useState("")
   const [clientePais, setClientePais] = useState("MX")
   const [clienteRfc, setClienteRfc] = useState("")
+  const [clienteNif, setClienteNif] = useState("")
   const [clienteActividad, setClienteActividad] = useState("")
   const [domicilioCliente, setDomicilioCliente] = useState<DireccionState>(() => createDireccion())
   const [contactoCliente, setContactoCliente] = useState<ContactoState>(() => createContacto())
@@ -766,6 +960,7 @@ function KycExpedienteContent() {
   const [clienteFisicaPaisNacionalidad, setClienteFisicaPaisNacionalidad] = useState("MX")
   const [clienteFisicaCurp, setClienteFisicaCurp] = useState("")
   const [clienteFisicaRfc, setClienteFisicaRfc] = useState("")
+  const [clienteFisicaNif, setClienteFisicaNif] = useState("")
   const [clienteFisicaOcupacion, setClienteFisicaOcupacion] = useState("")
   const [domicilioClienteFisica, setDomicilioClienteFisica] = useState<DireccionState>(() => createDireccion())
   const [contactoClienteFisica, setContactoClienteFisica] = useState<ContactoState>(() => createContacto())
@@ -796,6 +991,7 @@ function KycExpedienteContent() {
   const [clientePmdpNombre, setClientePmdpNombre] = useState("")
   const [clientePmdpFechaConstitucion, setClientePmdpFechaConstitucion] = useState("")
   const [clientePmdpRfc, setClientePmdpRfc] = useState("")
+  const [clientePmdpNif, setClientePmdpNif] = useState("")
   const [clientePmdpActividad, setClientePmdpActividad] = useState("")
   const [domicilioClientePmdp, setDomicilioClientePmdp] = useState<DireccionState>(() => createDireccion())
   const [contactoClientePmdp, setContactoClientePmdp] = useState({
@@ -817,8 +1013,21 @@ function KycExpedienteContent() {
   const [expedienteSeleccionado, setExpedienteSeleccionado] = useState<string | null>(null)
   const [expedientesCargados, setExpedientesCargados] = useState(false)
   const [busquedaExpedientes, setBusquedaExpedientes] = useState("")
+  const [actividadesEconomicas, setActividadesEconomicas] = useState<SatEuiCatalogOption[]>([])
+  const [girosMercantiles, setGirosMercantiles] = useState<SatEuiCatalogOption[]>([])
 
   const tipoClienteLabel = useMemo(() => findClienteTipoLabel(tipoCliente), [tipoCliente])
+  useEffect(() => {
+    let active = true
+    void loadSatEuiCatalogs().then((catalogs) => {
+      if (!active) return
+      setActividadesEconomicas(catalogs.actividadesEconomicas)
+      setGirosMercantiles(catalogs.girosMercantiles)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
   useEffect(() => {
     if (typeof window === "undefined") return
     const savedData = window.localStorage.getItem("registro-sat-data")
@@ -866,79 +1075,76 @@ function KycExpedienteContent() {
       }
       const sujetos = Array.isArray(data.sujetosRegistrados)
         ? data.sujetosRegistrados
-            .map((item) => ({
-              id: typeof item.id === "string" ? item.id : "",
-              nombre: typeof item.nombre === "string" ? item.nombre : "",
-              tipo: typeof item.tipo === "string" ? item.tipo : "",
-              actividad: typeof item.actividad === "string" ? item.actividad : "",
-              folioDocumento:
-                typeof item.actividades?.[0]?.folioDocumento === "string" ? item.actividades[0].folioDocumento : undefined,
-              identificacion: {
-                rfc: typeof item.identificacion?.rfc === "string" ? item.identificacion.rfc : "",
-                nombre: typeof item.identificacion?.nombre === "string" ? item.identificacion.nombre : "",
-                apellidoPaterno:
-                  typeof item.identificacion?.apellidoPaterno === "string" ? item.identificacion.apellidoPaterno : "",
-                apellidoMaterno:
-                  typeof item.identificacion?.apellidoMaterno === "string" ? item.identificacion.apellidoMaterno : "",
-                fechaNacimiento: typeof item.identificacion?.fecha === "string" ? item.identificacion.fecha : "",
-                paisNacionalidad:
-                  typeof item.identificacion?.paisNacionalidad === "string"
-                    ? item.identificacion.paisNacionalidad
-                    : "MX",
-                paisNacimiento:
-                  typeof item.identificacion?.paisNacimiento === "string"
-                    ? item.identificacion.paisNacimiento
-                    : "MX",
-                curp: typeof item.identificacion?.curp === "string" ? item.identificacion.curp : "",
-              },
-              contacto: {
-                lada: typeof item.contactos?.[0]?.claveLada === "string" ? item.contactos[0].claveLada : "",
-                telefonoFijo:
-                  typeof item.contactos?.[0]?.telefonoFijo === "string" ? item.contactos[0].telefonoFijo : "",
-                extension: typeof item.contactos?.[0]?.extension === "string" ? item.contactos[0].extension : "",
-                telefonoMovil:
-                  typeof item.contactos?.[0]?.telefonoMovil === "string" ? item.contactos[0].telefonoMovil : "",
-                correo: typeof item.contactos?.[0]?.correo === "string" ? item.contactos[0].correo : "",
-              },
-              domicilio: {
-                codigoPostal:
-                  typeof item.actividades?.[0]?.domicilio?.codigoPostal === "string"
-                    ? item.actividades[0].domicilio.codigoPostal
-                    : "",
-                tipoVialidad:
-                  typeof item.actividades?.[0]?.domicilio?.tipoVialidad === "string"
-                    ? item.actividades[0].domicilio.tipoVialidad
-                    : "",
-                nombreVialidad:
-                  typeof item.actividades?.[0]?.domicilio?.nombreVialidad === "string"
-                    ? item.actividades[0].domicilio.nombreVialidad
-                    : "",
-                numeroExterior:
-                  typeof item.actividades?.[0]?.domicilio?.numeroExterior === "string"
-                    ? item.actividades[0].domicilio.numeroExterior
-                    : "",
-                numeroInterior:
-                  typeof item.actividades?.[0]?.domicilio?.numeroInterior === "string"
-                    ? item.actividades[0].domicilio.numeroInterior
-                    : "",
-                colonia:
-                  typeof item.actividades?.[0]?.domicilio?.colonia === "string"
-                    ? item.actividades[0].domicilio.colonia
-                    : "",
-                alcaldia:
-                  typeof item.actividades?.[0]?.domicilio?.alcaldia === "string"
-                    ? item.actividades[0].domicilio.alcaldia
-                    : "",
-                entidad:
-                  typeof item.actividades?.[0]?.domicilio?.entidad === "string"
-                    ? item.actividades[0].domicilio.entidad
-                    : "",
-                pais:
-                  typeof item.actividades?.[0]?.domicilio?.pais === "string"
-                    ? item.actividades[0].domicilio.pais
-                    : "MX",
-              },
-            }))
+            .map((item) => {
+              const actividades = (Array.isArray(item.actividades) ? item.actividades : [])
+                .map((actividad) => {
+                  const key = typeof actividad.actividadKey === "string" ? actividad.actividadKey : ""
+                  if (!key) return null
+                  return {
+                    activityKey: key,
+                    label: getActividadEuiLabel(key),
+                    folioDocumento:
+                      typeof actividad.folioDocumento === "string" ? actividad.folioDocumento : undefined,
+                    domicilio: {
+                      codigoPostal:
+                        typeof actividad.domicilio?.codigoPostal === "string" ? actividad.domicilio.codigoPostal : "",
+                      tipoVialidad:
+                        typeof actividad.domicilio?.tipoVialidad === "string" ? actividad.domicilio.tipoVialidad : "",
+                      nombreVialidad:
+                        typeof actividad.domicilio?.nombreVialidad === "string"
+                          ? actividad.domicilio.nombreVialidad
+                          : "",
+                      numeroExterior:
+                        typeof actividad.domicilio?.numeroExterior === "string" ? actividad.domicilio.numeroExterior : "",
+                      numeroInterior:
+                        typeof actividad.domicilio?.numeroInterior === "string" ? actividad.domicilio.numeroInterior : "",
+                      colonia: typeof actividad.domicilio?.colonia === "string" ? actividad.domicilio.colonia : "",
+                      alcaldia: typeof actividad.domicilio?.alcaldia === "string" ? actividad.domicilio.alcaldia : "",
+                      ciudad: "",
+                      entidad: typeof actividad.domicilio?.entidad === "string" ? actividad.domicilio.entidad : "",
+                      pais: typeof actividad.domicilio?.pais === "string" ? actividad.domicilio.pais : "MX",
+                    },
+                  }
+                })
+                .filter((actividad): actividad is NonNullable<typeof actividad> => Boolean(actividad))
+              const primeraActividad = actividades[0]
+              return {
+                id: typeof item.id === "string" ? item.id : "",
+                nombre: typeof item.nombre === "string" ? item.nombre : "",
+                tipo: typeof item.tipo === "string" ? item.tipo : "",
+                actividad:
+                  actividades.map((actividad) => actividad.label).join(", ") ||
+                  (typeof item.actividad === "string" ? item.actividad : ""),
+                actividades,
+                folioDocumento: primeraActividad?.folioDocumento,
+                identificacion: {
+                  rfc: typeof item.identificacion?.rfc === "string" ? item.identificacion.rfc : "",
+                  nombre: typeof item.identificacion?.nombre === "string" ? item.identificacion.nombre : "",
+                  apellidoPaterno:
+                    typeof item.identificacion?.apellidoPaterno === "string" ? item.identificacion.apellidoPaterno : "",
+                  apellidoMaterno:
+                    typeof item.identificacion?.apellidoMaterno === "string" ? item.identificacion.apellidoMaterno : "",
+                  fechaNacimiento: typeof item.identificacion?.fecha === "string" ? item.identificacion.fecha : "",
+                  paisNacionalidad:
+                    typeof item.identificacion?.paisNacionalidad === "string"
+                      ? item.identificacion.paisNacionalidad
+                      : "MX",
+                  paisNacimiento:
+                    typeof item.identificacion?.paisNacimiento === "string" ? item.identificacion.paisNacimiento : "MX",
+                  curp: typeof item.identificacion?.curp === "string" ? item.identificacion.curp : "",
+                },
+                contacto: {
+                  lada: typeof item.contactos?.[0]?.claveLada === "string" ? item.contactos[0].claveLada : "",
+                  telefonoFijo:
+                    typeof item.contactos?.[0]?.telefonoFijo === "string" ? item.contactos[0].telefonoFijo : "",
+                  extension: typeof item.contactos?.[0]?.extension === "string" ? item.contactos[0].extension : "",
+                  telefonoMovil:
+                    typeof item.contactos?.[0]?.telefonoMovil === "string" ? item.contactos[0].telefonoMovil : "",
+                  correo: typeof item.contactos?.[0]?.correo === "string" ? item.contactos[0].correo : "",
+                },
+                domicilio: primeraActividad?.domicilio ?? createDireccion(),
+              }
+            })
             .filter((item) => item.id && item.nombre)
         : []
       setSujetosRegistrados(sujetos)
@@ -952,93 +1158,43 @@ function KycExpedienteContent() {
     const seleccionado = sujetosRegistrados.find((sujeto) => sujeto.id === sujetoObligadoId)
     if (!seleccionado) return
     const nombre = seleccionado.identificacion.nombre || seleccionado.nombre
-    const esPersonaFisica = seleccionado.tipo === "fisica"
-    if (esPersonaFisica) {
-      setTipoExpediente("persona_fisica")
-    } else if (seleccionado.tipo === "moral") {
-      setTipoExpediente("persona_moral")
-    }
-    setClienteDenominacion(nombre)
-    setClienteRfc(seleccionado.identificacion.rfc)
-    setClientePais(seleccionado.identificacion.paisNacionalidad || "MX")
-    setClienteActividad(seleccionado.actividad)
     setSujetoObligadoNombrePf(nombre)
     setSujetoObligadoRfcPf(seleccionado.identificacion.rfc)
-    setClienteFisicaPaisNacionalidad(seleccionado.identificacion.paisNacionalidad || "MX")
-    if (esPersonaFisica) {
-      setClienteFisicaNombres(seleccionado.identificacion.nombre)
-      setClienteFisicaApellidoPaterno(seleccionado.identificacion.apellidoPaterno)
-      setClienteFisicaApellidoMaterno(seleccionado.identificacion.apellidoMaterno)
-      setClienteFisicaFechaNacimiento(seleccionado.identificacion.fechaNacimiento)
-      setClienteFisicaPaisNacimiento(seleccionado.identificacion.paisNacimiento || "MX")
-      setClienteFisicaCurp(seleccionado.identificacion.curp)
-      setClienteFisicaRfc(seleccionado.identificacion.rfc)
-    }
     setSujetoObligadoNombrePmdp(nombre)
     setSujetoObligadoRfcPmdp(seleccionado.identificacion.rfc)
-    setContactoCliente((prev) => ({
-      ...prev,
-      ladaFijo: seleccionado.contacto.lada,
-      telefonoFijo: seleccionado.contacto.telefonoFijo,
-      extension: seleccionado.contacto.extension,
-      telefonoMovil: seleccionado.contacto.telefonoMovil,
-      correo: seleccionado.contacto.correo,
-    }))
-    setContactoClienteFisica((prev) => ({
-      ...prev,
-      ladaFijo: seleccionado.contacto.lada,
-      telefonoFijo: seleccionado.contacto.telefonoFijo,
-      extension: seleccionado.contacto.extension,
-      telefonoMovil: seleccionado.contacto.telefonoMovil,
-      correo: seleccionado.contacto.correo,
-    }))
-    setDomicilioCliente((prev) => ({
-      ...prev,
-      codigoPostal: seleccionado.domicilio.codigoPostal,
-      tipoVialidad: seleccionado.domicilio.tipoVialidad,
-      nombreVialidad: seleccionado.domicilio.nombreVialidad,
-      numeroExterior: seleccionado.domicilio.numeroExterior,
-      numeroInterior: seleccionado.domicilio.numeroInterior,
-      colonia: seleccionado.domicilio.colonia,
-      alcaldia: seleccionado.domicilio.alcaldia,
-      entidad: seleccionado.domicilio.entidad,
-      pais: seleccionado.domicilio.pais,
-      ciudad: prev.ciudad,
-    }))
-    setDomicilioClienteFisica((prev) => ({
-      ...prev,
-      codigoPostal: seleccionado.domicilio.codigoPostal,
-      tipoVialidad: seleccionado.domicilio.tipoVialidad,
-      nombreVialidad: seleccionado.domicilio.nombreVialidad,
-      numeroExterior: seleccionado.domicilio.numeroExterior,
-      numeroInterior: seleccionado.domicilio.numeroInterior,
-      colonia: seleccionado.domicilio.colonia,
-      alcaldia: seleccionado.domicilio.alcaldia,
-      entidad: seleccionado.domicilio.entidad,
-      pais: seleccionado.domicilio.pais,
-      ciudad: prev.ciudad,
-    }))
-    setDomicilioClientePmdp((prev) => ({
-      ...prev,
-      codigoPostal: seleccionado.domicilio.codigoPostal,
-      tipoVialidad: seleccionado.domicilio.tipoVialidad,
-      nombreVialidad: seleccionado.domicilio.nombreVialidad,
-      numeroExterior: seleccionado.domicilio.numeroExterior,
-      numeroInterior: seleccionado.domicilio.numeroInterior,
-      colonia: seleccionado.domicilio.colonia,
-      alcaldia: seleccionado.domicilio.alcaldia,
-      entidad: seleccionado.domicilio.entidad,
-      pais: seleccionado.domicilio.pais,
-      ciudad: prev.ciudad,
-    }))
-    setContactoClientePmdp((prev) => ({
-      ...prev,
-      lada: seleccionado.contacto.lada,
-      telefonoFijo: seleccionado.contacto.telefonoFijo,
-      extension: seleccionado.contacto.extension,
-      correo: seleccionado.contacto.correo,
-    }))
   }, [sujetoObligadoId, sujetosRegistrados])
+
+  const sujetoObligadoActual = useMemo(
+    () => sujetosRegistrados.find((sujeto) => sujeto.id === sujetoObligadoId) ?? null,
+    [sujetoObligadoId, sujetosRegistrados],
+  )
+  const actividadSeleccionada = useMemo(
+    () => sujetoObligadoActual?.actividades.find((actividad) => actividad.activityKey === activityKey) ?? null,
+    [activityKey, sujetoObligadoActual],
+  )
+  const activityLabel = actividadSeleccionada?.label || (activityKey ? getActividadEuiLabel(activityKey) : "")
+  const esArrendamiento = activityKey === ARRENDAMIENTO_ACTIVITY_KEY
+
+  useEffect(() => {
+    if (!sujetoObligadoActual) return
+    setActivityKey((current) => {
+      if (sujetoObligadoActual.actividades.some((actividad) => actividad.activityKey === current)) return current
+      return sujetoObligadoActual.actividades.length === 1
+        ? sujetoObligadoActual.actividades[0]?.activityKey ?? ""
+        : ""
+    })
+  }, [sujetoObligadoActual])
+
+  useEffect(() => {
+    if (!activityLabel) return
+    const previousActivityLabel = previousActivityLabelRef.current
+    const applyActivityDefault = (current: string) =>
+      !current || current === previousActivityLabel ? activityLabel : current
+    setTipoActoOperacion(applyActivityDefault)
+    setTipoActoOperacionFisica(applyActivityDefault)
+    setTipoActoOperacionPmdp(applyActivityDefault)
+    previousActivityLabelRef.current = activityLabel
+  }, [activityLabel])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -1058,7 +1214,7 @@ function KycExpedienteContent() {
         .filter((item): item is ExpedienteDetalle => Boolean(item))
       const mapa = new Map<string, ExpedienteDetalle>()
       detalleList.forEach((detalle) => {
-        mapa.set(detalle.rfc, detalle)
+        mapa.set(detalle.expedienteId, detalle)
       })
       setExpedientesDetalle(Object.fromEntries(mapa))
       setExpedientesResumen(detalleList.map(buildResumen))
@@ -1072,8 +1228,8 @@ function KycExpedienteContent() {
   const expedientesDisponibles = useMemo(() => {
     const mapa = new Map<string, ExpedienteListadoItem>()
     expedientesResumen.forEach((resumen) => {
-      const detalle = expedientesDetalle[resumen.rfc]
-      mapa.set(resumen.rfc, {
+      const detalle = expedientesDetalle[resumen.expedienteId]
+      mapa.set(resumen.expedienteId, {
         ...resumen,
         detalle: detalle ?? null,
         actualizadoEn: detalle?.actualizadoEn,
@@ -1081,7 +1237,7 @@ function KycExpedienteContent() {
     })
 
     Object.values(expedientesDetalle).forEach((detalle) => {
-      mapa.set(detalle.rfc, {
+      mapa.set(detalle.expedienteId, {
         ...buildResumen(detalle),
         detalle,
         actualizadoEn: detalle.actualizadoEn,
@@ -1095,7 +1251,7 @@ function KycExpedienteContent() {
     const termino = normalizarBusqueda(busquedaExpedientes)
     if (!termino) return expedientesDisponibles
     return expedientesDisponibles.filter((item) =>
-      normalizarBusqueda(`${item.nombre} ${item.rfc}`).includes(termino),
+      normalizarBusqueda(`${item.nombre} ${item.rfc} ${item.identificador}`).includes(termino),
     )
   }, [busquedaExpedientes, expedientesDisponibles])
 
@@ -1155,6 +1311,8 @@ function KycExpedienteContent() {
     (detalle: ExpedienteDetalle) => {
       const expediente = detalle.expedienteEui
       if (!expediente) return
+      setExpedienteIdActual(detalle.expedienteId)
+      setActivityKey(detalle.activityKey)
       setTipoExpediente(expediente.tipoExpediente)
       setFechaRegistro(expediente.fechaRegistro)
 
@@ -1174,6 +1332,7 @@ function KycExpedienteContent() {
         setClienteFisicaPaisNacionalidad(expedienteFisica.cliente.paisNacionalidad)
         setClienteFisicaCurp(expedienteFisica.cliente.curp)
         setClienteFisicaRfc(expedienteFisica.cliente.rfc)
+        setClienteFisicaNif(expedienteFisica.cliente.nif || expedienteFisica.identifiers.nif)
         setClienteFisicaOcupacion(expedienteFisica.cliente.ocupacion)
         setDomicilioClienteFisica(expedienteFisica.domicilioCliente)
         setContactoClienteFisica(expedienteFisica.contactoCliente)
@@ -1194,15 +1353,19 @@ function KycExpedienteContent() {
         setClientePmdpNombre(expedientePmdp.cliente.nombre)
         setClientePmdpFechaConstitucion(expedientePmdp.cliente.fechaConstitucion)
         setClientePmdpRfc(expedientePmdp.cliente.rfc)
+        setClientePmdpNif(expedientePmdp.cliente.nif || expedientePmdp.identifiers.nif)
         setClientePmdpActividad(expedientePmdp.cliente.actividad)
         setDomicilioClientePmdp(expedientePmdp.domicilioCliente)
         setContactoClientePmdp(expedientePmdp.contactoCliente)
         setServidorPublico1(expedientePmdp.servidorPublico1)
         setServidorPublico2(expedientePmdp.servidorPublico2)
-        setInmuebleTipoPmdp(expedientePmdp.inmueble.tipo)
-        setInmuebleValorPmdp(expedientePmdp.inmueble.valorReferencia)
-        setInmuebleFolioPmdp(expedientePmdp.inmueble.folioReal)
-        setUbicacionInmueblePmdp(expedientePmdp.ubicacionInmueble)
+        const inmueblePmdp = expedientePmdp.inmueble ?? expedientePmdp.inmuebleDraft
+        setInmuebleTipoPmdp(inmueblePmdp?.tipo ?? "")
+        setInmuebleValorPmdp(inmueblePmdp?.valorReferencia ?? "")
+        setInmuebleFolioPmdp(inmueblePmdp?.folioReal ?? "")
+        setUbicacionInmueblePmdp(
+          expedientePmdp.ubicacionInmueble ?? expedientePmdp.ubicacionInmuebleDraft ?? createDireccion(),
+        )
         setDocumentacionPmdp(expedientePmdp.documentacion)
         return
       }
@@ -1217,6 +1380,7 @@ function KycExpedienteContent() {
       setClienteFechaConstitucion(expedienteMoral.cliente.fechaConstitucion)
       setClientePais(expedienteMoral.cliente.paisNacionalidad)
       setClienteRfc(expedienteMoral.cliente.rfc)
+      setClienteNif(expedienteMoral.cliente.nif || expedienteMoral.identifiers.nif)
       setClienteActividad(expedienteMoral.cliente.actividad)
       setDomicilioCliente(expedienteMoral.domicilioCliente)
       setContactoCliente(expedienteMoral.contactoCliente)
@@ -1225,18 +1389,21 @@ function KycExpedienteContent() {
       setBeneficiario1(expedienteMoral.beneficiario1)
       setBeneficiario2(expedienteMoral.beneficiario2 ?? createBeneficiario())
       setTieneBeneficiario2(Boolean(expedienteMoral.beneficiario2))
-      setInmuebleTipo(expedienteMoral.inmueble.tipo)
-      setInmuebleValor(expedienteMoral.inmueble.valorReferencia)
-      setInmuebleFolio(expedienteMoral.inmueble.folioReal)
-      setUbicacionInmueble(expedienteMoral.inmueble.ubicacion)
+      const inmuebleMoral = expedienteMoral.inmueble ?? expedienteMoral.inmuebleDraft
+      setInmuebleTipo(inmuebleMoral?.tipo ?? "")
+      setInmuebleValor(inmuebleMoral?.valorReferencia ?? "")
+      setInmuebleFolio(inmuebleMoral?.folioReal ?? "")
+      setUbicacionInmueble(inmuebleMoral?.ubicacion ?? createDireccion())
       setDocumentacion(expedienteMoral.documentacion)
     },
     [],
   )
 
   const limpiarFormulario = useCallback(() => {
+    setExpedienteIdActual("")
     setTipoExpediente(EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral")
     setSujetoObligadoId("")
+    setActivityKey("")
     setSujetoObligadoNombrePf("")
     setSujetoObligadoRfcPf("")
     setTipoCliente(CLIENTE_TIPOS[0]?.value ?? "")
@@ -1247,6 +1414,7 @@ function KycExpedienteContent() {
     setClienteFechaConstitucion("")
     setClientePais("MX")
     setClienteRfc("")
+    setClienteNif("")
     setClienteActividad("")
     setDomicilioCliente(createDireccion())
     setContactoCliente(createContacto())
@@ -1273,6 +1441,7 @@ function KycExpedienteContent() {
     setClienteFisicaPaisNacionalidad("MX")
     setClienteFisicaCurp("")
     setClienteFisicaRfc("")
+    setClienteFisicaNif("")
     setClienteFisicaOcupacion("")
     setDomicilioClienteFisica(createDireccion())
     setContactoClienteFisica(createContacto())
@@ -1298,6 +1467,7 @@ function KycExpedienteContent() {
     setClientePmdpNombre("")
     setClientePmdpFechaConstitucion("")
     setClientePmdpRfc("")
+    setClientePmdpNif("")
     setClientePmdpActividad("")
     setDomicilioClientePmdp(createDireccion())
     setContactoClientePmdp({
@@ -1319,9 +1489,11 @@ function KycExpedienteContent() {
     if (!expedientesCargados) return
     const buscar = searchParams?.get("buscar")
     if (!buscar) return
-    const coincidencia = expedientesDisponibles.find((item) => item.rfc === buscar)
+    const coincidencia = expedientesDisponibles.find(
+      (item) => item.expedienteId === buscar || item.rfc === buscar || item.identificador === buscar,
+    )
     if (coincidencia?.detalle) {
-      setExpedienteSeleccionado(coincidencia.rfc)
+      setExpedienteSeleccionado(coincidencia.expedienteId)
       aplicarDetalleEnFormulario(coincidencia.detalle)
       toast({
         title: "Expediente recuperado",
@@ -1330,42 +1502,76 @@ function KycExpedienteContent() {
     }
   }, [aplicarDetalleEnFormulario, expedientesCargados, expedientesDisponibles, searchParams, toast])
 
+  const persistirExpediente = (detalle: ExpedienteDetalle) => {
+    const nextDetalle = { ...expedientesDetalle, [detalle.expedienteId]: detalle }
+    try {
+      window.localStorage.setItem(EXPEDIENTE_DETALLE_STORAGE_KEY, JSON.stringify(Object.values(nextDetalle)))
+    } catch (_error) {
+      toast({
+        title: "No se pudo guardar el expediente",
+        description: "El almacenamiento local no está disponible o no tiene espacio suficiente.",
+        variant: "destructive",
+      })
+      return
+    }
+    setExpedientesDetalle(nextDetalle)
+    setExpedientesResumen((prev) => {
+      const resumen = buildResumen(detalle)
+      return prev.some((item) => item.expedienteId === detalle.expedienteId)
+        ? prev.map((item) => (item.expedienteId === detalle.expedienteId ? resumen : item))
+        : [...prev, resumen]
+    })
+    setExpedienteIdActual(detalle.expedienteId)
+    setExpedienteSeleccionado(detalle.expedienteId)
+    toast({
+      title: "Expediente guardado",
+      description: "El expediente se actualizó correctamente.",
+    })
+  }
+
   const guardarExpediente = () => {
-    if (tipoExpediente === "persona_fisica" && !clienteFisicaRfc.trim()) {
+    if (!activityKey) {
       toast({
-        title: "Falta RFC",
-        description: "Registra el RFC del cliente para guardar el expediente.",
+        title: "Falta actividad vulnerable",
+        description: "Selecciona una actividad exacta del Alta SAT antes de guardar el expediente.",
         variant: "destructive",
       })
       return
     }
 
-    if (tipoExpediente === "persona_moral_derecho_publico" && !clientePmdpRfc.trim()) {
+    const personaFisica = tipoExpediente === "persona_fisica"
+    const identifiers = normalizeExpedienteIdentifiers(
+      personaFisica
+        ? { rfc: clienteFisicaRfc, nif: clienteFisicaNif, curp: clienteFisicaCurp }
+        : tipoExpediente === "persona_moral_derecho_publico"
+          ? { rfc: clientePmdpRfc, nif: clientePmdpNif }
+          : { rfc: clienteRfc, nif: clienteNif },
+    )
+    const identifierError = validateExpedienteIdentifiers(identifiers, personaFisica)
+    if (identifierError) {
       toast({
-        title: "Falta RFC",
-        description: "Registra el RFC del cliente para guardar el expediente.",
+        title: "Revisa los identificadores",
+        description: identifierError,
         variant: "destructive",
       })
       return
     }
 
-    if (tipoExpediente !== "persona_fisica" && tipoExpediente !== "persona_moral_derecho_publico" && !clienteRfc.trim()) {
-      toast({
-        title: "Falta RFC/NIF",
-        description: "Registra el RFC/NIF del cliente para guardar el expediente.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const sujetoSeleccionado = sujetosRegistrados.find((sujeto) => sujeto.id === sujetoObligadoId)
-
+    const sujetoSeleccionado = sujetoObligadoActual
+    const expedienteId = expedienteIdActual || crypto.randomUUID()
+    const primaryIdentifier = getPrimaryExpedienteIdentifier(identifiers)
     const fechaActual = todayDateString()
     setFechaRegistro(fechaActual)
+
     if (tipoExpediente === "persona_fisica") {
       const expedienteEui: ExpedienteEuiPersonaFisica = {
+        schemaVersion: EXPEDIENTE_EUI_SCHEMA_VERSION,
+        expedienteId,
         fechaRegistro: fechaActual,
         tipoExpediente,
+        activityKey,
+        activityLabel,
+        identifiers,
         sujetoObligadoNombre: sujetoObligadoNombrePf || sujetoSeleccionado?.nombre || "",
         sujetoObligadoRfc: sujetoObligadoRfcPf || sujetoSeleccionado?.identificacion?.rfc || "",
         tipoCliente: tipoClienteFisica,
@@ -1379,8 +1585,9 @@ function KycExpedienteContent() {
           fechaNacimiento: clienteFisicaFechaNacimiento,
           paisNacimiento: clienteFisicaPaisNacimiento,
           paisNacionalidad: clienteFisicaPaisNacionalidad,
-          curp: clienteFisicaCurp,
-          rfc: clienteFisicaRfc.toUpperCase(),
+          curp: identifiers.curp,
+          rfc: identifiers.rfc,
+          nif: identifiers.nif,
           ocupacion: clienteFisicaOcupacion,
         },
         domicilioCliente: domicilioClienteFisica,
@@ -1391,23 +1598,37 @@ function KycExpedienteContent() {
         identificacionCliente: identificacionClienteFisica,
         documentacion: documentacionFisica,
       }
-
+      const nombre =
+        `${expedienteEui.cliente.nombres} ${expedienteEui.cliente.apellidoPaterno} ${expedienteEui.cliente.apellidoMaterno}`.trim()
+      const ocupacion = buildCatalogSelection(clienteFisicaOcupacion, actividadesEconomicas)
       const detalle: ExpedienteDetalle = {
-        rfc: expedienteEui.cliente.rfc,
-        nombre: `${expedienteEui.cliente.nombres} ${expedienteEui.cliente.apellidoPaterno} ${expedienteEui.cliente.apellidoMaterno}`.trim() ||
-          expedienteEui.cliente.rfc,
+        schemaVersion: EXPEDIENTE_EUI_SCHEMA_VERSION,
+        expedienteId,
+        rfc: identifiers.rfc,
+        identifiers,
+        activityKey,
+        activityLabel,
+        ocupacion,
+        operationContext: {
+          tipoActoOperacion: tipoActoOperacionFisica,
+          fechaActoOperacion: fechaActoOperacionFisica,
+          relacionNegocios: relacionNegociosFisica,
+        },
+        nombre: nombre || primaryIdentifier,
         tipoCliente: tipoClienteFisica,
+        sujetoObligadoId: sujetoSeleccionado?.id,
         sujetoObligadoNombre: expedienteEui.sujetoObligadoNombre,
         expedienteEui,
         personas: [
           {
-            id: `cliente-${expedienteEui.cliente.rfc}`,
+            id: `cliente-${expedienteId}`,
             tipo: "persona_fisica",
-            denominacion: `${expedienteEui.cliente.nombres} ${expedienteEui.cliente.apellidoPaterno} ${expedienteEui.cliente.apellidoMaterno}`.trim(),
-            rfc: expedienteEui.cliente.rfc,
-            curp: expedienteEui.cliente.curp,
+            denominacion: nombre,
+            rfc: identifiers.rfc,
+            nif: identifiers.nif,
+            curp: identifiers.curp,
             pais: expedienteEui.cliente.paisNacionalidad,
-            giro: expedienteEui.cliente.ocupacion,
+            giro: ocupacion.label,
             rolRelacion: "Cliente",
             domicilio: {
               codigoPostal: expedienteEui.domicilioCliente.codigoPostal,
@@ -1427,70 +1648,84 @@ function KycExpedienteContent() {
             },
           },
         ],
+        beneficiariosControladores: [],
         actualizadoEn: new Date().toISOString(),
       }
-
-      setExpedientesDetalle((prev) => ({ ...prev, [detalle.rfc]: detalle }))
-      setExpedientesResumen((prev) => {
-        const existing = prev.find((item) => item.rfc === detalle.rfc)
-        if (existing) {
-          return prev.map((item) => (item.rfc === detalle.rfc ? buildResumen(detalle) : item))
-        }
-        return [...prev, buildResumen(detalle)]
-      })
-      setExpedienteSeleccionado(detalle.rfc)
-
-      const almacenados = Object.values({ ...expedientesDetalle, [detalle.rfc]: detalle })
-      window.localStorage.setItem(EXPEDIENTE_DETALLE_STORAGE_KEY, JSON.stringify(almacenados))
-
-      toast({
-        title: "Expediente guardado",
-        description: "El expediente se actualizó correctamente.",
-      })
+      persistirExpediente(detalle)
       return
     }
 
     if (tipoExpediente === "persona_moral_derecho_publico") {
       const expedienteEui: ExpedienteEuiPersonaMoralDerechoPublico = {
+        schemaVersion: EXPEDIENTE_EUI_SCHEMA_VERSION,
+        expedienteId,
         fechaRegistro: fechaActual,
         tipoExpediente,
-        sujetoObligadoNombre: sujetoObligadoNombrePmdp,
-        sujetoObligadoRfc: sujetoObligadoRfcPmdp,
+        activityKey,
+        activityLabel,
+        identifiers,
+        sujetoObligadoNombre: sujetoObligadoNombrePmdp || sujetoSeleccionado?.nombre || "",
+        sujetoObligadoRfc: sujetoObligadoRfcPmdp || sujetoSeleccionado?.identificacion.rfc || "",
         tipoActoOperacion: tipoActoOperacionPmdp,
         fechaActoOperacion: fechaActoOperacionPmdp,
         relacionNegocios: relacionNegociosPmdp,
         cliente: {
           nombre: clientePmdpNombre,
           fechaConstitucion: clientePmdpFechaConstitucion,
-          rfc: clientePmdpRfc.toUpperCase(),
+          rfc: identifiers.rfc,
+          nif: identifiers.nif,
           actividad: clientePmdpActividad,
         },
         domicilioCliente: domicilioClientePmdp,
         contactoCliente: contactoClientePmdp,
         servidorPublico1,
         servidorPublico2,
-        inmueble: {
-          tipo: inmuebleTipoPmdp,
-          valorReferencia: inmuebleValorPmdp,
-          folioReal: inmuebleFolioPmdp,
-        },
-        ubicacionInmueble: ubicacionInmueblePmdp,
+        ...(esArrendamiento
+          ? {
+              inmueble: {
+                tipo: inmuebleTipoPmdp,
+                valorReferencia: inmuebleValorPmdp,
+                folioReal: inmuebleFolioPmdp,
+              },
+              ubicacionInmueble: ubicacionInmueblePmdp,
+            }
+          : {
+              inmuebleDraft: {
+                tipo: inmuebleTipoPmdp,
+                valorReferencia: inmuebleValorPmdp,
+                folioReal: inmuebleFolioPmdp,
+              },
+              ubicacionInmuebleDraft: ubicacionInmueblePmdp,
+            }),
         documentacion: documentacionPmdp,
       }
-
+      const ocupacion = buildCatalogSelection(clientePmdpActividad, girosMercantiles)
       const detalle: ExpedienteDetalle = {
-        rfc: expedienteEui.cliente.rfc,
-        nombre: expedienteEui.cliente.nombre || expedienteEui.cliente.rfc,
+        schemaVersion: EXPEDIENTE_EUI_SCHEMA_VERSION,
+        expedienteId,
+        rfc: identifiers.rfc,
+        identifiers,
+        activityKey,
+        activityLabel,
+        ocupacion,
+        operationContext: {
+          tipoActoOperacion: tipoActoOperacionPmdp,
+          fechaActoOperacion: fechaActoOperacionPmdp,
+          relacionNegocios: relacionNegociosPmdp,
+        },
+        nombre: expedienteEui.cliente.nombre || primaryIdentifier,
         tipoCliente: "pm_derecho_publico",
+        sujetoObligadoId: sujetoSeleccionado?.id,
         sujetoObligadoNombre: expedienteEui.sujetoObligadoNombre,
         expedienteEui,
         personas: [
           {
-            id: `cliente-${expedienteEui.cliente.rfc}`,
+            id: `cliente-${expedienteId}`,
             tipo: "persona_moral",
             denominacion: expedienteEui.cliente.nombre,
-            rfc: expedienteEui.cliente.rfc,
-            giro: expedienteEui.cliente.actividad,
+            rfc: identifiers.rfc,
+            nif: identifiers.nif,
+            giro: ocupacion.label,
             rolRelacion: "Cliente",
             domicilio: {
               codigoPostal: expedienteEui.domicilioCliente.codigoPostal,
@@ -1510,32 +1745,21 @@ function KycExpedienteContent() {
             },
           },
         ],
+        beneficiariosControladores: [],
         actualizadoEn: new Date().toISOString(),
       }
-
-      setExpedientesDetalle((prev) => ({ ...prev, [detalle.rfc]: detalle }))
-      setExpedientesResumen((prev) => {
-        const existing = prev.find((item) => item.rfc === detalle.rfc)
-        if (existing) {
-          return prev.map((item) => (item.rfc === detalle.rfc ? buildResumen(detalle) : item))
-        }
-        return [...prev, buildResumen(detalle)]
-      })
-      setExpedienteSeleccionado(detalle.rfc)
-
-      const almacenados = Object.values({ ...expedientesDetalle, [detalle.rfc]: detalle })
-      window.localStorage.setItem(EXPEDIENTE_DETALLE_STORAGE_KEY, JSON.stringify(almacenados))
-
-      toast({
-        title: "Expediente guardado",
-        description: "El expediente se actualizó correctamente.",
-      })
+      persistirExpediente(detalle)
       return
     }
 
     const expedienteEui: ExpedienteEuiPersonaMoral = {
+      schemaVersion: EXPEDIENTE_EUI_SCHEMA_VERSION,
+      expedienteId,
       fechaRegistro: fechaActual,
       tipoExpediente,
+      activityKey,
+      activityLabel,
+      identifiers,
       sujetoObligadoId,
       sujetoObligadoNombre: sujetoSeleccionado?.nombre ?? "",
       tipoCliente,
@@ -1546,7 +1770,8 @@ function KycExpedienteContent() {
         denominacion: clienteDenominacion,
         fechaConstitucion: clienteFechaConstitucion,
         paisNacionalidad: clientePais,
-        rfc: clienteRfc.toUpperCase(),
+        rfc: identifiers.rfc,
+        nif: identifiers.nif,
         actividad: clienteActividad,
       },
       domicilioCliente,
@@ -1555,43 +1780,53 @@ function KycExpedienteContent() {
       identificacionRepresentante,
       beneficiario1,
       beneficiario2: tieneBeneficiario2 ? beneficiario2 : null,
-      inmueble: {
-        tipo: inmuebleTipo,
-        valorReferencia: inmuebleValor,
-        folioReal: inmuebleFolio,
-        ubicacion: ubicacionInmueble,
-      },
+      ...(esArrendamiento
+        ? {
+            inmueble: {
+              tipo: inmuebleTipo,
+              valorReferencia: inmuebleValor,
+              folioReal: inmuebleFolio,
+              ubicacion: ubicacionInmueble,
+            },
+          }
+        : {
+            inmuebleDraft: {
+              tipo: inmuebleTipo,
+              valorReferencia: inmuebleValor,
+              folioReal: inmuebleFolio,
+              ubicacion: ubicacionInmueble,
+            },
+          }),
       documentacion,
     }
-
+    const ocupacion = buildCatalogSelection(clienteActividad, girosMercantiles)
+    const beneficiariosControladores = [
+      buildBeneficiarioResumen(beneficiario1, expedienteId, 1),
+      ...(tieneBeneficiario2 ? [buildBeneficiarioResumen(beneficiario2, expedienteId, 2)] : []),
+    ].filter((item): item is ExpedientePersonaResumen => Boolean(item))
     const detalle: ExpedienteDetalle = {
-      rfc: expedienteEui.cliente.rfc,
-      nombre: expedienteEui.cliente.denominacion || expedienteEui.cliente.rfc,
+      schemaVersion: EXPEDIENTE_EUI_SCHEMA_VERSION,
+      expedienteId,
+      rfc: identifiers.rfc,
+      identifiers,
+      activityKey,
+      activityLabel,
+      ocupacion,
+      operationContext: {
+        tipoActoOperacion,
+        fechaActoOperacion,
+        relacionNegocios,
+      },
+      nombre: expedienteEui.cliente.denominacion || primaryIdentifier,
       tipoCliente,
       sujetoObligadoId: expedienteEui.sujetoObligadoId,
       sujetoObligadoNombre: expedienteEui.sujetoObligadoNombre,
       expedienteEui,
       personas: buildPersonasDesdeExpediente(expedienteEui),
+      beneficiariosControladores,
       actualizadoEn: new Date().toISOString(),
     }
-
-    setExpedientesDetalle((prev) => ({ ...prev, [detalle.rfc]: detalle }))
-    setExpedientesResumen((prev) => {
-      const existing = prev.find((item) => item.rfc === detalle.rfc)
-      if (existing) {
-        return prev.map((item) => (item.rfc === detalle.rfc ? buildResumen(detalle) : item))
-      }
-      return [...prev, buildResumen(detalle)]
-    })
-    setExpedienteSeleccionado(detalle.rfc)
-
-    const almacenados = Object.values({ ...expedientesDetalle, [detalle.rfc]: detalle })
-    window.localStorage.setItem(EXPEDIENTE_DETALLE_STORAGE_KEY, JSON.stringify(almacenados))
-
-    toast({
-      title: "Expediente guardado",
-      description: "El expediente se actualizó correctamente.",
-    })
+    persistirExpediente(detalle)
   }
 
   const expedientesTotales = expedientesDisponibles.length
@@ -1655,8 +1890,7 @@ function KycExpedienteContent() {
   const coloniasInmueblePmdp = infoUbicacionInmueblePmdp?.asentamientos ?? []
 
   const tipoClienteResumen = tipoClienteLabel
-  const sujetoObligadoSeleccionado =
-    sujetosRegistrados.find((sujeto) => sujeto.id === sujetoObligadoId) ?? sujetosRegistrados[0] ?? null
+  const sujetoObligadoSeleccionado = sujetoObligadoActual
 
   return (
     <div className="space-y-6">
@@ -1683,11 +1917,13 @@ function KycExpedienteContent() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Actividad registrada</p>
-              <p className="font-medium">{sujetoObligadoSeleccionado.actividad || "Sin actividad"}</p>
+              <p className="font-medium">{activityLabel || "Selecciona una actividad"}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Folio / acuse</p>
-              <p className="font-medium">{sujetoObligadoSeleccionado.folioDocumento || "Pendiente"}</p>
+              <p className="font-medium">
+                {actividadSeleccionada?.folioDocumento || sujetoObligadoSeleccionado.folioDocumento || "Pendiente"}
+              </p>
             </div>
             <div className="flex items-end">
               <Button asChild size="sm" className="w-full gap-2">
@@ -1700,8 +1936,6 @@ function KycExpedienteContent() {
         </Card>
       )}
 
-      {tipoExpediente === "persona_moral" && (
-        <>
       <Card className="border-slate-200">
         <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
@@ -1722,7 +1956,7 @@ function KycExpedienteContent() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
             <div className="space-y-2">
               <Label>Tipo de expediente</Label>
               <Select value={tipoExpediente} onValueChange={setTipoExpediente}>
@@ -1762,6 +1996,32 @@ function KycExpedienteContent() {
                 </p>
               )}
             </div>
+            <div className="space-y-2">
+              <Label>Actividad vulnerable aplicable</Label>
+              <Select value={activityKey} onValueChange={setActivityKey} disabled={!sujetoObligadoActual}>
+                <SelectTrigger className="bg-white">
+                  <SelectValue
+                    placeholder={
+                      sujetoObligadoActual?.actividades.length
+                        ? "Selecciona la actividad exacta"
+                        : "Sin actividades en el Alta"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {sujetoObligadoActual?.actividades.map((actividad) => (
+                    <SelectItem key={actividad.activityKey} value={actividad.activityKey}>
+                      {actividad.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(sujetoObligadoActual?.actividades.length ?? 0) > 1 ? (
+                <p className="text-xs text-amber-700">
+                  El Alta contiene varias actividades; selecciona la que corresponde a este expediente.
+                </p>
+              ) : null}
+            </div>
           </div>
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
             {tipoExpediente === "persona_moral"
@@ -1785,7 +2045,7 @@ function KycExpedienteContent() {
             <div className="flex flex-wrap items-center gap-2">
               <Input
                 className="max-w-sm"
-                placeholder="Buscar por RFC o razón social"
+                placeholder="Buscar por RFC, NIF, CURP o nombre"
                 value={busquedaExpedientes}
                 onChange={(event) => setBusquedaExpedientes(event.target.value)}
               />
@@ -1798,14 +2058,14 @@ function KycExpedienteContent() {
             <ScrollArea className="h-52 rounded border border-slate-200 bg-white">
               <div className="divide-y divide-slate-200">
                 {expedientesFiltrados.map((item) => {
-                  const seleccionado = item.rfc === expedienteSeleccionado
+                  const seleccionado = item.expedienteId === expedienteSeleccionado
                   const actualizado = formatearFechaActualizacion(item.actualizadoEn)
                   return (
                     <button
-                      key={item.rfc}
+                      key={item.expedienteId}
                       type="button"
                       onClick={() => {
-                        setExpedienteSeleccionado(item.rfc)
+                        setExpedienteSeleccionado(item.expedienteId)
                         if (item.detalle) aplicarDetalleEnFormulario(item.detalle)
                       }}
                       className={`flex w-full flex-col gap-1 p-3 text-left transition ${
@@ -1815,7 +2075,7 @@ function KycExpedienteContent() {
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <p className="text-sm font-semibold text-slate-700">{item.nombre}</p>
-                          <p className="text-xs text-slate-500">{item.rfc}</p>
+                          <p className="text-xs text-slate-500">{item.identificador}</p>
                         </div>
                         {actualizado && <span className="text-[11px] text-slate-500">{actualizado}</span>}
                       </div>
@@ -1890,18 +2150,12 @@ function KycExpedienteContent() {
               </div>
               <div className="space-y-2">
                 <Label>Tipo de acto u operación</Label>
-                <Select value={tipoActoOperacionFisica} onValueChange={setTipoActoOperacionFisica}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="---" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ACTO_OPERACION_PERSONA_FISICA.map((opcion) => (
-                      <SelectItem key={opcion} value={opcion}>
-                        {opcion}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  value={tipoActoOperacionFisica}
+                  onChange={(event) => setTipoActoOperacionFisica(event.target.value)}
+                  placeholder="Describe el acto dentro de la actividad seleccionada"
+                />
+                <p className="text-xs text-muted-foreground">Actividad aplicable: {activityLabel || "pendiente"}.</p>
               </div>
               <div className="space-y-2">
                 <Label>Fecha de celebración del acto u operación</Label>
@@ -1997,12 +2251,20 @@ function KycExpedienteContent() {
                 <Input
                   value={clienteFisicaCurp}
                   onChange={(event) => setClienteFisicaCurp(event.target.value.toUpperCase())}
-                  placeholder={tipoClienteFisica === "Persona Física Mexicana" ? "Obligatoria" : "Opcional"}
+                  placeholder="18 caracteres"
                 />
               </div>
               <div className="space-y-2">
                 <Label>RFC</Label>
                 <Input value={clienteFisicaRfc} onChange={(event) => setClienteFisicaRfc(event.target.value.toUpperCase())} />
+              </div>
+              <div className="space-y-2">
+                <Label>NIF</Label>
+                <Input
+                  value={clienteFisicaNif}
+                  onChange={(event) => setClienteFisicaNif(event.target.value.toUpperCase())}
+                  placeholder="Identificador fiscal extranjero"
+                />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>Actividad, ocupación, profesión</Label>
@@ -2011,13 +2273,20 @@ function KycExpedienteContent() {
                     <SelectValue placeholder="Selecciona ocupación" />
                   </SelectTrigger>
                   <SelectContent>
-                    {OCUPACIONES_OPCIONES.map((opcion) => (
-                      <SelectItem key={opcion} value={opcion}>
-                        {opcion}
+                    {clienteFisicaOcupacion &&
+                    !actividadesEconomicas.some((opcion) => opcion.value === clienteFisicaOcupacion) ? (
+                      <SelectItem value={clienteFisicaOcupacion}>{clienteFisicaOcupacion}</SelectItem>
+                    ) : null}
+                    {actividadesEconomicas.map((opcion) => (
+                      <SelectItem key={opcion.value} value={opcion.value}>
+                        {opcion.code} · {opcion.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Catálogo de actividades económicas de la plantilla oficial SAT. Debe existir RFC, NIF o CURP.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -2506,18 +2775,12 @@ function KycExpedienteContent() {
             </div>
             <div className="space-y-2">
               <Label>Tipo de acto u operación</Label>
-              <Select value={tipoActoOperacion} onValueChange={setTipoActoOperacion}>
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="---" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ACTO_OPERACION_OPCIONES.map((opcion) => (
-                    <SelectItem key={opcion} value={opcion}>
-                      {opcion}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                value={tipoActoOperacion}
+                onChange={(event) => setTipoActoOperacion(event.target.value)}
+                placeholder="Describe el acto dentro de la actividad seleccionada"
+              />
+              <p className="text-xs text-muted-foreground">Actividad aplicable: {activityLabel || "pendiente"}.</p>
             </div>
             <div className="space-y-2">
               <Label>Fecha de celebración del acto u operación</Label>
@@ -2574,18 +2837,12 @@ function KycExpedienteContent() {
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Tipo de acto u operación</Label>
-                <Select value={tipoActoOperacionPmdp} onValueChange={setTipoActoOperacionPmdp}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="---" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ACTO_OPERACION_PMDP.map((opcion) => (
-                      <SelectItem key={opcion} value={opcion}>
-                        {opcion}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  value={tipoActoOperacionPmdp}
+                  onChange={(event) => setTipoActoOperacionPmdp(event.target.value)}
+                  placeholder="Describe el acto dentro de la actividad seleccionada"
+                />
+                <p className="text-xs text-muted-foreground">Actividad aplicable: {activityLabel || "pendiente"}.</p>
               </div>
               <div className="space-y-2">
                 <Label>Fecha de celebración del acto u operación</Label>
@@ -2636,9 +2893,33 @@ function KycExpedienteContent() {
                 <Label>Registro Federal de Contribuyentes</Label>
                 <Input value={clientePmdpRfc} onChange={(event) => setClientePmdpRfc(event.target.value.toUpperCase())} />
               </div>
+              <div className="space-y-2">
+                <Label>NIF</Label>
+                <Input
+                  value={clientePmdpNif}
+                  onChange={(event) => setClientePmdpNif(event.target.value.toUpperCase())}
+                  placeholder="Identificador fiscal extranjero"
+                />
+              </div>
               <div className="space-y-2 md:col-span-2">
-                <Label>Actividad u objeto</Label>
-                <Textarea value={clientePmdpActividad} onChange={(event) => setClientePmdpActividad(event.target.value)} rows={3} />
+                <Label>Actividad u objeto / giro mercantil</Label>
+                <Select value={clientePmdpActividad} onValueChange={setClientePmdpActividad}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Selecciona el giro oficial" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clientePmdpActividad &&
+                    !girosMercantiles.some((opcion) => opcion.value === clientePmdpActividad) ? (
+                      <SelectItem value={clientePmdpActividad}>{clientePmdpActividad}</SelectItem>
+                    ) : null}
+                    {girosMercantiles.map((opcion) => (
+                      <SelectItem key={opcion.value} value={opcion.value}>
+                        {opcion.code} · {opcion.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Registra RFC o NIF y selecciona el giro del XLSM SAT.</p>
               </div>
             </CardContent>
           </Card>
@@ -2853,6 +3134,8 @@ function KycExpedienteContent() {
             </Card>
           ))}
 
+          {esArrendamiento ? (
+            <>
           <Card className="border-slate-200">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -2867,9 +3150,9 @@ function KycExpedienteContent() {
                     <SelectValue placeholder="---" />
                   </SelectTrigger>
                   <SelectContent>
-                    {TIPO_INMUEBLE_PMDP.map((tipo) => (
-                      <SelectItem key={tipo} value={tipo}>
-                        {tipo}
+                    {SAT_TIPOS_INMUEBLE.map((tipo) => (
+                      <SelectItem key={tipo.code} value={tipo.value}>
+                        {tipo.code} · {tipo.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2885,7 +3168,6 @@ function KycExpedienteContent() {
               </div>
             </CardContent>
           </Card>
-
           <Card className="border-slate-200">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -2981,6 +3263,8 @@ function KycExpedienteContent() {
               </div>
             </CardContent>
           </Card>
+            </>
+          ) : null}
 
           <Card className="border-slate-200">
             <CardHeader>
@@ -3003,6 +3287,8 @@ function KycExpedienteContent() {
         </>
       )}
 
+      {tipoExpediente === "persona_moral" && (
+        <>
       <Card className="border-slate-200">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -3035,12 +3321,35 @@ function KycExpedienteContent() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>RFC / NIF</Label>
+            <Label>RFC</Label>
             <Input value={clienteRfc} onChange={(event) => setClienteRfc(event.target.value.toUpperCase())} />
+          </div>
+          <div className="space-y-2">
+            <Label>NIF</Label>
+            <Input
+              value={clienteNif}
+              onChange={(event) => setClienteNif(event.target.value.toUpperCase())}
+              placeholder="Identificador fiscal extranjero"
+            />
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Actividad, giro mercantil, actividad u objeto social</Label>
-            <Textarea value={clienteActividad} onChange={(event) => setClienteActividad(event.target.value)} rows={3} />
+            <Select value={clienteActividad} onValueChange={setClienteActividad}>
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Selecciona el giro oficial" />
+              </SelectTrigger>
+              <SelectContent>
+                {clienteActividad && !girosMercantiles.some((opcion) => opcion.value === clienteActividad) ? (
+                  <SelectItem value={clienteActividad}>{clienteActividad}</SelectItem>
+                ) : null}
+                {girosMercantiles.map((opcion) => (
+                  <SelectItem key={opcion.value} value={opcion.value}>
+                    {opcion.code} · {opcion.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Registra RFC o NIF y selecciona el giro del XLSM SAT.</p>
           </div>
         </CardContent>
       </Card>
@@ -4239,12 +4548,14 @@ function KycExpedienteContent() {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Home className="h-5 w-5 text-slate-600" /> Características del inmueble
-          </CardTitle>
-          <CardDescription>Datos del inmueble asociado al acto u operación.</CardDescription>
+      {esArrendamiento ? (
+        <>
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Home className="h-5 w-5 text-slate-600" /> Características del inmueble
+              </CardTitle>
+              <CardDescription>Datos del inmueble asociado al acto u operación.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
@@ -4254,9 +4565,9 @@ function KycExpedienteContent() {
                 <SelectValue placeholder="---" />
               </SelectTrigger>
               <SelectContent>
-                {TIPO_INMUEBLE_OPCIONES.map((tipo) => (
-                  <SelectItem key={tipo} value={tipo}>
-                    {tipo}
+                {SAT_TIPOS_INMUEBLE.map((tipo) => (
+                  <SelectItem key={tipo.code} value={tipo.value}>
+                    {tipo.code} · {tipo.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -4370,6 +4681,8 @@ function KycExpedienteContent() {
           </div>
         </CardContent>
       </Card>
+        </>
+      ) : null}
 
       <Card className="border-slate-200">
         <CardHeader>

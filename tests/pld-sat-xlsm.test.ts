@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import test from "node:test"
 
-import { unzipSync } from "fflate"
+import { strToU8, unzipSync, zipSync } from "fflate"
 import XLSX from "xlsx"
 
 import {
@@ -12,11 +12,47 @@ import {
   extractSatXlsmLayoutFromBuffer,
   fillSatXlsmTemplate,
   getSatTemplateCachePath,
+  isSatXlsmFieldActive,
   resolveSatTemplateForActividad,
+  satFieldValuesToWorkbookCells,
   SAT_TEMPLATE_CATALOG,
 } from "../lib/pld"
 
 const repoRoot = process.cwd()
+
+test("XLSM extractor ignores non-list validation and keeps a list after a self-closing node", () => {
+  const workbook = zipSync({
+    "xl/workbook.xml": strToU8(
+      '<workbook><sheets><sheet name="Captura" r:id="rId1"/></sheets></workbook>',
+    ),
+    "xl/_rels/workbook.xml.rels": strToU8(
+      '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+    ),
+    "xl/worksheets/sheet1.xml": strToU8(
+      [
+        "<worksheet>",
+        "<sheetData>",
+        '<row r="1"><c r="A1" t="inlineStr"><is><t>Selector *</t></is></c></row>',
+        '<row r="2"><c r="A2" t="inlineStr"><is><t>No usar *</t></is></c></row>',
+        "</sheetData>",
+        "<dataValidations>",
+        '<dataValidation type="custom" sqref="B2"/>',
+        '<dataValidation type="list" sqref="B1"><formula1>&quot;Uno,Dos&quot;</formula1></dataValidation>',
+        "</dataValidations>",
+        "</worksheet>",
+      ].join(""),
+    ),
+  })
+  const layout = extractSatXlsmLayoutFromBuffer(workbook, {
+    templateId: "fixture-validation-list",
+    officialXlsmName: "fixture.xlsm",
+  })
+  const validationFields = layout.sections.flatMap((section) => section.fields)
+    .filter((field) => field.source === "xlsm-data-validation")
+
+  assert.deepEqual(validationFields.map((field) => field.cell), ["B1"])
+  assert.deepEqual(validationFields[0]?.options, ["Uno", "Dos"])
+})
 
 test("SAT template resolver maps fraction V to the current official Inmuebles XLSM", () => {
   const resolution = resolveSatTemplateForActividad("fraccion-v-inmuebles")
@@ -28,7 +64,7 @@ test("SAT template resolver maps fraction V to the current official Inmuebles XL
   assert.equal(resolution.requiresVariantSelection, false)
 })
 
-test("SAT template resolver requires real subformats for fractions XI and XII", () => {
+test("SAT template resolver only exposes subformats compatible with the selected activity", () => {
   const xi = resolveSatTemplateForActividad("fraccion-xi-a-inmuebles")
   const xii = resolveSatTemplateForActividad("fraccion-xii-notarios-a")
 
@@ -39,10 +75,99 @@ test("SAT template resolver requires real subformats for fractions XI and XII", 
   assert.match(xi.officialXlsmName, /\.xlsm$/)
 
   assert.equal(xii.fraccion, "Fracción XII")
-  assert.equal(xii.requiresVariantSelection, true)
-  assert.equal(xii.variants.length > 1, true)
+  assert.equal(xii.requiresVariantSelection, false)
+  assert.deepEqual(xii.variants.map((variant) => variant.templateId), ["sat-fraccion-xii-notarios-a"])
   assert.notEqual(xii.officialXlsmName, "Paquete múltiple de avisos.zip")
   assert.match(xii.officialXlsmName, /\.xlsm$/)
+
+  const xiAdministration = resolveSatTemplateForActividad(
+    "fraccion-xi-b-administracion",
+    "sat-fraccion-xi-e-fusion",
+  )
+  assert.equal(xiAdministration.templateId, "sat-fraccion-xi-b-administracion")
+  assert.deepEqual(
+    xiAdministration.variants.map((variant) => variant.templateId),
+    ["sat-fraccion-xi-b-administracion"],
+  )
+})
+
+test("XI-B questionnaire follows official conditional branches for other, inmuebles and virtual assets", () => {
+  const template = resolveSatTemplateForActividad("fraccion-xi-b-administracion")
+  const layout = JSON.parse(
+    readFileSync(
+      path.join(repoRoot, "public/data/sat-xlsm-layouts/sat-fraccion-xi-b-administracion.json"),
+      "utf8",
+    ),
+  )
+  const form = buildSatDynamicOperationForm({ template, layout })
+  const fields = form.sections.flatMap((section) => section.fields)
+  const byId = new Map(fields.map((field) => [field.id, field]))
+
+  assert.deepEqual(byId.get("persona_aviso.ocupacion")?.options, [
+    "1,Abogado",
+    "2,Contador",
+    "3,Administrador",
+    "4,Outsourcing / Servicios Especializados",
+    "5,Consultoría",
+    "99,Otro",
+  ])
+  assert.equal(
+    isSatXlsmFieldActive(byId.get("acto.activo_administrado_otro")!, {
+      "acto.activo_administrado": "1,Administración de bases de datos",
+    }),
+    false,
+  )
+  assert.equal(
+    isSatXlsmFieldActive(byId.get("acto.activo_administrado_otro")!, {
+      "acto.activo_administrado": "99,Otro",
+    }),
+    true,
+  )
+  assert.equal(
+    isSatXlsmFieldActive(byId.get("activo_inmueble.tipo")!, {
+      "acto.activo_administrado": "9,Inmuebles",
+    }),
+    true,
+  )
+  assert.equal(
+    isSatXlsmFieldActive(byId.get("activo_inmueble.tipo")!, {
+      "acto.activo_administrado": "10,Instrumentos Financieros",
+    }),
+    false,
+  )
+  assert.equal(
+    isSatXlsmFieldActive(byId.get("operacion_financiera.moneda")!, {
+      "operacion_financiera.instrumento_monetario": "16,Activos Virtuales",
+    }),
+    false,
+  )
+  assert.equal(
+    isSatXlsmFieldActive(byId.get("operacion_financiera.activo_virtual")!, {
+      "operacion_financiera.instrumento_monetario": "16,Activos Virtuales",
+    }),
+    true,
+  )
+  assert.equal(
+    isSatXlsmFieldActive(byId.get("operacion_financiera.activo_virtual_otro")!, {
+      "operacion_financiera.instrumento_monetario": "16,Activos Virtuales",
+      "operacion_financiera.activo_virtual": "999999,OTRO NO CONTENIDO EN EL CATALOGO",
+    }),
+    true,
+  )
+
+  const cells = satFieldValuesToWorkbookCells(
+    {
+      "acto.activo_administrado": "1,Administración de bases de datos",
+      "acto.activo_administrado_otro": "valor obsoleto",
+      "operacion_financiera.instrumento_monetario": "1,Efectivo",
+      "operacion_financiera.moneda": "1,Peso mexicano",
+      "operacion_financiera.activo_virtual": "1001,BITCOIN (BTC)",
+    },
+    layout,
+  )
+  assert.equal(cells["Acto u operación!F124"], undefined)
+  assert.equal(cells["Operaciones financieras!E7"], undefined)
+  assert.equal(cells["Operaciones financieras!D7"], "1,Peso mexicano")
 })
 
 test("Inmuebles XLSM layout exposes SAT sheets, fields and dropdowns from the workbook", () => {
