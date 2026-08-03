@@ -1,6 +1,7 @@
 import { classifyAvisoSalida, evaluarOperacionVulnerable } from "./operations"
 import { generateSatOutputPackage } from "./sat-outputs"
 import { resolveSatFormatoForActividad } from "./sat-formatos"
+import { centsToMoney } from "./money"
 import {
   evaluateEvidenceChecklist,
   getDocumentRequirementsForCliente,
@@ -24,6 +25,7 @@ export interface BuildPldOperationalCaseInput {
   clienteRfc?: string
   tipoCliente: string
   fechaOperacion: string
+  montoCentavos?: number
   montoMxn: number
   formaPago: string
   sospecha24h?: boolean
@@ -47,12 +49,14 @@ export interface BuildPldOperationalCaseInput {
 }
 
 export function buildPldOperationalCase(input: BuildPldOperationalCaseInput): PldOperationalCase {
+  const montoCentavos = resolveCanonicalAmountCents(input.montoCentavos)
+  const montoMxn = montoCentavos === undefined ? input.montoMxn : centsToMoney(montoCentavos)
   const formato = resolveSatFormatoForActividad(input.actividadKey)
   const obligation = evaluarOperacionVulnerable({
     actividadKey: input.actividadKey,
     clienteKey: input.clienteId,
     fechaOperacion: input.fechaOperacion,
-    montoMxn: input.montoMxn,
+    montoMxn,
   })
   const salida = classifyAvisoSalida({
     status: obligation.status,
@@ -101,7 +105,8 @@ export function buildPldOperationalCase(input: BuildPldOperationalCaseInput): Pl
     clienteRfc: input.clienteRfc,
     tipoCliente: input.tipoCliente,
     fechaOperacion: input.fechaOperacion,
-    montoMxn: input.montoMxn,
+    montoCentavos,
+    montoMxn,
     formaPago: input.formaPago,
     evidenceStatus,
     satOutputStatus: {
@@ -117,6 +122,14 @@ export function buildPldOperationalCase(input: BuildPldOperationalCaseInput): Pl
     suspicionNarrative: input.suspicionNarrative,
     auditTrail,
   }
+}
+
+function resolveCanonicalAmountCents(value: number | undefined) {
+  if (value === undefined) return undefined
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RangeError("montoCentavos debe ser un entero seguro mayor o igual a cero.")
+  }
+  return value
 }
 
 export function evaluateOperationalEvidenceDecision(input: {

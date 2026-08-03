@@ -104,7 +104,8 @@ test("operational case classifies SAT output and keeps tenant, evidence and audi
     clienteNombre: "Distribuidora Lomas Verdes, S.A. de C.V.",
     tipoCliente: "pm_mexicana",
     fechaOperacion: "2026-05-11",
-    montoMxn: 190000,
+    montoCentavos: 19_000_000,
+    montoMxn: 1,
     formaPago: "transferencia",
     sospecha24h: false,
     supuesto27Bis: false,
@@ -122,6 +123,8 @@ test("operational case classifies SAT output and keeps tenant, evidence and audi
 
   assert.equal(operationalCase.tenantId, tenant.id)
   assert.equal(operationalCase.periodo, "202605")
+  assert.equal(operationalCase.montoCentavos, 19_000_000)
+  assert.equal(operationalCase.montoMxn, 190_000)
   assert.equal(operationalCase.satOutputStatus.kind, "aviso_normal")
   assert.equal(operationalCase.evidenceStatus.canClose, true)
   assert.equal(operationalCase.satFormatoId, "sat-fraccion-vi-metales")
@@ -279,8 +282,49 @@ test("SAT output packages distinguish ready XML, blocked draft, zero report and 
 
   const ready = generateSatOutputPackage(baseCase)
   assert.equal(ready.validation.status, "listo")
+  assert.equal(ready.schemaVersion, 1)
+  assert.equal(ready.sourceOperationId, undefined)
   assert.equal(ready.downloads.some((download) => download.kind === "official_template"), true)
   assert.match(ready.xml, /<monto_operacion>500000.00<\/monto_operacion>/)
+
+  const exactTenMillion = generateSatOutputPackage({
+    ...baseCase,
+    montoCentavos: 1_000_000_000,
+    // Simula un espejo legacy desfasado y un valor XLSM obsoleto: el entero
+    // canónico debe prevalecer en toda salida SAT.
+    montoMxn: 9_999_999.99,
+    satFieldValues: {
+      ...baseCase.satFieldValues,
+      "pago.monto": "9999999.99",
+    },
+  })
+  assert.match(exactTenMillion.xml, /<monto_operacion>10000000.00<\/monto_operacion>/)
+  assert.doesNotMatch(exactTenMillion.xml, /<monto_operacion>9999999\.99<\/monto_operacion>/)
+  assert.match(exactTenMillion.ficha, /"Monto MXN","10000000\.00"/)
+
+  const exactLargeAmount = generateSatOutputPackage({
+    ...baseCase,
+    montoCentavos: Number.MAX_SAFE_INTEGER,
+    montoMxn: Number.MAX_SAFE_INTEGER / 100,
+  })
+  assert.match(exactLargeAmount.xml, /<monto_operacion>90071992547409\.91<\/monto_operacion>/)
+  assert.match(exactLargeAmount.ficha, /"Monto MXN","90071992547409\.91"/)
+
+  const linked = generateSatOutputPackage(baseCase, {
+    sourceOperationId: "operation-stable-id",
+    sourceOperationRevision: 4,
+    updatedAt: "2026-08-03T18:00:00.000Z",
+  })
+  assert.equal(linked.id, "satpkg-operation-stable-id")
+  assert.equal(linked.schemaVersion, 2)
+  assert.equal(linked.sourceOperationId, "operation-stable-id")
+  assert.equal(linked.sourceOperationRevision, 4)
+  assert.equal(linked.updatedAt, "2026-08-03T18:00:00.000Z")
+
+  const mappedLegacyPackages = [baseCase, baseCase].map(generateSatOutputPackage)
+  assert.equal(mappedLegacyPackages[1].schemaVersion, 1)
+  assert.equal(mappedLegacyPackages[1].sourceOperationId, undefined)
+  assert.notEqual(mappedLegacyPackages[1].id, "satpkg-undefined")
 
   const blocked = generateSatOutputPackage({
     ...baseCase,
@@ -327,6 +371,8 @@ test("demo dataset links SAT registration, EUI and prebuilt SAT output packages"
   assert.equal(registro.sujetosRegistrados[0].identificacion.rfc, "ISN2103158Q7")
   assert.equal(expedientes.some((item) => item.sujetoObligadoId === registro.sujetosRegistrados[0].id), true)
   assert.equal(links.some((link) => link.sujetoObligadoRfc === "ISN2103158Q7" && link.euiCount > 0), true)
+  assert.equal(packages.every((item) => item.id && item.id !== "satpkg-undefined"), true)
+  assert.equal(packages.every((item) => item.schemaVersion === 1 && !item.sourceOperationId), true)
   assert.equal(snapshot.items.length, SAT_FORMATOS_ACTIVIDADES.length)
   assert.equal(packages.some((item) => item.outputKind === "aviso_normal"), true)
   assert.equal(packages.some((item) => item.outputKind === "informe_ceros"), true)

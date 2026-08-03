@@ -135,15 +135,65 @@ export function pruneInactiveSatFieldValues(input: {
   fields: SatXlsmField[]
   values: Record<string, string>
 }): Record<string, string> {
-  const fieldIds = new Set(input.fields.map((field) => field.id))
-  const activeFieldIds = new Set(
-    input.fields
-      .filter((field) => isSatXlsmFieldActive(field, input.values))
-      .map((field) => field.id),
-  )
+  const valuesWithControls = inferBeneficiaryConditionControls(input.fields, input.values)
+  const conditionalValues = { ...valuesWithControls }
+  for (const field of input.fields) {
+    if (conditionalValues[field.id] !== undefined) continue
+    const aliasValue = getSatXlsmFieldValueKeys(field)
+      .slice(1)
+      .map((key) => valuesWithControls[key])
+      .find((value) => value !== undefined)
+    if (aliasValue !== undefined) conditionalValues[field.id] = aliasValue
+  }
+
+  const activeByValueKey = new Map<string, boolean>()
+  for (const field of input.fields) {
+    const active = isSatXlsmFieldActive(field, conditionalValues)
+    for (const key of getSatXlsmFieldValueKeys(field)) {
+      activeByValueKey.set(key, Boolean(activeByValueKey.get(key)) || active)
+    }
+  }
 
   return Object.fromEntries(
-    Object.entries(input.values).filter(([fieldId]) => !fieldIds.has(fieldId) || activeFieldIds.has(fieldId)),
+    Object.entries(valuesWithControls).filter(([key]) => activeByValueKey.get(key) !== false),
+  )
+}
+
+function inferBeneficiaryConditionControls(
+  fields: SatXlsmField[],
+  values: Record<string, string>,
+): Record<string, string> {
+  const output = { ...values }
+  const candidateValues = new Map<string, Set<string>>()
+
+  for (const field of fields) {
+    const fieldValue = getSatXlsmFieldValueKeys(field)
+      .map((key) => values[key])
+      .find((value) => Boolean(value?.trim()))
+    if (!fieldValue) continue
+
+    for (const condition of field.activeWhen || []) {
+      if (condition.fieldId !== "beneficiario.tipo_persona") continue
+      if (output[condition.fieldId]?.trim() || condition.equals.length !== 1) continue
+      const candidates = candidateValues.get(condition.fieldId) ?? new Set<string>()
+      candidates.add(condition.equals[0])
+      candidateValues.set(condition.fieldId, candidates)
+    }
+  }
+
+  for (const [fieldId, candidates] of candidateValues) {
+    if (candidates.size === 1) output[fieldId] = [...candidates][0]
+  }
+  return output
+}
+
+function getSatXlsmFieldValueKeys(field: SatXlsmField): string[] {
+  return Array.from(
+    new Set(
+      [field.id, field.targetCell, `${field.sheetName}!${field.cell}`].filter(
+        (key): key is string => Boolean(key),
+      ),
+    ),
   )
 }
 

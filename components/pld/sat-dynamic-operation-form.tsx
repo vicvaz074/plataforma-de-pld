@@ -37,6 +37,7 @@ interface SatDynamicOperationFormProps {
   onChange: (fieldId: string, value: string) => void
   editedFieldIds?: string[]
   infoHintContent?: InfoHintContent
+  sectionKinds?: Array<NonNullable<SatXlsmField["sectionKind"]>>
 }
 
 const SAT_STEPS: Array<{
@@ -131,12 +132,14 @@ export function SatDynamicOperationFormView({
   onChange,
   editedFieldIds = [],
   infoHintContent,
+  sectionKinds,
 }: SatDynamicOperationFormProps) {
   const [visibleRows, setVisibleRows] = useState<Record<string, number>>({})
   const [activeStepId, setActiveStepId] = useState<NonNullable<SatXlsmField["sectionKind"]>>("alta_sat")
   const [showResolvedFields, setShowResolvedFields] = useState(false)
   const [showOptionalFields, setShowOptionalFields] = useState(false)
   const [postalCatalog, setPostalCatalog] = useState<CodigoPostalInfo[]>(CODIGOS_POSTALES)
+  const sectionKindsKey = sectionKinds?.join("|") ?? ""
 
   const allFields = useMemo<SatXlsmField[]>(() => {
     if (!form) return []
@@ -144,10 +147,15 @@ export function SatDynamicOperationFormView({
     const visibleFields = form.templateId.includes("fraccion-v-inmuebles")
       ? fields.filter((field) => field.source === "manual-sat-map")
       : fields
-    return visibleFields.map((field) =>
-      field.sectionKind ? field : { ...field, sectionKind: "acto_operacion" },
+    const normalizedFields = visibleFields.map((field) =>
+      field.sectionKind ? field : { ...field, sectionKind: "acto_operacion" as const },
     )
-  }, [form])
+    if (!sectionKindsKey) return normalizedFields
+    const allowedKinds = new Set(sectionKindsKey.split("|"))
+    return normalizedFields.filter(
+      (field) => Boolean(field.sectionKind && allowedKinds.has(field.sectionKind)),
+    )
+  }, [form, sectionKindsKey])
 
   const activeFields = useMemo(
     () => filterActiveSatXlsmFields(allFields, values),
@@ -296,7 +304,7 @@ export function SatDynamicOperationFormView({
           <Badge
             variant="outline"
             className={
-              missingRequired.length
+              actionableMissingRequired.length
                 ? "border-amber-200 bg-amber-50 text-[10px] text-amber-700"
                 : "border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700"
             }
