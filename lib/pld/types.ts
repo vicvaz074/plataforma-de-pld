@@ -696,8 +696,11 @@ export interface SatDownloadOption {
 
 export interface SatOutputPackage {
   id: string
-  schemaVersion: 1
+  schemaVersion: 1 | 2
   createdAt: string
+  updatedAt?: string
+  sourceOperationId?: string
+  sourceOperationRevision?: number
   tenantId: string
   tenantRfc: string
   tenantName: string
@@ -729,6 +732,31 @@ export interface SatOutputPackage {
   satOutputOverride?: SatOutputOverride
   validation: SatOutputValidation
   downloads: SatDownloadOption[]
+}
+
+export type SatQueueItemKind = "sat_output" | "identification_only" | "internal_record"
+
+export interface SatQueueItem {
+  id: string
+  source: "operation" | "unlinked_package"
+  kind: SatQueueItemKind
+  label: string
+  description: string
+  sourceOperationId?: string
+  sourceOperationRevision?: number
+  operationStatus?: UmbralStatus
+  lifecycleStatus?: "active" | "cancelled"
+  packageId?: string
+  package?: SatOutputPackage
+  actividadKey: string
+  actividadNombre?: string
+  clienteNombre: string
+  clienteRfc?: string
+  periodo: string
+  fechaOperacion?: string
+  montoCentavos?: number
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type WizardStepStatus = "complete" | "missing" | "review" | "blocked"
@@ -892,6 +920,9 @@ export interface PldOperationalCase {
   clienteRfc?: string
   tipoCliente: string
   fechaOperacion: string
+  /** Fuente canónica del monto cuando está disponible. */
+  montoCentavos?: number
+  /** Espejo numérico conservado para consumidores legacy y cálculos UMA. */
   montoMxn: number
   formaPago: string
   ebrId?: string

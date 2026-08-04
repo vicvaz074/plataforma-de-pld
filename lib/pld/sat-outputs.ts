@@ -1,6 +1,7 @@
 import { resolveSatFormatoForActividad } from "./sat-formatos"
 import { buildOfficialSatXml } from "./sat-xml"
 import { resolveSatTemplateForActividad } from "./sat-template-catalog"
+import { centsToDecimalString, parseMoneyToCents } from "./money"
 import type {
   PldOperationalCase,
   PldSubjectRegistrationLink,
@@ -82,7 +83,22 @@ export function getSatLayoutForActividad(actividadKey: string): SatLayoutDefinit
   }
 }
 
-export function generateSatOutputPackage(operationalCase: PldOperationalCase): SatOutputPackage {
+export interface SatOutputSourceMetadata {
+  sourceOperationId: string
+  sourceOperationRevision: number
+  updatedAt?: string
+}
+
+export function generateSatOutputPackage(operationalCase: PldOperationalCase): SatOutputPackage
+export function generateSatOutputPackage(
+  operationalCase: PldOperationalCase,
+  source: SatOutputSourceMetadata,
+): SatOutputPackage
+export function generateSatOutputPackage(
+  operationalCase: PldOperationalCase,
+  source?: unknown,
+): SatOutputPackage {
+  const sourceMetadata = normalizeSatOutputSourceMetadata(source)
   const formato = resolveSatFormatoForActividad(operationalCase.actividadKey)
   const template = resolveSatTemplateForActividad(
     operationalCase.actividadKey,
@@ -125,9 +141,12 @@ export function generateSatOutputPackage(operationalCase: PldOperationalCase): S
   })
 
   return {
-    id: `satpkg-${operationalCase.id}-${outputKind}`,
-    schemaVersion: 1,
+    id: sourceMetadata ? `satpkg-${sourceMetadata.sourceOperationId}` : `satpkg-${operationalCase.id}-${outputKind}`,
+    schemaVersion: sourceMetadata ? 2 : 1,
     createdAt: generatedAt,
+    updatedAt: sourceMetadata ? sourceMetadata.updatedAt || generatedAt : undefined,
+    sourceOperationId: sourceMetadata?.sourceOperationId,
+    sourceOperationRevision: sourceMetadata?.sourceOperationRevision,
     tenantId: operationalCase.tenantId,
     tenantRfc: operationalCase.tenantRfc,
     tenantName: operationalCase.tenantName,
@@ -158,6 +177,21 @@ export function generateSatOutputPackage(operationalCase: PldOperationalCase): S
     satDemoScenarioId: operationalCase.satDemoScenarioId,
     validation,
     downloads,
+  }
+}
+
+function normalizeSatOutputSourceMetadata(value: unknown): SatOutputSourceMetadata | undefined {
+  if (!value || typeof value !== "object") return undefined
+  const source = value as Record<string, unknown>
+  if (typeof source.sourceOperationId !== "string" || !source.sourceOperationId.trim()) return undefined
+  if (!Number.isSafeInteger(source.sourceOperationRevision) || Number(source.sourceOperationRevision) < 1) {
+    return undefined
+  }
+
+  return {
+    sourceOperationId: source.sourceOperationId,
+    sourceOperationRevision: Number(source.sourceOperationRevision),
+    updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : undefined,
   }
 }
 
@@ -238,7 +272,7 @@ function validateSatOutput(operationalCase: PldOperationalCase, outputKind: SatO
   if (outputKind !== "informe_ceros") {
     if (!operationalCase.clienteNombre) missingFields.push("cliente.nombre")
     if (!operationalCase.fechaOperacion) missingFields.push("operacion.fecha")
-    if (!Number.isFinite(operationalCase.montoMxn) || operationalCase.montoMxn < 0) missingFields.push("operacion.monto")
+    if (!hasValidOperationalAmount(operationalCase)) missingFields.push("operacion.monto")
     if (operationalCase.satMissingRequiredFields?.length) {
       operationalCase.satMissingRequiredFields.forEach((field) => missingFields.push(`xlsm.${field}`))
     }
@@ -280,7 +314,7 @@ function buildCaptureSheet(
     ["Cliente", operationalCase.clienteNombre],
     ["RFC cliente", operationalCase.clienteRfc || ""],
     ["Fecha de operación", operationalCase.fechaOperacion],
-    ["Monto MXN", formatMoney(operationalCase.montoMxn)],
+    ["Monto MXN", formatOperationalAmount(operationalCase)],
     ["Forma de pago", operationalCase.formaPago],
     ["Faltantes", validation.missingFields.join("; ")],
     ["Advertencias", validation.warnings.join("; ")],
@@ -353,9 +387,24 @@ function escapeXml(value: string | number | undefined | null) {
     .replace(/'/g, "&apos;")
 }
 
-function formatMoney(value: number) {
-  if (!Number.isFinite(value)) return "0.00"
-  return value.toFixed(2)
+function canonicalAmountCents(operationalCase: PldOperationalCase) {
+  if (operationalCase.montoCentavos !== undefined) {
+    return Number.isSafeInteger(operationalCase.montoCentavos) && operationalCase.montoCentavos >= 0
+      ? operationalCase.montoCentavos
+      : null
+  }
+
+  const parsed = parseMoneyToCents(operationalCase.montoMxn)
+  return parsed.ok ? parsed.cents : null
+}
+
+function hasValidOperationalAmount(operationalCase: PldOperationalCase) {
+  return canonicalAmountCents(operationalCase) !== null
+}
+
+function formatOperationalAmount(operationalCase: PldOperationalCase) {
+  const cents = canonicalAmountCents(operationalCase)
+  return cents === null ? "0.00" : centsToDecimalString(cents)
 }
 
 function slugFraction(fraccion: string) {

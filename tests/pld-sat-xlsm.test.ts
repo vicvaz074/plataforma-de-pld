@@ -13,6 +13,8 @@ import {
   fillSatXlsmTemplate,
   getSatTemplateCachePath,
   isSatXlsmFieldActive,
+  isSatXlsmFieldRequired,
+  pruneInactiveSatFieldValues,
   resolveSatTemplateForActividad,
   satFieldValuesToWorkbookCells,
   SAT_TEMPLATE_CATALOG,
@@ -89,6 +91,108 @@ test("SAT template resolver only exposes subformats compatible with the selected
     xiAdministration.variants.map((variant) => variant.templateId),
     ["sat-fraccion-xi-b-administracion"],
   )
+})
+
+test("XII Notarios A only activates, requires and exports F18 when F17 uses SAT code 9", () => {
+  const template = resolveSatTemplateForActividad("fraccion-xii-notarios-a")
+  const workbookPath = path.join(repoRoot, getSatTemplateCachePath(template))
+  assert.equal(existsSync(workbookPath), true, "Run pnpm sync:sat:formatos to cache official SAT XLSM templates")
+  const workbook = readFileSync(workbookPath)
+  const extractedLayout = extractSatXlsmLayoutFromBuffer(workbook, template)
+  const extractedTipoActoOtro = extractedLayout.sections
+    .flatMap((section) => section.fields)
+    .find((field) => field.id === "aviso.descripcion-tipo-de-acto-otro.f18")
+  assert.equal(extractedTipoActoOtro?.cell, "F18")
+
+  const layout = JSON.parse(
+    readFileSync(
+      path.join(repoRoot, "public/data/sat-xlsm-layouts/sat-fraccion-xii-notarios-a.json"),
+      "utf8",
+    ),
+  )
+  const form = buildSatDynamicOperationForm({ template, layout })
+  const fields = form.sections.flatMap((section) => section.fields)
+  const tipoActoId = "aviso.tipo-de-acto-realizado.f17"
+  const tipoActoOtroId = "aviso.descripcion-tipo-de-acto-otro.f18"
+  const tipoActo = fields.find((field) => field.id === tipoActoId)
+  const tipoActoOtro = fields.find((field) => field.id === tipoActoOtroId)
+  const valorCatastralId = "aviso.valor-catastral-del-inmueble.c25"
+
+  assert.ok(tipoActo)
+  assert.ok(tipoActoOtro)
+  assert.equal(tipoActo.cell, "F17")
+  assert.equal(tipoActoOtro.cell, "F18")
+  assert.equal(tipoActoOtro.required, false)
+  assert.deepEqual(tipoActoOtro.activeWhen, [{ fieldId: tipoActoId, equals: ["9"] }])
+  assert.deepEqual(tipoActoOtro.requiredWhen, [{ fieldId: tipoActoId, equals: ["9"] }])
+
+  const prefillMontoGeneral = buildSatDynamicOperationForm({
+    template,
+    layout,
+    prefill: { montoMxn: "10000000.00" },
+  })
+  assert.equal(prefillMontoGeneral.initialValues[valorCatastralId], undefined)
+  const prefillCatastralExplicito = buildSatDynamicOperationForm({
+    template,
+    layout,
+    prefill: {
+      montoMxn: "10000000.00",
+      instrumentoValorCatastral: "2450000.00",
+    },
+  })
+  assert.equal(prefillCatastralExplicito.initialValues[valorCatastralId], "2450000.00")
+
+  const cases = [
+    ["1, Prescripción Positiva", false],
+    ["2, Dación en Pago", false],
+    ["3, Adjudicación", false],
+    ["9, Otro", true],
+  ] as const
+
+  for (const [tipoActoValue, expectsOtro] of cases) {
+    const values = {
+      [tipoActoId]: tipoActoValue,
+      [tipoActoOtroId]: "ACTO-OTRO-PRUEBA-2026",
+      "Aviso!F18": "ACTO-OTRO-PRUEBA-2026",
+    }
+    assert.equal(isSatXlsmFieldActive(tipoActoOtro, values), expectsOtro)
+    assert.equal(isSatXlsmFieldRequired(tipoActoOtro, values), expectsOtro)
+
+    const cells = satFieldValuesToWorkbookCells(values, layout)
+    assert.equal(cells["Aviso!F17"], tipoActoValue)
+    assert.equal(cells["Aviso!F18"], expectsOtro ? "ACTO-OTRO-PRUEBA-2026" : undefined)
+  }
+
+  const filledNormal = fillSatXlsmTemplate(workbook, {
+    template,
+    values: {
+      [tipoActoId]: "1, Prescripción Positiva",
+      [tipoActoOtroId]: "VALOR-OBSOLETO",
+      "Aviso!F18": "VALOR-OBSOLETO",
+    },
+    layout,
+  })
+  assert.equal(filledNormal.writtenCells.includes("Aviso!F18"), false)
+  assert.equal(filledNormal.missingRequiredFields.includes(tipoActoOtroId), false)
+
+  const missingOtro = fillSatXlsmTemplate(workbook, {
+    template,
+    values: { [tipoActoId]: "9, Otro" },
+    layout,
+  })
+  assert.equal(missingOtro.missingRequiredFields.includes(tipoActoOtroId), true)
+
+  const filledOtro = fillSatXlsmTemplate(workbook, {
+    template,
+    values: {
+      [tipoActoId]: "9, Otro",
+      [tipoActoOtroId]: "ACTO-OTRO-PRUEBA-2026",
+    },
+    layout,
+  })
+  assert.equal(filledOtro.writtenCells.includes("Aviso!F18"), true)
+  const avisoSheet = Buffer.from(unzipSync(filledOtro.workbook)["xl/worksheets/sheet1.xml"]).toString("utf8")
+  assert.match(avisoSheet, /ACTO-OTRO-PRUEBA-2026/)
 })
 
 test("XI-B questionnaire follows official conditional branches for other, inmuebles and virtual assets", () => {
@@ -219,7 +323,7 @@ test("dynamic Actos y Operaciones form is generated from the selected SAT XLSM t
   assert.equal(form.initialValues["pago.moneda"], "MXN")
 })
 
-test("Inmuebles questionnaire maps Persona Objeto and Beneficiario controlador with exact SAT dropdowns", () => {
+test("Inmuebles questionnaire maps Persona Objeto and only the primary PF Beneficiario controlador row", () => {
   const template = resolveSatTemplateForActividad("fraccion-v-inmuebles")
   const workbookPath = path.join(repoRoot, getSatTemplateCachePath(template))
   assert.equal(existsSync(workbookPath), true, "Run pnpm sync:sat:formatos to cache official SAT XLSM templates")
@@ -239,11 +343,13 @@ test("Inmuebles questionnaire maps Persona Objeto and Beneficiario controlador w
       clientePais: "MEXICO,MX",
       clienteGiro: "NO APLICA||1000000",
       beneficiarioTipoPersonaSat: "persona_fisica",
-      beneficiarioNombre: "Adriana",
-      beneficiarioApellidoPaterno: "Luna",
-      beneficiarioApellidoMaterno: "Paredes",
-      beneficiarioRfc: "LUPA760912QA1",
-      beneficiarioPais: "MEXICO,MX",
+      beneficiarioPfNombre: "Adriana",
+      beneficiarioPfApellidoPaterno: "Luna",
+      beneficiarioPfApellidoMaterno: "Paredes",
+      beneficiarioPfRfc: "LUPA760912QA1",
+      beneficiarioPfPais: "MEXICO,MX",
+      beneficiarioPmRazonSocial: "No debe aparecer, S.A. de C.V.",
+      beneficiarioPmRfc: "NDA260101AA1",
     },
   })
   const fields = form.sections.flatMap((section) => section.fields)
@@ -272,6 +378,147 @@ test("Inmuebles questionnaire maps Persona Objeto and Beneficiario controlador w
   assert.equal(form.initialValues["persona_aviso.sujeto_obligado_rfc"], "SAN910101AB1")
   assert.equal(form.initialValues["persona_aviso.pm.razon_social"], "Desarrollos Lago Verde, S.A.P.I. de C.V.")
   assert.equal(form.initialValues["beneficiario.pf.nombre"], "Adriana")
+  assert.equal(form.initialValues["beneficiario.pf.rfc"], "LUPA760912QA1")
+  assert.equal(form.initialValues["beneficiario.pf.2.nombre"], undefined)
+  assert.equal(form.initialValues["beneficiario.pf.2.rfc"], undefined)
+  assert.equal(form.initialValues["beneficiario.pm.razon_social"], undefined)
+  assert.equal(form.initialValues["beneficiario.pm.rfc"], undefined)
+  assert.equal(form.initialValues["beneficiario.pm.denominacion_fiduciario"], undefined)
+  assert.equal(form.initialValues["beneficiario.pm.rfc_fiduciario"], undefined)
+  assert.equal(form.initialValues["beneficiario.pm.identificador_fideicomiso"], undefined)
+})
+
+test("Inmuebles questionnaire maps only the primary PM Beneficiario controlador row", () => {
+  const template = resolveSatTemplateForActividad("fraccion-v-inmuebles")
+  const workbookPath = path.join(repoRoot, getSatTemplateCachePath(template))
+  assert.equal(existsSync(workbookPath), true, "Run pnpm sync:sat:formatos to cache official SAT XLSM templates")
+  const layout = extractSatXlsmLayoutFromBuffer(readFileSync(workbookPath), template)
+  const form = buildSatDynamicOperationForm({
+    template,
+    layout,
+    prefill: {
+      beneficiarioTipoPersonaSat: "persona_moral",
+      beneficiarioPmRazonSocial: "Controladora Bosque, S.A. de C.V.",
+      beneficiarioPmFechaConstitucion: "07/03/2019",
+      beneficiarioPmRfc: "CBO190307AB2",
+      beneficiarioPmPais: "MEXICO,MX",
+      beneficiarioPfNombre: "No debe aparecer",
+      beneficiarioPfRfc: "NDA760912QA1",
+    },
+  })
+
+  assert.equal(form.initialValues["beneficiario.pm.razon_social"], "Controladora Bosque, S.A. de C.V.")
+  assert.equal(form.initialValues["beneficiario.pm.fecha_constitucion"], "07/03/2019")
+  assert.equal(form.initialValues["beneficiario.pm.rfc"], "CBO190307AB2")
+  assert.equal(form.initialValues["beneficiario.pm.pais_nacionalidad"], "MEXICO,MX")
+  assert.equal(form.initialValues["beneficiario.pm.2.razon_social"], undefined)
+  assert.equal(form.initialValues["beneficiario.pm.2.rfc"], undefined)
+  assert.equal(form.initialValues["beneficiario.pf.nombre"], undefined)
+  assert.equal(form.initialValues["beneficiario.pf.rfc"], undefined)
+  assert.equal(form.initialValues["beneficiario.pm.denominacion_fiduciario"], undefined)
+  assert.equal(form.initialValues["beneficiario.pm.rfc_fiduciario"], undefined)
+  assert.equal(form.initialValues["beneficiario.pm.identificador_fideicomiso"], undefined)
+})
+
+test("Beneficiario controlador activates, requires and exports only the selected singular PF or PM branch", () => {
+  const template = resolveSatTemplateForActividad("fraccion-i-juegos")
+  const layout = JSON.parse(
+    readFileSync(path.join(repoRoot, "public/data/sat-xlsm-layouts/sat-fraccion-i-juegos.json"), "utf8"),
+  )
+  const inmueblesTemplate = resolveSatTemplateForActividad("fraccion-v-inmuebles")
+  const inmueblesLayout = JSON.parse(
+    readFileSync(path.join(repoRoot, "public/data/sat-xlsm-layouts/sat-fraccion-v-inmuebles.json"), "utf8"),
+  )
+  const cases = [
+    {
+      type: "persona_fisica",
+      prefill: {
+        beneficiarioTipoPersonaSat: "persona_fisica",
+        beneficiarioPfNombre: "Adriana",
+        beneficiarioPfRfc: "LUPA760912QA1",
+        beneficiarioPfPais: "MEXICO,MX",
+      },
+      selected: "pf",
+      opposite: "pm",
+    },
+    {
+      type: "persona_moral",
+      prefill: {
+        beneficiarioTipoPersonaSat: "persona_moral",
+        beneficiarioPmRazonSocial: "Controladora Bosque, S.A. de C.V.",
+        beneficiarioPmRfc: "CBO190307AB2",
+        beneficiarioPmPais: "MEXICO,MX",
+      },
+      selected: "pm",
+      opposite: "pf",
+    },
+  ] as const
+
+  const branchForField = (cell: string) => Number(cell.match(/\d+/)?.[0] ?? 0) <= 16 ? "pf" : "pm"
+  const isFiduciary = (id: string, label: string) => /fiduciari|fideicomiso/i.test(`${id} ${label}`)
+
+  for (const scenario of cases) {
+    const form = buildSatDynamicOperationForm({ template, layout, prefill: scenario.prefill })
+    const fields = form.sections
+      .flatMap((section) => section.fields)
+      .filter((field) => field.sectionKind === "beneficiario_controlador")
+    const values = form.initialValues
+    const selectedFields = fields.filter((field) => branchForField(field.cell) === scenario.selected)
+    const oppositeFields = fields.filter((field) => branchForField(field.cell) === scenario.opposite)
+    const fiduciaryFields = fields.filter((field) => isFiduciary(field.id, field.label))
+
+    assert.equal(fields.some((field) => field.source === "xlsm-label"), false)
+    assert.equal(selectedFields.some((field) => isSatXlsmFieldActive(field, values)), true)
+    assert.equal(oppositeFields.every((field) => !isSatXlsmFieldActive(field, values)), true)
+    assert.equal(fiduciaryFields.every((field) => !isSatXlsmFieldActive(field, values)), true)
+
+    const selectedRequired = fields.filter((field) =>
+      isSatXlsmFieldRequired(field, { "beneficiario.tipo_persona": scenario.type }),
+    )
+    assert.equal(selectedRequired.length > 0, true)
+    assert.equal(selectedRequired.every((field) => branchForField(field.cell) === scenario.selected), true)
+    assert.equal(selectedRequired.some((field) => isFiduciary(field.id, field.label)), false)
+    const selectedMissing = selectedRequired
+      .filter((field) => !(values[field.id] ?? "").trim())
+    assert.equal(selectedMissing.some((field) => branchForField(field.cell) === scenario.opposite), false)
+    assert.equal(selectedMissing.some((field) => isFiduciary(field.id, field.label)), false)
+
+    const staleOpposite = oppositeFields[0]
+    const staleFiduciary = fiduciaryFields[0]
+    assert.ok(staleOpposite)
+    assert.ok(staleFiduciary)
+    const pruned = pruneInactiveSatFieldValues({
+      fields,
+      values: {
+        ...values,
+        [staleOpposite.id]: "VALOR OBSOLETO",
+        [staleFiduciary.id]: "VALOR FIDUCIARIO OBSOLETO",
+      },
+    })
+    assert.equal(pruned[staleOpposite.id], undefined)
+    assert.equal(pruned[staleFiduciary.id], undefined)
+
+    const inmueblesForm = buildSatDynamicOperationForm({
+      template: inmueblesTemplate,
+      layout: inmueblesLayout,
+      prefill: scenario.prefill,
+    })
+    const repeatedField = inmueblesForm.sections
+      .flatMap((section) => section.fields)
+      .find(
+        (field) =>
+          field.sectionKind === "beneficiario_controlador" &&
+          field.repeatIndex === 2 &&
+          field.repeatGroup?.endsWith(`_${scenario.selected}`),
+      )
+    assert.ok(repeatedField)
+    assert.equal(isSatXlsmFieldActive(repeatedField, inmueblesForm.initialValues), false)
+    const prunedRepeated = pruneInactiveSatFieldValues({
+      fields: inmueblesForm.sections.flatMap((section) => section.fields),
+      values: { ...inmueblesForm.initialValues, [repeatedField.id]: "VALOR REPETIDO OBSOLETO" },
+    })
+    assert.equal(prunedRepeated[repeatedField.id], undefined)
+  }
 })
 
 test("Desarrollo inmobiliario questionnaire keeps official XLSM dropdown options", () => {
@@ -545,7 +792,7 @@ test("filled SAT XLSM keeps macros and writes mapped values into official workbo
       "inmueble.folio_real": "CDMX-2026-0001",
       "inmueble.2.tipo_bien": "2,Departamento",
       "inmueble.2.valor_pactado": "2500000",
-      "Acto u operación!F70": "4850000",
+      "Acto u operación!F70": "10000000.00",
       "pago.fecha": "12/05/2026",
       "pago.forma_pago": "1,Contado",
       "pago.instrumento_monetario": "6,Transferencia interbancaria",
@@ -572,7 +819,9 @@ test("filled SAT XLSM keeps macros and writes mapped values into official workbo
   assert.match(beneficiarioSheet, /Adriana/)
   assert.match(beneficiarioSheet, /LUPA760912QA1/)
   assert.notEqual(acto.C5.w, "46154")
+  assert.equal(acto.F70.v, 10_000_000)
   assert.match(sheet, /4850000/)
+  assert.match(sheet, /10000000/)
   assert.match(sheet, /2500000/)
   assert.equal(filled.writtenCells.includes("Persona Objeto del aviso!C4"), true)
   assert.equal(filled.writtenCells.includes("Beneficiario controlador!B5"), true)

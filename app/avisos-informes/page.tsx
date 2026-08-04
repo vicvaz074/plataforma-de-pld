@@ -35,6 +35,10 @@ import { useToast } from "@/components/ui/use-toast"
 import { InfoHint } from "@/components/pld/info-hint"
 import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
 import {
+  loadStoredPldOperations,
+  type StoredPldOperationV3,
+} from "@/lib/pld/stored-operations"
+import {
   Activity,
   AlertCircle,
   AlertTriangle,
@@ -58,6 +62,7 @@ import {
   buildSatTemplateDemoScenarioValues,
   buildSatTemplateDemoScenarios,
   buildSatWorkbookDownloadValues,
+  buildSatQueueItems,
   applySatOutputOverride,
   buildSatPackageActionView,
   fillSatXlsmTemplate,
@@ -68,6 +73,7 @@ import {
   type SatOutputKind,
   type SatOutputOverride,
   type SatOutputPackage,
+  type SatQueueItem,
   type SatXlsmLayout,
 } from "@/lib/pld"
 
@@ -119,22 +125,16 @@ interface ExpedienteResumen {
   actualizadoEn?: string
 }
 
-interface OperacionResumen {
-  id: string
-  rfc: string
-  cliente: string
-  actividadNombre: string
-  tipoOperacion: string
-  monto: number
-  fechaOperacion: string
-  umbralStatus?: "sin-obligacion" | "identificacion" | "aviso"
-  alerta?: string | null
-  avisoPresentado?: boolean
-}
+type OperacionResumen = StoredPldOperationV3
 
 interface SatOutputPackageResumen {
   id: string
+  schemaVersion: 1 | 2
   createdAt: string
+  updatedAt?: string
+  sourceOperationId?: string
+  sourceOperationRevision?: number
+  tenantId: string
   tenantRfc: string
   tenantName: string
   periodo: string
@@ -163,6 +163,7 @@ interface SatOutputPackageResumen {
   goldenFixtureId?: string
   satDemoScenarioId?: string
   satOutputOverride?: SatOutputOverride
+  downloads: SatOutputPackage["downloads"]
   validation: {
     status: "listo" | "borrador_bloqueado"
     missingFields: string[]
@@ -184,6 +185,21 @@ interface EvaluacionEbrResumen {
     paisResidencia?: string
     sectorEconomico?: string
   }
+}
+
+function getUniqueSatMissingFields(satPackage?: SatOutputPackageResumen | null) {
+  if (!satPackage) return []
+  const byCanonicalId = new Map<string, string>()
+  for (const fieldId of [
+    ...satPackage.validation.missingFields,
+    ...(satPackage.satMissingRequiredFields ?? []),
+  ]) {
+    const canonicalId = fieldId.trim().toLowerCase().replace(/^xlsm\./, "")
+    if (canonicalId && !byCanonicalId.has(canonicalId)) {
+      byCanonicalId.set(canonicalId, fieldId)
+    }
+  }
+  return Array.from(byCanonicalId.values())
 }
 
 const checklistQuestions: ChecklistQuestion[] = [
@@ -393,7 +409,8 @@ const AVISOS_INFO_HINTS: Record<string, InfoHintContent> = {
   bandeja: {
     id: "bandeja-sat",
     title: "Bandeja SAT",
-    summary: "Concentra las salidas calculadas desde Actos y Operaciones para descargar Excel, XML y ficha.",
+    summary:
+      "Concentra todas las operaciones; sólo las reportables con paquete real habilitan Excel, XML y ficha.",
   },
   override: {
     id: "corregir-salida",
@@ -466,6 +483,9 @@ export default function AvisosInformesPage() {
                   : null
 
                 return {
+                  // Conservar campos presentes y futuros para que una corrección
+                  // desde esta bandeja no reduzca el paquete al volver a persistirlo.
+                  ...record,
                   id: typeof record.id === "string" ? record.id : crypto.randomUUID(),
                   nombre: typeof record.nombre === "string" ? record.nombre : "",
                   rfc: typeof identificacion.rfc === "string" ? identificacion.rfc : "",
@@ -514,43 +534,14 @@ export default function AvisosInformesPage() {
       setExpedientesEui([])
     }
 
-    const operacionesRaw = window.localStorage.getItem(OPERACIONES_STORAGE_KEY)
-    if (operacionesRaw) {
-      try {
-        const parsed = JSON.parse(operacionesRaw)
-        const operacionesParsed = Array.isArray(parsed)
-          ? parsed
-              .map((item) => {
-                if (!item || typeof item !== "object") return null
-                const record = item as Record<string, unknown>
-                return {
-                  id: typeof record.id === "string" ? record.id : crypto.randomUUID(),
-                  rfc: typeof record.rfc === "string" ? record.rfc : "",
-                  cliente: typeof record.cliente === "string" ? record.cliente : "",
-                  actividadNombre: typeof record.actividadNombre === "string" ? record.actividadNombre : "",
-                  tipoOperacion: typeof record.tipoOperacion === "string" ? record.tipoOperacion : "",
-                  monto: typeof record.monto === "number" ? record.monto : 0,
-                  fechaOperacion: typeof record.fechaOperacion === "string" ? record.fechaOperacion : "",
-                  umbralStatus:
-                    record.umbralStatus === "sin-obligacion" ||
-                    record.umbralStatus === "identificacion" ||
-                    record.umbralStatus === "aviso"
-                      ? record.umbralStatus
-                      : undefined,
-                  alerta: typeof record.alerta === "string" ? record.alerta : null,
-                  avisoPresentado: record.avisoPresentado === true,
-                }
-              })
-              .filter((item) => Boolean(item?.rfc)) as OperacionResumen[]
-          : []
-        setOperaciones(operacionesParsed)
-      } catch (error) {
-        console.error("Error al leer operaciones", error)
-        setOperaciones([])
-      }
-    } else {
-      setOperaciones([])
+    const operationsResult = loadStoredPldOperations(window.localStorage, {
+      key: OPERACIONES_STORAGE_KEY,
+      persistMigration: true,
+    })
+    if (operationsResult.parseError) {
+      console.error("Error al leer operaciones", operationsResult.parseError)
     }
+    setOperaciones(operationsResult.operations)
 
     const ebrRaw = window.localStorage.getItem(EBR_STORAGE_KEY)
     if (ebrRaw) {
@@ -614,7 +605,17 @@ export default function AvisosInformesPage() {
 
                 return {
                   id: typeof record.id === "string" ? record.id : crypto.randomUUID(),
+                  schemaVersion: record.schemaVersion === 2 ? 2 : 1,
                   createdAt: typeof record.createdAt === "string" ? record.createdAt : "",
+                  updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : undefined,
+                  sourceOperationId:
+                    typeof record.sourceOperationId === "string" ? record.sourceOperationId : undefined,
+                  sourceOperationRevision:
+                    typeof record.sourceOperationRevision === "number" &&
+                    Number.isSafeInteger(record.sourceOperationRevision)
+                      ? record.sourceOperationRevision
+                      : undefined,
+                  tenantId: typeof record.tenantId === "string" ? record.tenantId : "",
                   tenantRfc: typeof record.tenantRfc === "string" ? record.tenantRfc : "",
                   tenantName: typeof record.tenantName === "string" ? record.tenantName : "",
                   periodo: typeof record.periodo === "string" ? record.periodo : "",
@@ -689,6 +690,9 @@ export default function AvisosInformesPage() {
                           at: typeof overrideRaw?.at === "string" ? overrideRaw.at : "",
                         }
                       : undefined,
+                  downloads: Array.isArray(record.downloads)
+                    ? (record.downloads as SatOutputPackage["downloads"])
+                    : [],
                   validation: {
                     status: validation.status === "listo" ? "listo" : "borrador_bloqueado",
                     missingFields: Array.isArray(validation.missingFields) ? validation.missingFields : [],
@@ -713,6 +717,29 @@ export default function AvisosInformesPage() {
     loadIntegrationData()
   }, [loadIntegrationData])
 
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (
+        event.key === null ||
+        event.key === OPERACIONES_STORAGE_KEY ||
+        event.key === SAT_OUTPUT_PACKAGES_KEY ||
+        event.key === REGISTRO_STORAGE_KEY ||
+        event.key === EXPEDIENTE_STORAGE_KEY ||
+        event.key === EBR_STORAGE_KEY
+      ) {
+        loadIntegrationData()
+      }
+    }
+
+    window.addEventListener("storage", handleStorageChange)
+    return () => window.removeEventListener("storage", handleStorageChange)
+  }, [loadIntegrationData])
+
+  const operacionesActivas = useMemo(
+    () => operaciones.filter((operacion) => operacion.lifecycle.status === "active"),
+    [operaciones],
+  )
+
   const sujetosDisponibles = useMemo(() => {
     const map = new Map<string, { rfc: string; nombre: string; fuente: string }>()
 
@@ -732,7 +759,7 @@ export default function AvisosInformesPage() {
       }
     })
 
-    operaciones.forEach((operacion) => {
+    operacionesActivas.forEach((operacion) => {
       if (!operacion.rfc) return
       if (!map.has(operacion.rfc)) {
         map.set(operacion.rfc, {
@@ -744,14 +771,12 @@ export default function AvisosInformesPage() {
     })
 
     return Array.from(map.values())
-  }, [expedientesEui, operaciones, sujetosRegistro])
+  }, [expedientesEui, operacionesActivas, sujetosRegistro])
 
   useEffect(() => {
-    if (selectedRfc) return
+    if (selectedRfc && sujetosDisponibles.some((sujeto) => sujeto.rfc === selectedRfc)) return
     const primerRfc = sujetosDisponibles[0]?.rfc
-    if (primerRfc) {
-      setSelectedRfc(primerRfc)
-    }
+    setSelectedRfc(primerRfc ?? "")
   }, [selectedRfc, sujetosDisponibles])
 
   const detectionDateTime = useMemo(() => buildDate(noticeForm.detectionDate, noticeForm.detectionTime), [
@@ -801,37 +826,38 @@ export default function AvisosInformesPage() {
   }, [selectedOperationType])
 
   const operacionesFiltradas = useMemo(
-    () => operaciones.filter((operacion) => (selectedRfc ? operacion.rfc === selectedRfc : true)),
-    [operaciones, selectedRfc],
+    () => operacionesActivas.filter((operacion) => (selectedRfc ? operacion.rfc === selectedRfc : true)),
+    [operacionesActivas, selectedRfc],
   )
 
-  const satPackagesCoincidentes = useMemo(
+  const satQueueItems = useMemo(
     () =>
-      satOutputPackages.filter((item) => !selectedRfc || item.clienteRfc === selectedRfc || item.tenantRfc === selectedRfc),
-    [satOutputPackages, selectedRfc],
+      buildSatQueueItems({
+        operations: operaciones,
+        packages: satOutputPackages as unknown as SatOutputPackage[],
+      }),
+    [operaciones, satOutputPackages],
   )
-
-  const satPackagesFiltrados = useMemo(
-    () => (satPackagesCoincidentes.length > 0 ? satPackagesCoincidentes : satOutputPackages),
-    [satOutputPackages, satPackagesCoincidentes],
-  )
-
-  const mostrandoPaquetesSinCoincidencia = selectedRfc !== "" && satPackagesCoincidentes.length === 0 && satOutputPackages.length > 0
 
   useEffect(() => {
-    if (!satPackagesFiltrados.length) {
+    if (!satQueueItems.length) {
       setSelectedSatPackageId("")
       return
     }
 
-    if (!satPackagesFiltrados.some((item) => item.id === selectedSatPackageId)) {
-      setSelectedSatPackageId(satPackagesFiltrados[0].id)
+    if (!satQueueItems.some((item) => item.id === selectedSatPackageId)) {
+      setSelectedSatPackageId(satQueueItems[0].id)
     }
-  }, [satPackagesFiltrados, selectedSatPackageId])
+  }, [satQueueItems, selectedSatPackageId])
+
+  const satQueueItemSeleccionado = useMemo(
+    () => satQueueItems.find((item) => item.id === selectedSatPackageId) ?? satQueueItems[0] ?? null,
+    [satQueueItems, selectedSatPackageId],
+  )
 
   const satPackageSeleccionado = useMemo(
-    () => satPackagesFiltrados.find((item) => item.id === selectedSatPackageId) ?? satPackagesFiltrados[0] ?? null,
-    [satPackagesFiltrados, selectedSatPackageId],
+    () => (satQueueItemSeleccionado?.package as SatOutputPackageResumen | undefined) ?? null,
+    [satQueueItemSeleccionado],
   )
   const satPackageActions = useMemo(
     () => (satPackageSeleccionado ? buildSatPackageActionView(satPackageSeleccionado as unknown as SatOutputPackage) : []),
@@ -1049,7 +1075,7 @@ export default function AvisosInformesPage() {
     const rows = [
       ["RFC", "Cliente", "Tipo cliente", "Registro completo", "Operaciones", "Alertas", "Avisos pendientes", "Riesgo EBR"],
       ...sujetosDisponibles.map((sujeto) => {
-        const ops = operaciones.filter((op) => op.rfc === sujeto.rfc)
+        const ops = operacionesActivas.filter((op) => op.rfc === sujeto.rfc)
         const alertas = ops.filter((op) => op.alerta).length
         const pendientes = ops.filter((op) => op.umbralStatus === "aviso" && !op.avisoPresentado).length
         const registro = sujetosRegistro.find((item) => item.rfc === sujeto.rfc)
@@ -1085,7 +1111,7 @@ export default function AvisosInformesPage() {
   const handleDownloadOperacionesAviso = () => {
     const rows = [
       ["RFC", "Cliente", "Actividad", "Tipo operación", "Monto", "Fecha", "Umbral", "Alerta"],
-      ...operaciones
+      ...operacionesActivas
         .filter((op) => op.umbralStatus === "aviso")
         .map((op) => [
           op.rfc,
@@ -1170,7 +1196,7 @@ export default function AvisosInformesPage() {
     window.localStorage.setItem(SAT_OUTPUT_PACKAGES_KEY, JSON.stringify(updatedPackages))
     setOverrideDialogOpen(false)
     setOverrideReason("")
-    setSelectedSatPackageId(satPackageSeleccionado.id)
+    setSelectedSatPackageId(satQueueItemSeleccionado?.id || "")
     setTraceabilityEntries((prev) => [
       {
         id: `override-${Date.now()}`,
@@ -1327,43 +1353,31 @@ export default function AvisosInformesPage() {
                 <InfoHint content={AVISOS_INFO_HINTS.bandeja} />
               </CardTitle>
               <CardDescription>
-                Revisa salidas calculadas, descarga archivos oficiales y corrige solo con justificación trazable.
+                Revisa todas las operaciones. Las descargas sólo se habilitan cuando existe una salida SAT real.
               </CardDescription>
             </div>
             <Badge variant={satPackageSeleccionado?.validation.status === "listo" ? "default" : "outline"}>
-              {satPackageSeleccionado
-                ? satPackageSeleccionado.validation.status === "listo"
-                  ? "XML listo"
-                  : "Borrador bloqueado"
-                : "Sin paquete"}
+              {satQueueItemSeleccionado ? satQueueItemStatusLabel(satQueueItemSeleccionado) : "Sin operaciones"}
             </Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {satOutputPackages.length === 0 ? (
+          {satQueueItems.length === 0 ? (
             <Alert>
               <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>No hay paquetes SAT calculados</AlertTitle>
+              <AlertTitle>No hay operaciones ni paquetes SAT</AlertTitle>
               <AlertDescription>
-                Carga la demo completa o registra una operación con salida SAT para habilitar descargas de plantilla, XML y ficha.
+                Registra una operación o carga la demo completa para iniciar la bandeja.
               </AlertDescription>
             </Alert>
           ) : (
             <>
-              {mostrandoPaquetesSinCoincidencia && (
-                <Alert className="border-amber-200 bg-amber-50">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>No hay paquetes exactos para el RFC seleccionado</AlertTitle>
-                  <AlertDescription>
-                    Se muestran todos los paquetes SAT disponibles para que puedas descargar, revisar o corregir la salida sin perder contexto.
-                  </AlertDescription>
-                </Alert>
-              )}
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-                <div className="space-y-2">
-                  {satPackagesFiltrados.map((item) => {
-                    const selected = item.id === satPackageSeleccionado?.id
-                    const missingCount = item.validation.missingFields.length + (item.satMissingRequiredFields?.length || 0)
+                <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1 lg:max-h-[640px]">
+                  {satQueueItems.map((item) => {
+                    const selected = item.id === satQueueItemSeleccionado?.id
+                    const satPackage = item.package as SatOutputPackageResumen | undefined
+                    const missingCount = getUniqueSatMissingFields(satPackage).length
                     return (
                       <button
                         key={item.id}
@@ -1376,32 +1390,36 @@ export default function AvisosInformesPage() {
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="font-semibold text-slate-900">
-                              {item.clienteNombre || item.tenantName}
+                              {item.clienteNombre}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {item.periodo} · {item.actividadKey} ·{" "}
-                              {item.satTemplateFile || item.officialTemplateName || "Plantilla SAT"}
+                              {item.periodo || "Sin periodo"} · {item.actividadNombre || item.actividadKey}
+                              {typeof item.montoCentavos === "number"
+                                ? ` · ${formatCurrency(item.montoCentavos / 100)}`
+                                : ""}
                             </p>
+                            <p className="mt-1 text-xs text-slate-600">{item.description}</p>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             <Badge variant="outline" className="bg-white">
-                              {satOutputKindLabel(item.outputKind)}
+                              {item.label}
                             </Badge>
                             <Badge
                               variant="outline"
-                              className={
-                                item.validation.status === "listo"
-                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                  : "border-amber-200 bg-amber-50 text-amber-700"
-                              }
+                              className={satQueueItemBadgeClass(item)}
                             >
-                              {item.validation.status === "listo" ? "Listo" : `${missingCount} faltante(s)`}
+                              {satPackage
+                                ? satPackage.validation.status === "listo"
+                                  ? "Listo"
+                                  : `${missingCount} faltante(s)`
+                                : satQueueItemStatusLabel(item)}
                             </Badge>
                           </div>
                         </div>
-                        {item.satOutputOverride && (
+                        {satPackage?.satOutputOverride && (
                           <p className="mt-2 text-xs text-amber-700">
-                            Corregido desde {satOutputKindLabel(item.satOutputOverride.originalKind)}: {item.satOutputOverride.reason}
+                            Corregido desde {satOutputKindLabel(satPackage.satOutputOverride.originalKind)}:{" "}
+                            {satPackage.satOutputOverride.reason}
                           </p>
                         )}
                       </button>
@@ -1409,57 +1427,64 @@ export default function AvisosInformesPage() {
                   })}
                 </div>
 
-                <div className="rounded-lg border bg-white p-4 text-sm">
+                <div className="self-start rounded-lg border bg-white p-4 text-sm lg:sticky lg:top-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Paquete seleccionado</p>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Elemento seleccionado</p>
                       <p className="font-semibold text-slate-900">
-                        {satPackageSeleccionado?.clienteNombre || satPackageSeleccionado?.tenantName}
+                        {satQueueItemSeleccionado?.clienteNombre}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          if (!satPackageSeleccionado) return
-                          setOverrideKind(satPackageSeleccionado.outputKind)
-                          setOverrideReason("")
-                          setOverrideDialogOpen(true)
-                        }}
-                      >
-                        Corregir salida
-                      </Button>
-                      <InfoHint content={AVISOS_INFO_HINTS.override} />
+                    {satPackageSeleccionado && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setOverrideKind(satPackageSeleccionado.outputKind)
+                            setOverrideReason("")
+                            setOverrideDialogOpen(true)
+                          }}
+                        >
+                          Corregir salida
+                        </Button>
+                        <InfoHint content={AVISOS_INFO_HINTS.override} />
+                      </div>
+                    )}
+                  </div>
+                  {satPackageSeleccionado ? (
+                    <div className="mt-4 grid gap-2">
+                      {satPackageActions.map((action) => (
+                        <Button
+                          key={action.id}
+                          type="button"
+                          className="justify-start gap-2"
+                          variant={action.emphasis === "primary" ? "default" : action.emphasis === "secondary" ? "secondary" : "outline"}
+                          disabled={!action.enabled}
+                          onClick={() => {
+                            if (action.id === "official-template") window.open(satPackageSeleccionado.officialTemplateUrl, "_blank")
+                            if (action.id === "filled-workbook") handleDownloadSatWorkbook(satPackageSeleccionado)
+                            if (action.id === "xml") handleDownloadSatXml(satPackageSeleccionado)
+                            if (action.id === "capture-sheet") handleDownloadSatFicha(satPackageSeleccionado)
+                            if (action.id === "missing-fields") setSelectedTab("reportes")
+                          }}
+                        >
+                          {action.id === "official-template" && <FileUp className="h-4 w-4" />}
+                          {action.id === "filled-workbook" && <FileText className="h-4 w-4" />}
+                          {action.id === "xml" && <Download className="h-4 w-4" />}
+                          {action.id === "capture-sheet" && <ClipboardList className="h-4 w-4" />}
+                          {action.id === "missing-fields" && <AlertCircle className="h-4 w-4" />}
+                          {action.label}
+                        </Button>
+                      ))}
                     </div>
-                  </div>
-                  <div className="mt-4 grid gap-2">
-                    {satPackageActions.map((action) => (
-                      <Button
-                        key={action.id}
-                        type="button"
-                        className="justify-start gap-2"
-                        variant={action.emphasis === "primary" ? "default" : action.emphasis === "secondary" ? "secondary" : "outline"}
-                        disabled={!action.enabled}
-                        onClick={() => {
-                          if (!satPackageSeleccionado) return
-                          if (action.id === "official-template") window.open(satPackageSeleccionado.officialTemplateUrl, "_blank")
-                          if (action.id === "filled-workbook") handleDownloadSatWorkbook(satPackageSeleccionado)
-                          if (action.id === "xml") handleDownloadSatXml(satPackageSeleccionado)
-                          if (action.id === "capture-sheet") handleDownloadSatFicha(satPackageSeleccionado)
-                          if (action.id === "missing-fields") setSelectedTab("reportes")
-                        }}
-                      >
-                        {action.id === "official-template" && <FileUp className="h-4 w-4" />}
-                        {action.id === "filled-workbook" && <FileText className="h-4 w-4" />}
-                        {action.id === "xml" && <Download className="h-4 w-4" />}
-                        {action.id === "capture-sheet" && <ClipboardList className="h-4 w-4" />}
-                        {action.id === "missing-fields" && <AlertCircle className="h-4 w-4" />}
-                        {action.label}
-                      </Button>
-                    ))}
-                  </div>
+                  ) : (
+                    <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">
+                      <p className="font-medium">Sin descarga SAT</p>
+                      <p className="mt-1 text-xs">{satQueueItemSeleccionado?.description}</p>
+                    </div>
+                  )}
                   {satPackageSeleccionado?.satOutputOverride && (
                     <div className="mt-3 rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
                       <p className="font-semibold">Corrección trazable</p>
@@ -1469,11 +1494,17 @@ export default function AvisosInformesPage() {
                 </div>
               </div>
 
-              {satPackageSeleccionado?.validation.missingFields.length ? (
+              {!satPackageSeleccionado ? (
+                <Alert className="border-slate-200 bg-white">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>{satQueueItemSeleccionado?.label}</AlertTitle>
+                  <AlertDescription>{satQueueItemSeleccionado?.description}</AlertDescription>
+                </Alert>
+              ) : getUniqueSatMissingFields(satPackageSeleccionado).length ? (
                 <Alert className="border-amber-200 bg-amber-50">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>Campos faltantes para XML listo</AlertTitle>
-                  <AlertDescription>{satPackageSeleccionado.validation.missingFields.join(", ")}</AlertDescription>
+                  <AlertDescription>{getUniqueSatMissingFields(satPackageSeleccionado).join(", ")}</AlertDescription>
                 </Alert>
               ) : (
                 <Alert className="border-emerald-200 bg-white">
@@ -1490,17 +1521,17 @@ export default function AvisosInformesPage() {
       </Card>
 
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="integraciones" className="flex items-center gap-2">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
+          <TabsTrigger value="integraciones" className="flex min-h-10 items-center gap-2 text-xs sm:text-sm">
             <Link2 className="h-4 w-4" /> Integraciones
           </TabsTrigger>
-          <TabsTrigger value="reportes" className="flex items-center gap-2">
+          <TabsTrigger value="reportes" className="flex min-h-10 items-center gap-2 text-xs sm:text-sm">
             <FileUp className="h-4 w-4" /> Reportes
           </TabsTrigger>
-          <TabsTrigger value="aviso" className="flex items-center gap-2">
+          <TabsTrigger value="aviso" className="flex min-h-10 items-center gap-2 text-xs sm:text-sm">
             <ListChecks className="h-4 w-4" /> Revision manual
           </TabsTrigger>
-          <TabsTrigger value="trazabilidad" className="flex items-center gap-2">
+          <TabsTrigger value="trazabilidad" className="flex min-h-10 items-center gap-2 text-xs sm:text-sm">
             <History className="h-4 w-4" /> Trazabilidad
           </TabsTrigger>
         </TabsList>
@@ -1872,7 +1903,7 @@ export default function AvisosInformesPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Operaciones con alerta</span>
-                    <span className="font-semibold">{operaciones.filter((op) => op.alerta).length}</span>
+                    <span className="font-semibold">{operacionesActivas.filter((op) => op.alerta).length}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Evaluaciones EBR capturadas</span>
@@ -2347,6 +2378,23 @@ function satOutputKindLabel(kind: SatOutputPackageResumen["outputKind"]) {
   if (kind === "informe_27_bis") return "Informe 27 Bis"
   if (kind === "aviso_24h") return "Aviso 24 horas"
   return "Aviso normal"
+}
+
+function satQueueItemStatusLabel(item: SatQueueItem) {
+  if (item.lifecycleStatus === "cancelled") return "Cancelada"
+  if (item.package?.validation.status === "listo") return "XML listo"
+  if (item.package) return "Borrador bloqueado"
+  if (item.kind === "identification_only") return "Sólo identificación"
+  if (item.kind === "internal_record") return "Registro interno"
+  return "Paquete pendiente"
+}
+
+function satQueueItemBadgeClass(item: SatQueueItem) {
+  if (item.lifecycleStatus === "cancelled") return "border-slate-300 bg-slate-100 text-slate-700"
+  if (item.package?.validation.status === "listo") return "border-emerald-200 bg-emerald-50 text-emerald-700"
+  if (item.package || item.kind === "sat_output") return "border-amber-200 bg-amber-50 text-amber-700"
+  if (item.kind === "identification_only") return "border-sky-200 bg-sky-50 text-sky-700"
+  return "border-slate-200 bg-slate-50 text-slate-700"
 }
 
 function formatDate(date: Date) {

@@ -44,6 +44,15 @@ type PostalCatalogEntry = {
 
 const SHEET_COMBOS = "Combos"
 const XML_SOURCE = "Plantilla oficial SAT XLSM"
+const XII_NOTARIOS_A_TEMPLATE_ID = "sat-fraccion-xii-notarios-a"
+const XII_NOTARIOS_A_TIPO_ACTO_FIELD_ID = "aviso.tipo-de-acto-realizado.f17"
+const XII_NOTARIOS_A_TIPO_ACTO_OTRO_FIELD_ID = "aviso.descripcion-tipo-de-acto-otro.f18"
+const XII_NOTARIOS_A_TIPO_ACTO_OTRO_CONDITION = [
+  { fieldId: XII_NOTARIOS_A_TIPO_ACTO_FIELD_ID, equals: ["9"] },
+]
+const BENEFICIARY_PERSON_TYPE_FIELD_ID = "beneficiario.tipo_persona"
+const BENEFICIARY_REPEAT_MODE_FIELD_ID = "beneficiario.permitir_repetidos"
+const BENEFICIARY_TRUST_MODE_FIELD_ID = "beneficiario.es_fideicomiso"
 
 export function extractSatXlsmLayoutFromBuffer(
   input: Uint8Array,
@@ -90,7 +99,7 @@ export function extractSatXlsmLayoutFromBuffer(
     officialXlsmName: template.officialXlsmName,
     generatedAt: new Date().toISOString(),
     workbookHasMacros: Boolean(zip["xl/vbaProject.bin"]),
-    sections,
+    sections: applySatTemplateFieldRules(template.templateId, sections),
     optionLists,
     source: XML_SOURCE,
   }
@@ -109,6 +118,11 @@ export function buildSatDynamicOperationForm(input: {
   }))
   const initialValues: Record<string, string> = {}
   const prefill = input.prefill || {}
+  const beneficiaryType = beneficiaryPrefillBranch(prefill)
+  if (beneficiaryType) initialValues[BENEFICIARY_PERSON_TYPE_FIELD_ID] = beneficiaryType
+  if (hasExplicitFiduciaryBeneficiaryPrefill(prefill)) {
+    initialValues[BENEFICIARY_TRUST_MODE_FIELD_ID] = "si"
+  }
 
   for (const field of sections.flatMap((section) => section.fields)) {
     const value = prefillValueForField(field, prefill)
@@ -145,7 +159,8 @@ function withInferredSectionKind(field: SatXlsmField): SatXlsmField {
 }
 
 export function normalizeSatXlsmLayout(layout: SatXlsmLayout): SatXlsmLayout {
-  const sectionsWithoutAuxiliaryFields = layout.sections.map((section) => ({
+  const sectionsWithTemplateRules = applySatTemplateFieldRules(layout.templateId, layout.sections)
+  const sectionsWithoutAuxiliaryFields = sectionsWithTemplateRules.map((section) => ({
     ...section,
     fields: section.fields.filter((field) => !isAuxiliarySatXlsmField(field)),
   }))
@@ -164,25 +179,132 @@ export function normalizeSatXlsmLayout(layout: SatXlsmLayout): SatXlsmLayout {
 
   return {
     ...layout,
-    sections: sectionsWithoutAuxiliaryFields.map((section) => {
-      const manualFields = getManualFields(layout.templateId, section.sheetName, layout.optionLists)
-      const sourceFields = layout.templateId.includes("fraccion-xi-b-administracion")
-        ? filterXiBExtractedFields(section.sheetName, section.fields, manualFields)
-        : section.fields
-      const fields = mergeFields([
-        ...manualFields,
-        ...sourceFields.map((field) =>
-          field.source === "manual-sat-map" ? field : { ...field, required: false },
-        ),
-      ])
-      return { ...section, fields }
-    }),
+    sections: applySatTemplateFieldRules(
+      layout.templateId,
+      sectionsWithoutAuxiliaryFields.map((section) => {
+        const manualFields = getManualFields(layout.templateId, section.sheetName, layout.optionLists)
+        const sourceFields = layout.templateId.includes("fraccion-xi-b-administracion")
+          ? filterXiBExtractedFields(section.sheetName, section.fields, manualFields)
+          : section.fields
+        const fields = mergeFields([
+          ...manualFields,
+          ...sourceFields.map((field) =>
+            field.source === "manual-sat-map" ? field : { ...field, required: false },
+          ),
+        ])
+        return { ...section, fields }
+      }),
+    ),
+  }
+}
+
+/**
+ * Reglas condicionales verificadas contra la plantilla oficial SAT de la
+ * Fracción XII (consulta: 2026-08-03). La extracción genérica sólo conserva
+ * validaciones de lista, por lo que F18 (validación de longitud) se completa
+ * aquí de forma determinista y queda enlazada al catálogo de F17.
+ */
+function applySatTemplateFieldRules(
+  templateId: string,
+  sections: SatXlsmSection[],
+): SatXlsmSection[] {
+  const sectionsWithBeneficiaryRules = sections.map((section) => ({
+    ...section,
+    fields: section.fields.map(applyBeneficiaryFieldRules),
+  }))
+  if (templateId !== XII_NOTARIOS_A_TEMPLATE_ID) return sectionsWithBeneficiaryRules
+
+  return sectionsWithBeneficiaryRules.map((section) => {
+    if (section.sheetName !== "Aviso") return section
+
+    let hasTipoActoOtro = false
+    const fields = section.fields.map((field) => {
+      if (field.cell.toUpperCase() === "F17") {
+        return { ...field, id: XII_NOTARIOS_A_TIPO_ACTO_FIELD_ID }
+      }
+      if (field.cell.toUpperCase() !== "F18") return field
+
+      hasTipoActoOtro = true
+      return buildXiiNotariosATipoActoOtroField(field)
+    })
+
+    if (!hasTipoActoOtro) fields.push(buildXiiNotariosATipoActoOtroField())
+    return { ...section, fields }
+  })
+}
+
+function applyBeneficiaryFieldRules(field: SatXlsmField): SatXlsmField {
+  const branch = beneficiaryFieldBranch(field)
+  if (!branch) return field
+
+  const activeWhen = appendSatFieldConditions(field.activeWhen, [
+    { fieldId: BENEFICIARY_PERSON_TYPE_FIELD_ID, equals: [branch] },
+  ])
+  if (beneficiaryRepeatIndex(field) > 1) {
+    return {
+      ...field,
+      required: false,
+      requiredWhen: undefined,
+      activeWhen: appendSatFieldConditions(activeWhen, [
+        { fieldId: BENEFICIARY_REPEAT_MODE_FIELD_ID, equals: ["si"] },
+      ]),
+    }
+  }
+  if (isFiduciaryBeneficiaryField(field)) {
+    return {
+      ...field,
+      required: false,
+      requiredWhen: undefined,
+      activeWhen: appendSatFieldConditions(activeWhen, [
+        { fieldId: BENEFICIARY_TRUST_MODE_FIELD_ID, equals: ["si"] },
+      ]),
+    }
+  }
+  return { ...field, activeWhen }
+}
+
+function appendSatFieldConditions(
+  current: SatXlsmField["activeWhen"],
+  additions: NonNullable<SatXlsmField["activeWhen"]>,
+): NonNullable<SatXlsmField["activeWhen"]> {
+  const conditions = [...(current || [])]
+  for (const addition of additions) {
+    const duplicate = conditions.some(
+      (condition) =>
+        condition.fieldId === addition.fieldId &&
+        condition.equals.length === addition.equals.length &&
+        condition.equals.every((value, index) => value === addition.equals[index]),
+    )
+    if (!duplicate) conditions.push(addition)
+  }
+  return conditions
+}
+
+function buildXiiNotariosATipoActoOtroField(
+  sourceField?: SatXlsmField,
+): SatXlsmField {
+  return {
+    ...sourceField,
+    id: XII_NOTARIOS_A_TIPO_ACTO_OTRO_FIELD_ID,
+    label: "Descripción Tipo de Acto (Otro)",
+    sheetName: "Aviso",
+    cell: "F18",
+    required: false,
+    dataType: "texto",
+    optionListId: undefined,
+    options: undefined,
+    source: "manual-sat-map",
+    conditionalGroup: "tipo-acto-realizado-otro",
+    activeWhen: XII_NOTARIOS_A_TIPO_ACTO_OTRO_CONDITION,
+    requiredWhen: XII_NOTARIOS_A_TIPO_ACTO_OTRO_CONDITION,
+    targetCell: "Aviso!F18",
   }
 }
 
 function isAuxiliarySatXlsmField(field: SatXlsmField): boolean {
   const label = slug(field.label)
   return (
+    (field.source === "xlsm-label" && slug(field.sheetName).includes("beneficiario")) ||
     (field.source === "xlsm-label" && /^los-campos-marcados-con.*obligatorios?$/.test(label)) ||
     label === "n-a" ||
     label === "na"
@@ -1893,7 +2015,19 @@ function insertCellSorted(body: string, cellRef: string, cellXml: string): strin
 }
 
 function prefillValueForField(field: SatXlsmField, prefill: Record<string, unknown>): string {
+  const beneficiaryBranch = beneficiaryFieldBranch(field)
+  if (beneficiaryBranch) {
+    if (beneficiaryRepeatIndex(field) > 1) return ""
+
+    const selectedBranch = beneficiaryPrefillBranch(prefill)
+    if (!selectedBranch || selectedBranch !== beneficiaryBranch) return ""
+
+    const fiduciaryValue = fiduciaryBeneficiaryPrefill(field, prefill)
+    if (fiduciaryValue !== undefined) return stringPrefill(fiduciaryValue)
+  }
+
   const clienteNombrePartes = splitPersonName(stringPrefill(prefill.clienteNombre))
+  const beneficiaryPrefill = beneficiaryBranchPrefill(prefill)
   const lookup: Record<string, unknown> = {
     "persona_aviso.sujeto_obligado_rfc": prefill.sujetoObligadoRfc || prefill.tenantRfc,
     "persona_aviso.periodo": prefill.periodo,
@@ -1932,17 +2066,20 @@ function prefillValueForField(field: SatXlsmField, prefill: Record<string, unkno
     "persona_aviso.contacto.pais_telefono": prefill.clientePaisTelefono || "MEXICO,MX",
     "persona_aviso.contacto.telefono": prefill.clienteTelefono,
     "persona_aviso.contacto.correo": prefill.clienteCorreo,
-    "beneficiario.pf.nombre": prefill.beneficiarioNombre,
-    "beneficiario.pf.apellido_paterno": prefill.beneficiarioApellidoPaterno,
-    "beneficiario.pf.apellido_materno": prefill.beneficiarioApellidoMaterno,
-    "beneficiario.pf.fecha_nacimiento": prefill.beneficiarioFechaNacimiento,
-    "beneficiario.pf.rfc": prefill.beneficiarioRfc,
-    "beneficiario.pf.curp": prefill.beneficiarioCurp,
-    "beneficiario.pf.pais_nacionalidad": prefill.beneficiarioPais || "MEXICO,MX",
-    "beneficiario.pm.razon_social": prefill.beneficiarioRazonSocial,
-    "beneficiario.pm.fecha_constitucion": prefill.beneficiarioFechaConstitucion,
-    "beneficiario.pm.rfc": prefill.beneficiarioRfc,
-    "beneficiario.pm.pais_nacionalidad": prefill.beneficiarioPais || "MEXICO,MX",
+    "beneficiario.pf.nombre": beneficiaryPrefill.pf.nombre,
+    "beneficiario.pf.apellido_paterno": beneficiaryPrefill.pf.apellidoPaterno,
+    "beneficiario.pf.apellido_materno": beneficiaryPrefill.pf.apellidoMaterno,
+    "beneficiario.pf.fecha_nacimiento": beneficiaryPrefill.pf.fechaNacimiento,
+    "beneficiario.pf.rfc": beneficiaryPrefill.pf.rfc,
+    "beneficiario.pf.curp": beneficiaryPrefill.pf.curp,
+    "beneficiario.pf.pais_nacionalidad": beneficiaryPrefill.pf.pais,
+    "beneficiario.pm.razon_social": beneficiaryPrefill.pm.razonSocial,
+    "beneficiario.pm.fecha_constitucion": beneficiaryPrefill.pm.fechaConstitucion,
+    "beneficiario.pm.rfc": beneficiaryPrefill.pm.rfc,
+    "beneficiario.pm.pais_nacionalidad": beneficiaryPrefill.pm.pais,
+    "beneficiario.pm.denominacion_fiduciario": prefill.beneficiarioFiduciarioDenominacion,
+    "beneficiario.pm.rfc_fiduciario": prefill.beneficiarioFiduciarioRfc,
+    "beneficiario.pm.identificador_fideicomiso": prefill.beneficiarioFideicomisoIdentificador,
     "contraparte.pf.nombre": prefill.contraparteNombre,
     "contraparte.pf.apellido_paterno": prefill.contraparteApellidoPaterno,
     "contraparte.pf.apellido_materno": prefill.contraparteApellidoMaterno,
@@ -1975,11 +2112,13 @@ function prefillValueForField(field: SatXlsmField, prefill: Record<string, unkno
     "inmueble.terreno_m2": prefill.terrenoM2,
     "inmueble.inmueble_m2": prefill.inmuebleM2,
     "inmueble.folio_real": prefill.folioReal,
+    "inmueble.valor_catastral": prefill.inmuebleValorCatastral,
     "instrumento.fecha": prefill.instrumentoFecha,
     "instrumento.numero": prefill.instrumentoNumero,
     "instrumento.notario": prefill.instrumentoNotario,
     "instrumento.entidad": prefill.instrumentoEntidad,
     "instrumento.valor_avaluo": prefill.instrumentoValorAvaluo,
+    "instrumento.valor_catastral": prefill.instrumentoValorCatastral,
     "instrumento.fecha_contrato": prefill.instrumentoFechaContrato,
     "operacion_financiera.monto": prefill.montoMxn,
     "operacion_financiera.instrumento_monetario": prefill.instrumentoMonetario || prefill.instrumento,
@@ -1990,6 +2129,105 @@ function prefillValueForField(field: SatXlsmField, prefill: Record<string, unkno
   const raw = lookup[field.id] ?? inferPrefillValueForExtractedField(field, prefill)
   if (raw === undefined || raw === null || raw === "") return ""
   return String(raw)
+}
+
+type BeneficiaryPrefillBranch = "persona_fisica" | "persona_moral"
+
+function beneficiaryFieldBranch(field: SatXlsmField): BeneficiaryPrefillBranch | undefined {
+  const id = slug(field.id)
+  const repeatGroup = slug(field.repeatGroup || "")
+  if (id.startsWith("beneficiario-pf-") || (repeatGroup.startsWith("beneficiario-") && repeatGroup.endsWith("-pf"))) {
+    return "persona_fisica"
+  }
+  if (id.startsWith("beneficiario-pm-") || (repeatGroup.startsWith("beneficiario-") && repeatGroup.endsWith("-pm"))) {
+    return "persona_moral"
+  }
+
+  if (!slug(field.sheetName).includes("beneficiario")) return undefined
+  const { row } = splitCell(field.cell)
+  if (row > 0 && row <= 16) return "persona_fisica"
+  if (row >= 17) return "persona_moral"
+  return undefined
+}
+
+function beneficiaryRepeatIndex(field: SatXlsmField): number {
+  if (field.repeatIndex && field.repeatIndex > 0) return field.repeatIndex
+  const match = field.id.match(/^beneficiario\.(?:pf|pm)\.(\d+)\./)
+  return match ? Number(match[1]) : 1
+}
+
+function beneficiaryPrefillBranch(prefill: Record<string, unknown>): BeneficiaryPrefillBranch | undefined {
+  const explicit = slug(
+    stringPrefill(prefill[BENEFICIARY_PERSON_TYPE_FIELD_ID] || prefill.beneficiarioTipoPersonaSat),
+  )
+  if (["persona-fisica", "fisica", "pf"].includes(explicit)) return "persona_fisica"
+  if (["persona-moral", "moral", "pm", "fideicomiso"].includes(explicit)) return "persona_moral"
+
+  if (
+    stringPrefill(prefill.beneficiarioPmRazonSocial || prefill.beneficiarioRazonSocial) ||
+    stringPrefill(prefill.beneficiarioPmFechaConstitucion || prefill.beneficiarioFechaConstitucion)
+  ) {
+    return "persona_moral"
+  }
+  if (
+    stringPrefill(prefill.beneficiarioPfNombre || prefill.beneficiarioNombre) ||
+    stringPrefill(prefill.beneficiarioPfApellidoPaterno || prefill.beneficiarioApellidoPaterno) ||
+    stringPrefill(prefill.beneficiarioPfApellidoMaterno || prefill.beneficiarioApellidoMaterno) ||
+    stringPrefill(prefill.beneficiarioPfFechaNacimiento || prefill.beneficiarioFechaNacimiento) ||
+    stringPrefill(prefill.beneficiarioPfCurp || prefill.beneficiarioCurp)
+  ) {
+    return "persona_fisica"
+  }
+  return undefined
+}
+
+function beneficiaryBranchPrefill(prefill: Record<string, unknown>) {
+  const branch = beneficiaryPrefillBranch(prefill)
+  return {
+    pf: {
+      nombre: prefill.beneficiarioPfNombre || prefill.beneficiarioNombre,
+      apellidoPaterno: prefill.beneficiarioPfApellidoPaterno || prefill.beneficiarioApellidoPaterno,
+      apellidoMaterno: prefill.beneficiarioPfApellidoMaterno || prefill.beneficiarioApellidoMaterno,
+      fechaNacimiento: prefill.beneficiarioPfFechaNacimiento || prefill.beneficiarioFechaNacimiento,
+      rfc: prefill.beneficiarioPfRfc || (branch === "persona_fisica" ? prefill.beneficiarioRfc : undefined),
+      curp: prefill.beneficiarioPfCurp || prefill.beneficiarioCurp,
+      pais: prefill.beneficiarioPfPais || (branch === "persona_fisica" ? prefill.beneficiarioPais || "MEXICO,MX" : undefined),
+    },
+    pm: {
+      razonSocial: prefill.beneficiarioPmRazonSocial || prefill.beneficiarioRazonSocial,
+      fechaConstitucion: prefill.beneficiarioPmFechaConstitucion || prefill.beneficiarioFechaConstitucion,
+      rfc: prefill.beneficiarioPmRfc || (branch === "persona_moral" ? prefill.beneficiarioRfc : undefined),
+      pais: prefill.beneficiarioPmPais || (branch === "persona_moral" ? prefill.beneficiarioPais || "MEXICO,MX" : undefined),
+    },
+  }
+}
+
+function fiduciaryBeneficiaryPrefill(field: SatXlsmField, prefill: Record<string, unknown>): unknown {
+  const id = slug(field.id)
+  const label = slug(field.label)
+  if (id.includes("denominacion-fiduciario") || label.includes("denominacion-fiduciario")) {
+    return prefill.beneficiarioFiduciarioDenominacion || ""
+  }
+  if (id.includes("rfc-fiduciario") || label.includes("rfc-fiduciario")) {
+    return prefill.beneficiarioFiduciarioRfc || ""
+  }
+  if (id.includes("identificador-fideicomiso") || label.includes("identificador-fideicomiso")) {
+    return prefill.beneficiarioFideicomisoIdentificador || ""
+  }
+  return undefined
+}
+
+function isFiduciaryBeneficiaryField(field: SatXlsmField): boolean {
+  const semantic = slug(`${field.id} ${field.label}`)
+  return semantic.includes("fiduciari") || semantic.includes("fideicomiso")
+}
+
+function hasExplicitFiduciaryBeneficiaryPrefill(prefill: Record<string, unknown>): boolean {
+  return Boolean(
+    stringPrefill(prefill.beneficiarioFiduciarioDenominacion) ||
+      stringPrefill(prefill.beneficiarioFiduciarioRfc) ||
+      stringPrefill(prefill.beneficiarioFideicomisoIdentificador),
+  )
 }
 
 function inferPrefillValueForExtractedField(field: SatXlsmField, prefill: Record<string, unknown>): unknown {
@@ -2021,7 +2259,12 @@ function inferPrefillValueForExtractedField(field: SatXlsmField, prefill: Record
     if (label.includes("fecha") && !label.includes("nacimiento") && !label.includes("constitucion")) {
       return prefill.fechaOperacion
     }
-    if (label.includes("monto") || label.includes("valor")) return prefill.montoMxn
+    const isSurface = /superficie|terreno|construccion|metros-cuadrados|m2/.test(label)
+    if (label.includes("valor-catastral")) {
+      return prefill.instrumentoValorCatastral || prefill.inmuebleValorCatastral
+    }
+    const isAuthoritativeMoney = /monto|importe|contraprestacion|precio-pactado|valor-pactado/.test(label)
+    if (isAuthoritativeMoney && !isSurface) return prefill.montoMxn
     if (label.includes("moneda") || label.includes("divisa")) return prefill.monedaSat || prefill.moneda
     if (label.includes("instrumento-monetario")) return prefill.instrumentoMonetario || prefill.instrumento
     if (label.includes("codigo-postal")) return prefill.codigoPostal || prefill.clienteCodigoPostal
@@ -2076,54 +2319,57 @@ function inferPersonFieldPrefill(
   prefill: Record<string, unknown>,
   scope: "cliente" | "cliente_pf" | "cliente_pm" | "representante" | "beneficiario_pf" | "beneficiario_pm" | "contraparte",
 ): unknown {
+  const beneficiary = beneficiaryBranchPrefill(prefill)
   if (label.includes("razon-social") || label.includes("denominacion")) {
-    if (scope === "beneficiario_pm") return prefill.beneficiarioRazonSocial || prefill.beneficiarioNombre
+    if (scope === "beneficiario_pm") return beneficiary.pm.razonSocial
     if (scope === "contraparte") return prefill.contraparteRazonSocial || prefill.contraparteNombre
     return prefill.clienteRazonSocial || prefill.clienteNombre
   }
   if (label.includes("nombre")) {
-    if (scope.startsWith("beneficiario")) return prefill.beneficiarioNombre
+    if (scope === "beneficiario_pf") return beneficiary.pf.nombre
     if (scope === "representante") return prefill.representanteNombre
     if (scope === "contraparte") return prefill.contraparteNombre
     return prefill.clienteNombrePf || prefill.clienteNombreSat || splitPersonName(stringPrefill(prefill.clienteNombre)).nombre
   }
   if (label.includes("apellido-paterno")) {
-    if (scope.startsWith("beneficiario")) return prefill.beneficiarioApellidoPaterno
+    if (scope === "beneficiario_pf") return beneficiary.pf.apellidoPaterno
     if (scope === "representante") return prefill.representanteApellidoPaterno
     if (scope === "contraparte") return prefill.contraparteApellidoPaterno
     return prefill.clienteApellidoPaterno || splitPersonName(stringPrefill(prefill.clienteNombre)).apellidoPaterno
   }
   if (label.includes("apellido-materno")) {
-    if (scope.startsWith("beneficiario")) return prefill.beneficiarioApellidoMaterno
+    if (scope === "beneficiario_pf") return beneficiary.pf.apellidoMaterno
     if (scope === "representante") return prefill.representanteApellidoMaterno
     if (scope === "contraparte") return prefill.contraparteApellidoMaterno
     return prefill.clienteApellidoMaterno || splitPersonName(stringPrefill(prefill.clienteNombre)).apellidoMaterno
   }
   if (label.includes("fecha-nacimiento")) {
-    if (scope.startsWith("beneficiario")) return prefill.beneficiarioFechaNacimiento
+    if (scope === "beneficiario_pf") return beneficiary.pf.fechaNacimiento
     if (scope === "representante") return prefill.representanteFechaNacimiento
     if (scope === "contraparte") return prefill.contraparteFechaNacimiento
     return prefill.clienteFechaNacimiento
   }
   if (label.includes("fecha-constitucion")) {
-    if (scope === "beneficiario_pm") return prefill.beneficiarioFechaConstitucion
+    if (scope === "beneficiario_pm") return beneficiary.pm.fechaConstitucion
     if (scope === "contraparte") return prefill.contraparteFechaConstitucion
     return prefill.clienteFechaConstitucion
   }
   if (label === "rfc" || label.includes("rfc")) {
-    if (scope.startsWith("beneficiario")) return prefill.beneficiarioRfc
+    if (scope === "beneficiario_pf") return beneficiary.pf.rfc
+    if (scope === "beneficiario_pm") return beneficiary.pm.rfc
     if (scope === "representante") return prefill.representanteRfc
     if (scope === "contraparte") return prefill.contraparteRfc
     return prefill.clienteRfc
   }
   if (label.includes("curp")) {
-    if (scope.startsWith("beneficiario")) return prefill.beneficiarioCurp
+    if (scope === "beneficiario_pf") return beneficiary.pf.curp
     if (scope === "representante") return prefill.representanteCurp
     if (scope === "contraparte") return prefill.contraparteCurp
     return prefill.clienteCurp
   }
   if (label.includes("pais") || label.includes("nacionalidad")) {
-    if (scope.startsWith("beneficiario")) return prefill.beneficiarioPais || "MEXICO,MX"
+    if (scope === "beneficiario_pf") return beneficiary.pf.pais
+    if (scope === "beneficiario_pm") return beneficiary.pm.pais
     if (scope === "contraparte") return prefill.contrapartePais || "MEXICO,MX"
     return prefill.clientePais || "MEXICO,MX"
   }

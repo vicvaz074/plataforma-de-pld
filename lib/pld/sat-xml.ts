@@ -1,4 +1,5 @@
 import { resolveSatFormatoForActividad } from "./sat-formatos"
+import { centsToDecimalString, parseMoneyToCents } from "./money"
 import type {
   PldOperationalCase,
   SatOutputKind,
@@ -116,9 +117,9 @@ export function satDate(raw: unknown): string {
 }
 
 export function satMoney(raw: unknown): string {
-  const text = normalize(raw).replace(/,/g, "")
-  const amount = Number(text)
-  return Number.isFinite(amount) ? amount.toFixed(2) : ""
+  if (typeof raw !== "string" && typeof raw !== "number") return ""
+  const parsed = parseMoneyToCents(raw, { allowNegative: true })
+  return parsed.ok ? parsed.decimal : ""
 }
 
 export function excelSerialFromDate(raw: unknown): number | null {
@@ -182,7 +183,7 @@ function buildArrendamientoAviso(values: SatXmlValueMap, operationalCase: PldOpe
           node("forma_pago", satCatalogCode(value(values, "pago.forma_pago")), true),
           node("instrumento_monetario", satCatalogCode(value(values, "pago.instrumento_monetario")), true),
           node("moneda", satCatalogCode(value(values, "pago.moneda")), true),
-          node("monto_operacion", satMoney(value(values, "pago.monto") || operationalCase.montoMxn), true),
+          node("monto_operacion", operationalAmountForSat(operationalCase, value(values, "pago.monto")), true),
         ]),
       ]),
     ]),
@@ -245,10 +246,17 @@ function buildGenericAviso(values: SatXmlValueMap, operationalCase: PldOperation
     wrap("detalle_operaciones", [
       wrap("datos_operacion", [
         node("fecha_operacion", satDate(value(values, "acto.fecha_operacion") || operationalCase.fechaOperacion), true),
-        node("monto_operacion", satMoney(value(values, "pago.monto") || operationalCase.montoMxn), true),
+        node("monto_operacion", operationalAmountForSat(operationalCase, value(values, "pago.monto")), true),
       ]),
     ]),
   ])
+}
+
+function operationalAmountForSat(operationalCase: PldOperationalCase, legacyOverride?: string) {
+  if (Number.isSafeInteger(operationalCase.montoCentavos) && Number(operationalCase.montoCentavos) >= 0) {
+    return centsToDecimalString(Number(operationalCase.montoCentavos))
+  }
+  return satMoney(legacyOverride || operationalCase.montoMxn)
 }
 
 function buildValueMap(operationalCase: PldOperationalCase): SatXmlValueMap {
