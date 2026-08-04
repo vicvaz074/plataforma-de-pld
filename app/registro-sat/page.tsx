@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
+import { ActividadVulnerableCombobox } from "@/components/pld/actividad-vulnerable-combobox"
 import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
 import { actividadesVulnerables } from "@/lib/data/actividades"
 import { findCodigoPostalInfo, registerCodigoPostalInfo, type CodigoPostalInfo } from "@/lib/data/codigos-postales"
@@ -2565,21 +2566,14 @@ export default function RegistroSATPage() {
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-2">
                             <Label htmlFor={`actividad-clave-${index}`}>Actividad Vulnerable que pretende realizar</Label>
-                            <Select
+                            <ActividadVulnerableCombobox
+                              id={`actividad-clave-${index}`}
+                              ariaLabel={`Actividad vulnerable ${index + 1} que pretende realizar`}
                               value={actividad.actividadKey}
-                              onValueChange={(value) => actualizarActividadCampo(index, "actividadKey", value)}
-                            >
-                              <SelectTrigger id={`actividad-clave-${index}`}>
-                                <SelectValue placeholder="Selecciona una actividad" />
-                              </SelectTrigger>
-                              <SelectContent position="popper">
-                                {actividadesVulnerables.map((item) => (
-                                  <SelectItem key={item.key} value={item.key}>
-                                    {item.fraccion} · {item.nombre}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              options={actividadesVulnerables}
+                              placeholder="Busca fracción o actividad"
+                              onChange={(value) => actualizarActividadCampo(index, "actividadKey", value)}
+                            />
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor={`actividad-fecha-${index}`}>
