@@ -139,6 +139,7 @@ import {
   type SatDynamicOperationForm,
   type SatOutputKind,
   type SatOutputPackage,
+  type SatXlsmField,
   type SatXlsmLayout,
 } from "@/lib/pld"
 
@@ -2359,6 +2360,7 @@ export default function ActividadesVulnerablesPage() {
   const preserveSatValuesOnActivityChangeRef = useRef(false)
   const satEditInitializationRef = useRef<string | null>(null)
   const primaryBeneficiarySatFieldIdsRef = useRef<Set<string>>(new Set())
+  const satAllFieldsActualRef = useRef<SatXlsmField[]>([])
 
   const actualizarInmuebleForm = useCallback(
     (campo: keyof DatosInmuebleFormState, valor: string) => {
@@ -2440,7 +2442,10 @@ export default function ActividadesVulnerablesPage() {
           }
         })
       }
-      return next
+      return pruneInactiveSatFieldValues({
+        fields: satAllFieldsActualRef.current,
+        values: next,
+      })
     })
 
     if (normalizedFieldId.includes("beneficiario")) {
@@ -3259,6 +3264,7 @@ export default function ActividadesVulnerablesPage() {
   )
 
   useEffect(() => {
+    satAllFieldsActualRef.current = satAllFieldsActual
     primaryBeneficiarySatFieldIdsRef.current = new Set(
       satAllFieldsActual
         .filter((field) => field.sectionKind === "beneficiario_controlador")

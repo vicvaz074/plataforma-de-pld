@@ -8,6 +8,7 @@ import XLSX from "xlsx"
 
 import {
   buildSatDynamicOperationForm,
+  buildSatQuestionnaireDedupedFieldView,
   buildSatWorkbookDownloadValues,
   extractSatXlsmLayoutFromBuffer,
   fillSatXlsmTemplate,
@@ -228,6 +229,45 @@ test("XI-B questionnaire follows official conditional branches for other, inmueb
     true,
   )
   assert.equal(
+    isSatXlsmFieldActive(byId.get("acto.descripcion_activo_administrado")!, {
+      "acto.activo_administrado": "1,Administración de bases de datos",
+    }),
+    false,
+  )
+  assert.equal(
+    isSatXlsmFieldRequired(byId.get("acto.descripcion_activo_administrado")!, {
+      "acto.activo_administrado": "1,Administración de bases de datos",
+    }),
+    false,
+  )
+  assert.equal(
+    isSatXlsmFieldActive(byId.get("acto.descripcion_activo_administrado")!, {
+      "acto.activo_administrado": "99,Otro",
+    }),
+    true,
+  )
+  assert.equal(
+    isSatXlsmFieldRequired(byId.get("acto.descripcion_activo_administrado")!, {
+      "acto.activo_administrado": "99,Otro",
+    }),
+    true,
+  )
+  const otherDescriptionFields = [
+    byId.get("acto.activo_administrado_otro")!,
+    byId.get("acto.descripcion_activo_administrado")!,
+  ]
+  const dedupedOtherDescription = buildSatQuestionnaireDedupedFieldView({
+    fields: otherDescriptionFields,
+    values: {
+      "acto.activo_administrado": "99,Otro",
+      "acto.activo_administrado_otro": "",
+      "acto.descripcion_activo_administrado": "",
+    },
+    missingRequiredIds: otherDescriptionFields.map((field) => field.id),
+  })
+  assert.equal(dedupedOtherDescription.fields.length, 1)
+  assert.equal(dedupedOtherDescription.duplicateHiddenCount, 1)
+  assert.equal(
     isSatXlsmFieldActive(byId.get("activo_inmueble.tipo")!, {
       "acto.activo_administrado": "9,Inmuebles",
     }),
@@ -263,6 +303,7 @@ test("XI-B questionnaire follows official conditional branches for other, inmueb
     {
       "acto.activo_administrado": "1,Administración de bases de datos",
       "acto.activo_administrado_otro": "valor obsoleto",
+      "acto.descripcion_activo_administrado": "descripción obsoleta",
       "operacion_financiera.instrumento_monetario": "1,Efectivo",
       "operacion_financiera.moneda": "1,Peso mexicano",
       "operacion_financiera.activo_virtual": "1001,BITCOIN (BTC)",
@@ -270,8 +311,18 @@ test("XI-B questionnaire follows official conditional branches for other, inmueb
     layout,
   )
   assert.equal(cells["Acto u operación!F124"], undefined)
+  assert.equal(cells["Acto u operación!B179"], undefined)
   assert.equal(cells["Operaciones financieras!E7"], undefined)
   assert.equal(cells["Operaciones financieras!D7"], "1,Peso mexicano")
+
+  const otherCells = satFieldValuesToWorkbookCells(
+    {
+      "acto.activo_administrado": "99,Otro",
+      "acto.descripcion_activo_administrado": "Activo especializado",
+    },
+    layout,
+  )
+  assert.equal(otherCells["Acto u operación!B179"], "Activo especializado")
 })
 
 test("Inmuebles XLSM layout exposes SAT sheets, fields and dropdowns from the workbook", () => {
