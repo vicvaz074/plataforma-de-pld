@@ -37,6 +37,7 @@ import {
   RegulatorySourceChip,
   SatOutputSummaryPanel,
 } from "@/components/pld/actos-workspace-ui"
+import { ActividadVulnerableCombobox } from "@/components/pld/actividad-vulnerable-combobox"
 import { InfoHint } from "@/components/pld/info-hint"
 import { SatDynamicOperationFormView } from "@/components/pld/sat-dynamic-operation-form"
 import {
@@ -221,110 +222,6 @@ function resolveActividadPorClave(clave: string | undefined) {
     actividadesVulnerables.find(
       (actividad) => normalizarFraccion(actividad.fraccion) === normalizarFraccion(clave),
     )
-  )
-}
-
-type ActividadVulnerableComboboxProps = {
-  value: string
-  options: ActividadVulnerable[]
-  placeholder?: string
-  disabled?: boolean
-  triggerClassName?: string
-  onChange: (value: string) => void
-}
-
-function ActividadVulnerableCombobox({
-  value,
-  options,
-  placeholder = "Busca por fracción o actividad",
-  disabled,
-  triggerClassName,
-  onChange,
-}: ActividadVulnerableComboboxProps) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState("")
-  const selected = options.find((actividad) => actividad.key === value)
-  const filteredOptions = useMemo(() => {
-    const term = normalizarBusqueda(query)
-    if (!term) return options
-    return options.filter((actividad) => {
-      const searchable = [
-        actividad.fraccion,
-        actividad.nombre,
-        actividad.descripcion,
-        actividad.key,
-        ...actividad.ejemplosOperaciones.map((ejemplo) => `${ejemplo.titulo} ${ejemplo.descripcion}`),
-      ].join(" ")
-      return normalizarBusqueda(searchable).includes(term)
-    })
-  }, [options, query])
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className={cn("h-10 w-full max-w-none justify-between gap-2 bg-white px-3 text-left font-normal", triggerClassName)}
-        >
-          <span className="min-w-0 flex-1 truncate">
-            {selected ? `${selected.fraccion} - ${selected.nombre}` : placeholder}
-          </span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="max-h-[360px] w-[--radix-popover-trigger-width] overflow-hidden p-0">
-        <div className="border-b p-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onInput={(event) => setQuery(event.currentTarget.value)}
-              placeholder="Filtrar por fracción, nombre o palabra clave"
-              className="h-9 pl-8"
-              autoFocus
-            />
-          </div>
-        </div>
-        <div className="max-h-72 space-y-1 overflow-y-auto overscroll-contain p-1">
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((actividad) => {
-              const isSelected = actividad.key === value
-              return (
-                <button
-                  key={actividad.key}
-                  type="button"
-                  className={`flex w-full min-w-0 items-start gap-2 rounded-md px-3 py-2 text-left text-sm transition hover:bg-slate-100 ${
-                    isSelected ? "bg-emerald-50 text-emerald-900" : "text-slate-700"
-                  }`}
-                  onClick={() => {
-                    onChange(actividad.key)
-                    setOpen(false)
-                    setQuery("")
-                  }}
-                >
-                  <CheckCircle2
-                    className={`mt-0.5 h-4 w-4 shrink-0 ${isSelected ? "text-emerald-600" : "text-transparent"}`}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-semibold">{actividad.fraccion}</span>
-                    <span className="line-clamp-2 text-xs leading-relaxed text-slate-500">{actividad.nombre}</span>
-                  </span>
-                </button>
-              )
-            })
-          ) : (
-            <div className="px-3 py-6 text-center text-sm text-slate-500">
-              No encontré actividades con ese texto.
-            </div>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
   )
 }
 
@@ -7063,11 +6960,11 @@ const cambiarMesCalendario = (delta: number) => {
                     </span>
                   </div>
                   <ActividadVulnerableCombobox
+                    ariaLabel="Actividad vulnerable"
                     value={actividadOperacionSeleccionada || actividadKey}
                     options={actividadesRegistradasCliente.length > 0 ? actividadesRegistradasCliente : actividadesVulnerables}
                     placeholder="Busca fracción o actividad"
                     disabled={(actividadesRegistradasCliente.length > 0 ? actividadesRegistradasCliente : actividadesVulnerables).length === 0}
-                    triggerClassName="h-11 rounded-xl border-slate-200 px-4 text-[15px] shadow-sm shadow-slate-100/70"
                     onChange={(value) => {
                       setActividadOperacionSeleccionada(value)
                       setActividadKey(value)
