@@ -1200,6 +1200,7 @@ function getServiciosProfesionalesAdministracionManualFields(
 
   if (sheetName === "Acto u operación") {
     const activoSelectorId = "acto.activo_administrado"
+    const otroActivoWhen = condition(activoSelectorId, "99")
     const inmuebleWhen = condition(activoSelectorId, "9")
     const instrumentoFinancieroWhen = condition(activoSelectorId, "10")
     return [
@@ -1248,15 +1249,15 @@ function getServiciosProfesionalesAdministracionManualFields(
       ),
       field(
         "acto.activo_administrado_otro",
-        "Descripción de otro activo administrado",
+        "Descripción del activo administrado",
         "F124",
         "texto",
         undefined,
         false,
         {
           sectionKind: "acto_operacion",
-          activeWhen: condition(activoSelectorId, "99"),
-          requiredWhen: condition(activoSelectorId, "99"),
+          activeWhen: otroActivoWhen,
+          requiredWhen: otroActivoWhen,
         },
       ),
       field("acto.numero_empleados", "Número de empleados", "H124", "numero", undefined, true, {
@@ -1268,8 +1269,12 @@ function getServiciosProfesionalesAdministracionManualFields(
         "B179",
         "texto",
         undefined,
-        true,
-        { sectionKind: "acto_operacion" },
+        false,
+        {
+          sectionKind: "acto_operacion",
+          activeWhen: otroActivoWhen,
+          requiredWhen: otroActivoWhen,
+        },
       ),
       field(
         "activo_inmueble.tipo",
