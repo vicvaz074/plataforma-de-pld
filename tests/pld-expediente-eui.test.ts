@@ -8,6 +8,7 @@ import {
   getActividadEuiLabel,
   getPrimaryExpedienteIdentifier,
   normalizeExpedienteIdentifiers,
+  validateClientExpedienteIdentifiers,
   validateExpedienteIdentifiers,
 } from "../lib/pld/expediente-eui"
 
@@ -20,6 +21,25 @@ test("EUI accepts the applicable identifier combinations by person type", () => 
   assert.equal(validateExpedienteIdentifiers({ nif: "EU123456789" }, false), null)
   assert.match(validateExpedienteIdentifiers({}, true) ?? "", /RFC, NIF o CURP/)
   assert.match(validateExpedienteIdentifiers({ curp: "GOCG650418HVZNMR07" }, false) ?? "", /RFC o NIF/)
+})
+
+test("EUI only treats NIF as applicable for foreign clients", () => {
+  assert.match(
+    validateClientExpedienteIdentifiers({ nif: "EU123456789" }, { personaFisica: false, extranjero: false }) ?? "",
+    /RFC de la persona moral mexicana/,
+  )
+  assert.equal(
+    validateClientExpedienteIdentifiers({ nif: "EU123456789" }, { personaFisica: false, extranjero: true }),
+    null,
+  )
+  assert.equal(
+    validateClientExpedienteIdentifiers({ curp: "GOCG650418HVZNMR07" }, { personaFisica: true, extranjero: false }),
+    null,
+  )
+  assert.match(
+    validateClientExpedienteIdentifiers({}, { personaFisica: true, extranjero: false }) ?? "",
+    /RFC o CURP/,
+  )
 })
 
 test("EUI normalizes identifiers and keeps a stable legacy id without depending on RFC", () => {

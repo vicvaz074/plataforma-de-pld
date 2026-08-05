@@ -2858,14 +2858,16 @@ export default function ActividadesVulnerablesPage() {
         rfc: expediente.sujetoObligadoRfc,
         nombre: expediente.sujetoObligadoNombre,
         clave: expediente.claveSujetoObligado,
-      }) || `expediente:${normalizarBusqueda(expediente.expedienteId)}`
-    const expedienteSujeto =
-      (expedienteActual && expedienteOptionValue(expedienteActual) === sujetoObligadoOperacion
-        ? expedienteActual
-        : null) ??
-      Object.values(expedientesDetalle).find((expediente) => {
-        return expedienteOptionValue(expediente) === sujetoObligadoOperacion
       })
+    const expedienteSujeto = sujetoObligadoOperacion
+      ? (expedienteActual && expedienteOptionValue(expedienteActual) === sujetoObligadoOperacion
+          ? expedienteActual
+          : null) ??
+        Object.values(expedientesDetalle).find((expediente) => {
+          const optionValue = expedienteOptionValue(expediente)
+          return Boolean(optionValue) && optionValue === sujetoObligadoOperacion
+        })
+      : null
 
     if (expedienteSujeto) {
       return {
@@ -3341,7 +3343,7 @@ export default function ActividadesVulnerablesPage() {
           rfc: expediente.sujetoObligadoRfc,
           nombre: expediente.sujetoObligadoNombre,
           clave: expediente.claveSujetoObligado,
-        }) || `expediente:${normalizarBusqueda(expediente.expedienteId)}`
+        })
       )
     },
     [tenantState.tenants],
@@ -3359,6 +3361,7 @@ export default function ActividadesVulnerablesPage() {
 
     expedientesDisponibles.forEach((expediente) => {
       const clave = resolveSujetoObligadoOptionValue(expediente)
+      if (!clave) return
       const existing = mapa.get(clave)
       if (existing) {
         mapa.set(clave, {
@@ -3395,12 +3398,11 @@ export default function ActividadesVulnerablesPage() {
       .filter(
         (opcion) =>
           opcion.expedientesCount > 0 ||
-          opcion.value === `tenant:${activeTenant?.id}` ||
+          opcion.value.startsWith("tenant:") ||
           opcion.value === sujetoGuardadoValue,
       )
       .sort((a, b) => a.label.localeCompare(b.label, "es"))
   }, [
-    activeTenant?.id,
     expedientesDisponibles,
     operacionEditandoId,
     operaciones,
@@ -3413,7 +3415,8 @@ export default function ActividadesVulnerablesPage() {
       expedientesDisponibles
         .filter((expediente) => {
           if (!sujetoObligadoOperacion) return true
-          return resolveSujetoObligadoOptionValue(expediente) === sujetoObligadoOperacion
+          const sujetoVinculado = resolveSujetoObligadoOptionValue(expediente)
+          return !sujetoVinculado || sujetoVinculado === sujetoObligadoOperacion
         })
         .map((expediente) => ({
           value: expediente.expedienteId,
@@ -6190,17 +6193,11 @@ const reutilizarDatosCliente = (operacion: OperacionCliente, modo: "reusar" | "e
   setPersonaExpedienteSeleccionada(operacion.personaExpedienteId ?? "")
   setPersonaAvisoActual(operacion.personaAviso ?? null)
 
-  const tenantSujeto = tenantState.tenants.find(
-    (tenant) =>
-      tenant.id === operacion.sujetoObligado?.id ||
-      Boolean(operacion.sujetoObligado?.rfc && tenant.rfc === operacion.sujetoObligado.rfc),
-  )
-  const sujetoOperacionValue = tenantSujeto
-    ? `tenant:${tenantSujeto.id}`
-    : expedienteOperacion
-      ? resolveSujetoObligadoOptionValue(expedienteOperacion)
-      : getSujetoObligadoOptionValueFromSnapshot(operacion.sujetoObligado) ||
-        (activeTenant?.id ? `tenant:${activeTenant.id}` : "")
+  const sujetoGuardadoValue = getSujetoObligadoOptionValueFromSnapshot(operacion.sujetoObligado)
+  const sujetoOperacionValue =
+    sujetoGuardadoValue ||
+    (expedienteOperacion ? resolveSujetoObligadoOptionValue(expedienteOperacion) : "") ||
+    (activeTenant?.id ? `tenant:${activeTenant.id}` : "")
   setSujetoObligadoOperacion(sujetoOperacionValue)
   setSatFieldValues(
     modo === "editar"
