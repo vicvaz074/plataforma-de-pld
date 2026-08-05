@@ -1,6 +1,6 @@
 import { ACTIVIDADES_VULNERABLES_ARTICULO_17 } from "./actividades"
 
-export const EXPEDIENTE_EUI_SCHEMA_VERSION = 2
+export const EXPEDIENTE_EUI_SCHEMA_VERSION = 3
 export const ARRENDAMIENTO_ACTIVITY_KEY = "fraccion-xv-uso-goce"
 
 export interface ExpedienteIdentifiers {
@@ -18,6 +18,11 @@ export interface SatEuiCatalogOption {
 export interface SatEuiCatalogs {
   actividadesEconomicas: SatEuiCatalogOption[]
   girosMercantiles: SatEuiCatalogOption[]
+}
+
+export interface ExpedienteIdentifierContext {
+  personaFisica: boolean
+  extranjero: boolean
 }
 
 const RFC_PATTERN = /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/
@@ -74,6 +79,41 @@ export function validateExpedienteIdentifiers(
   if (!personaFisica && identifiers.curp && !identifiers.rfc && !identifiers.nif) {
     return "Para una persona moral, registra RFC o NIF; la CURP no sustituye esos identificadores."
   }
+  if (identifiers.rfc && !RFC_PATTERN.test(identifiers.rfc)) {
+    return "El RFC no tiene un formato válido con homoclave."
+  }
+  if (identifiers.curp && !CURP_PATTERN.test(identifiers.curp)) {
+    return "La CURP no tiene un formato válido de 18 caracteres."
+  }
+  if (identifiers.nif && !NIF_PATTERN.test(identifiers.nif)) {
+    return "El NIF debe tener entre 2 y 30 caracteres alfanuméricos válidos."
+  }
+  return null
+}
+
+/**
+ * Validates the identifiers that apply to the client's legal form and
+ * nationality. The legacy validator above remains available for consumers
+ * that do not yet provide nationality context.
+ */
+export function validateClientExpedienteIdentifiers(
+  identifiersInput: Partial<ExpedienteIdentifiers>,
+  context: ExpedienteIdentifierContext,
+): string | null {
+  const identifiers = normalizeExpedienteIdentifiers(identifiersInput)
+
+  if (context.personaFisica) {
+    if (!identifiers.rfc && !identifiers.curp && !(context.extranjero && identifiers.nif)) {
+      return context.extranjero
+        ? "Registra al menos un identificador del cliente: RFC, NIF o CURP."
+        : "Registra al menos RFC o CURP para el cliente mexicano."
+    }
+  } else if (!identifiers.rfc && !(context.extranjero && identifiers.nif)) {
+    return context.extranjero
+      ? "Registra RFC o NIF para la persona moral extranjera."
+      : "Registra el RFC de la persona moral mexicana."
+  }
+
   if (identifiers.rfc && !RFC_PATTERN.test(identifiers.rfc)) {
     return "El RFC no tiene un formato válido con homoclave."
   }

@@ -8,11 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
+import { ActividadVulnerableCombobox } from "@/components/pld/actividad-vulnerable-combobox"
+import { SatCatalogCombobox } from "@/components/pld/sat-catalog-combobox"
 import {
   Building2,
   CalendarClock,
@@ -25,6 +28,7 @@ import {
   Users,
 } from "lucide-react"
 import { CLIENTE_TIPOS, findClienteTipoLabel } from "@/lib/data/tipos-cliente"
+import { actividadesVulnerables } from "@/lib/data/actividades"
 import { PAISES, findPaisByCodigo } from "@/lib/data/paises"
 import {
   findCodigoPostalInfo,
@@ -42,10 +46,16 @@ import {
   getPrimaryExpedienteIdentifier,
   loadSatEuiCatalogs,
   normalizeExpedienteIdentifiers,
-  validateExpedienteIdentifiers,
+  validateClientExpedienteIdentifiers,
   type ExpedienteIdentifiers,
   type SatEuiCatalogOption,
 } from "@/lib/pld/expediente-eui"
+import {
+  evaluateExpedientePmDocumentChecklist,
+  normalizeExpedientePmDocumentManualState,
+} from "@/lib/pld/expediente-document-checklist"
+
+const NO_SUJETO_OBLIGADO_VALUE = "__sin_sujeto_obligado__"
 
 const EXPEDIENTE_TIPOS = [
   { value: "persona_moral", label: "Persona Moral" },
@@ -163,22 +173,6 @@ const OCUPACIONES_OPCIONES = [
   "Jubilado",
   "Servidor público",
   "Otro",
-]
-
-const DOCUMENTOS_EUI = [
-  "Formulario de Identificación del Cliente",
-  "Documento que acredita la celebración del Acto u Operación (contrato, factura, etc.)",
-  "Instrumento público que acredite la constitución del Cliente",
-  "Constancia de inscripción en el Registro Público del instrumento que acredite su constitución",
-  "Constancia de Situación Fiscal (SAT)",
-  "Comprobante de domicilio del Cliente",
-  "Instrumento que contenga los poderes del representante o apoderado legal",
-  "Identificación oficial del representante o apoderado legal",
-  "Comprobante de domicilio del representante o apoderado legal",
-  "Identificación oficial del Beneficiario Controlador",
-  "Constancia CURP (o equivalente) del Beneficiario Controlador",
-  "Cédula de Identificación Fiscal o NIF del Beneficiario Controlador",
-  "Comprobante de domicilio del Beneficiario Controlador (si no coincide con la ID)",
 ]
 
 const DOCUMENTOS_EUI_PERSONA_FISICA = [
@@ -311,6 +305,7 @@ interface ExpedienteEuiPersonaMoral {
     ubicacion: DireccionState
   }
   documentacion: Record<string, boolean>
+  documentacionManual?: Record<string, boolean>
 }
 
 interface ExpedienteEuiPersonaFisica {
@@ -782,8 +777,18 @@ function sanitizeDetalle(raw: any): ExpedienteDetalle | null {
     nombre: nombre || primaryIdentifier || "Expediente sin nombre",
     tipoCliente: typeof raw.tipoCliente === "string" ? raw.tipoCliente : undefined,
     detalleTipoCliente: typeof raw.detalleTipoCliente === "string" ? raw.detalleTipoCliente : undefined,
-    sujetoObligadoId: typeof raw.sujetoObligadoId === "string" ? raw.sujetoObligadoId : undefined,
-    sujetoObligadoNombre: typeof raw.sujetoObligadoNombre === "string" ? raw.sujetoObligadoNombre : undefined,
+    sujetoObligadoId:
+      typeof raw.sujetoObligadoId === "string" && raw.sujetoObligadoId.trim()
+        ? raw.sujetoObligadoId
+        : typeof expedienteRaw?.sujetoObligadoId === "string" && expedienteRaw.sujetoObligadoId.trim()
+          ? expedienteRaw.sujetoObligadoId
+          : undefined,
+    sujetoObligadoNombre:
+      typeof raw.sujetoObligadoNombre === "string" && raw.sujetoObligadoNombre.trim()
+        ? raw.sujetoObligadoNombre
+        : typeof expedienteRaw?.sujetoObligadoNombre === "string" && expedienteRaw.sujetoObligadoNombre.trim()
+          ? expedienteRaw.sujetoObligadoNombre
+          : undefined,
     expedienteEui,
     personas: Array.isArray(raw.personas) ? (raw.personas as ExpedientePersonaResumen[]) : undefined,
     beneficiariosControladores: Array.isArray(raw.beneficiariosControladores)
@@ -922,7 +927,7 @@ function KycExpedienteContent() {
   const previousActivityLabelRef = useRef("")
   const [sujetoObligadoNombrePf, setSujetoObligadoNombrePf] = useState("")
   const [sujetoObligadoRfcPf, setSujetoObligadoRfcPf] = useState("")
-  const [tipoCliente, setTipoCliente] = useState<string>(CLIENTE_TIPOS[0]?.value ?? "")
+  const [tipoCliente, setTipoCliente] = useState<string>("pm_mexicana")
   const [tipoActoOperacion, setTipoActoOperacion] = useState("")
   const [fechaActoOperacion, setFechaActoOperacion] = useState("")
   const [relacionNegocios, setRelacionNegocios] = useState<RespuestaSiNo>("")
@@ -1168,12 +1173,62 @@ function KycExpedienteContent() {
     () => sujetosRegistrados.find((sujeto) => sujeto.id === sujetoObligadoId) ?? null,
     [sujetoObligadoId, sujetosRegistrados],
   )
+  const actividadesAplicables = useMemo(() => {
+    if (!sujetoObligadoActual) return actividadesVulnerables
+    const registradas = new Set(sujetoObligadoActual.actividades.map((actividad) => actividad.activityKey))
+    return actividadesVulnerables.filter((actividad) => registradas.has(actividad.key))
+  }, [sujetoObligadoActual])
   const actividadSeleccionada = useMemo(
     () => sujetoObligadoActual?.actividades.find((actividad) => actividad.activityKey === activityKey) ?? null,
     [activityKey, sujetoObligadoActual],
   )
   const activityLabel = actividadSeleccionada?.label || (activityKey ? getActividadEuiLabel(activityKey) : "")
   const esArrendamiento = activityKey === ARRENDAMIENTO_ACTIVITY_KEY
+  const nifAplicaPersonaFisica = clienteFisicaPaisNacionalidad !== "MX"
+  const nifAplicaPersonaMoral = clientePais !== "MX"
+  const checklistPersonaMoral = useMemo(
+    () =>
+      evaluateExpedientePmDocumentChecklist({
+        cliente: {
+          denominacion: clienteDenominacion,
+          fechaConstitucion: clienteFechaConstitucion,
+          paisNacionalidad: clientePais,
+          rfc: clienteRfc,
+          nif: nifAplicaPersonaMoral ? clienteNif : "",
+          actividad: clienteActividad,
+        },
+        tipoActoOperacion,
+        fechaActoOperacion,
+        domicilioCliente,
+        representante,
+        identificacionRepresentante,
+        beneficiario: {
+          nombres: beneficiario1.nombres,
+          apellidoPaterno: beneficiario1.apellidoPaterno,
+          curp: beneficiario1.curp,
+          rfc: beneficiario1.rfc,
+          domicilio: beneficiario1.domicilio,
+          identificacion: beneficiario1.identificacion,
+        },
+        manual: documentacion,
+      }),
+    [
+      beneficiario1,
+      clienteActividad,
+      clienteDenominacion,
+      clienteFechaConstitucion,
+      clienteNif,
+      clientePais,
+      clienteRfc,
+      domicilioCliente,
+      documentacion,
+      fechaActoOperacion,
+      identificacionRepresentante,
+      nifAplicaPersonaMoral,
+      representante,
+      tipoActoOperacion,
+    ],
+  )
 
   useEffect(() => {
     if (!sujetoObligadoActual) return
@@ -1313,6 +1368,7 @@ function KycExpedienteContent() {
       if (!expediente) return
       setExpedienteIdActual(detalle.expedienteId)
       setActivityKey(detalle.activityKey)
+      setSujetoObligadoId(detalle.sujetoObligadoId ?? "")
       setTipoExpediente(expediente.tipoExpediente)
       setFechaRegistro(expediente.fechaRegistro)
 
@@ -1371,7 +1427,7 @@ function KycExpedienteContent() {
       }
 
       const expedienteMoral = expediente as ExpedienteEuiPersonaMoral
-      setSujetoObligadoId(expedienteMoral.sujetoObligadoId)
+      setSujetoObligadoId(detalle.sujetoObligadoId ?? expedienteMoral.sujetoObligadoId ?? "")
       setTipoCliente(expedienteMoral.tipoCliente)
       setTipoActoOperacion(expedienteMoral.tipoActoOperacion)
       setFechaActoOperacion(expedienteMoral.fechaActoOperacion)
@@ -1394,7 +1450,11 @@ function KycExpedienteContent() {
       setInmuebleValor(inmuebleMoral?.valorReferencia ?? "")
       setInmuebleFolio(inmuebleMoral?.folioReal ?? "")
       setUbicacionInmueble(inmuebleMoral?.ubicacion ?? createDireccion())
-      setDocumentacion(expedienteMoral.documentacion)
+      setDocumentacion(
+        normalizeExpedientePmDocumentManualState(
+          expedienteMoral.documentacionManual ?? expedienteMoral.documentacion,
+        ),
+      )
     },
     [],
   )
@@ -1406,7 +1466,7 @@ function KycExpedienteContent() {
     setActivityKey("")
     setSujetoObligadoNombrePf("")
     setSujetoObligadoRfcPf("")
-    setTipoCliente(CLIENTE_TIPOS[0]?.value ?? "")
+    setTipoCliente("pm_mexicana")
     setTipoActoOperacion("")
     setFechaActoOperacion("")
     setRelacionNegocios("")
@@ -1502,7 +1562,7 @@ function KycExpedienteContent() {
     }
   }, [aplicarDetalleEnFormulario, expedientesCargados, expedientesDisponibles, searchParams, toast])
 
-  const persistirExpediente = (detalle: ExpedienteDetalle) => {
+  const persistirExpediente = (detalle: ExpedienteDetalle, pendingDocuments?: number) => {
     const nextDetalle = { ...expedientesDetalle, [detalle.expedienteId]: detalle }
     try {
       window.localStorage.setItem(EXPEDIENTE_DETALLE_STORAGE_KEY, JSON.stringify(Object.values(nextDetalle)))
@@ -1525,7 +1585,10 @@ function KycExpedienteContent() {
     setExpedienteSeleccionado(detalle.expedienteId)
     toast({
       title: "Expediente guardado",
-      description: "El expediente se actualizó correctamente.",
+      description:
+        typeof pendingDocuments === "number" && pendingDocuments > 0
+          ? `El expediente se guardó con ${pendingDocuments} documento${pendingDocuments === 1 ? "" : "s"} pendiente${pendingDocuments === 1 ? "" : "s"}.`
+          : "El expediente se actualizó correctamente.",
     })
   }
 
@@ -1533,21 +1596,34 @@ function KycExpedienteContent() {
     if (!activityKey) {
       toast({
         title: "Falta actividad vulnerable",
-        description: "Selecciona una actividad exacta del Alta SAT antes de guardar el expediente.",
+        description: "Selecciona la actividad vulnerable aplicable antes de guardar el expediente.",
         variant: "destructive",
       })
       return
     }
 
     const personaFisica = tipoExpediente === "persona_fisica"
+    const personaMoralDerechoPublico = tipoExpediente === "persona_moral_derecho_publico"
+    const clienteExtranjero = personaFisica
+      ? nifAplicaPersonaFisica
+      : personaMoralDerechoPublico
+        ? false
+        : nifAplicaPersonaMoral
     const identifiers = normalizeExpedienteIdentifiers(
       personaFisica
-        ? { rfc: clienteFisicaRfc, nif: clienteFisicaNif, curp: clienteFisicaCurp }
-        : tipoExpediente === "persona_moral_derecho_publico"
-          ? { rfc: clientePmdpRfc, nif: clientePmdpNif }
-          : { rfc: clienteRfc, nif: clienteNif },
+        ? {
+            rfc: clienteFisicaRfc,
+            nif: nifAplicaPersonaFisica ? clienteFisicaNif : "",
+            curp: clienteFisicaCurp,
+          }
+        : personaMoralDerechoPublico
+          ? { rfc: clientePmdpRfc, nif: "" }
+          : { rfc: clienteRfc, nif: nifAplicaPersonaMoral ? clienteNif : "" },
     )
-    const identifierError = validateExpedienteIdentifiers(identifiers, personaFisica)
+    const identifierError = validateClientExpedienteIdentifiers(identifiers, {
+      personaFisica,
+      extranjero: clienteExtranjero,
+    })
     if (identifierError) {
       toast({
         title: "Revisa los identificadores",
@@ -1797,7 +1873,8 @@ function KycExpedienteContent() {
               ubicacion: ubicacionInmueble,
             },
           }),
-      documentacion,
+      documentacion: checklistPersonaMoral.effectiveSnapshot,
+      documentacionManual: checklistPersonaMoral.manualState,
     }
     const ocupacion = buildCatalogSelection(clienteActividad, girosMercantiles)
     const beneficiariosControladores = [
@@ -1826,7 +1903,7 @@ function KycExpedienteContent() {
       beneficiariosControladores,
       actualizadoEn: new Date().toISOString(),
     }
-    persistirExpediente(detalle)
+    persistirExpediente(detalle, checklistPersonaMoral.summary.missing)
   }
 
   const expedientesTotales = expedientesDisponibles.length
@@ -1943,7 +2020,8 @@ function KycExpedienteContent() {
               <FileText className="h-5 w-5 text-slate-600" /> Expediente único de identificación
             </CardTitle>
             <CardDescription>
-              Captura el Expediente Único de Identificación para persona moral o física y conecta con el sujeto obligado registrado.
+              Registra al cliente de forma independiente. Puedes vincularlo a un sujeto obligado cuando corresponda,
+              pero ese vínculo no es necesario para guardar el expediente.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1977,12 +2055,25 @@ function KycExpedienteContent() {
               <Input type="date" value={fechaRegistro} readOnly />
             </div>
             <div className="space-y-2">
-              <Label>Sujeto obligado</Label>
-              <Select value={sujetoObligadoId} onValueChange={setSujetoObligadoId}>
+              <Label>Sujeto obligado (opcional)</Label>
+              <Select
+                value={sujetoObligadoId || NO_SUJETO_OBLIGADO_VALUE}
+                onValueChange={(value) => {
+                  const nextValue = value === NO_SUJETO_OBLIGADO_VALUE ? "" : value
+                  setSujetoObligadoId(nextValue)
+                  if (!nextValue) {
+                    setSujetoObligadoNombrePf("")
+                    setSujetoObligadoRfcPf("")
+                    setSujetoObligadoNombrePmdp("")
+                    setSujetoObligadoRfcPmdp("")
+                  }
+                }}
+              >
                 <SelectTrigger className="bg-white">
-                  <SelectValue placeholder={sujetosRegistrados.length ? "Selecciona sujeto" : "Sin sujetos registrados"} />
+                  <SelectValue placeholder="Sin vincular sujeto obligado" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={NO_SUJETO_OBLIGADO_VALUE}>Sin vincular sujeto obligado</SelectItem>
                   {sujetosRegistrados.map((sujeto) => (
                     <SelectItem key={sujeto.id} value={sujeto.id}>
                       {sujeto.nombre} · {sujeto.tipo}
@@ -1992,35 +2083,31 @@ function KycExpedienteContent() {
               </Select>
               {sujetosRegistrados.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  No hay sujetos obligados registrados. Completa el módulo de alta para habilitar esta selección.
+                  No hay sujetos obligados registrados; puedes continuar con el expediente del cliente.
                 </p>
               )}
             </div>
             <div className="space-y-2">
               <Label>Actividad vulnerable aplicable</Label>
-              <Select value={activityKey} onValueChange={setActivityKey} disabled={!sujetoObligadoActual}>
-                <SelectTrigger className="bg-white">
-                  <SelectValue
-                    placeholder={
-                      sujetoObligadoActual?.actividades.length
-                        ? "Selecciona la actividad exacta"
-                        : "Sin actividades en el Alta"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {sujetoObligadoActual?.actividades.map((actividad) => (
-                    <SelectItem key={actividad.activityKey} value={actividad.activityKey}>
-                      {actividad.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ActividadVulnerableCombobox
+                id="eui-actividad-vulnerable"
+                ariaLabel="Seleccionar actividad vulnerable aplicable al expediente"
+                value={activityKey}
+                options={actividadesAplicables}
+                placeholder="Busca por fracción o actividad"
+                onChange={setActivityKey}
+              />
               {(sujetoObligadoActual?.actividades.length ?? 0) > 1 ? (
                 <p className="text-xs text-amber-700">
                   El Alta contiene varias actividades; selecciona la que corresponde a este expediente.
                 </p>
-              ) : null}
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {sujetoObligadoActual
+                    ? "La lista se limita a las actividades registradas para el sujeto vinculado."
+                    : "Sin sujeto vinculado puedes seleccionar cualquier actividad aplicable al cliente."}
+                </p>
+              )}
             </div>
           </div>
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
@@ -2109,9 +2196,11 @@ function KycExpedienteContent() {
           <Card className="border-slate-200">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-slate-600" /> Sujeto obligado
+                <Users className="h-5 w-5 text-slate-600" /> Sujeto obligado (opcional)
               </CardTitle>
-              <CardDescription>Datos del sujeto obligado vinculados al expediente.</CardDescription>
+              <CardDescription>
+                Completa estos datos sólo si deseas conservar un vínculo; no bloquean el registro del cliente.
+              </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -2258,34 +2347,33 @@ function KycExpedienteContent() {
                 <Label>RFC</Label>
                 <Input value={clienteFisicaRfc} onChange={(event) => setClienteFisicaRfc(event.target.value.toUpperCase())} />
               </div>
-              <div className="space-y-2">
-                <Label>NIF</Label>
-                <Input
-                  value={clienteFisicaNif}
-                  onChange={(event) => setClienteFisicaNif(event.target.value.toUpperCase())}
-                  placeholder="Identificador fiscal extranjero"
-                />
-              </div>
+              {nifAplicaPersonaFisica ? (
+                <div className="space-y-2">
+                  <Label>NIF (opcional si ya registraste RFC)</Label>
+                  <Input
+                    value={clienteFisicaNif}
+                    onChange={(event) => setClienteFisicaNif(event.target.value.toUpperCase())}
+                    placeholder="Identificador fiscal extranjero"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Sólo aplica para clientes extranjeros y no se exige cuando ya existe RFC.
+                  </p>
+                </div>
+              ) : null}
               <div className="space-y-2 md:col-span-2">
                 <Label>Actividad, ocupación, profesión</Label>
-                <Select value={clienteFisicaOcupacion} onValueChange={setClienteFisicaOcupacion}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Selecciona ocupación" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clienteFisicaOcupacion &&
-                    !actividadesEconomicas.some((opcion) => opcion.value === clienteFisicaOcupacion) ? (
-                      <SelectItem value={clienteFisicaOcupacion}>{clienteFisicaOcupacion}</SelectItem>
-                    ) : null}
-                    {actividadesEconomicas.map((opcion) => (
-                      <SelectItem key={opcion.value} value={opcion.value}>
-                        {opcion.code} · {opcion.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SatCatalogCombobox
+                  id="eui-actividad-economica-pf"
+                  ariaLabel="Seleccionar actividad, ocupación o profesión del cliente"
+                  value={clienteFisicaOcupacion}
+                  options={actividadesEconomicas}
+                  placeholder="Busca una ocupación oficial"
+                  searchPlaceholder="Buscar por código o actividad"
+                  onChange={setClienteFisicaOcupacion}
+                />
                 <p className="text-xs text-muted-foreground">
-                  Catálogo de actividades económicas de la plantilla oficial SAT. Debe existir RFC, NIF o CURP.
+                  Catálogo de actividades económicas de la plantilla oficial SAT. Para una persona mexicana debe
+                  existir RFC o CURP.
                 </p>
               </div>
             </CardContent>
@@ -2807,8 +2895,11 @@ function KycExpedienteContent() {
           <Card className="border-slate-200">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-slate-600" /> Sujeto obligado
+                <Users className="h-5 w-5 text-slate-600" /> Sujeto obligado (opcional)
               </CardTitle>
+              <CardDescription>
+                El expediente del cliente puede guardarse sin relacionarlo con un sujeto obligado.
+              </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -2893,33 +2984,21 @@ function KycExpedienteContent() {
                 <Label>Registro Federal de Contribuyentes</Label>
                 <Input value={clientePmdpRfc} onChange={(event) => setClientePmdpRfc(event.target.value.toUpperCase())} />
               </div>
-              <div className="space-y-2">
-                <Label>NIF</Label>
-                <Input
-                  value={clientePmdpNif}
-                  onChange={(event) => setClientePmdpNif(event.target.value.toUpperCase())}
-                  placeholder="Identificador fiscal extranjero"
-                />
-              </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>Actividad u objeto / giro mercantil</Label>
-                <Select value={clientePmdpActividad} onValueChange={setClientePmdpActividad}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Selecciona el giro oficial" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clientePmdpActividad &&
-                    !girosMercantiles.some((opcion) => opcion.value === clientePmdpActividad) ? (
-                      <SelectItem value={clientePmdpActividad}>{clientePmdpActividad}</SelectItem>
-                    ) : null}
-                    {girosMercantiles.map((opcion) => (
-                      <SelectItem key={opcion.value} value={opcion.value}>
-                        {opcion.code} · {opcion.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Registra RFC o NIF y selecciona el giro del XLSM SAT.</p>
+                <SatCatalogCombobox
+                  id="eui-giro-pmdp"
+                  ariaLabel="Seleccionar actividad u objeto de la persona moral de derecho público"
+                  value={clientePmdpActividad}
+                  options={girosMercantiles}
+                  placeholder="Busca el giro oficial"
+                  searchPlaceholder="Buscar por código o giro"
+                  onChange={setClientePmdpActividad}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Registra el RFC y selecciona el giro del catálogo oficial SAT. El NIF no aplica a este tipo de
+                  cliente.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -3324,32 +3403,34 @@ function KycExpedienteContent() {
             <Label>RFC</Label>
             <Input value={clienteRfc} onChange={(event) => setClienteRfc(event.target.value.toUpperCase())} />
           </div>
-          <div className="space-y-2">
-            <Label>NIF</Label>
-            <Input
-              value={clienteNif}
-              onChange={(event) => setClienteNif(event.target.value.toUpperCase())}
-              placeholder="Identificador fiscal extranjero"
-            />
-          </div>
+          {nifAplicaPersonaMoral ? (
+            <div className="space-y-2">
+              <Label>NIF (opcional si ya registraste RFC)</Label>
+              <Input
+                value={clienteNif}
+                onChange={(event) => setClienteNif(event.target.value.toUpperCase())}
+                placeholder="Identificador fiscal extranjero"
+              />
+              <p className="text-xs text-muted-foreground">
+                Sólo aplica para clientes extranjeros y no se exige cuando ya existe RFC.
+              </p>
+            </div>
+          ) : null}
           <div className="space-y-2 md:col-span-2">
             <Label>Actividad, giro mercantil, actividad u objeto social</Label>
-            <Select value={clienteActividad} onValueChange={setClienteActividad}>
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder="Selecciona el giro oficial" />
-              </SelectTrigger>
-              <SelectContent>
-                {clienteActividad && !girosMercantiles.some((opcion) => opcion.value === clienteActividad) ? (
-                  <SelectItem value={clienteActividad}>{clienteActividad}</SelectItem>
-                ) : null}
-                {girosMercantiles.map((opcion) => (
-                  <SelectItem key={opcion.value} value={opcion.value}>
-                    {opcion.code} · {opcion.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">Registra RFC o NIF y selecciona el giro del XLSM SAT.</p>
+            <SatCatalogCombobox
+              id="eui-giro-persona-moral"
+              ariaLabel="Seleccionar actividad, giro mercantil u objeto social"
+              value={clienteActividad}
+              options={girosMercantiles}
+              placeholder="Busca el giro oficial"
+              searchPlaceholder="Buscar por código, giro o actividad"
+              onChange={setClienteActividad}
+            />
+            <p className="text-xs text-muted-foreground">
+              Selecciona el giro del catálogo oficial SAT. Para una persona mexicana se requiere RFC; el NIF sólo
+              aplica a clientes extranjeros.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -4686,21 +4767,78 @@ function KycExpedienteContent() {
 
       <Card className="border-slate-200">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-slate-600" /> Documentación que integra el EUI – Persona Moral
-          </CardTitle>
-          <CardDescription>Marca cada documento como presente o no presente.</CardDescription>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1.5">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-slate-600" /> Documentación que integra el EUI – Persona Moral
+              </CardTitle>
+              <CardDescription>
+                El sistema reconoce lo respaldado por los datos capturados. Confirma manualmente lo demás; los
+                pendientes no impiden guardar el expediente.
+              </CardDescription>
+            </div>
+            <Badge variant="outline" className="w-fit whitespace-nowrap">
+              {checklistPersonaMoral.summary.total - checklistPersonaMoral.summary.missing}/
+              {checklistPersonaMoral.summary.total} integrados
+            </Badge>
+          </div>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2">
-          {DOCUMENTOS_EUI.map((doc) => (
-            <label key={doc} className="flex items-start gap-3 rounded border border-slate-200 bg-white p-3 text-sm">
-              <Checkbox
-                checked={Boolean(documentacion[doc])}
-                onCheckedChange={(value) => setDocumentacion((prev) => ({ ...prev, [doc]: Boolean(value) }))}
-              />
-              <span>{doc}</span>
-            </label>
-          ))}
+        <CardContent className="space-y-4">
+          <div className="space-y-2 rounded-lg border bg-muted/30 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="font-medium">Avance documental</span>
+              <span className="text-muted-foreground">{checklistPersonaMoral.summary.progress}%</span>
+            </div>
+            <Progress value={checklistPersonaMoral.summary.progress} aria-label="Avance documental del expediente" />
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span>{checklistPersonaMoral.summary.automatic} detectados automáticamente</span>
+              <span>{checklistPersonaMoral.summary.manual} confirmados manualmente</span>
+              <span>{checklistPersonaMoral.summary.missing} pendientes</span>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            {checklistPersonaMoral.items.map((item) => {
+              const automatico = item.status === "automatic"
+              const completo = item.status !== "missing"
+              const estadoLabel = automatico
+                ? "Detectado automáticamente"
+                : item.status === "manual"
+                  ? "Confirmado manualmente"
+                  : "Faltante"
+
+              return (
+                <div key={item.id} className="flex items-start gap-3 rounded-lg border bg-background p-3 text-sm">
+                  <Checkbox
+                    id={`documento-${item.id}`}
+                    checked={completo}
+                    disabled={automatico}
+                    onCheckedChange={(value) =>
+                      setDocumentacion((prev) => ({ ...prev, [item.id]: Boolean(value) }))
+                    }
+                    aria-label={`${estadoLabel}: ${item.label}`}
+                  />
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <label htmlFor={`documento-${item.id}`} className="block cursor-pointer font-medium leading-snug">
+                      {item.label}
+                    </label>
+                    <Badge variant={item.status === "missing" ? "outline" : "secondary"} className="w-fit">
+                      {estadoLabel}
+                    </Badge>
+                    {item.valueSummary ? (
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {item.sourceLabel}: {item.valueSummary}
+                      </p>
+                    ) : item.missingFields.length > 0 ? (
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        Falta: {item.missingFields.join(", ")}.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </CardContent>
       </Card>
         </>
