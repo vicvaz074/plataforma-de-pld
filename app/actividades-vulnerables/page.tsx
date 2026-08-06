@@ -40,6 +40,7 @@ import {
 import { ActividadVulnerableCombobox } from "@/components/pld/actividad-vulnerable-combobox"
 import { InfoHint } from "@/components/pld/info-hint"
 import { SatDynamicOperationFormView } from "@/components/pld/sat-dynamic-operation-form"
+import { SearchableSelect } from "@/components/pld/searchable-select"
 import {
   AlertCircle,
   ArrowRight,
@@ -85,6 +86,7 @@ import {
   storedPldSubjectIdentity,
   type StoredPldOperationV3,
 } from "@/lib/pld/stored-operations"
+import { SAT_INSTRUMENTO_MONETARIO_OPTIONS } from "@/lib/pld/sat-instrumentos-monetarios"
 import { UMA_MONTHS, findUmaByMonthYear } from "@/lib/data/uma"
 import { CLIENTE_TIPOS, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
 import { CIUDADES_MEXICO, findCodigoPostalInfo } from "@/lib/data/codigos-postales"
@@ -393,12 +395,6 @@ const FORMA_PAGO_OPTIONS = [
   { value: "2", label: "Cheque" },
   { value: "3", label: "Efectivo" },
   { value: "4", label: "Otro instrumento" },
-]
-
-const INSTRUMENTO_MONETARIO_OPTIONS = [
-  { value: "1", label: "Cuenta propia" },
-  { value: "2", label: "Cuenta de tercero" },
-  { value: "3", label: "Medio no bancarizado" },
 ]
 
 const ALERTA_DEFAULT = ALERTA_TIPOS[0]?.value ?? "0"
@@ -7872,6 +7868,24 @@ const cambiarMesCalendario = (delta: number) => {
 
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
+                    <Label>Instrumento monetario utilizado</Label>
+                    <SearchableSelect
+                      ariaLabel="Instrumento monetario utilizado"
+                      value={liquidacionForm.instrumento}
+                      options={SAT_INSTRUMENTO_MONETARIO_OPTIONS}
+                      placeholder="Selecciona instrumento monetario"
+                      searchPlaceholder="Buscar instrumento monetario"
+                      emptyLabel="No hay instrumentos monetarios que coincidan."
+                      onChange={(value) => actualizarLiquidacionForm("instrumento", value)}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Catálogo SAT: {SAT_INSTRUMENTO_MONETARIO_OPTIONS.length} opciones, con búsqueda y desplazamiento.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
                     <Label>Moneda</Label>
                     <Select
                       value={moneda}
@@ -8534,21 +8548,15 @@ const cambiarMesCalendario = (delta: number) => {
                         </div>
                         <div className="space-y-2">
                           <Label>Instrumento monetario utilizado</Label>
-                          <Select
+                          <SearchableSelect
+                            ariaLabel="Instrumento monetario utilizado"
                             value={liquidacionForm.instrumento}
-                            onValueChange={(value) => actualizarLiquidacionForm("instrumento", value)}
-                          >
-                            <SelectTrigger className="bg-white">
-                              <SelectValue placeholder="Selecciona instrumento" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {INSTRUMENTO_MONETARIO_OPTIONS.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            options={SAT_INSTRUMENTO_MONETARIO_OPTIONS}
+                            placeholder="Selecciona instrumento monetario"
+                            searchPlaceholder="Buscar instrumento monetario"
+                            emptyLabel="No hay instrumentos monetarios que coincidan."
+                            onChange={(value) => actualizarLiquidacionForm("instrumento", value)}
+                          />
                         </div>
                       </div>
                       <p className="mt-2 text-[11px] text-muted-foreground">
