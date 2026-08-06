@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs"
 import test from "node:test"
 
 import {
+  buildSatDynamicOperationForm,
   extractSatXlsmLayoutFromBuffer,
   getSatTemplateCachePath,
   hydrateSatXlsmLayout,
@@ -12,8 +13,14 @@ import {
   normalizeSatXlsmLayout,
   resolveSatTemplateForActividad,
   serializeSatXlsmLayout,
+  PERSONA_OBJETO_DOMICILIO_FIELD_ID,
+  PERSONA_OBJETO_TYPE_FIELD_ID,
   SAT_TEMPLATE_CATALOG,
 } from "../lib/pld"
+import {
+  evaluateExpedientePmDocumentChecklist,
+  getExpedienteDocumentsForScope,
+} from "../lib/pld/expediente-document-checklist"
 import { buildStructuredSheetFields } from "../lib/pld/sat-xlsm-structure"
 import type { SatTemplateCatalogItem, SatXlsmField, SatXlsmLayout } from "../lib/pld/types"
 
@@ -414,4 +421,130 @@ test("la actividad vulnerable resuelve la plantilla y el layout que le correspon
   }
 
   assert.deepEqual(failures, [])
+})
+
+test("un fideicomiso sólo llena las columnas del fideicomiso, no las de persona moral", () => {
+  // El Anexo pone en el mismo renglón las columnas de persona moral y las del
+  // fideicomiso. Son excluyentes: declarar la figura decide cuáles se escriben.
+  const template = resolveSatTemplateForActividad("fraccion-xi-a-inmuebles")
+  const layout = layoutFor(template.templateId)
+  const form = buildSatDynamicOperationForm({
+    template,
+    layout,
+    prefill: {
+      clienteTipoPersona: "fideicomiso",
+      clienteRazonSocial: "FIDEICOMISO F/12345",
+      clienteRfc: "FID160101AB1",
+      clientePais: "MEXICO,MX",
+      fideicomisoFiduciarioDenominacion: "BANCO FIDUCIARIO SA",
+      fideicomisoFiduciarioRfc: "BFI900101AA1",
+      fideicomisoIdentificador: "F/12345",
+    },
+  })
+  const fields = form.sections.flatMap((section) => section.fields)
+  const valueAt = (cell: string) =>
+    form.initialValues[fields.find((field) => field.cell === cell && field.sheetName.includes("Persona Objeto"))?.id ?? ""]
+
+  assert.equal(form.initialValues[PERSONA_OBJETO_TYPE_FIELD_ID], "fideicomiso")
+  assert.equal(valueAt("G37"), "BANCO FIDUCIARIO SA")
+  assert.equal(valueAt("H37"), "BFI900101AA1")
+  assert.equal(valueAt("I37"), "F/12345")
+
+  // Las columnas de persona moral quedan intactas.
+  for (const cell of ["B37", "C37", "D37", "E37", "F37"]) {
+    assert.equal(valueAt(cell), undefined, `${cell} no debe llenarse para un fideicomiso`)
+  }
+})
+
+test("una persona moral no arrastra las columnas del fiduciario", () => {
+  const template = resolveSatTemplateForActividad("fraccion-xi-a-inmuebles")
+  const layout = layoutFor(template.templateId)
+  const form = buildSatDynamicOperationForm({
+    template,
+    layout,
+    prefill: {
+      clienteTipoPersona: "persona_moral",
+      clienteRazonSocial: "LOGISALL MEXICO S DE RL DE CV",
+      clienteRfc: "LME161125GY9",
+      clientePais: "MEXICO,MX",
+    },
+  })
+  const fields = form.sections.flatMap((section) => section.fields)
+  const valueAt = (cell: string) =>
+    form.initialValues[fields.find((field) => field.cell === cell && field.sheetName.includes("Persona Objeto"))?.id ?? ""]
+
+  assert.equal(valueAt("B37"), "LOGISALL MEXICO S DE RL DE CV")
+  assert.equal(valueAt("D37"), "LME161125GY9")
+  for (const cell of ["G37", "H37", "I37"]) {
+    assert.equal(valueAt(cell), undefined, `${cell} es del fideicomiso y no aplica a una persona moral`)
+  }
+})
+
+test("la figura del cliente se deduce cuando el expediente no la declara", () => {
+  const template = resolveSatTemplateForActividad("fraccion-xi-a-inmuebles")
+  const layout = layoutFor(template.templateId)
+  const porFiduciario = buildSatDynamicOperationForm({
+    template,
+    layout,
+    prefill: { fideicomisoFiduciarioDenominacion: "BANCO FIDUCIARIO SA" },
+  })
+  const porRazonSocial = buildSatDynamicOperationForm({
+    template,
+    layout,
+    prefill: { clienteRazonSocial: "LOGISALL MEXICO S DE RL DE CV" },
+  })
+
+  assert.equal(porFiduciario.initialValues[PERSONA_OBJETO_TYPE_FIELD_ID], "fideicomiso")
+  assert.equal(porRazonSocial.initialValues[PERSONA_OBJETO_TYPE_FIELD_ID], "persona_moral")
+})
+
+test("el expediente de un fideicomiso sólo exige su documentación propia", () => {
+  const fideicomiso = getExpedienteDocumentsForScope("fideicomiso")
+  const personaMoral = getExpedienteDocumentsForScope("persona_moral")
+
+  assert.deepEqual(fideicomiso.map((item) => item.id), [
+    "existencia-persona-moral",
+    "constancia-situacion-fiscal",
+    "poderes-representante",
+    "identificacion-representante",
+  ])
+  assert.equal(personaMoral.length > fideicomiso.length, true)
+
+  const evaluado = evaluateExpedientePmDocumentChecklist({ scope: "fideicomiso", manual: {} })
+  assert.equal(evaluado.items.length, 4)
+  assert.equal(evaluado.summary.total, 4)
+  // La integración de una persona moral no aplica al fideicomiso.
+  assert.equal(evaluado.items.some((item) => item.id === "inscripcion-registro-publico"), false)
+  assert.equal(evaluado.items.some((item) => item.id === "identificacion-beneficiario"), false)
+})
+
+test("el Anexo pide un solo domicilio: nacional o del extranjero, no ambos", () => {
+  // Ambas tablas traen columnas marcadas como obligatorias en la plantilla, así
+  // que sin distinguir el ámbito ningún aviso podría cerrarse.
+  const template = resolveSatTemplateForActividad("fraccion-xi-a-inmuebles")
+  const layout = layoutFor(template.templateId)
+  const fields = layout.sections.flatMap((section) => section.fields)
+  const nacional = fields.find((field) => field.cell === "B104")
+  const internacional = fields.find((field) => field.cell === "B122")
+
+  assert.ok(nacional)
+  assert.ok(internacional)
+
+  const enMexico = { [PERSONA_OBJETO_DOMICILIO_FIELD_ID]: "nacional" }
+  assert.equal(isSatXlsmFieldRequired(nacional, enMexico), true)
+  assert.equal(isSatXlsmFieldActive(internacional, enMexico), false)
+
+  const enExtranjero = { [PERSONA_OBJETO_DOMICILIO_FIELD_ID]: "internacional" }
+  assert.equal(isSatXlsmFieldActive(nacional, enExtranjero), false)
+  assert.equal(isSatXlsmFieldRequired(internacional, enExtranjero), true)
+
+  // El domicilio nacional es el caso corriente y es el que se asume.
+  const form = buildSatDynamicOperationForm({ template, layout })
+  assert.equal(form.initialValues[PERSONA_OBJETO_DOMICILIO_FIELD_ID], "nacional")
+  const extranjero = buildSatDynamicOperationForm({
+    template,
+    layout,
+    prefill: { clienteDomicilioAmbito: "extranjero" },
+  })
+  assert.equal(extranjero.initialValues[PERSONA_OBJETO_DOMICILIO_FIELD_ID], "internacional")
 })

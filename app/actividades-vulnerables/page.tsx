@@ -440,6 +440,12 @@ const BENEFICIARIO_FORM_DEFAULT: BeneficiarioFormState = {
   pais: "MX",
 }
 
+const FIDEICOMISO_FORM_DEFAULT: FideicomisoFormState = {
+  fiduciarioDenominacion: "",
+  fiduciarioRfc: "",
+  identificador: "",
+}
+
 const CONTRAPARTE_FORM_DEFAULT: ContraparteFormState = {
   tipo: "persona_fisica",
   nombre: "",
@@ -608,11 +614,19 @@ interface DomicilioAviso {
 }
 
 interface PersonaAvisoOperacion {
-  tipo: "persona_fisica" | "persona_moral"
+  tipo: "persona_fisica" | "persona_moral" | "fideicomiso"
   denominacion?: string
   fechaConstitucion?: string
   pais?: string
   giro?: string
+  /**
+   * Datos que el Anexo pide en las columnas del fideicomiso. Son excluyentes de
+   * las de persona moral: cuando la figura es un fideicomiso el SAT espera al
+   * fiduciario y el identificador, no una denominación social.
+   */
+  fiduciarioDenominacion?: string
+  fiduciarioRfc?: string
+  identificadorFideicomiso?: string
   nombre?: string
   apellidoPaterno?: string
   apellidoMaterno?: string
@@ -739,6 +753,17 @@ interface ContraparteFormState {
   pais: string
 }
 
+/**
+ * Datos que el Anexo pide en las columnas del fideicomiso. Se capturan aquí
+ * cuando el expediente no los trae o cuando este aviso en particular reporta un
+ * fiduciario distinto al registrado.
+ */
+interface FideicomisoFormState {
+  fiduciarioDenominacion: string
+  fiduciarioRfc: string
+  identificador: string
+}
+
 interface InstrumentoPublicoFormState {
   numero: string
   fecha: string
@@ -750,7 +775,10 @@ interface InstrumentoPublicoFormState {
 
 interface ExpedientePersona {
   id?: string
-  tipo?: "persona_moral" | "persona_fisica"
+  tipo?: "persona_moral" | "persona_fisica" | "fideicomiso"
+  fiduciarioDenominacion?: string
+  fiduciarioRfc?: string
+  identificadorFideicomiso?: string
   denominacion?: string
   nombre?: string
   apellidoPaterno?: string
@@ -1477,7 +1505,10 @@ function sanitizeClienteGuardado(raw: any): ClienteGuardado | null {
 function sanitizeExpedientePersona(raw: any): ExpedientePersona | null {
   if (!raw || typeof raw !== "object") return null
 
-  const tipo = raw.tipo === "persona_fisica" || raw.tipo === "persona_moral" ? raw.tipo : undefined
+  const tipo =
+    raw.tipo === "persona_fisica" || raw.tipo === "persona_moral" || raw.tipo === "fideicomiso"
+      ? raw.tipo
+      : undefined
   const representanteRaw = raw.representante
   const representante: RepresentanteAviso | null =
     representanteRaw && typeof representanteRaw === "object"
@@ -1552,6 +1583,11 @@ function sanitizeExpedientePersona(raw: any): ExpedientePersona | null {
   return {
     id: typeof raw.id === "string" ? raw.id : undefined,
     tipo,
+    fiduciarioDenominacion:
+      typeof raw.fiduciarioDenominacion === "string" ? raw.fiduciarioDenominacion : undefined,
+    fiduciarioRfc: typeof raw.fiduciarioRfc === "string" ? raw.fiduciarioRfc : undefined,
+    identificadorFideicomiso:
+      typeof raw.identificadorFideicomiso === "string" ? raw.identificadorFideicomiso : undefined,
     denominacion: typeof raw.denominacion === "string" ? raw.denominacion : undefined,
     nombre: typeof raw.nombre === "string" ? raw.nombre : undefined,
     apellidoPaterno: typeof raw.apellidoPaterno === "string" ? raw.apellidoPaterno : undefined,
@@ -1804,11 +1840,19 @@ function sanitizeExpediente(raw: any): ExpedienteDetalle | null {
 
 function buildPersonaAvisoFromExpediente(persona: ExpedientePersona | null | undefined): PersonaAvisoOperacion | null {
   if (!persona) return null
-  const tipo = persona.tipo === "persona_fisica" ? "persona_fisica" : "persona_moral"
+  const tipo =
+    persona.tipo === "persona_fisica"
+      ? "persona_fisica"
+      : persona.tipo === "fideicomiso"
+        ? "fideicomiso"
+        : "persona_moral"
 
-  if (tipo === "persona_moral") {
+  if (tipo === "persona_moral" || tipo === "fideicomiso") {
     return {
       tipo,
+      fiduciarioDenominacion: persona.fiduciarioDenominacion,
+      fiduciarioRfc: persona.fiduciarioRfc,
+      identificadorFideicomiso: persona.identificadorFideicomiso,
       denominacion: persona.denominacion ?? persona.rfc ?? persona.nif ?? "Persona moral",
       fechaConstitucion: persona.fechaConstitucion,
       pais: persona.pais,
@@ -1858,8 +1902,13 @@ function buildPersonaAvisoFromExpediente(persona: ExpedientePersona | null | und
 function sanitizePersonaAviso(raw: any): PersonaAvisoOperacion | null {
   if (!raw || typeof raw !== "object") return null
 
-  const tipo = raw.tipo === "persona_fisica" || raw.tipo === "persona_moral" ? raw.tipo : null
+  const tipo =
+    raw.tipo === "persona_fisica" || raw.tipo === "persona_moral" || raw.tipo === "fideicomiso"
+      ? raw.tipo
+      : null
   if (!tipo) return null
+
+  const textoOpcional = (valor: unknown) => (typeof valor === "string" && valor.trim() ? valor.trim() : undefined)
 
   const representanteRaw = raw.representante
   const representante: RepresentanteAviso | null =
@@ -1935,6 +1984,9 @@ function sanitizePersonaAviso(raw: any): PersonaAvisoOperacion | null {
 
   return {
     tipo,
+    fiduciarioDenominacion: textoOpcional(raw.fiduciarioDenominacion),
+    fiduciarioRfc: textoOpcional(raw.fiduciarioRfc),
+    identificadorFideicomiso: textoOpcional(raw.identificadorFideicomiso),
     denominacion: typeof raw.denominacion === "string" ? raw.denominacion : undefined,
     fechaConstitucion:
       typeof raw.fechaConstitucion === "string" ? raw.fechaConstitucion : undefined,
@@ -2201,6 +2253,9 @@ export default function ActividadesVulnerablesPage() {
   const [contraparteForm, setContraparteForm] = useState<ContraparteFormState>(
     () => ({ ...CONTRAPARTE_FORM_DEFAULT }),
   )
+  const [fideicomisoForm, setFideicomisoForm] = useState<FideicomisoFormState>(
+    () => ({ ...FIDEICOMISO_FORM_DEFAULT }),
+  )
   const [instrumentoForm, setInstrumentoForm] = useState<InstrumentoPublicoFormState>(
     () => ({ ...INSTRUMENTO_FORM_DEFAULT }),
   )
@@ -2299,6 +2354,13 @@ export default function ActividadesVulnerablesPage() {
         ),
       )
       setDatosEuiConfirmados(false)
+    },
+    [],
+  )
+
+  const actualizarFideicomisoForm = useCallback(
+    (campo: keyof FideicomisoFormState, valor: string) => {
+      setFideicomisoForm((prev) => ({ ...prev, [campo]: valor }))
     },
     [],
   )
@@ -3032,7 +3094,11 @@ export default function ActividadesVulnerablesPage() {
         clienteNombrePf: personaAvisoActual?.nombre,
         clienteApellidoPaterno: personaAvisoActual?.apellidoPaterno,
         clienteApellidoMaterno: personaAvisoActual?.apellidoMaterno,
+        clienteTipoPersona: personaAvisoActual?.tipo,
         clienteRazonSocial: personaAvisoActual?.denominacion,
+        fideicomisoFiduciarioDenominacion: fideicomisoForm.fiduciarioDenominacion || personaAvisoActual?.fiduciarioDenominacion,
+        fideicomisoFiduciarioRfc: fideicomisoForm.fiduciarioRfc || personaAvisoActual?.fiduciarioRfc,
+        fideicomisoIdentificador: fideicomisoForm.identificador || personaAvisoActual?.identificadorFideicomiso,
         clienteRfc: personaAvisoActual?.rfc ?? expedienteActual?.identifiers.rfc ?? "",
         clienteFechaNacimiento: personaAvisoActual?.fechaNacimiento,
         clienteFechaConstitucion: personaAvisoActual?.fechaConstitucion,
@@ -3044,6 +3110,7 @@ export default function ActividadesVulnerablesPage() {
           expedienteActual?.ocupacion?.code && expedienteActual?.ocupacion?.label
             ? `${expedienteActual.ocupacion.code},${expedienteActual.ocupacion.label}`
             : expedienteActual?.ocupacion?.code || expedienteActual?.ocupacion?.label,
+        clienteDomicilioAmbito: personaAvisoActual?.domicilio?.ambito,
         clienteEstado: personaAvisoActual?.domicilio?.entidad,
         clienteMunicipio: personaAvisoActual?.domicilio?.municipio,
         clienteCiudad: personaAvisoActual?.domicilio?.ciudad,
@@ -3104,6 +3171,7 @@ export default function ActividadesVulnerablesPage() {
     beneficiarioForm,
     clienteNombre,
     contraparteForm,
+    fideicomisoForm,
     fechaOperacion,
     figuraClienteInmueble,
     figuraSujetoObligadoInmueble,
@@ -8555,6 +8623,58 @@ const cambiarMesCalendario = (delta: number) => {
                         El monto y la moneda se tomarán de los campos generales capturados arriba.
                       </p>
                     </div>
+
+                    {personaAvisoActual?.tipo === "fideicomiso" ? (
+                      <div className="rounded border bg-white p-4 shadow-sm">
+                        <div className="flex items-center gap-2 text-slate-700">
+                          <ShieldAlert className="h-5 w-5 text-emerald-600" />
+                          <h4 className="text-sm font-semibold">Datos del fideicomiso</h4>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          El Anexo reporta al fiduciario y el identificador del fideicomiso en lugar de la
+                          denominación y el giro de una persona moral. Si el expediente ya los tiene, se toman de
+                          ahí; captúralos aquí sólo cuando este aviso reporte un fiduciario distinto.
+                        </p>
+                        <div className="mt-4 grid gap-4 md:grid-cols-3">
+                          <div className="space-y-2 md:col-span-2">
+                            <Label>Denominación del fiduciario</Label>
+                            <Input
+                              value={
+                                fideicomisoForm.fiduciarioDenominacion ||
+                                personaAvisoActual?.fiduciarioDenominacion ||
+                                ""
+                              }
+                              onChange={(event) =>
+                                actualizarFideicomisoForm("fiduciarioDenominacion", event.target.value)
+                              }
+                              placeholder="Institución fiduciaria"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>RFC del fiduciario</Label>
+                            <Input
+                              value={fideicomisoForm.fiduciarioRfc || personaAvisoActual?.fiduciarioRfc || ""}
+                              onChange={(event) =>
+                                actualizarFideicomisoForm("fiduciarioRfc", event.target.value.toUpperCase())
+                              }
+                              placeholder="RFC con homoclave"
+                            />
+                          </div>
+                          <div className="space-y-2 md:col-span-3">
+                            <Label>Identificador del fideicomiso</Label>
+                            <Input
+                              value={
+                                fideicomisoForm.identificador ||
+                                personaAvisoActual?.identificadorFideicomiso ||
+                                ""
+                              }
+                              onChange={(event) => actualizarFideicomisoForm("identificador", event.target.value)}
+                              placeholder="Número, referencia o identificador"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
 
                     <div className="rounded border bg-white p-4 shadow-sm">
                       <div className="flex items-center gap-2 text-slate-700">

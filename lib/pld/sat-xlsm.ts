@@ -4,6 +4,10 @@ import {
   BENEFICIARY_PERSON_TYPE_FIELD_ID,
   BENEFICIARY_REPEAT_MODE_FIELD_ID,
   BENEFICIARY_TRUST_MODE_FIELD_ID,
+  PERSONA_OBJETO_DOMICILIO_FIELD_ID,
+  PERSONA_OBJETO_TYPE_FIELD_ID,
+  type PersonaObjetoDomicilioAmbito,
+  type PersonaObjetoTipo,
 } from "./sat-field-controls"
 import { excelSerialFromDate, satDate } from "./sat-xml"
 import {
@@ -139,8 +143,23 @@ export function buildSatDynamicOperationForm(input: {
   if (hasExplicitFiduciaryBeneficiaryPrefill(prefill)) {
     initialValues[BENEFICIARY_TRUST_MODE_FIELD_ID] = "si"
   }
+  const personaObjetoTipo = personaObjetoPrefillTipo(prefill)
+  if (personaObjetoTipo) initialValues[PERSONA_OBJETO_TYPE_FIELD_ID] = personaObjetoTipo
+  initialValues[PERSONA_OBJETO_DOMICILIO_FIELD_ID] = personaObjetoPrefillDomicilio(prefill)
 
-  for (const field of sections.flatMap((section) => section.fields)) {
+  // Dos pasadas: primero lo incondicional, que es lo que fija las ramas, y
+  // después lo condicionado, ya evaluado contra esas ramas. Así un fideicomiso
+  // no arrastra las columnas de persona moral ni se llena la descripción de
+  // "Otro" cuando el catálogo apunta a otra opción.
+  const allFields = sections.flatMap((section) => section.fields)
+  for (const field of allFields) {
+    if (field.activeWhen?.length) continue
+    const value = prefillValueForField(field, prefill)
+    if (value) initialValues[field.id] = value
+  }
+  for (const field of allFields) {
+    if (!field.activeWhen?.length) continue
+    if (!isSatXlsmFieldActive(field, initialValues)) continue
     const value = prefillValueForField(field, prefill)
     if (value) initialValues[field.id] = value
   }
@@ -283,7 +302,7 @@ function applySatTemplateFieldRules(
 ): SatXlsmSection[] {
   const sectionsWithBeneficiaryRules = sections.map((section) => ({
     ...section,
-    fields: section.fields.map(applyBeneficiaryFieldRules),
+    fields: section.fields.map(applyBeneficiaryFieldRules).map(applyPersonaObjetoFieldRules),
   }))
   if (templateId !== XII_NOTARIOS_A_TEMPLATE_ID) return sectionsWithBeneficiaryRules
 
@@ -334,6 +353,64 @@ function applyBeneficiaryFieldRules(field: SatXlsmField): SatXlsmField {
     }
   }
   return { ...field, activeWhen }
+}
+
+/**
+ * Restringe cada bloque de la persona objeto a la naturaleza declarada.
+ *
+ * El Anexo pone en el mismo renglón las columnas de persona moral y las del
+ * fideicomiso, y arriba un bloque aparte para persona física. Son excluyentes:
+ * sin esta regla los tres se piden a la vez y el libro termina con datos de una
+ * figura que no participó en el acto.
+ */
+function applyPersonaObjetoFieldRules(field: SatXlsmField): SatXlsmField {
+  if (!slug(field.sheetName).includes("persona-objeto")) return field
+
+  const domicilio = personaObjetoDomicilioBranch(field)
+  if (domicilio) {
+    return {
+      ...field,
+      activeWhen: appendSatFieldConditions(field.activeWhen, [
+        { fieldId: PERSONA_OBJETO_DOMICILIO_FIELD_ID, equals: [domicilio] },
+      ]),
+    }
+  }
+
+  const branch = personaObjetoFieldBranch(field)
+  if (!branch) return field
+
+  return {
+    ...field,
+    activeWhen: appendSatFieldConditions(field.activeWhen, [
+      { fieldId: PERSONA_OBJETO_TYPE_FIELD_ID, equals: [branch] },
+    ]),
+  }
+}
+
+function personaObjetoFieldBranch(field: SatXlsmField): PersonaObjetoTipo | undefined {
+  const group = slug(field.conditionalGroup ?? "")
+  if (group.includes("fideicomiso") || group.includes("fiduciari")) return "fideicomiso"
+
+  const block = slug(field.repeatGroup ?? "")
+  if (!block) return undefined
+  // El representante, el domicilio y el contacto aplican a cualquier figura.
+  if (block.includes("representa") || block.includes("apoderado")) return undefined
+  if (block.includes("domicilio") || block.includes("telefono") || block.includes("contacto")) {
+    return undefined
+  }
+  if (group.includes("persona-moral") || block.includes("persona-moral")) return "persona_moral"
+  if (group.includes("persona-fisica") || block.includes("persona-fisica")) return "persona_fisica"
+  return undefined
+}
+
+function personaObjetoDomicilioBranch(
+  field: SatXlsmField,
+): PersonaObjetoDomicilioAmbito | undefined {
+  const block = slug(field.repeatGroup ?? "")
+  if (!block.includes("domicilio")) return undefined
+  if (block.includes("internacional") || block.includes("extranjero")) return "internacional"
+  if (block.includes("nacional")) return "nacional"
+  return undefined
 }
 
 function appendSatFieldConditions(
@@ -2418,6 +2495,45 @@ function resolvePersonaObjetoScope(field: SatXlsmField): PersonaObjetoScope | un
   if (block.includes("persona-moral") || block.includes("persona-fisica-o-moral")) return "cliente_pm"
   if (block.includes("persona-fisica")) return "cliente_pf"
   return undefined
+}
+
+/**
+ * Naturaleza declarada para la persona objeto del aviso. Si el expediente no la
+ * trae, se deduce de los datos capturados: el fideicomiso se reconoce por los
+ * datos del fiduciario y la persona moral por su denominación.
+ */
+function personaObjetoPrefillTipo(prefill: Record<string, unknown>): PersonaObjetoTipo | undefined {
+  const declared = slug(stringPrefill(prefill.clienteTipoPersona))
+  if (declared.includes("fideicomiso")) return "fideicomiso"
+  if (declared.includes("moral")) return "persona_moral"
+  if (declared.includes("fisica")) return "persona_fisica"
+
+  if (hasFideicomisoPrefill(prefill)) return "fideicomiso"
+  if (stringPrefill(prefill.clienteRazonSocial)) return "persona_moral"
+  if (stringPrefill(prefill.clienteNombrePf) || stringPrefill(prefill.clienteApellidoPaterno)) {
+    return "persona_fisica"
+  }
+  return undefined
+}
+
+/**
+ * Ámbito del domicilio reportado. El Anexo sólo espera una de sus dos tablas,
+ * así que se elige la nacional salvo que el expediente declare lo contrario.
+ */
+function personaObjetoPrefillDomicilio(
+  prefill: Record<string, unknown>,
+): PersonaObjetoDomicilioAmbito {
+  const declared = slug(stringPrefill(prefill.clienteDomicilioAmbito))
+  if (declared.includes("extranjer") || declared.includes("internacional")) return "internacional"
+  return "nacional"
+}
+
+function hasFideicomisoPrefill(prefill: Record<string, unknown>): boolean {
+  return Boolean(
+    stringPrefill(prefill.fideicomisoFiduciarioDenominacion) ||
+      stringPrefill(prefill.fideicomisoFiduciarioRfc) ||
+      stringPrefill(prefill.fideicomisoIdentificador),
+  )
 }
 
 /** Columnas del fiduciario dentro del bloque de persona moral o fideicomiso. */

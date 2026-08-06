@@ -1,4 +1,4 @@
-import { BENEFICIARY_PERSON_TYPE_FIELD_ID } from "./sat-field-controls"
+import { isSatInferableControlFieldId } from "./sat-field-controls"
 import type {
   OperationalWizardStepDiagnostics,
   BlockingReasonsView,
@@ -136,7 +136,7 @@ export function pruneInactiveSatFieldValues(input: {
   fields: SatXlsmField[]
   values: Record<string, string>
 }): Record<string, string> {
-  const valuesWithControls = inferBeneficiaryConditionControls(input.fields, input.values)
+  const valuesWithControls = inferSyntheticControlValues(input.fields, input.values)
   const conditionalValues = { ...valuesWithControls }
   for (const field of input.fields) {
     if (conditionalValues[field.id] !== undefined) continue
@@ -160,7 +160,15 @@ export function pruneInactiveSatFieldValues(input: {
   )
 }
 
-function inferBeneficiaryConditionControls(
+/**
+ * Deduce los controles de captura que no viven en el libro.
+ *
+ * Una operación guardada antes de que existiera el control no lo trae, así que
+ * se infiere de los datos ya capturados: si todos los campos con valor de una
+ * rama apuntan a la misma opción, ésa es la rama elegida. Con dos ramas en uso
+ * no se asume ninguna, para no descartar lo que el usuario escribió.
+ */
+function inferSyntheticControlValues(
   fields: SatXlsmField[],
   values: Record<string, string>,
 ): Record<string, string> {
@@ -174,7 +182,7 @@ function inferBeneficiaryConditionControls(
     if (!fieldValue) continue
 
     for (const condition of field.activeWhen || []) {
-      if (condition.fieldId !== BENEFICIARY_PERSON_TYPE_FIELD_ID) continue
+      if (!isSatInferableControlFieldId(condition.fieldId)) continue
       if (output[condition.fieldId]?.trim() || condition.equals.length !== 1) continue
       const candidates = candidateValues.get(condition.fieldId) ?? new Set<string>()
       candidates.add(condition.equals[0])
