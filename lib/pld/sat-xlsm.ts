@@ -1,6 +1,25 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate"
 
+import {
+  BENEFICIARY_PERSON_TYPE_FIELD_ID,
+  BENEFICIARY_REPEAT_MODE_FIELD_ID,
+  BENEFICIARY_TRUST_MODE_FIELD_ID,
+  PERSONA_OBJETO_DOMICILIO_FIELD_ID,
+  PERSONA_OBJETO_TYPE_FIELD_ID,
+  type PersonaObjetoDomicilioAmbito,
+  type PersonaObjetoTipo,
+} from "./sat-field-controls"
 import { excelSerialFromDate, satDate } from "./sat-xml"
+import {
+  columnToNumber,
+  expandRange,
+  numberToColumn,
+  slug,
+  splitCell,
+  stripRequiredMarker,
+  type CellMap,
+} from "./sat-xlsm-grid"
+import { buildStructuredSheetFields, type SheetDataValidation } from "./sat-xlsm-structure"
 import {
   isSatXlsmFieldActive,
   isSatXlsmFieldRequired,
@@ -29,7 +48,6 @@ type ParsedWorkbook = {
   sharedStrings: string[]
 }
 
-type CellMap = Record<string, string>
 type ResolvedWorkbookCellValue = {
   value: string
   dataType?: SatXlsmField["dataType"]
@@ -50,9 +68,7 @@ const XII_NOTARIOS_A_TIPO_ACTO_OTRO_FIELD_ID = "aviso.descripcion-tipo-de-acto-o
 const XII_NOTARIOS_A_TIPO_ACTO_OTRO_CONDITION = [
   { fieldId: XII_NOTARIOS_A_TIPO_ACTO_FIELD_ID, equals: ["9"] },
 ]
-const BENEFICIARY_PERSON_TYPE_FIELD_ID = "beneficiario.tipo_persona"
-const BENEFICIARY_REPEAT_MODE_FIELD_ID = "beneficiario.permitir_repetidos"
-const BENEFICIARY_TRUST_MODE_FIELD_ID = "beneficiario.es_fideicomiso"
+
 
 export function extractSatXlsmLayoutFromBuffer(
   input: Uint8Array,
@@ -77,8 +93,12 @@ export function extractSatXlsmLayoutFromBuffer(
       const manualFields = getManualFields(template.templateId, sheet.name, optionLists)
       const mergedFields = mergeFields([
         ...manualFields,
-        ...buildValidationFields(sheet.name, cells, validations, optionLists),
-        ...(template.templateId.includes("fraccion-v-inmuebles") ? [] : buildLabelFields(sheet.name, cells)),
+        ...buildStructuredSheetFields({
+          sheetName: sheet.name,
+          cells,
+          validations,
+          optionLists,
+        }),
       ])
       const fields = template.templateId.includes("fraccion-v-inmuebles")
         ? mergedFields.map((field) => (field.source === "manual-sat-map" ? field : { ...field, required: false }))
@@ -123,8 +143,23 @@ export function buildSatDynamicOperationForm(input: {
   if (hasExplicitFiduciaryBeneficiaryPrefill(prefill)) {
     initialValues[BENEFICIARY_TRUST_MODE_FIELD_ID] = "si"
   }
+  const personaObjetoTipo = personaObjetoPrefillTipo(prefill)
+  if (personaObjetoTipo) initialValues[PERSONA_OBJETO_TYPE_FIELD_ID] = personaObjetoTipo
+  initialValues[PERSONA_OBJETO_DOMICILIO_FIELD_ID] = personaObjetoPrefillDomicilio(prefill)
 
-  for (const field of sections.flatMap((section) => section.fields)) {
+  // Dos pasadas: primero lo incondicional, que es lo que fija las ramas, y
+  // después lo condicionado, ya evaluado contra esas ramas. Así un fideicomiso
+  // no arrastra las columnas de persona moral ni se llena la descripción de
+  // "Otro" cuando el catálogo apunta a otra opción.
+  const allFields = sections.flatMap((section) => section.fields)
+  for (const field of allFields) {
+    if (field.activeWhen?.length) continue
+    const value = prefillValueForField(field, prefill)
+    if (value) initialValues[field.id] = value
+  }
+  for (const field of allFields) {
+    if (!field.activeWhen?.length) continue
+    if (!isSatXlsmFieldActive(field, initialValues)) continue
     const value = prefillValueForField(field, prefill)
     if (value) initialValues[field.id] = value
   }
@@ -158,7 +193,64 @@ function withInferredSectionKind(field: SatXlsmField): SatXlsmField {
   return { ...field, sectionKind: "acto_operacion" }
 }
 
-export function normalizeSatXlsmLayout(layout: SatXlsmLayout): SatXlsmLayout {
+/**
+ * Devuelve el layout listo para publicarse.
+ *
+ * Se aplican dos podas, porque el navegador descarga este JSON por plantilla:
+ *
+ * - Los campos que apuntan a un catálogo del libro sueltan su copia de
+ *   opciones. Un catálogo del SAT llega a cientos de entradas y una tabla
+ *   repite el mismo campo decenas de veces.
+ * - Se conservan sólo los catálogos que algún campo usa. Las hojas de combos
+ *   incluyen tablas auxiliares de búsqueda de código postal con cientos de
+ *   miles de renglones que ninguna validación referencia; el llenado del libro
+ *   las lee del propio XLSM, no del layout.
+ *
+ * `hydrateSatXlsmLayout` repone las opciones al consumirlo.
+ */
+export function serializeSatXlsmLayout(layout: SatXlsmLayout): SatXlsmLayout {
+  const referencedListIds = new Set(
+    layout.sections
+      .flatMap((section) => section.fields)
+      .map((field) => field.optionListId)
+      .filter((id): id is string => Boolean(id)),
+  )
+
+  return {
+    ...layout,
+    optionLists: layout.optionLists.filter((list) => referencedListIds.has(list.id)),
+    sections: layout.sections.map((section) => ({
+      ...section,
+      fields: section.fields.map((field) => {
+        if (!field.optionListId || !referencedListIds.has(field.optionListId)) return field
+        const { options, ...rest } = field
+        return rest
+      }),
+    })),
+  }
+}
+
+/** Repone las opciones que `serializeSatXlsmLayout` dejó fuera del JSON. */
+export function hydrateSatXlsmLayout(layout: SatXlsmLayout): SatXlsmLayout {
+  const optionsById = new Map(layout.optionLists.map((list) => [list.id, list.options]))
+  let changed = false
+
+  const sections = layout.sections.map((section) => ({
+    ...section,
+    fields: section.fields.map((field) => {
+      if (field.options || !field.optionListId) return field
+      const options = optionsById.get(field.optionListId)
+      if (!options) return field
+      changed = true
+      return { ...field, options }
+    }),
+  }))
+
+  return changed ? { ...layout, sections } : layout
+}
+
+export function normalizeSatXlsmLayout(input: SatXlsmLayout): SatXlsmLayout {
+  const layout = hydrateSatXlsmLayout(input)
   const sectionsWithTemplateRules = applySatTemplateFieldRules(layout.templateId, layout.sections)
   const sectionsWithoutAuxiliaryFields = sectionsWithTemplateRules.map((section) => ({
     ...section,
@@ -210,7 +302,7 @@ function applySatTemplateFieldRules(
 ): SatXlsmSection[] {
   const sectionsWithBeneficiaryRules = sections.map((section) => ({
     ...section,
-    fields: section.fields.map(applyBeneficiaryFieldRules),
+    fields: section.fields.map(applyBeneficiaryFieldRules).map(applyPersonaObjetoFieldRules),
   }))
   if (templateId !== XII_NOTARIOS_A_TEMPLATE_ID) return sectionsWithBeneficiaryRules
 
@@ -261,6 +353,64 @@ function applyBeneficiaryFieldRules(field: SatXlsmField): SatXlsmField {
     }
   }
   return { ...field, activeWhen }
+}
+
+/**
+ * Restringe cada bloque de la persona objeto a la naturaleza declarada.
+ *
+ * El Anexo pone en el mismo renglón las columnas de persona moral y las del
+ * fideicomiso, y arriba un bloque aparte para persona física. Son excluyentes:
+ * sin esta regla los tres se piden a la vez y el libro termina con datos de una
+ * figura que no participó en el acto.
+ */
+function applyPersonaObjetoFieldRules(field: SatXlsmField): SatXlsmField {
+  if (!slug(field.sheetName).includes("persona-objeto")) return field
+
+  const domicilio = personaObjetoDomicilioBranch(field)
+  if (domicilio) {
+    return {
+      ...field,
+      activeWhen: appendSatFieldConditions(field.activeWhen, [
+        { fieldId: PERSONA_OBJETO_DOMICILIO_FIELD_ID, equals: [domicilio] },
+      ]),
+    }
+  }
+
+  const branch = personaObjetoFieldBranch(field)
+  if (!branch) return field
+
+  return {
+    ...field,
+    activeWhen: appendSatFieldConditions(field.activeWhen, [
+      { fieldId: PERSONA_OBJETO_TYPE_FIELD_ID, equals: [branch] },
+    ]),
+  }
+}
+
+function personaObjetoFieldBranch(field: SatXlsmField): PersonaObjetoTipo | undefined {
+  const group = slug(field.conditionalGroup ?? "")
+  if (group.includes("fideicomiso") || group.includes("fiduciari")) return "fideicomiso"
+
+  const block = slug(field.repeatGroup ?? "")
+  if (!block) return undefined
+  // El representante, el domicilio y el contacto aplican a cualquier figura.
+  if (block.includes("representa") || block.includes("apoderado")) return undefined
+  if (block.includes("domicilio") || block.includes("telefono") || block.includes("contacto")) {
+    return undefined
+  }
+  if (group.includes("persona-moral") || block.includes("persona-moral")) return "persona_moral"
+  if (group.includes("persona-fisica") || block.includes("persona-fisica")) return "persona_fisica"
+  return undefined
+}
+
+function personaObjetoDomicilioBranch(
+  field: SatXlsmField,
+): PersonaObjetoDomicilioAmbito | undefined {
+  const block = slug(field.repeatGroup ?? "")
+  if (!block.includes("domicilio")) return undefined
+  if (block.includes("internacional") || block.includes("extranjero")) return "internacional"
+  if (block.includes("nacional")) return "nacional"
+  return undefined
 }
 
 function appendSatFieldConditions(
@@ -698,8 +848,13 @@ function parseDefinedNameRange(formula: string): { sheetName: string; range: str
   }
 }
 
-function parseDataValidations(xml: string): Array<{ sqref: string[]; optionListId?: string; inlineOptions?: string[] }> {
-  const validations: Array<{ sqref: string[]; optionListId?: string; inlineOptions?: string[] }> = []
+/**
+ * Conserva todas las validaciones tipadas de la hoja, no sólo las listas: el
+ * conjunto completo (longitud, fecha, decimal, entero) es el que delimita las
+ * celdas capturables de cada Anexo.
+ */
+function parseDataValidations(xml: string): SheetDataValidation[] {
+  const validations: SheetDataValidation[] = []
   // Keep the self-closing alternative separate. A single greedy attribute
   // capture can otherwise consume `/>` and pair that validation with the body
   // of a later node.
@@ -709,89 +864,33 @@ function parseDataValidations(xml: string): Array<{ sqref: string[]; optionListI
   while ((match = regex.exec(xml))) {
     const attrs = match[1] || match[2] || ""
     const body = match[3] || ""
-    if ((getAttr(attrs, "type") || "").toLowerCase() !== "list") continue
+    const type = (getAttr(attrs, "type") || "").toLowerCase()
+    if (!type) continue
     const sqref = (getAttr(attrs, "sqref") || "")
       .split(/\s+/)
       .map((item) => item.trim())
       .filter(Boolean)
-    const formula = decodeXml((body.match(/<formula1>([\s\S]*?)<\/formula1>/) || [])[1] || "")
+    const formula = decodeXml(
+      (body.match(/<formula1>([\s\S]*?)<\/formula1>/) || [])[1] || getAttr(attrs, "formula1"),
+    )
       .replace(/^=/, "")
       .replace(/^"|"$/g, "")
       .trim()
-    if (!sqref.length || !formula) continue
+    if (!sqref.length) continue
+    if (type === "list" && !formula) continue
     validations.push({
+      type,
+      operator: getAttr(attrs, "operator") || undefined,
       sqref,
-      optionListId: /^[A-Za-z_][\w.]*$/.test(formula) ? formula : undefined,
-      inlineOptions: formula.includes(",") ? formula.split(",").map((item) => item.trim()).filter(Boolean) : undefined,
+      formula1: formula,
+      optionListId: type === "list" && /^[A-Za-z_][\w.]*$/.test(formula) ? formula : undefined,
+      inlineOptions:
+        type === "list" && formula.includes(",")
+          ? formula.split(",").map((item) => item.trim()).filter(Boolean)
+          : undefined,
     })
   }
   return validations
-}
-
-function buildValidationFields(
-  sheetName: string,
-  cells: CellMap,
-  validations: Array<{ sqref: string[]; optionListId?: string; inlineOptions?: string[] }>,
-  optionLists: SatXlsmOptionList[],
-): SatXlsmField[] {
-  const fields: SatXlsmField[] = []
-  const optionMap = new Map(optionLists.map((list) => [list.id, list.options]))
-
-  for (const validation of validations) {
-    const refs = validation.sqref.flatMap((range) => expandRange(range).slice(0, 1))
-    for (const cell of refs) {
-      const label = findNearbyLabel(cell, cells) || `${sheetName} ${cell}`
-      fields.push({
-        id: `${slug(sheetName)}.${slug(label)}.${cell.toLowerCase()}`,
-        label: stripRequiredMarker(label),
-        sheetName,
-        cell,
-        required: label.includes("*"),
-        dataType: "catalogo",
-        optionListId: validation.optionListId,
-        options: validation.optionListId ? optionMap.get(validation.optionListId) || [] : validation.inlineOptions || [],
-        source: "xlsm-data-validation",
-      })
-    }
-  }
-
-  return fields
-}
-
-function buildLabelFields(sheetName: string, cells: CellMap): SatXlsmField[] {
-  const fields: SatXlsmField[] = []
-  for (const [labelCell, label] of Object.entries(cells)) {
-    if (!label.includes("*") || label.length > 120) continue
-    if (isAuxiliaryLabelText(label)) continue
-    const { col, row } = splitCell(labelCell)
-    const targetCell = `${numberToColumn(columnToNumber(col) + 1)}${row}`
-    const existingTarget = cells[targetCell]
-    if (existingTarget && existingTarget.includes("*")) continue
-
-    fields.push({
-      id: `${slug(sheetName)}.${slug(label)}.${targetCell.toLowerCase()}`,
-      label: stripRequiredMarker(label),
-      sheetName,
-      cell: targetCell,
-      required: true,
-      dataType: inferDataType(label),
-      source: "xlsm-label",
-    })
-  }
-  return fields
-}
-
-function isAuxiliaryLabelText(label: string): boolean {
-  const normalized = slug(label)
-  return /^los-campos-marcados-con.*obligatorios?$/.test(normalized) || normalized === "n-a" || normalized === "na"
-}
-
-function inferDataType(label: string): SatXlsmField["dataType"] {
-  const normalized = slug(label)
-  if (normalized.includes("fecha")) return "fecha"
-  if (normalized.includes("monto") || normalized.includes("valor") || normalized.includes("importe")) return "moneda"
-  if (normalized.includes("numero") || normalized.includes("cantidad")) return "numero"
-  return "texto"
 }
 
 function getManualFields(templateId: string, sheetName: string, optionLists: SatXlsmOptionList[]): SatXlsmField[] {
@@ -1751,6 +1850,13 @@ function buildRepeatedFields(input: {
   return fields
 }
 
+/**
+ * Deja una sola definición por celda y reencamina las condiciones.
+ *
+ * Un mapa manual desplaza al campo estructural de la misma celda, pero las
+ * reglas derivadas apuntan al identificador estructural; sin reencaminarlas, la
+ * condición quedaría huérfana y el campo dependiente nunca se activaría.
+ */
 function mergeFields(fields: SatXlsmField[]): SatXlsmField[] {
   const byCell = new Map<string, SatXlsmField>()
   for (const field of fields) {
@@ -1758,7 +1864,26 @@ function mergeFields(fields: SatXlsmField[]): SatXlsmField[] {
     const existing = byCell.get(key)
     if (!existing || fieldPriority(field) > fieldPriority(existing)) byCell.set(key, field)
   }
-  return [...byCell.values()]
+
+  const idByCell = new Map([...byCell].map(([key, field]) => [key, field.id]))
+  const idRemap = new Map<string, string>()
+  for (const field of fields) {
+    const winnerId = idByCell.get(`${field.sheetName}!${field.cell}`)
+    if (winnerId && winnerId !== field.id) idRemap.set(field.id, winnerId)
+  }
+  if (!idRemap.size) return [...byCell.values()]
+
+  const remapConditions = (conditions: SatXlsmField["activeWhen"]) =>
+    conditions?.map((condition) => {
+      const target = idRemap.get(condition.fieldId)
+      return target ? { ...condition, fieldId: target } : condition
+    })
+
+  return [...byCell.values()].map((field) => ({
+    ...field,
+    activeWhen: remapConditions(field.activeWhen),
+    requiredWhen: remapConditions(field.requiredWhen),
+  }))
 }
 
 function fieldPriority(field: SatXlsmField) {
@@ -2245,6 +2370,17 @@ function inferPrefillValueForExtractedField(field: SatXlsmField, prefill: Record
   if (sheet.includes("persona-objeto")) {
     const headerValue = inferHeaderPrefill(field, prefill)
     if (headerValue !== undefined) return headerValue
+
+    const scope = resolvePersonaObjetoScope(field)
+    if (scope === "fideicomiso") return inferFideicomisoFieldPrefill(label, prefill)
+    if (scope === "domicilio_nacional" || scope === "domicilio_internacional") {
+      return inferDomicilioFieldPrefill(label, col, prefill)
+    }
+    if (scope === "contacto") return inferContactoFieldPrefill(label, col, prefill)
+    if (scope) return inferPersonFieldPrefill(label, col, prefill, scope)
+
+    // Sin bloque reconocible se conservan los tramos del Anexo 1, que es el
+    // orden que comparten los formatos clásicos.
     if (row >= 18 && row <= 32) return inferPersonFieldPrefill(label, col, prefill, "cliente_pf")
     if (row >= 33 && row <= 45) return inferPersonFieldPrefill(label, col, prefill, "cliente_pm")
     if (row >= 46 && row <= 58) return inferPersonFieldPrefill(label, col, prefill, "representante")
@@ -2254,6 +2390,12 @@ function inferPrefillValueForExtractedField(field: SatXlsmField, prefill: Record
   }
 
   if (sheet.includes("beneficiario")) {
+    if (slug(field.conditionalGroup ?? "").includes("fideicomiso")) {
+      return inferFideicomisoFieldPrefill(label, prefill)
+    }
+    const scope = resolvePersonaObjetoScope(field)
+    if (scope === "cliente_pf") return inferPersonFieldPrefill(label, col, prefill, "beneficiario_pf")
+    if (scope === "cliente_pm") return inferPersonFieldPrefill(label, col, prefill, "beneficiario_pm")
     if (row <= 16) return inferPersonFieldPrefill(label, col, prefill, "beneficiario_pf")
     return inferPersonFieldPrefill(label, col, prefill, "beneficiario_pm")
   }
@@ -2315,6 +2457,96 @@ function inferHeaderPrefill(field: SatXlsmField, prefill: Record<string, unknown
     if (cell === "E8") return prefill.alertaDescripcion
   }
 
+  return undefined
+}
+
+type PersonaObjetoScope =
+  | "cliente_pf"
+  | "cliente_pm"
+  | "representante"
+  | "domicilio_nacional"
+  | "domicilio_internacional"
+  | "contacto"
+  | "fideicomiso"
+
+/**
+ * Clasifica un campo por el bloque que lo contiene en la plantilla.
+ *
+ * Cada Anexo coloca sus bloques en renglones distintos, así que deducir el
+ * origen del dato por número de renglón sólo acierta en el Anexo 1 y desplaza
+ * el prellenado en el resto. El rótulo del bloque —y el del grupo de columnas
+ * cuando el Anexo separa persona moral de fideicomiso— sí es estable.
+ */
+function resolvePersonaObjetoScope(field: SatXlsmField): PersonaObjetoScope | undefined {
+  const group = slug(field.conditionalGroup ?? "")
+  if (group.includes("fideicomiso") || group.includes("fiduciari")) return "fideicomiso"
+
+  const block = slug(field.repeatGroup ?? "")
+  if (!block) return undefined
+  if (block.includes("representa") || block.includes("apoderado")) return "representante"
+  if (block.includes("domicilio-internacional") || block.includes("extranjero")) {
+    return "domicilio_internacional"
+  }
+  if (block.includes("domicilio")) return "domicilio_nacional"
+  if (block.includes("telefono") || block.includes("clave-de-pais") || block.includes("clave-del-pais")) {
+    return "contacto"
+  }
+  if (block.includes("contacto") || block.includes("correo")) return "contacto"
+  if (block.includes("persona-moral") || block.includes("persona-fisica-o-moral")) return "cliente_pm"
+  if (block.includes("persona-fisica")) return "cliente_pf"
+  return undefined
+}
+
+/**
+ * Naturaleza declarada para la persona objeto del aviso. Si el expediente no la
+ * trae, se deduce de los datos capturados: el fideicomiso se reconoce por los
+ * datos del fiduciario y la persona moral por su denominación.
+ */
+function personaObjetoPrefillTipo(prefill: Record<string, unknown>): PersonaObjetoTipo | undefined {
+  const declared = slug(stringPrefill(prefill.clienteTipoPersona))
+  if (declared.includes("fideicomiso")) return "fideicomiso"
+  if (declared.includes("moral")) return "persona_moral"
+  if (declared.includes("fisica")) return "persona_fisica"
+
+  if (hasFideicomisoPrefill(prefill)) return "fideicomiso"
+  if (stringPrefill(prefill.clienteRazonSocial)) return "persona_moral"
+  if (stringPrefill(prefill.clienteNombrePf) || stringPrefill(prefill.clienteApellidoPaterno)) {
+    return "persona_fisica"
+  }
+  return undefined
+}
+
+/**
+ * Ámbito del domicilio reportado. El Anexo sólo espera una de sus dos tablas,
+ * así que se elige la nacional salvo que el expediente declare lo contrario.
+ */
+function personaObjetoPrefillDomicilio(
+  prefill: Record<string, unknown>,
+): PersonaObjetoDomicilioAmbito {
+  const declared = slug(stringPrefill(prefill.clienteDomicilioAmbito))
+  if (declared.includes("extranjer") || declared.includes("internacional")) return "internacional"
+  return "nacional"
+}
+
+function hasFideicomisoPrefill(prefill: Record<string, unknown>): boolean {
+  return Boolean(
+    stringPrefill(prefill.fideicomisoFiduciarioDenominacion) ||
+      stringPrefill(prefill.fideicomisoFiduciarioRfc) ||
+      stringPrefill(prefill.fideicomisoIdentificador),
+  )
+}
+
+/** Columnas del fiduciario dentro del bloque de persona moral o fideicomiso. */
+function inferFideicomisoFieldPrefill(label: string, prefill: Record<string, unknown>): unknown {
+  if (label.includes("denominacion") || label.includes("razon-social")) {
+    return prefill.fideicomisoFiduciarioDenominacion ?? prefill.beneficiarioFiduciarioDenominacion
+  }
+  if (label.includes("identificador")) {
+    return prefill.fideicomisoIdentificador ?? prefill.beneficiarioFideicomisoIdentificador
+  }
+  if (label.includes("rfc")) {
+    return prefill.fideicomisoFiduciarioRfc ?? prefill.beneficiarioFiduciarioRfc
+  }
   return undefined
 }
 
@@ -2439,44 +2671,9 @@ function isUsefulLabel(value?: string): value is string {
   return trimmed.length > 2 && !/^\d+(?:\.\d+)?$/.test(trimmed)
 }
 
-function expandRange(range: string): string[] {
-  const [start, end = start] = range.replace(/\$/g, "").split(":")
-  const a = splitCell(start.toUpperCase())
-  const b = splitCell(end.toUpperCase())
-  const cells: string[] = []
-  for (let row = a.row; row <= b.row; row += 1) {
-    for (let col = columnToNumber(a.col); col <= columnToNumber(b.col); col += 1) {
-      cells.push(`${numberToColumn(col)}${row}`)
-    }
-  }
-  return cells
-}
 
-function splitCell(cell: string): { col: string; row: number } {
-  const match = cell.match(/^([A-Z]+)(\d+)$/i)
-  return {
-    col: (match?.[1] || "A").toUpperCase(),
-    row: Number(match?.[2] || 1),
-  }
-}
 
-function columnToNumber(col: string): number {
-  return col
-    .toUpperCase()
-    .split("")
-    .reduce((sum, char) => sum * 26 + char.charCodeAt(0) - 64, 0)
-}
 
-function numberToColumn(input: number): string {
-  let n = Math.max(1, input)
-  let result = ""
-  while (n > 0) {
-    const remainder = (n - 1) % 26
-    result = String.fromCharCode(65 + remainder) + result
-    n = Math.floor((n - remainder) / 26)
-  }
-  return result
-}
 
 function matchTags(xml: string, tag: string): string[] {
   const regex = new RegExp(`<${tag}\\b([^>]*)\\/?>(?:<\\/${tag}>)?`, "g")
@@ -2509,18 +2706,7 @@ function buildFilledWorkbookName(name: string) {
   return name.replace(/\.xlsm$/i, "-relleno-pld.xlsm")
 }
 
-function stripRequiredMarker(label: string) {
-  return label.replace(/^\*\s*/, "").replace(/\s+/g, " ").trim()
-}
 
-function slug(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-}
 
 function normalizeString(value: unknown): string {
   return value === undefined || value === null ? "" : String(value).trim()

@@ -117,10 +117,13 @@ test("XII Notarios A only activates, requires and exports F18 when F17 uses SAT 
   const tipoActoOtroId = "aviso.descripcion-tipo-de-acto-otro.f18"
   const tipoActo = fields.find((field) => field.id === tipoActoId)
   const tipoActoOtro = fields.find((field) => field.id === tipoActoOtroId)
-  const valorCatastralId = "aviso.valor-catastral-del-inmueble.c25"
+  // El identificador incluye el bloque repetible al que pertenece la celda, así
+  // que se ancla por celda: lo que debe permanecer estable es el destino C25.
+  const valorCatastralId = fields.find((field) => field.cell === "C25" && field.sheetName === "Aviso")?.id ?? ""
 
   assert.ok(tipoActo)
   assert.ok(tipoActoOtro)
+  assert.ok(valorCatastralId, "la plantilla debe mapear el valor catastral en C25")
   assert.equal(tipoActo.cell, "F17")
   assert.equal(tipoActoOtro.cell, "F18")
   assert.equal(tipoActoOtro.required, false)

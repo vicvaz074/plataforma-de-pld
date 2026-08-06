@@ -280,6 +280,16 @@ interface ExpedienteEuiPersonaMoral {
     nif: string
     actividad: string
   }
+  /**
+   * Datos que el Anexo pide en las columnas del fideicomiso. Sólo aplican
+   * cuando el expediente es de esa figura: el SAT reporta al fiduciario y el
+   * identificador en lugar de la denominación y el giro de una persona moral.
+   */
+  fideicomiso?: {
+    fiduciarioDenominacion: string
+    fiduciarioRfc: string
+    identificador: string
+  }
   domicilioCliente: DireccionState
   contactoCliente: ContactoState
   representante: RepresentanteState
@@ -396,7 +406,10 @@ interface ExpedienteEuiPersonaMoralDerechoPublico {
 
 interface ExpedientePersonaResumen {
   id?: string
-  tipo?: "persona_moral" | "persona_fisica"
+  tipo?: "persona_moral" | "persona_fisica" | "fideicomiso"
+  fiduciarioDenominacion?: string
+  fiduciarioRfc?: string
+  identificadorFideicomiso?: string
   denominacion?: string
   fechaConstitucion?: string
   rfc?: string
@@ -819,7 +832,10 @@ function buildPersonasDesdeExpediente(expediente: ExpedienteEuiPersonaMoral): Ex
   return [
     {
       id: `cliente-${primaryIdentifier}`,
-      tipo: "persona_moral",
+      tipo: expediente.fideicomiso ? "fideicomiso" : "persona_moral",
+      fiduciarioDenominacion: expediente.fideicomiso?.fiduciarioDenominacion,
+      fiduciarioRfc: expediente.fideicomiso?.fiduciarioRfc,
+      identificadorFideicomiso: expediente.fideicomiso?.identificador,
       denominacion: expediente.cliente.denominacion,
       fechaConstitucion: expediente.cliente.fechaConstitucion,
       rfc: expediente.cliente.rfc,
@@ -935,6 +951,9 @@ function KycExpedienteContent() {
   const [clienteRfc, setClienteRfc] = useState("")
   const [clienteNif, setClienteNif] = useState("")
   const [clienteActividad, setClienteActividad] = useState("")
+  const [fiduciarioDenominacion, setFiduciarioDenominacion] = useState("")
+  const [fiduciarioRfc, setFiduciarioRfc] = useState("")
+  const [identificadorFideicomiso, setIdentificadorFideicomiso] = useState("")
   const [domicilioCliente, setDomicilioCliente] = useState<DireccionState>(() => createDireccion())
   const [contactoCliente, setContactoCliente] = useState<ContactoState>(() => createContacto())
   const [representante, setRepresentante] = useState<RepresentanteState>(() => createRepresentante())
@@ -1184,6 +1203,7 @@ function KycExpedienteContent() {
   )
   const activityLabel = actividadSeleccionada?.label || (activityKey ? getActividadEuiLabel(activityKey) : "")
   const esArrendamiento = activityKey === ARRENDAMIENTO_ACTIVITY_KEY
+  const esFideicomiso = tipoExpediente === "fideicomiso"
   const nifAplicaPersonaFisica = clienteFisicaPaisNacionalidad !== "MX"
   const nifAplicaPersonaMoral = clientePais !== "MX"
   const checklistPersonaMoral = useMemo(
@@ -1211,6 +1231,7 @@ function KycExpedienteContent() {
           identificacion: beneficiario1.identificacion,
         },
         manual: documentacion,
+        scope: tipoExpediente === "fideicomiso" ? "fideicomiso" : "persona_moral",
       }),
     [
       beneficiario1,
@@ -1227,6 +1248,7 @@ function KycExpedienteContent() {
       nifAplicaPersonaMoral,
       representante,
       tipoActoOperacion,
+      tipoExpediente,
     ],
   )
 
@@ -1446,6 +1468,9 @@ function KycExpedienteContent() {
       setClienteRfc(expedienteMoral.cliente.rfc)
       setClienteNif(expedienteMoral.cliente.nif || expedienteMoral.identifiers.nif)
       setClienteActividad(expedienteMoral.cliente.actividad)
+      setFiduciarioDenominacion(expedienteMoral.fideicomiso?.fiduciarioDenominacion ?? "")
+      setFiduciarioRfc(expedienteMoral.fideicomiso?.fiduciarioRfc ?? "")
+      setIdentificadorFideicomiso(expedienteMoral.fideicomiso?.identificador ?? "")
       setDomicilioCliente(expedienteMoral.domicilioCliente)
       setContactoCliente(expedienteMoral.contactoCliente)
       setRepresentante({
@@ -1502,6 +1527,9 @@ function KycExpedienteContent() {
     setClienteRfc("")
     setClienteNif("")
     setClienteActividad("")
+    setFiduciarioDenominacion("")
+    setFiduciarioRfc("")
+    setIdentificadorFideicomiso("")
     setDomicilioCliente(createDireccion())
     setContactoCliente(createContacto())
     setRepresentante(createRepresentante())
@@ -1882,6 +1910,15 @@ function KycExpedienteContent() {
         nif: identifiers.nif,
         actividad: clienteActividad,
       },
+      ...(esFideicomiso
+        ? {
+            fideicomiso: {
+              fiduciarioDenominacion: fiduciarioDenominacion.trim(),
+              fiduciarioRfc: fiduciarioRfc.trim().toUpperCase(),
+              identificador: identificadorFideicomiso.trim(),
+            },
+          }
+        : {}),
       domicilioCliente,
       contactoCliente,
       representante,
@@ -3291,16 +3328,63 @@ function KycExpedienteContent() {
 
       {tipoExpediente === "persona_moral" && (
         <>
+      {esFideicomiso ? (
+        <Card className="border-slate-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-slate-600" /> Datos del fideicomiso
+            </CardTitle>
+            <CardDescription>
+              El Anexo reporta a la institución fiduciaria y el identificador del fideicomiso. Estos datos viajan a
+              las columnas del fideicomiso del formato SAT, no a las de persona moral.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Denominación del fiduciario</Label>
+              <Input
+                value={fiduciarioDenominacion}
+                onChange={(event) => setFiduciarioDenominacion(event.target.value)}
+                placeholder="Institución fiduciaria autorizada"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>RFC del fiduciario</Label>
+              <Input
+                value={fiduciarioRfc}
+                onChange={(event) => setFiduciarioRfc(event.target.value.toUpperCase())}
+                placeholder="RFC con homoclave"
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Identificador del fideicomiso</Label>
+              <Input
+                value={identificadorFideicomiso}
+                onChange={(event) => setIdentificadorFideicomiso(event.target.value)}
+                placeholder="Número, referencia o identificador del fideicomiso"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card className="border-slate-200">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-slate-600" /> Datos de identificación del cliente (Persona Moral)
+            <Building2 className="h-5 w-5 text-slate-600" />{" "}
+            {esFideicomiso
+              ? "Datos de identificación del fideicomiso"
+              : "Datos de identificación del cliente (Persona Moral)"}
           </CardTitle>
-          <CardDescription>Información general de la persona moral.</CardDescription>
+          <CardDescription>
+            {esFideicomiso
+              ? "Información general del fideicomiso como cliente."
+              : "Información general de la persona moral."}
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label>Denominación o razón social</Label>
+            <Label>{esFideicomiso ? "Denominación del fideicomiso" : "Denominación o razón social"}</Label>
             <Input value={clienteDenominacion} onChange={(event) => setClienteDenominacion(event.target.value)} />
           </div>
           <div className="space-y-2">

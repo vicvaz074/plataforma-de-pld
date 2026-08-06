@@ -20,7 +20,8 @@
     "sync:sat:postal": "node scripts/sync-sat-postal-catalog.mjs",
     "validate:pep:data": "tsx scripts/validate-pep-data.mjs",
     "test:pld": "tsx --test tests/*.test.ts",
-    "start": "next start"
+    "start": "next start",
+    "sync:sat:layouts": "tsx scripts/rebuild-sat-xlsm-layouts.mjs"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",

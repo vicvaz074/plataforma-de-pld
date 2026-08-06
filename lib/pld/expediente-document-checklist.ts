@@ -112,6 +112,44 @@ export const EXPEDIENTE_PM_DOCUMENTS: readonly ExpedientePmDocumentDefinition[] 
   },
 ]
 
+export type ExpedienteDocumentScope = "persona_moral" | "fideicomiso"
+
+/**
+ * Expediente del fideicomiso conforme al Anexo 8 de las RCG.
+ *
+ * La integración no reproduce la de una persona moral: no hay inscripción en el
+ * Registro Público del cliente, ni beneficiario controlador documentado como
+ * tal, ni comprobante de domicilio propio. Se acredita la institución
+ * fiduciaria, su situación fiscal y la representación que actúa por ella.
+ */
+const EXPEDIENTE_FIDEICOMISO_DOCUMENT_IDS: readonly ExpedientePmDocumentId[] = [
+  "existencia-persona-moral",
+  "constancia-situacion-fiscal",
+  "poderes-representante",
+  "identificacion-representante",
+]
+
+const EXPEDIENTE_FIDEICOMISO_LABELS: Partial<Record<ExpedientePmDocumentId, string>> = {
+  "existencia-persona-moral":
+    "Instrumento que acredite la constitución del fideicomiso y la institución fiduciaria",
+  "constancia-situacion-fiscal": "Constancia de Situación Fiscal del fideicomiso (SAT)",
+  "poderes-representante": "Instrumento que contenga los poderes del delegado o apoderado fiduciario",
+  "identificacion-representante": "Identificación oficial del delegado o apoderado fiduciario",
+}
+
+export function getExpedienteDocumentsForScope(
+  scope: ExpedienteDocumentScope = "persona_moral",
+): readonly ExpedientePmDocumentDefinition[] {
+  if (scope !== "fideicomiso") return EXPEDIENTE_PM_DOCUMENTS
+
+  return EXPEDIENTE_PM_DOCUMENTS.filter((document) =>
+    EXPEDIENTE_FIDEICOMISO_DOCUMENT_IDS.includes(document.id),
+  ).map((document) => ({
+    ...document,
+    label: EXPEDIENTE_FIDEICOMISO_LABELS[document.id] ?? document.label,
+  }))
+}
+
 export interface ExpedienteChecklistAddress {
   codigoPostal?: string
   tipoVialidad?: string
@@ -161,6 +199,8 @@ export interface ExpedientePmDocumentChecklistInput {
   }
   manual?: Record<string, unknown> | null
   detectedDocuments?: Record<string, unknown> | null
+  /** Integración exigible según la figura del cliente. */
+  scope?: ExpedienteDocumentScope
 }
 
 export type ExpedientePmDocumentManualState = Record<ExpedientePmDocumentId, boolean>
@@ -378,7 +418,8 @@ export function evaluateExpedientePmDocumentChecklist(
   const manualState = normalizeExpedientePmDocumentManualState(input.manual)
   const detectedState = normalizeExpedientePmDocumentManualState(input.detectedDocuments)
 
-  const items = EXPEDIENTE_PM_DOCUMENTS.map((definition): ExpedientePmDocumentChecklistItem => {
+  const items = getExpedienteDocumentsForScope(input.scope).map(
+    (definition): ExpedientePmDocumentChecklistItem => {
     const automaticData = evaluateAutomaticData(definition.id, input)
     const detectedDocument = detectedState[definition.id]
     const manualChecked = manualState[definition.id]
@@ -419,16 +460,17 @@ export function evaluateExpedientePmDocumentChecklist(
       }
     }
 
-    return {
-      ...definition,
-      status: "missing",
-      source: "none",
-      sourceLabel: "Pendiente",
-      valueSummary: "",
-      missingFields: automaticData.missingFields,
-      manualChecked: false,
-    }
-  })
+      return {
+        ...definition,
+        status: "missing",
+        source: "none",
+        sourceLabel: "Pendiente",
+        valueSummary: "",
+        missingFields: automaticData.missingFields,
+        manualChecked: false,
+      }
+    },
+  )
 
   const automatic = items.filter(({ status }) => status === "automatic").length
   const manual = items.filter(({ status }) => status === "manual").length

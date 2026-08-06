@@ -12,7 +12,7 @@ const satTemplateCatalogModule = satTemplateCatalog.default || satTemplateCatalo
 const satXlsmModule = satXlsm.default || satXlsm
 const { SAT_FORMATOS_ACTIVIDADES, buildSatFormatSnapshot } = satFormatosModule
 const { SAT_TEMPLATE_CATALOG } = satTemplateCatalogModule
-const { extractSatXlsmLayoutFromBuffer } = satXlsmModule
+const { extractSatXlsmLayoutFromBuffer, serializeSatXlsmLayout } = satXlsmModule
 
 const zipCache = new Map()
 
@@ -166,7 +166,7 @@ async function main() {
   for (const layout of layouts) {
     writeFileSync(
       `public/data/sat-xlsm-layouts/${layout.templateId}.json`,
-      `${JSON.stringify(layout)}\n`,
+      `${JSON.stringify(serializeSatXlsmLayout(layout))}\n`,
     )
   }
   const layoutSnapshot = {
