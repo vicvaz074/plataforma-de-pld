@@ -151,6 +151,25 @@ test("automatic state is recalculated and disappears when its source data is rem
   )
 })
 
+test("street type Otro remains pending until its open description is captured", () => {
+  const pendingInput = completeInput()
+  pendingInput.domicilioCliente = { ...completeAddress, tipoVialidad: "Otro" }
+  const pending = evaluateExpedientePmDocumentChecklist(pendingInput)
+  const pendingAddress = pending.items.find(({ id }) => id === "domicilio-cliente")
+
+  assert.equal(pendingAddress?.status, "missing")
+  assert.deepEqual(pendingAddress?.missingFields, ["Tipo de vialidad"])
+
+  const describedInput = completeInput()
+  describedInput.domicilioCliente = { ...completeAddress, tipoVialidad: "Sendero peatonal" }
+  const described = evaluateExpedientePmDocumentChecklist(describedInput)
+
+  assert.equal(
+    described.items.find(({ id }) => id === "domicilio-cliente")?.status,
+    "automatic",
+  )
+})
+
 test("effective snapshot includes stable ids, current labels, aliases and unknown legacy keys", () => {
   const result = evaluateExpedientePmDocumentChecklist({
     manual: {

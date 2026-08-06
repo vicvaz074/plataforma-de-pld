@@ -10,12 +10,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
 import { ActividadVulnerableCombobox } from "@/components/pld/actividad-vulnerable-combobox"
+import { SearchableSelect } from "@/components/pld/searchable-select"
+import { SearchableSelectWithOther } from "@/components/pld/searchable-select-with-other"
 import { SatCatalogCombobox } from "@/components/pld/sat-catalog-combobox"
+import { TipoVialidadCombobox } from "@/components/pld/tipo-vialidad-combobox"
 import {
   Building2,
   CalendarClock,
@@ -54,6 +56,7 @@ import {
   evaluateExpedientePmDocumentChecklist,
   normalizeExpedientePmDocumentManualState,
 } from "@/lib/pld/expediente-document-checklist"
+import { resolveExpedientePaisCode } from "@/lib/pld/expediente-address-catalogs"
 
 const NO_SUJETO_OBLIGADO_VALUE = "__sin_sujeto_obligado__"
 
@@ -65,29 +68,6 @@ const EXPEDIENTE_TIPOS = [
   { value: "pm_derecho_publico_simplificado", label: "PM de Derecho Público Régimen Simplificado" },
   { value: "embajada_consulado", label: "Embajada, Consulado u Organismo" },
   { value: "fideicomiso", label: "Fideicomiso" },
-]
-
-const TIPO_VIALIDAD_OPCIONES = [
-  "Calle",
-  "Avenida",
-  "Boulevard",
-  "Calzada",
-  "Carretera",
-  "Circuito",
-  "Privada",
-  "Prolongación",
-  "Andador",
-  "Retorno",
-  "Otro",
-]
-
-const TIPO_VIALIDAD_PERSONA_FISICA = [
-  "AVENIDA",
-  "BOULEVARD",
-  "CALLE",
-  "CALZADA",
-  "EJE VIAL",
-  "VIA",
 ]
 
 const TIPO_CLIENTE_PERSONA_FISICA = [
@@ -174,6 +154,20 @@ const OCUPACIONES_OPCIONES = [
   "Servidor público",
   "Otro",
 ]
+
+const PAIS_SEARCH_OPTIONS = PAISES.map((pais) => ({
+  value: pais.code,
+  label: pais.label,
+  keywords: [pais.code],
+}))
+
+const RESPUESTA_SI_NO_OPTIONS = [
+  { value: "si", label: "Sí" },
+  { value: "no", label: "No" },
+]
+
+const SAT_TIPO_INMUEBLE_OTRO_VALUE =
+  SAT_TIPOS_INMUEBLE.find((tipo) => tipo.code === "99")?.value ?? "99,Otro"
 
 const DOCUMENTOS_EUI_PERSONA_FISICA = [
   "Formulario de Identificación del Cliente",
@@ -294,12 +288,14 @@ interface ExpedienteEuiPersonaMoral {
   beneficiario2?: BeneficiarioState | null
   inmueble?: {
     tipo: string
+    tipoOtro?: string
     valorReferencia: string
     folioReal: string
     ubicacion: DireccionState
   }
   inmuebleDraft?: {
     tipo: string
+    tipoOtro?: string
     valorReferencia: string
     folioReal: string
     ubicacion: DireccionState
@@ -383,11 +379,13 @@ interface ExpedienteEuiPersonaMoralDerechoPublico {
   servidorPublico2: ServidorPublicoState
   inmueble?: {
     tipo: string
+    tipoOtro?: string
     valorReferencia: string
     folioReal: string
   }
   inmuebleDraft?: {
     tipo: string
+    tipoOtro?: string
     valorReferencia: string
     folioReal: string
   }
@@ -947,6 +945,7 @@ function KycExpedienteContent() {
   const [tieneBeneficiario2, setTieneBeneficiario2] = useState(false)
   const [beneficiario2, setBeneficiario2] = useState<BeneficiarioState>(() => createBeneficiario())
   const [inmuebleTipo, setInmuebleTipo] = useState("")
+  const [inmuebleTipoOtro, setInmuebleTipoOtro] = useState("")
   const [inmuebleValor, setInmuebleValor] = useState("")
   const [inmuebleFolio, setInmuebleFolio] = useState("")
   const [ubicacionInmueble, setUbicacionInmueble] = useState<DireccionState>(() => createDireccion())
@@ -1008,6 +1007,7 @@ function KycExpedienteContent() {
   const [servidorPublico1, setServidorPublico1] = useState<ServidorPublicoState>(() => createServidorPublico())
   const [servidorPublico2, setServidorPublico2] = useState<ServidorPublicoState>(() => createServidorPublico())
   const [inmuebleTipoPmdp, setInmuebleTipoPmdp] = useState("")
+  const [inmuebleTipoOtroPmdp, setInmuebleTipoOtroPmdp] = useState("")
   const [inmuebleValorPmdp, setInmuebleValorPmdp] = useState("")
   const [inmuebleFolioPmdp, setInmuebleFolioPmdp] = useState("")
   const [ubicacionInmueblePmdp, setUbicacionInmueblePmdp] = useState<DireccionState>(() => createDireccion())
@@ -1384,8 +1384,10 @@ function KycExpedienteContent() {
         setClienteFisicaApellidoPaterno(expedienteFisica.cliente.apellidoPaterno)
         setClienteFisicaApellidoMaterno(expedienteFisica.cliente.apellidoMaterno)
         setClienteFisicaFechaNacimiento(expedienteFisica.cliente.fechaNacimiento)
-        setClienteFisicaPaisNacimiento(expedienteFisica.cliente.paisNacimiento)
-        setClienteFisicaPaisNacionalidad(expedienteFisica.cliente.paisNacionalidad)
+        setClienteFisicaPaisNacimiento(resolveExpedientePaisCode(expedienteFisica.cliente.paisNacimiento))
+        setClienteFisicaPaisNacionalidad(
+          resolveExpedientePaisCode(expedienteFisica.cliente.paisNacionalidad),
+        )
         setClienteFisicaCurp(expedienteFisica.cliente.curp)
         setClienteFisicaRfc(expedienteFisica.cliente.rfc)
         setClienteFisicaNif(expedienteFisica.cliente.nif || expedienteFisica.identifiers.nif)
@@ -1393,7 +1395,12 @@ function KycExpedienteContent() {
         setDomicilioClienteFisica(expedienteFisica.domicilioCliente)
         setContactoClienteFisica(expedienteFisica.contactoCliente)
         setActuaRepresentante(expedienteFisica.actuaRepresentante)
-        setRepresentanteFisica(expedienteFisica.representante)
+        setRepresentanteFisica({
+          ...expedienteFisica.representante,
+          paisNacionalidad: resolveExpedientePaisCode(
+            expedienteFisica.representante.paisNacionalidad,
+          ),
+        })
         setDomicilioCorrespondenciaFisica(expedienteFisica.domicilioCorrespondencia)
         setIdentificacionClienteFisica(expedienteFisica.identificacionCliente)
         setDocumentacionFisica(expedienteFisica.documentacion)
@@ -1417,6 +1424,7 @@ function KycExpedienteContent() {
         setServidorPublico2(expedientePmdp.servidorPublico2)
         const inmueblePmdp = expedientePmdp.inmueble ?? expedientePmdp.inmuebleDraft
         setInmuebleTipoPmdp(inmueblePmdp?.tipo ?? "")
+        setInmuebleTipoOtroPmdp(inmueblePmdp?.tipoOtro ?? "")
         setInmuebleValorPmdp(inmueblePmdp?.valorReferencia ?? "")
         setInmuebleFolioPmdp(inmueblePmdp?.folioReal ?? "")
         setUbicacionInmueblePmdp(
@@ -1434,19 +1442,37 @@ function KycExpedienteContent() {
       setRelacionNegocios(expedienteMoral.relacionNegocios)
       setClienteDenominacion(expedienteMoral.cliente.denominacion)
       setClienteFechaConstitucion(expedienteMoral.cliente.fechaConstitucion)
-      setClientePais(expedienteMoral.cliente.paisNacionalidad)
+      setClientePais(resolveExpedientePaisCode(expedienteMoral.cliente.paisNacionalidad))
       setClienteRfc(expedienteMoral.cliente.rfc)
       setClienteNif(expedienteMoral.cliente.nif || expedienteMoral.identifiers.nif)
       setClienteActividad(expedienteMoral.cliente.actividad)
       setDomicilioCliente(expedienteMoral.domicilioCliente)
       setContactoCliente(expedienteMoral.contactoCliente)
-      setRepresentante(expedienteMoral.representante)
+      setRepresentante({
+        ...expedienteMoral.representante,
+        paisNacionalidad: resolveExpedientePaisCode(expedienteMoral.representante.paisNacionalidad),
+      })
       setIdentificacionRepresentante(expedienteMoral.identificacionRepresentante)
-      setBeneficiario1(expedienteMoral.beneficiario1)
-      setBeneficiario2(expedienteMoral.beneficiario2 ?? createBeneficiario())
+      setBeneficiario1({
+        ...expedienteMoral.beneficiario1,
+        paisNacionalidad: resolveExpedientePaisCode(expedienteMoral.beneficiario1.paisNacionalidad),
+        paisNacimiento: resolveExpedientePaisCode(expedienteMoral.beneficiario1.paisNacimiento),
+      })
+      setBeneficiario2(
+        expedienteMoral.beneficiario2
+          ? {
+              ...expedienteMoral.beneficiario2,
+              paisNacionalidad: resolveExpedientePaisCode(
+                expedienteMoral.beneficiario2.paisNacionalidad,
+              ),
+              paisNacimiento: resolveExpedientePaisCode(expedienteMoral.beneficiario2.paisNacimiento),
+            }
+          : createBeneficiario(),
+      )
       setTieneBeneficiario2(Boolean(expedienteMoral.beneficiario2))
       const inmuebleMoral = expedienteMoral.inmueble ?? expedienteMoral.inmuebleDraft
       setInmuebleTipo(inmuebleMoral?.tipo ?? "")
+      setInmuebleTipoOtro(inmuebleMoral?.tipoOtro ?? "")
       setInmuebleValor(inmuebleMoral?.valorReferencia ?? "")
       setInmuebleFolio(inmuebleMoral?.folioReal ?? "")
       setUbicacionInmueble(inmuebleMoral?.ubicacion ?? createDireccion())
@@ -1484,6 +1510,7 @@ function KycExpedienteContent() {
     setBeneficiario2(createBeneficiario())
     setTieneBeneficiario2(false)
     setInmuebleTipo("")
+    setInmuebleTipoOtro("")
     setInmuebleValor("")
     setInmuebleFolio("")
     setUbicacionInmueble(createDireccion())
@@ -1539,6 +1566,7 @@ function KycExpedienteContent() {
     setServidorPublico1(createServidorPublico())
     setServidorPublico2(createServidorPublico())
     setInmuebleTipoPmdp("")
+    setInmuebleTipoOtroPmdp("")
     setInmuebleValorPmdp("")
     setInmuebleFolioPmdp("")
     setUbicacionInmueblePmdp(createDireccion())
@@ -1760,6 +1788,8 @@ function KycExpedienteContent() {
           ? {
               inmueble: {
                 tipo: inmuebleTipoPmdp,
+                tipoOtro:
+                  inmuebleTipoPmdp === SAT_TIPO_INMUEBLE_OTRO_VALUE ? inmuebleTipoOtroPmdp.trim() : "",
                 valorReferencia: inmuebleValorPmdp,
                 folioReal: inmuebleFolioPmdp,
               },
@@ -1768,6 +1798,8 @@ function KycExpedienteContent() {
           : {
               inmuebleDraft: {
                 tipo: inmuebleTipoPmdp,
+                tipoOtro:
+                  inmuebleTipoPmdp === SAT_TIPO_INMUEBLE_OTRO_VALUE ? inmuebleTipoOtroPmdp.trim() : "",
                 valorReferencia: inmuebleValorPmdp,
                 folioReal: inmuebleFolioPmdp,
               },
@@ -1860,6 +1892,7 @@ function KycExpedienteContent() {
         ? {
             inmueble: {
               tipo: inmuebleTipo,
+              tipoOtro: inmuebleTipo === SAT_TIPO_INMUEBLE_OTRO_VALUE ? inmuebleTipoOtro.trim() : "",
               valorReferencia: inmuebleValor,
               folioReal: inmuebleFolio,
               ubicacion: ubicacionInmueble,
@@ -1868,6 +1901,7 @@ function KycExpedienteContent() {
         : {
             inmuebleDraft: {
               tipo: inmuebleTipo,
+              tipoOtro: inmuebleTipo === SAT_TIPO_INMUEBLE_OTRO_VALUE ? inmuebleTipoOtro.trim() : "",
               valorReferencia: inmuebleValor,
               folioReal: inmuebleFolio,
               ubicacion: ubicacionInmueble,
@@ -2037,18 +2071,15 @@ function KycExpedienteContent() {
           <div className="grid gap-4 md:grid-cols-4">
             <div className="space-y-2">
               <Label>Tipo de expediente</Label>
-              <Select value={tipoExpediente} onValueChange={setTipoExpediente}>
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="Selecciona tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {EXPEDIENTE_TIPOS.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                id="eui-tipo-expediente"
+                ariaLabel="Seleccionar tipo de expediente"
+                value={tipoExpediente}
+                options={EXPEDIENTE_TIPOS}
+                placeholder="Selecciona tipo"
+                searchPlaceholder="Buscar tipo de expediente"
+                onChange={setTipoExpediente}
+              />
             </div>
             <div className="space-y-2">
               <Label>Fecha de registro / actualización</Label>
@@ -2056,9 +2087,20 @@ function KycExpedienteContent() {
             </div>
             <div className="space-y-2">
               <Label>Sujeto obligado (opcional)</Label>
-              <Select
+              <SearchableSelect
+                id="eui-sujeto-obligado"
+                ariaLabel="Seleccionar sujeto obligado opcional"
                 value={sujetoObligadoId || NO_SUJETO_OBLIGADO_VALUE}
-                onValueChange={(value) => {
+                options={[
+                  { value: NO_SUJETO_OBLIGADO_VALUE, label: "Sin vincular sujeto obligado" },
+                  ...sujetosRegistrados.map((sujeto) => ({
+                    value: sujeto.id,
+                    label: `${sujeto.nombre} · ${sujeto.tipo}`,
+                  })),
+                ]}
+                placeholder="Sin vincular sujeto obligado"
+                searchPlaceholder="Buscar sujeto obligado"
+                onChange={(value) => {
                   const nextValue = value === NO_SUJETO_OBLIGADO_VALUE ? "" : value
                   setSujetoObligadoId(nextValue)
                   if (!nextValue) {
@@ -2068,19 +2110,7 @@ function KycExpedienteContent() {
                     setSujetoObligadoRfcPmdp("")
                   }
                 }}
-              >
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="Sin vincular sujeto obligado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_SUJETO_OBLIGADO_VALUE}>Sin vincular sujeto obligado</SelectItem>
-                  {sujetosRegistrados.map((sujeto) => (
-                    <SelectItem key={sujeto.id} value={sujeto.id}>
-                      {sujeto.nombre} · {sujeto.tipo}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
               {sujetosRegistrados.length === 0 && (
                 <p className="text-xs text-muted-foreground">
                   No hay sujetos obligados registrados; puedes continuar con el expediente del cliente.
@@ -2224,18 +2254,15 @@ function KycExpedienteContent() {
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Tipo de cliente</Label>
-                <Select value={tipoClienteFisica} onValueChange={setTipoClienteFisica}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="---" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIPO_CLIENTE_PERSONA_FISICA.map((opcion) => (
-                      <SelectItem key={opcion} value={opcion}>
-                        {opcion}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  id="eui-pf-tipo-cliente"
+                  ariaLabel="Seleccionar tipo de cliente persona física"
+                  value={tipoClienteFisica}
+                  options={TIPO_CLIENTE_PERSONA_FISICA}
+                  placeholder="Selecciona tipo de cliente"
+                  searchPlaceholder="Buscar tipo de cliente"
+                  onChange={setTipoClienteFisica}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Tipo de acto u operación</Label>
@@ -2256,18 +2283,15 @@ function KycExpedienteContent() {
               </div>
               <div className="space-y-2">
                 <Label>¿Existe relación de negocios?</Label>
-                <Select
+                <SearchableSelect
+                  id="eui-pf-relacion-negocios"
+                  ariaLabel="Indicar si existe relación de negocios"
                   value={relacionNegociosFisica}
-                  onValueChange={(value) => setRelacionNegociosFisica(value as RespuestaSiNo)}
-                >
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="---" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="si">Sí</SelectItem>
-                    <SelectItem value="no">No</SelectItem>
-                  </SelectContent>
-                </Select>
+                  options={RESPUESTA_SI_NO_OPTIONS}
+                  placeholder="Selecciona una opción"
+                  searchPlaceholder="Buscar opción"
+                  onChange={(value) => setRelacionNegociosFisica(value as RespuestaSiNo)}
+                />
               </div>
             </CardContent>
           </Card>
@@ -2307,33 +2331,27 @@ function KycExpedienteContent() {
               </div>
               <div className="space-y-2">
                 <Label>País de nacimiento</Label>
-                <Select value={clienteFisicaPaisNacimiento} onValueChange={setClienteFisicaPaisNacimiento}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Selecciona país" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PAISES.map((pais) => (
-                      <SelectItem key={pais.code} value={pais.code}>
-                        {pais.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  id="eui-pf-pais-nacimiento"
+                  ariaLabel="Seleccionar país de nacimiento del cliente"
+                  value={clienteFisicaPaisNacimiento}
+                  options={PAIS_SEARCH_OPTIONS}
+                  placeholder="Selecciona país"
+                  searchPlaceholder="Buscar país por nombre o código"
+                  onChange={setClienteFisicaPaisNacimiento}
+                />
               </div>
               <div className="space-y-2">
                 <Label>País de nacionalidad</Label>
-                <Select value={clienteFisicaPaisNacionalidad} onValueChange={setClienteFisicaPaisNacionalidad}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Selecciona país" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PAISES.map((pais) => (
-                      <SelectItem key={pais.code} value={pais.code}>
-                        {pais.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  id="eui-pf-pais-nacionalidad"
+                  ariaLabel="Seleccionar país de nacionalidad del cliente"
+                  value={clienteFisicaPaisNacionalidad}
+                  options={PAIS_SEARCH_OPTIONS}
+                  placeholder="Selecciona país"
+                  searchPlaceholder="Buscar país por nombre o código"
+                  onChange={setClienteFisicaPaisNacionalidad}
+                />
               </div>
               <div className="space-y-2">
                 <Label>CURP</Label>
@@ -2398,21 +2416,12 @@ function KycExpedienteContent() {
                 </div>
                 <div className="space-y-2">
                   <Label>Tipo de vialidad</Label>
-                  <Select
+                  <TipoVialidadCombobox
+                    id="eui-pf-domicilio-tipo-vialidad"
+                    ariaLabel="Seleccionar tipo de vialidad del domicilio del cliente"
                     value={domicilioClienteFisica.tipoVialidad}
-                    onValueChange={(value) => setDomicilioClienteFisica((prev) => ({ ...prev, tipoVialidad: value }))}
-                  >
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIPO_VIALIDAD_PERSONA_FISICA.map((tipo) => (
-                        <SelectItem key={tipo} value={tipo}>
-                          {tipo}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(value) => setDomicilioClienteFisica((prev) => ({ ...prev, tipoVialidad: value }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Nombre de la vialidad</Label>
@@ -2437,21 +2446,15 @@ function KycExpedienteContent() {
                 </div>
                 <div className="space-y-2">
                   <Label>Colonia / Urbanización</Label>
-                  <Select
+                  <SearchableSelect
+                    id="eui-pf-domicilio-colonia"
+                    ariaLabel="Seleccionar colonia o urbanización del domicilio del cliente"
                     value={domicilioClienteFisica.colonia}
-                    onValueChange={(value) => setDomicilioClienteFisica((prev) => ({ ...prev, colonia: value }))}
-                  >
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from(new Set([...coloniasClienteFisica, domicilioClienteFisica.colonia].filter(Boolean))).map((colonia) => (
-                        <SelectItem key={colonia} value={colonia}>
-                          {colonia}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    options={Array.from(new Set([...coloniasClienteFisica, domicilioClienteFisica.colonia].filter(Boolean)))}
+                    placeholder="Selecciona colonia"
+                    searchPlaceholder="Buscar colonia"
+                    onChange={(value) => setDomicilioClienteFisica((prev) => ({ ...prev, colonia: value }))}
+                  />
                 </div>
               </div>
               <div className="grid gap-4 md:grid-cols-4">
@@ -2514,15 +2517,21 @@ function KycExpedienteContent() {
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
                 <Label>¿El cliente actúa por cuenta propia o mediante representante?</Label>
-                <Select value={actuaRepresentante} onValueChange={setActuaRepresentante}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Selecciona opción" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="si">Sí, el Cliente actúa por conducto de representante o apoderado legal</SelectItem>
-                    <SelectItem value="no">No, el Cliente actúa por cuenta propia</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  id="eui-pf-actua-representante"
+                  ariaLabel="Indicar si el cliente actúa mediante representante"
+                  value={actuaRepresentante}
+                  options={[
+                    {
+                      value: "si",
+                      label: "Sí, el Cliente actúa por conducto de representante o apoderado legal",
+                    },
+                    { value: "no", label: "No, el Cliente actúa por cuenta propia" },
+                  ]}
+                  placeholder="Selecciona una opción"
+                  searchPlaceholder="Buscar opción"
+                  onChange={setActuaRepresentante}
+                />
               </div>
             </CardContent>
           </Card>
@@ -2554,33 +2563,30 @@ function KycExpedienteContent() {
                   </div>
                   <div className="space-y-2">
                     <Label>País de nacionalidad</Label>
-                    <Select value={representanteFisica.paisNacionalidad} onValueChange={(value) => setRepresentanteFisica((prev) => ({ ...prev, paisNacionalidad: value }))}>
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="Selecciona país" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PAISES.map((pais) => (
-                          <SelectItem key={pais.code} value={pais.code}>
-                            {pais.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      id="eui-pf-representante-pais-nacionalidad"
+                      ariaLabel="Seleccionar país de nacionalidad del representante"
+                      value={representanteFisica.paisNacionalidad}
+                      options={PAIS_SEARCH_OPTIONS}
+                      placeholder="Selecciona país"
+                      searchPlaceholder="Buscar país por nombre o código"
+                      onChange={(value) => setRepresentanteFisica((prev) => ({ ...prev, paisNacionalidad: value }))}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Actividad, ocupación, profesión</Label>
-                    <Select value={representanteFisica.ocupacion} onValueChange={(value) => setRepresentanteFisica((prev) => ({ ...prev, ocupacion: value }))}>
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="Selecciona ocupación" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {OCUPACIONES_OPCIONES.map((opcion) => (
-                          <SelectItem key={opcion} value={opcion}>
-                            {opcion}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelectWithOther
+                      id="eui-pf-representante-ocupacion"
+                      ariaLabel="Seleccionar actividad, ocupación o profesión del representante"
+                      value={representanteFisica.ocupacion}
+                      options={OCUPACIONES_OPCIONES}
+                      otherValue="Otro"
+                      placeholder="Selecciona ocupación"
+                      searchPlaceholder="Buscar ocupación"
+                      otherInputAriaLabel="Especificar otra actividad, ocupación o profesión del representante"
+                      otherInputPlaceholder="Especifica la actividad, ocupación o profesión"
+                      onChange={(value) => setRepresentanteFisica((prev) => ({ ...prev, ocupacion: value }))}
+                    />
                   </div>
                 </div>
 
@@ -2615,21 +2621,15 @@ function KycExpedienteContent() {
                   <div className="mt-3 grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Tipo de identificación</Label>
-                      <Select
+                      <SearchableSelect
+                        id="eui-pf-representante-tipo-identificacion"
+                        ariaLabel="Seleccionar tipo de identificación del representante"
                         value={representanteFisica.identificacion.tipo}
-                        onValueChange={(value) => setRepresentanteFisica((prev) => ({ ...prev, identificacion: { ...prev.identificacion, tipo: value } }))}
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Selecciona identificación" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {IDENTIFICACION_OPCIONES.map((opcion) => (
-                            <SelectItem key={opcion} value={opcion}>
-                              {opcion}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        options={IDENTIFICACION_OPCIONES}
+                        placeholder="Selecciona identificación"
+                        searchPlaceholder="Buscar identificación"
+                        onChange={(value) => setRepresentanteFisica((prev) => ({ ...prev, identificacion: { ...prev.identificacion, tipo: value } }))}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Número de identificación</Label>
@@ -2637,21 +2637,15 @@ function KycExpedienteContent() {
                     </div>
                     <div className="space-y-2">
                       <Label>Autoridad que emite</Label>
-                      <Select
+                      <SearchableSelect
+                        id="eui-pf-representante-autoridad-identificacion"
+                        ariaLabel="Seleccionar autoridad que emite la identificación del representante"
                         value={representanteFisica.identificacion.autoridad}
-                        onValueChange={(value) => setRepresentanteFisica((prev) => ({ ...prev, identificacion: { ...prev.identificacion, autoridad: value } }))}
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Selecciona autoridad" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {AUTORIDAD_IDENTIFICACION_OPCIONES.map((opcion) => (
-                            <SelectItem key={opcion} value={opcion}>
-                              {opcion}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        options={AUTORIDAD_IDENTIFICACION_OPCIONES}
+                        placeholder="Selecciona autoridad"
+                        searchPlaceholder="Buscar autoridad"
+                        onChange={(value) => setRepresentanteFisica((prev) => ({ ...prev, identificacion: { ...prev.identificacion, autoridad: value } }))}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Fecha de vigencia</Label>
@@ -2683,21 +2677,12 @@ function KycExpedienteContent() {
                   </div>
                   <div className="space-y-2">
                     <Label>Tipo de vialidad</Label>
-                    <Select
+                    <TipoVialidadCombobox
+                      id="eui-pf-correspondencia-tipo-vialidad"
+                      ariaLabel="Seleccionar tipo de vialidad del domicilio de correspondencia"
                       value={domicilioCorrespondenciaFisica.tipoVialidad}
-                      onValueChange={(value) => setDomicilioCorrespondenciaFisica((prev) => ({ ...prev, tipoVialidad: value }))}
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="---" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TIPO_VIALIDAD_PERSONA_FISICA.map((tipo) => (
-                          <SelectItem key={tipo} value={tipo}>
-                            {tipo}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onChange={(value) => setDomicilioCorrespondenciaFisica((prev) => ({ ...prev, tipoVialidad: value }))}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Nombre de la vialidad</Label>
@@ -2722,21 +2707,15 @@ function KycExpedienteContent() {
                   </div>
                   <div className="space-y-2">
                     <Label>Colonia / Urbanización</Label>
-                    <Select
+                    <SearchableSelect
+                      id="eui-pf-correspondencia-colonia"
+                      ariaLabel="Seleccionar colonia o urbanización del domicilio de correspondencia"
                       value={domicilioCorrespondenciaFisica.colonia}
-                      onValueChange={(value) => setDomicilioCorrespondenciaFisica((prev) => ({ ...prev, colonia: value }))}
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="---" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from(new Set([...coloniasCorrespondenciaFisica, domicilioCorrespondenciaFisica.colonia].filter(Boolean))).map((colonia) => (
-                          <SelectItem key={colonia} value={colonia}>
-                            {colonia}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      options={Array.from(new Set([...coloniasCorrespondenciaFisica, domicilioCorrespondenciaFisica.colonia].filter(Boolean)))}
+                      placeholder="Selecciona colonia"
+                      searchPlaceholder="Buscar colonia"
+                      onChange={(value) => setDomicilioCorrespondenciaFisica((prev) => ({ ...prev, colonia: value }))}
+                    />
                   </div>
                 </div>
                 <div className="grid gap-4 md:grid-cols-4">
@@ -2770,21 +2749,15 @@ function KycExpedienteContent() {
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Tipo de identificación</Label>
-                <Select
+                <SearchableSelect
+                  id="eui-pf-cliente-tipo-identificacion"
+                  ariaLabel="Seleccionar tipo de identificación del cliente"
                   value={identificacionClienteFisica.tipo}
-                  onValueChange={(value) => setIdentificacionClienteFisica((prev) => ({ ...prev, tipo: value }))}
-                >
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Selecciona identificación" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {IDENTIFICACION_OPCIONES.map((opcion) => (
-                      <SelectItem key={opcion} value={opcion}>
-                        {opcion}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={IDENTIFICACION_OPCIONES}
+                  placeholder="Selecciona identificación"
+                  searchPlaceholder="Buscar identificación"
+                  onChange={(value) => setIdentificacionClienteFisica((prev) => ({ ...prev, tipo: value }))}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Número de identificación</Label>
@@ -2792,21 +2765,15 @@ function KycExpedienteContent() {
               </div>
               <div className="space-y-2">
                 <Label>Autoridad que la emite</Label>
-                <Select
+                <SearchableSelect
+                  id="eui-pf-cliente-autoridad-identificacion"
+                  ariaLabel="Seleccionar autoridad que emite la identificación del cliente"
                   value={identificacionClienteFisica.autoridad}
-                  onValueChange={(value) => setIdentificacionClienteFisica((prev) => ({ ...prev, autoridad: value }))}
-                >
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Selecciona autoridad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AUTORIDAD_IDENTIFICACION_OPCIONES.map((opcion) => (
-                      <SelectItem key={opcion} value={opcion}>
-                        {opcion}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={AUTORIDAD_IDENTIFICACION_OPCIONES}
+                  placeholder="Selecciona autoridad"
+                  searchPlaceholder="Buscar autoridad"
+                  onChange={(value) => setIdentificacionClienteFisica((prev) => ({ ...prev, autoridad: value }))}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Fecha de vigencia</Label>
@@ -2847,18 +2814,15 @@ function KycExpedienteContent() {
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label>Tipo de cliente</Label>
-              <Select value={tipoCliente} onValueChange={setTipoCliente}>
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="---" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CLIENTE_TIPOS.map((opcion) => (
-                    <SelectItem key={opcion.value} value={opcion.value}>
-                      {opcion.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                id="eui-pm-tipo-cliente"
+                ariaLabel="Seleccionar tipo de cliente persona moral"
+                value={tipoCliente}
+                options={CLIENTE_TIPOS.map((opcion) => ({ value: opcion.value, label: opcion.label }))}
+                placeholder="Selecciona tipo de cliente"
+                searchPlaceholder="Buscar tipo de cliente"
+                onChange={setTipoCliente}
+              />
               <p className="text-xs text-muted-foreground">{tipoClienteResumen}</p>
             </div>
             <div className="space-y-2">
@@ -2876,15 +2840,15 @@ function KycExpedienteContent() {
             </div>
             <div className="space-y-2">
               <Label>¿Existe relación de negocios?</Label>
-              <Select value={relacionNegocios} onValueChange={(value) => setRelacionNegocios(value as RespuestaSiNo)}>
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="---" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="si">Sí</SelectItem>
-                  <SelectItem value="no">No</SelectItem>
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                id="eui-pm-relacion-negocios"
+                ariaLabel="Indicar si existe relación de negocios"
+                value={relacionNegocios}
+                options={RESPUESTA_SI_NO_OPTIONS}
+                placeholder="Selecciona una opción"
+                searchPlaceholder="Buscar opción"
+                onChange={(value) => setRelacionNegocios(value as RespuestaSiNo)}
+              />
             </div>
           </CardContent>
         </Card>
@@ -2945,18 +2909,15 @@ function KycExpedienteContent() {
               </div>
               <div className="space-y-2">
                 <Label>¿Existe relación de negocios?</Label>
-                <Select
+                <SearchableSelect
+                  id="eui-pmdp-relacion-negocios"
+                  ariaLabel="Indicar si existe relación de negocios"
                   value={relacionNegociosPmdp}
-                  onValueChange={(value) => setRelacionNegociosPmdp(value as RespuestaSiNo)}
-                >
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="---" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="si">Sí</SelectItem>
-                    <SelectItem value="no">No</SelectItem>
-                  </SelectContent>
-                </Select>
+                  options={RESPUESTA_SI_NO_OPTIONS}
+                  placeholder="Selecciona una opción"
+                  searchPlaceholder="Buscar opción"
+                  onChange={(value) => setRelacionNegociosPmdp(value as RespuestaSiNo)}
+                />
               </div>
             </CardContent>
           </Card>
@@ -3022,21 +2983,12 @@ function KycExpedienteContent() {
                 </div>
                 <div className="space-y-2">
                   <Label>Tipo de vialidad</Label>
-                  <Select
+                  <TipoVialidadCombobox
+                    id="eui-pmdp-domicilio-tipo-vialidad"
+                    ariaLabel="Seleccionar tipo de vialidad del domicilio del cliente"
                     value={domicilioClientePmdp.tipoVialidad}
-                    onValueChange={(value) => setDomicilioClientePmdp((prev) => ({ ...prev, tipoVialidad: value }))}
-                  >
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIPO_VIALIDAD_PERSONA_FISICA.map((tipo) => (
-                        <SelectItem key={tipo} value={tipo}>
-                          {tipo}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(value) => setDomicilioClientePmdp((prev) => ({ ...prev, tipoVialidad: value }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Nombre de la vialidad</Label>
@@ -3061,21 +3013,15 @@ function KycExpedienteContent() {
                 </div>
                 <div className="space-y-2">
                   <Label>Colonia / Urbanización</Label>
-                  <Select
+                  <SearchableSelect
+                    id="eui-pmdp-domicilio-colonia"
+                    ariaLabel="Seleccionar colonia o urbanización del domicilio del cliente"
                     value={domicilioClientePmdp.colonia}
-                    onValueChange={(value) => setDomicilioClientePmdp((prev) => ({ ...prev, colonia: value }))}
-                  >
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from(new Set([...coloniasClientePmdp, domicilioClientePmdp.colonia].filter(Boolean))).map((colonia) => (
-                        <SelectItem key={colonia} value={colonia}>
-                          {colonia}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    options={Array.from(new Set([...coloniasClientePmdp, domicilioClientePmdp.colonia].filter(Boolean)))}
+                    placeholder="Selecciona colonia"
+                    searchPlaceholder="Buscar colonia"
+                    onChange={(value) => setDomicilioClientePmdp((prev) => ({ ...prev, colonia: value }))}
+                  />
                 </div>
               </div>
               <div className="grid gap-4 md:grid-cols-4">
@@ -3165,39 +3111,25 @@ function KycExpedienteContent() {
                   <div className="mt-3 grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Tipo de identificación</Label>
-                      <Select
+                      <SearchableSelect
+                        ariaLabel={`Seleccionar tipo de identificación de ${block.label}`}
                         value={block.data.identificacion.tipo}
-                        onValueChange={(value) => block.setter((prev) => ({ ...prev, identificacion: { ...prev.identificacion, tipo: value } }))}
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Selecciona identificación" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {IDENTIFICACION_OPCIONES.map((opcion) => (
-                            <SelectItem key={opcion} value={opcion}>
-                              {opcion}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        options={IDENTIFICACION_OPCIONES}
+                        placeholder="Selecciona identificación"
+                        searchPlaceholder="Buscar identificación"
+                        onChange={(value) => block.setter((prev) => ({ ...prev, identificacion: { ...prev.identificacion, tipo: value } }))}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Autoridad que la emite</Label>
-                      <Select
+                      <SearchableSelect
+                        ariaLabel={`Seleccionar autoridad de identificación de ${block.label}`}
                         value={block.data.identificacion.autoridad}
-                        onValueChange={(value) => block.setter((prev) => ({ ...prev, identificacion: { ...prev.identificacion, autoridad: value } }))}
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="Selecciona autoridad" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {AUTORIDAD_IDENTIFICACION_OPCIONES.map((opcion) => (
-                            <SelectItem key={opcion} value={opcion}>
-                              {opcion}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        options={AUTORIDAD_IDENTIFICACION_OPCIONES}
+                        placeholder="Selecciona autoridad"
+                        searchPlaceholder="Buscar autoridad"
+                        onChange={(value) => block.setter((prev) => ({ ...prev, identificacion: { ...prev.identificacion, autoridad: value } }))}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Número de identificación</Label>
@@ -3224,18 +3156,24 @@ function KycExpedienteContent() {
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Tipo de inmueble</Label>
-                <Select value={inmuebleTipoPmdp} onValueChange={setInmuebleTipoPmdp}>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="---" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SAT_TIPOS_INMUEBLE.map((tipo) => (
-                      <SelectItem key={tipo.code} value={tipo.value}>
-                        {tipo.code} · {tipo.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelectWithOther
+                  id="eui-pmdp-tipo-inmueble"
+                  ariaLabel="Seleccionar tipo de inmueble"
+                  value={inmuebleTipoPmdp}
+                  options={SAT_TIPOS_INMUEBLE.map((tipo) => ({
+                    value: tipo.value,
+                    label: `${tipo.code} · ${tipo.label}`,
+                    keywords: [tipo.code],
+                  }))}
+                  otherValue={SAT_TIPO_INMUEBLE_OTRO_VALUE}
+                  otherText={inmuebleTipoOtroPmdp}
+                  onOtherTextChange={setInmuebleTipoOtroPmdp}
+                  placeholder="Selecciona tipo de inmueble"
+                  searchPlaceholder="Buscar tipo de inmueble"
+                  otherInputAriaLabel="Especificar otro tipo de inmueble"
+                  otherInputPlaceholder="Especifica el tipo de inmueble"
+                  onChange={setInmuebleTipoPmdp}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Valor de referencia</Label>
@@ -3266,21 +3204,12 @@ function KycExpedienteContent() {
                 </div>
                 <div className="space-y-2">
                   <Label>Tipo de vialidad</Label>
-                  <Select
+                  <TipoVialidadCombobox
+                    id="eui-pmdp-inmueble-tipo-vialidad"
+                    ariaLabel="Seleccionar tipo de vialidad de la ubicación del inmueble"
                     value={ubicacionInmueblePmdp.tipoVialidad}
-                    onValueChange={(value) => setUbicacionInmueblePmdp((prev) => ({ ...prev, tipoVialidad: value }))}
-                  >
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIPO_VIALIDAD_PERSONA_FISICA.map((tipo) => (
-                        <SelectItem key={tipo} value={tipo}>
-                          {tipo}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(value) => setUbicacionInmueblePmdp((prev) => ({ ...prev, tipoVialidad: value }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Nombre de la vialidad</Label>
@@ -3305,21 +3234,15 @@ function KycExpedienteContent() {
                 </div>
                 <div className="space-y-2">
                   <Label>Colonia / Urbanización</Label>
-                  <Select
+                  <SearchableSelect
+                    id="eui-pmdp-inmueble-colonia"
+                    ariaLabel="Seleccionar colonia o urbanización de la ubicación del inmueble"
                     value={ubicacionInmueblePmdp.colonia}
-                    onValueChange={(value) => setUbicacionInmueblePmdp((prev) => ({ ...prev, colonia: value }))}
-                  >
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from(new Set([...coloniasInmueblePmdp, ubicacionInmueblePmdp.colonia].filter(Boolean))).map((colonia) => (
-                        <SelectItem key={colonia} value={colonia}>
-                          {colonia}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    options={Array.from(new Set([...coloniasInmueblePmdp, ubicacionInmueblePmdp.colonia].filter(Boolean)))}
+                    placeholder="Selecciona colonia"
+                    searchPlaceholder="Buscar colonia"
+                    onChange={(value) => setUbicacionInmueblePmdp((prev) => ({ ...prev, colonia: value }))}
+                  />
                 </div>
               </div>
               <div className="grid gap-4 md:grid-cols-4">
@@ -3386,18 +3309,15 @@ function KycExpedienteContent() {
           </div>
           <div className="space-y-2">
             <Label>País de nacionalidad</Label>
-            <Select value={clientePais} onValueChange={setClientePais}>
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder="Selecciona país" />
-              </SelectTrigger>
-              <SelectContent>
-                {PAISES.map((pais) => (
-                  <SelectItem key={pais.code} value={pais.code}>
-                    {pais.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              id="eui-pm-cliente-pais-nacionalidad"
+              ariaLabel="Seleccionar país de nacionalidad del cliente"
+              value={clientePais}
+              options={PAIS_SEARCH_OPTIONS}
+              placeholder="Selecciona país"
+              searchPlaceholder="Buscar país por nombre o código"
+              onChange={setClientePais}
+            />
           </div>
           <div className="space-y-2">
             <Label>RFC</Label>
@@ -3455,21 +3375,12 @@ function KycExpedienteContent() {
             </div>
             <div className="space-y-2">
               <Label>Tipo de vialidad</Label>
-              <Select
+              <TipoVialidadCombobox
+                id="eui-pm-domicilio-tipo-vialidad"
+                ariaLabel="Seleccionar tipo de vialidad del domicilio del cliente"
                 value={domicilioCliente.tipoVialidad}
-                onValueChange={(value) => setDomicilioCliente((prev) => ({ ...prev, tipoVialidad: value }))}
-              >
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="---" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIPO_VIALIDAD_OPCIONES.map((tipo) => (
-                    <SelectItem key={tipo} value={tipo}>
-                      {tipo}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(value) => setDomicilioCliente((prev) => ({ ...prev, tipoVialidad: value }))}
+              />
             </div>
             <div className="space-y-2">
               <Label>Nombre de la vialidad</Label>
@@ -3494,21 +3405,15 @@ function KycExpedienteContent() {
             </div>
             <div className="space-y-2">
               <Label>Colonia / Urbanización</Label>
-              <Select
+              <SearchableSelect
+                id="eui-pm-domicilio-colonia"
+                ariaLabel="Seleccionar colonia o urbanización del domicilio del cliente"
                 value={domicilioCliente.colonia}
-                onValueChange={(value) => setDomicilioCliente((prev) => ({ ...prev, colonia: value }))}
-              >
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="---" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from(new Set([...coloniasCliente, domicilioCliente.colonia].filter(Boolean))).map((colonia) => (
-                    <SelectItem key={colonia} value={colonia}>
-                      {colonia}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={Array.from(new Set([...coloniasCliente, domicilioCliente.colonia].filter(Boolean)))}
+                placeholder="Selecciona colonia"
+                searchPlaceholder="Buscar colonia"
+                onChange={(value) => setDomicilioCliente((prev) => ({ ...prev, colonia: value }))}
+              />
             </div>
           </div>
 
@@ -3598,18 +3503,15 @@ function KycExpedienteContent() {
           </div>
           <div className="space-y-2">
             <Label>País de nacionalidad</Label>
-            <Select value={representante.paisNacionalidad} onValueChange={(value) => setRepresentante((prev) => ({ ...prev, paisNacionalidad: value }))}>
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder="Selecciona país" />
-              </SelectTrigger>
-              <SelectContent>
-                {PAISES.map((pais) => (
-                  <SelectItem key={pais.code} value={pais.code}>
-                    {pais.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              id="eui-pm-representante-pais-nacionalidad"
+              ariaLabel="Seleccionar país de nacionalidad del representante"
+              value={representante.paisNacionalidad}
+              options={PAIS_SEARCH_OPTIONS}
+              placeholder="Selecciona país"
+              searchPlaceholder="Buscar país por nombre o código"
+              onChange={(value) => setRepresentante((prev) => ({ ...prev, paisNacionalidad: value }))}
+            />
           </div>
         </CardContent>
       </Card>
@@ -3668,33 +3570,27 @@ function KycExpedienteContent() {
             </div>
             <div className="space-y-2">
               <Label>País de nacionalidad</Label>
-              <Select value={beneficiario1.paisNacionalidad} onValueChange={(value) => setBeneficiario1((prev) => ({ ...prev, paisNacionalidad: value }))}>
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="Selecciona país" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAISES.map((pais) => (
-                    <SelectItem key={pais.code} value={pais.code}>
-                      {pais.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                id="eui-pm-beneficiario-1-pais-nacionalidad"
+                ariaLabel="Seleccionar país de nacionalidad del beneficiario controlador 1"
+                value={beneficiario1.paisNacionalidad}
+                options={PAIS_SEARCH_OPTIONS}
+                placeholder="Selecciona país"
+                searchPlaceholder="Buscar país por nombre o código"
+                onChange={(value) => setBeneficiario1((prev) => ({ ...prev, paisNacionalidad: value }))}
+              />
             </div>
             <div className="space-y-2">
               <Label>País de nacimiento</Label>
-              <Select value={beneficiario1.paisNacimiento} onValueChange={(value) => setBeneficiario1((prev) => ({ ...prev, paisNacimiento: value }))}>
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="Selecciona país" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAISES.map((pais) => (
-                    <SelectItem key={pais.code} value={pais.code}>
-                      {pais.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                id="eui-pm-beneficiario-1-pais-nacimiento"
+                ariaLabel="Seleccionar país de nacimiento del beneficiario controlador 1"
+                value={beneficiario1.paisNacimiento}
+                options={PAIS_SEARCH_OPTIONS}
+                placeholder="Selecciona país"
+                searchPlaceholder="Buscar país por nombre o código"
+                onChange={(value) => setBeneficiario1((prev) => ({ ...prev, paisNacimiento: value }))}
+              />
             </div>
             <div className="space-y-2">
               <Label>CURP o equivalente</Label>
@@ -3728,23 +3624,14 @@ function KycExpedienteContent() {
               </div>
               <div className="space-y-2">
                 <Label>Tipo de vialidad</Label>
-                <Select
+                <TipoVialidadCombobox
+                  id="eui-pm-beneficiario-1-domicilio-tipo-vialidad"
+                  ariaLabel="Seleccionar tipo de vialidad del domicilio del beneficiario controlador 1"
                   value={beneficiario1.domicilio.tipoVialidad}
-                  onValueChange={(value) =>
+                  onChange={(value) =>
                     setBeneficiario1((prev) => ({ ...prev, domicilio: { ...prev.domicilio, tipoVialidad: value } }))
                   }
-                >
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="---" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIPO_VIALIDAD_OPCIONES.map((tipo) => (
-                      <SelectItem key={tipo} value={tipo}>
-                        {tipo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
               <div className="space-y-2">
                 <Label>Nombre de la vialidad</Label>
@@ -3784,28 +3671,22 @@ function KycExpedienteContent() {
               </div>
               <div className="space-y-2">
                 <Label>Colonia / Urbanización</Label>
-                <Select
+                <SearchableSelect
+                  id="eui-pm-beneficiario-1-domicilio-colonia"
+                  ariaLabel="Seleccionar colonia o urbanización del domicilio del beneficiario controlador 1"
                   value={beneficiario1.domicilio.colonia}
-                  onValueChange={(value) =>
+                  options={Array.from(
+                    new Set([...coloniasBeneficiario1, beneficiario1.domicilio.colonia].filter(Boolean)),
+                  )}
+                  placeholder="Selecciona colonia"
+                  searchPlaceholder="Buscar colonia"
+                  onChange={(value) =>
                     setBeneficiario1((prev) => ({
                       ...prev,
                       domicilio: { ...prev.domicilio, colonia: value },
                     }))
                   }
-                >
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="---" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from(
-                      new Set([...coloniasBeneficiario1, beneficiario1.domicilio.colonia].filter(Boolean)),
-                    ).map((colonia) => (
-                      <SelectItem key={colonia} value={colonia}>
-                        {colonia}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
             </div>
             <div className="mt-4 grid gap-4 md:grid-cols-4">
@@ -3915,20 +3796,17 @@ function KycExpedienteContent() {
             <div className="mt-3 grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>¿Reside en el extranjero?</Label>
-                <Select
+                <SearchableSelect
+                  id="eui-pm-beneficiario-1-reside-extranjero"
+                  ariaLabel="Indicar si el beneficiario controlador 1 reside en el extranjero"
                   value={beneficiario1.resideExtranjero}
-                  onValueChange={(value) =>
+                  options={RESPUESTA_SI_NO_OPTIONS}
+                  placeholder="Selecciona una opción"
+                  searchPlaceholder="Buscar opción"
+                  onChange={(value) =>
                     setBeneficiario1((prev) => ({ ...prev, resideExtranjero: value as RespuestaSiNo }))
                   }
-                >
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="---" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="si">Sí</SelectItem>
-                    <SelectItem value="no">No</SelectItem>
-                  </SelectContent>
-                </Select>
+                />
               </div>
             </div>
             {beneficiario1.resideExtranjero === "si" && (
@@ -3949,26 +3827,17 @@ function KycExpedienteContent() {
                 </div>
                 <div className="space-y-2">
                   <Label>Tipo de vialidad</Label>
-                  <Select
+                  <TipoVialidadCombobox
+                    id="eui-pm-beneficiario-1-correspondencia-tipo-vialidad"
+                    ariaLabel="Seleccionar tipo de vialidad de correspondencia del beneficiario controlador 1"
                     value={beneficiario1.domicilioCorrespondencia.tipoVialidad}
-                    onValueChange={(value) =>
+                    onChange={(value) =>
                       setBeneficiario1((prev) => ({
                         ...prev,
                         domicilioCorrespondencia: { ...prev.domicilioCorrespondencia, tipoVialidad: value },
                       }))
                     }
-                  >
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIPO_VIALIDAD_OPCIONES.map((tipo) => (
-                        <SelectItem key={tipo} value={tipo}>
-                          {tipo}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Nombre de la vialidad</Label>
@@ -4017,9 +3886,19 @@ function KycExpedienteContent() {
                 </div>
                 <div className="space-y-2">
                   <Label>Colonia / Urbanización</Label>
-                  <Select
+                  <SearchableSelect
+                    id="eui-pm-beneficiario-1-correspondencia-colonia"
+                    ariaLabel="Seleccionar colonia o urbanización de correspondencia del beneficiario controlador 1"
                     value={beneficiario1.domicilioCorrespondencia.colonia}
-                    onValueChange={(value) =>
+                    options={Array.from(
+                      new Set([
+                        ...coloniasBeneficiario1Correspondencia,
+                        beneficiario1.domicilioCorrespondencia.colonia,
+                      ].filter(Boolean)),
+                    )}
+                    placeholder="Selecciona colonia"
+                    searchPlaceholder="Buscar colonia"
+                    onChange={(value) =>
                       setBeneficiario1((prev) => ({
                         ...prev,
                         domicilioCorrespondencia: {
@@ -4028,23 +3907,7 @@ function KycExpedienteContent() {
                         },
                       }))
                     }
-                  >
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from(
-                        new Set([
-                          ...coloniasBeneficiario1Correspondencia,
-                          beneficiario1.domicilioCorrespondencia.colonia,
-                        ].filter(Boolean)),
-                      ).map((colonia) => (
-                        <SelectItem key={colonia} value={colonia}>
-                          {colonia}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Alcaldía / Municipio</Label>
@@ -4163,33 +4026,27 @@ function KycExpedienteContent() {
                 </div>
                 <div className="space-y-2">
                   <Label>País de nacionalidad</Label>
-                  <Select value={beneficiario2.paisNacionalidad} onValueChange={(value) => setBeneficiario2((prev) => ({ ...prev, paisNacionalidad: value }))}>
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="Selecciona país" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PAISES.map((pais) => (
-                        <SelectItem key={pais.code} value={pais.code}>
-                          {pais.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    id="eui-pm-beneficiario-2-pais-nacionalidad"
+                    ariaLabel="Seleccionar país de nacionalidad del beneficiario controlador 2"
+                    value={beneficiario2.paisNacionalidad}
+                    options={PAIS_SEARCH_OPTIONS}
+                    placeholder="Selecciona país"
+                    searchPlaceholder="Buscar país por nombre o código"
+                    onChange={(value) => setBeneficiario2((prev) => ({ ...prev, paisNacionalidad: value }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>País de nacimiento</Label>
-                  <Select value={beneficiario2.paisNacimiento} onValueChange={(value) => setBeneficiario2((prev) => ({ ...prev, paisNacimiento: value }))}>
-                    <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="Selecciona país" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PAISES.map((pais) => (
-                        <SelectItem key={pais.code} value={pais.code}>
-                          {pais.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    id="eui-pm-beneficiario-2-pais-nacimiento"
+                    ariaLabel="Seleccionar país de nacimiento del beneficiario controlador 2"
+                    value={beneficiario2.paisNacimiento}
+                    options={PAIS_SEARCH_OPTIONS}
+                    placeholder="Selecciona país"
+                    searchPlaceholder="Buscar país por nombre o código"
+                    onChange={(value) => setBeneficiario2((prev) => ({ ...prev, paisNacimiento: value }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>CURP o equivalente</Label>
@@ -4223,26 +4080,17 @@ function KycExpedienteContent() {
                   </div>
                   <div className="space-y-2">
                     <Label>Tipo de vialidad</Label>
-                    <Select
+                    <TipoVialidadCombobox
+                      id="eui-pm-beneficiario-2-domicilio-tipo-vialidad"
+                      ariaLabel="Seleccionar tipo de vialidad del domicilio del beneficiario controlador 2"
                       value={beneficiario2.domicilio.tipoVialidad}
-                      onValueChange={(value) =>
+                      onChange={(value) =>
                         setBeneficiario2((prev) => ({
                           ...prev,
                           domicilio: { ...prev.domicilio, tipoVialidad: value },
                         }))
                       }
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="---" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TIPO_VIALIDAD_OPCIONES.map((tipo) => (
-                          <SelectItem key={tipo} value={tipo}>
-                            {tipo}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Nombre de la vialidad</Label>
@@ -4282,28 +4130,22 @@ function KycExpedienteContent() {
                   </div>
                   <div className="space-y-2">
                     <Label>Colonia / Urbanización</Label>
-                    <Select
+                    <SearchableSelect
+                      id="eui-pm-beneficiario-2-domicilio-colonia"
+                      ariaLabel="Seleccionar colonia o urbanización del domicilio del beneficiario controlador 2"
                       value={beneficiario2.domicilio.colonia}
-                      onValueChange={(value) =>
+                      options={Array.from(
+                        new Set([...coloniasBeneficiario2, beneficiario2.domicilio.colonia].filter(Boolean)),
+                      )}
+                      placeholder="Selecciona colonia"
+                      searchPlaceholder="Buscar colonia"
+                      onChange={(value) =>
                         setBeneficiario2((prev) => ({
                           ...prev,
                           domicilio: { ...prev.domicilio, colonia: value },
                         }))
                       }
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="---" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from(
-                          new Set([...coloniasBeneficiario2, beneficiario2.domicilio.colonia].filter(Boolean)),
-                        ).map((colonia) => (
-                          <SelectItem key={colonia} value={colonia}>
-                            {colonia}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    />
                   </div>
                 </div>
                 <div className="mt-4 grid gap-4 md:grid-cols-4">
@@ -4413,20 +4255,17 @@ function KycExpedienteContent() {
                 <div className="mt-3 grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>¿Reside en el extranjero?</Label>
-                    <Select
+                    <SearchableSelect
+                      id="eui-pm-beneficiario-2-reside-extranjero"
+                      ariaLabel="Indicar si el beneficiario controlador 2 reside en el extranjero"
                       value={beneficiario2.resideExtranjero}
-                      onValueChange={(value) =>
+                      options={RESPUESTA_SI_NO_OPTIONS}
+                      placeholder="Selecciona una opción"
+                      searchPlaceholder="Buscar opción"
+                      onChange={(value) =>
                         setBeneficiario2((prev) => ({ ...prev, resideExtranjero: value as RespuestaSiNo }))
                       }
-                    >
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="---" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="si">Sí</SelectItem>
-                        <SelectItem value="no">No</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    />
                   </div>
                 </div>
                 {beneficiario2.resideExtranjero === "si" && (
@@ -4447,26 +4286,17 @@ function KycExpedienteContent() {
                     </div>
                     <div className="space-y-2">
                       <Label>Tipo de vialidad</Label>
-                      <Select
+                      <TipoVialidadCombobox
+                        id="eui-pm-beneficiario-2-correspondencia-tipo-vialidad"
+                        ariaLabel="Seleccionar tipo de vialidad de correspondencia del beneficiario controlador 2"
                         value={beneficiario2.domicilioCorrespondencia.tipoVialidad}
-                        onValueChange={(value) =>
+                        onChange={(value) =>
                           setBeneficiario2((prev) => ({
                             ...prev,
                             domicilioCorrespondencia: { ...prev.domicilioCorrespondencia, tipoVialidad: value },
                           }))
                         }
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="---" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TIPO_VIALIDAD_OPCIONES.map((tipo) => (
-                            <SelectItem key={tipo} value={tipo}>
-                              {tipo}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Nombre de la vialidad</Label>
@@ -4515,9 +4345,19 @@ function KycExpedienteContent() {
                     </div>
                     <div className="space-y-2">
                       <Label>Colonia / Urbanización</Label>
-                      <Select
+                      <SearchableSelect
+                        id="eui-pm-beneficiario-2-correspondencia-colonia"
+                        ariaLabel="Seleccionar colonia o urbanización de correspondencia del beneficiario controlador 2"
                         value={beneficiario2.domicilioCorrespondencia.colonia}
-                        onValueChange={(value) =>
+                        options={Array.from(
+                          new Set([
+                            ...coloniasBeneficiario2Correspondencia,
+                            beneficiario2.domicilioCorrespondencia.colonia,
+                          ].filter(Boolean)),
+                        )}
+                        placeholder="Selecciona colonia"
+                        searchPlaceholder="Buscar colonia"
+                        onChange={(value) =>
                           setBeneficiario2((prev) => ({
                             ...prev,
                             domicilioCorrespondencia: {
@@ -4526,23 +4366,7 @@ function KycExpedienteContent() {
                             },
                           }))
                         }
-                      >
-                        <SelectTrigger className="bg-white">
-                          <SelectValue placeholder="---" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from(
-                            new Set([
-                              ...coloniasBeneficiario2Correspondencia,
-                              beneficiario2.domicilioCorrespondencia.colonia,
-                            ].filter(Boolean)),
-                          ).map((colonia) => (
-                            <SelectItem key={colonia} value={colonia}>
-                              {colonia}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Alcaldía / Municipio</Label>
@@ -4641,18 +4465,24 @@ function KycExpedienteContent() {
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label>Tipo de inmueble</Label>
-            <Select value={inmuebleTipo} onValueChange={setInmuebleTipo}>
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder="---" />
-              </SelectTrigger>
-              <SelectContent>
-                {SAT_TIPOS_INMUEBLE.map((tipo) => (
-                  <SelectItem key={tipo.code} value={tipo.value}>
-                    {tipo.code} · {tipo.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelectWithOther
+              id="eui-pm-tipo-inmueble"
+              ariaLabel="Seleccionar tipo de inmueble"
+              value={inmuebleTipo}
+              options={SAT_TIPOS_INMUEBLE.map((tipo) => ({
+                value: tipo.value,
+                label: `${tipo.code} · ${tipo.label}`,
+                keywords: [tipo.code],
+              }))}
+              otherValue={SAT_TIPO_INMUEBLE_OTRO_VALUE}
+              otherText={inmuebleTipoOtro}
+              onOtherTextChange={setInmuebleTipoOtro}
+              placeholder="Selecciona tipo de inmueble"
+              searchPlaceholder="Buscar tipo de inmueble"
+              otherInputAriaLabel="Especificar otro tipo de inmueble"
+              otherInputPlaceholder="Especifica el tipo de inmueble"
+              onChange={setInmuebleTipo}
+            />
           </div>
           <div className="space-y-2">
             <Label>Valor de referencia</Label>
@@ -4685,21 +4515,12 @@ function KycExpedienteContent() {
             </div>
             <div className="space-y-2">
               <Label>Tipo de vialidad</Label>
-              <Select
+              <TipoVialidadCombobox
+                id="eui-pm-inmueble-tipo-vialidad"
+                ariaLabel="Seleccionar tipo de vialidad de la ubicación del inmueble"
                 value={ubicacionInmueble.tipoVialidad}
-                onValueChange={(value) => setUbicacionInmueble((prev) => ({ ...prev, tipoVialidad: value }))}
-              >
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="---" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIPO_VIALIDAD_OPCIONES.map((tipo) => (
-                    <SelectItem key={tipo} value={tipo}>
-                      {tipo}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(value) => setUbicacionInmueble((prev) => ({ ...prev, tipoVialidad: value }))}
+              />
             </div>
             <div className="space-y-2">
               <Label>Nombre de la vialidad</Label>
@@ -4724,21 +4545,15 @@ function KycExpedienteContent() {
             </div>
             <div className="space-y-2">
               <Label>Colonia / Urbanización</Label>
-              <Select
+              <SearchableSelect
+                id="eui-pm-inmueble-colonia"
+                ariaLabel="Seleccionar colonia o urbanización de la ubicación del inmueble"
                 value={ubicacionInmueble.colonia}
-                onValueChange={(value) => setUbicacionInmueble((prev) => ({ ...prev, colonia: value }))}
-              >
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="---" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from(new Set([...coloniasInmueble, ubicacionInmueble.colonia].filter(Boolean))).map((colonia) => (
-                    <SelectItem key={colonia} value={colonia}>
-                      {colonia}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={Array.from(new Set([...coloniasInmueble, ubicacionInmueble.colonia].filter(Boolean)))}
+                placeholder="Selecciona colonia"
+                searchPlaceholder="Buscar colonia"
+                onChange={(value) => setUbicacionInmueble((prev) => ({ ...prev, colonia: value }))}
+              />
             </div>
           </div>
 
