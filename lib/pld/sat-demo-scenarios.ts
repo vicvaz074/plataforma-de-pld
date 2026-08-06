@@ -1,11 +1,15 @@
 import { SAT_TEMPLATE_CATALOG } from "./sat-template-catalog"
 import { normalizeSatXlsmLayout } from "./sat-xlsm"
+import { isSatXlsmFieldRequired } from "./ui-workflow"
 import type {
   SatTemplateCatalogItem,
   SatTemplateDemoScenario,
   SatXlsmField,
   SatXlsmLayout,
 } from "./types"
+
+/** Cortes de seguridad para el llenado iterativo de escenarios demo. */
+const MAX_DEMO_FILL_PASSES = 6
 
 const DEMO_PERIOD = "202605"
 const DEMO_TENANT_RFC = "FSC220908AC2"
@@ -83,17 +87,26 @@ export function buildSatTemplateDemoScenarioValues(input: {
   const layout = normalizeSatXlsmLayout(input.layout)
   const satFieldValues = { ...input.scenario.satFieldValues }
   const satCellValues = { ...(input.scenario.satCellValues || {}) }
+  const fields = layout.sections.flatMap((section) => section.fields)
 
-  for (const field of layout.sections.flatMap((section) => section.fields)) {
-    if (!field.required) continue
-    const cellKey = `${field.sheetName}!${field.cell}`
-    if (satFieldValues[field.id] || satCellValues[cellKey]) {
-      if (satFieldValues[field.id] && field.options?.length && !field.options.includes(satFieldValues[field.id])) {
-        satFieldValues[field.id] = selectDemoOption(field, input.scenario)
+  // Elegir una opción puede volver obligatorios campos que dependen de ella
+  // (por ejemplo el domicilio del inmueble al declarar un bien inmueble), así
+  // que se recorre hasta que no aparezcan nuevos pendientes.
+  for (let pass = 0; pass < MAX_DEMO_FILL_PASSES; pass += 1) {
+    let filled = 0
+    for (const field of fields) {
+      if (!isSatXlsmFieldRequired(field, satFieldValues)) continue
+      const cellKey = `${field.sheetName}!${field.cell}`
+      if (satFieldValues[field.id] || satCellValues[cellKey]) {
+        if (satFieldValues[field.id] && field.options?.length && !field.options.includes(satFieldValues[field.id])) {
+          satFieldValues[field.id] = selectDemoOption(field, input.scenario)
+        }
+        continue
       }
-      continue
+      satFieldValues[field.id] = demoValueForField(field, input.scenario)
+      filled += 1
     }
-    satFieldValues[field.id] = demoValueForField(field, input.scenario)
+    if (!filled) break
   }
 
   return { satFieldValues, satCellValues }

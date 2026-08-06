@@ -1,3 +1,4 @@
+import { BENEFICIARY_PERSON_TYPE_FIELD_ID } from "./sat-field-controls"
 import type {
   OperationalWizardStepDiagnostics,
   BlockingReasonsView,
@@ -173,7 +174,7 @@ function inferBeneficiaryConditionControls(
     if (!fieldValue) continue
 
     for (const condition of field.activeWhen || []) {
-      if (condition.fieldId !== "beneficiario.tipo_persona") continue
+      if (condition.fieldId !== BENEFICIARY_PERSON_TYPE_FIELD_ID) continue
       if (output[condition.fieldId]?.trim() || condition.equals.length !== 1) continue
       const candidates = candidateValues.get(condition.fieldId) ?? new Set<string>()
       candidates.add(condition.equals[0])

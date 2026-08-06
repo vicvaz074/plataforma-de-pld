@@ -575,6 +575,8 @@ export interface SatXlsmField {
   targetCell?: string
   readOnly?: boolean
   placeholder?: string
+  /** Longitud máxima declarada por la validación de la plantilla oficial. */
+  maxLength?: number
 }
 
 export interface SatXlsmOptionListCellBinding {
