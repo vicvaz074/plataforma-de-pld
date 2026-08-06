@@ -262,10 +262,13 @@ const evaluateRequiredValues = (values: RequiredValue[], summaryValues = values)
   }
 }
 
-const evaluateAddress = (address: ExpedienteChecklistAddress | undefined): AutomaticEvaluation =>
-  evaluateRequiredValues([
+const evaluateAddress = (address: ExpedienteChecklistAddress | undefined): AutomaticEvaluation => {
+  const tipoVialidad =
+    normalizeLookupKey(address?.tipoVialidad ?? "") === "otro" ? "" : address?.tipoVialidad
+
+  return evaluateRequiredValues([
     { label: "Código postal", value: address?.codigoPostal },
-    { label: "Tipo de vialidad", value: address?.tipoVialidad },
+    { label: "Tipo de vialidad", value: tipoVialidad },
     { label: "Nombre de la vialidad", value: address?.nombreVialidad },
     { label: "Número exterior", value: address?.numeroExterior },
     { label: "Colonia", value: address?.colonia },
@@ -273,6 +276,7 @@ const evaluateAddress = (address: ExpedienteChecklistAddress | undefined): Autom
     { label: "Entidad", value: address?.entidad },
     { label: "País", value: address?.pais },
   ])
+}
 
 const evaluateIdentification = (
   identification: ExpedienteChecklistIdentification | undefined,
