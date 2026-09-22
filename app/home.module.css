@@ -1,0 +1,127 @@
+.home {
+  min-height: calc(100vh - var(--app-header-height));
+  padding: clamp(18px, 1.5vw, 34px) clamp(50px, 4.4vw, 100px) 46px clamp(36px, 3.45vw, 78px);
+  background: #fff;
+  box-shadow: inset 8px 7px 22px -23px #5a6d8c;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.heading {
+  margin: 0 0 clamp(24px, 1.56vw, 35px);
+  color: #ea7119;
+  font-size: clamp(28px, 2.46vw, 55px) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.005em;
+  line-height: 1.25;
+  text-align: center;
+  font-family: Arial, Helvetica, sans-serif !important;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(28px, 2.2vw, 50px) clamp(22px, 2.25vw, 51px);
+  width: 100%;
+}
+
+.moduleCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  aspect-ratio: 1.38;
+  padding: 18px 18px 24px;
+  border: 2px solid #dedee0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 3px rgb(31 41 55 / 3%);
+  color: #252e3c;
+  text-align: center;
+  text-decoration: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.moduleCard:hover,
+.moduleCard:focus-visible {
+  border-color: #f7941d;
+  box-shadow: 0 8px 26px rgb(31 41 55 / 12%);
+  transform: translateY(-2px);
+}
+
+.moduleCard:focus-visible {
+  outline: 3px solid #f7941d;
+  outline-offset: 3px;
+}
+
+.cardVisual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 34%;
+  margin-bottom: clamp(10px, 1vw, 23px);
+  transform: translateY(-15px);
+}
+
+.cardIcon {
+  width: clamp(38px, 2.7vw, 62px);
+  height: clamp(38px, 2.7vw, 62px);
+  color: #465162;
+}
+
+.aliciaLogo {
+  width: clamp(110px, 7vw, 158px);
+  height: auto;
+  filter: brightness(0) saturate(100%) invert(56%) sepia(90%) saturate(850%) hue-rotate(348deg);
+}
+
+.cardTitle {
+  display: block;
+  max-width: 95%;
+  color: #253044;
+  font-size: clamp(16px, 1.03vw, 23px);
+  font-weight: 700 !important;
+  line-height: 1.2;
+  font-family: Arial, Helvetica, sans-serif !important;
+  transform: translateY(-10px);
+}
+
+.cardMore {
+  position: absolute;
+  bottom: clamp(12px, 1vw, 22px);
+  width: clamp(20px, 1.5vw, 34px);
+  height: clamp(20px, 1.5vw, 34px);
+  color: #aeb0c7;
+}
+
+.demoTools {
+  margin-top: 160px;
+  color: #667085;
+  font-size: 14px;
+}
+
+.demoTools summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+@media (max-width: 1100px) {
+  .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 800px) {
+  .home { padding: 24px; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .heading { font-size: 28px !important; }
+}
+
+@media (max-width: 550px) {
+  .home { padding: 22px 16px; }
+  .grid { gap: 14px; }
+  .moduleCard { aspect-ratio: 1; padding: 12px 10px 24px; }
+  .cardTitle { font-size: 13px; }
+  .cardVisual { height: 38%; margin-bottom: 4px; }
+  .cardIcon { width: 34px; height: 34px; }
+}

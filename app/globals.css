@@ -139,6 +139,14 @@ body {
   color: hsl(var(--sidebar-foreground));
 }
 
+/* Tipografía de la portada de referencia, aislada del resto de los formularios. */
+.pld-reference-shell,
+.pld-reference-shell a,
+.pld-reference-shell button,
+.pld-reference-shell span {
+  font-family: Arial, Helvetica, sans-serif !important;
+}
+
 /* Animaciones para botones */
 .button {
   transition: all 0.3s ease;
