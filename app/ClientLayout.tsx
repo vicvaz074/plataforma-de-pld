@@ -11,7 +11,7 @@ import { AppProvider } from "@/lib/AppContext"
 import { DEFAULT_USERS } from "@/lib/default-users"
 import { Toaster } from "@/components/ui/toaster"
 
-const SIDEBAR_EXPANDED_WIDTH = "16.42rem"
+const SIDEBAR_EXPANDED_WIDTH = "clamp(15rem, 16.9vw, 24rem)"
 const SIDEBAR_COLLAPSED_WIDTH = "5rem"
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -85,11 +85,11 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
           {isLoginPage ? (
             children
           ) : (
-            <div className="flex min-h-screen overflow-x-hidden">
+            <div className="flex min-h-screen overflow-x-hidden" style={{ "--app-header-height": "clamp(68px, 4.55vw, 102px)" } as React.CSSProperties}>
               {isAuthenticated && <Sidebar collapsed={effectiveSidebarCollapsed} onToggle={handleSidebarToggle} />}
               <div className="flex-1 min-w-0 flex flex-col transition-[margin,width] duration-300" style={contentStyle}>
-                {isAuthenticated && <Header sidebarOffset={sidebarOffset} showSidebarLogo={isSidebarCollapsed} />}
-                <main className={`min-w-0 flex-1 bg-background p-4 sm:p-8 ${isAuthenticated ? "mt-16" : ""}`}>{children}</main>
+                {isAuthenticated && <Header />}
+                <main className={`min-w-0 flex-1 bg-background ${pathname === "/" ? "p-0" : "p-4 sm:p-8"}`} style={isAuthenticated ? { marginTop: "var(--app-header-height)" } : undefined}>{children}</main>
               </div>
             </div>
           )}

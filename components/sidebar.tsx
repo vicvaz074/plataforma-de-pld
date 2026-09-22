@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useLanguage } from "@/lib/LanguageContext"
 import { usePathname } from "next/navigation"
 import Image from "next/image"
-import { ChevronLeft, LayoutDashboard, Shield, FileCheck, Users, FileText, GraduationCap, Search, Database, Settings, Sparkles, Book, ClipboardCheck, UserSearch } from "lucide-react"
+import { ChevronLeft, LayoutDashboard, Shield, FileCheck, Users, FileText, GraduationCap, Search, Database, Settings, Book, ClipboardCheck, UserSearch, Monitor } from "lucide-react"
 import { translations } from "@/lib/translations"
 import { aliciaTranslations } from "@/lib/alicia-translations"
 
@@ -21,7 +21,7 @@ const navigationItems = [
   { key: "evidenciasTrazabilidad", icon: Database, href: "/evidencias-trazabilidad" },
   { key: "gobernanzaControl", icon: Settings, href: "/gobernanza-control" },
   { key: "compiladoLeyes", icon: Book, href: "/marco-normativo-aplicable" },
-  { key: "alicia", icon: Sparkles, href: "/alicia" },
+  { key: "alicia", icon: Monitor, href: "/alicia" },
 ]
 
 type SidebarProps = {
@@ -37,36 +37,22 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   return (
     <aside
-      className="fixed left-0 top-0 h-screen overflow-y-auto bg-sidebar text-sidebar-foreground px-3 pt-0 pb-4 flex flex-col flex-shrink-0 z-40 transition-[width] duration-300"
-      style={{ width: collapsed ? "5rem" : "16.42rem" }}
+      className="pld-reference-shell fixed left-0 z-40 flex flex-col overflow-y-auto bg-sidebar px-[clamp(10px,1.1vw,24px)] pb-4 text-sidebar-foreground transition-[width] duration-300"
+      style={{ top: "var(--app-header-height)", height: "calc(100vh - var(--app-header-height))", width: collapsed ? "5rem" : "clamp(15rem, 16.9vw, 24rem)" }}
     >
-      <div className="mb-3 h-16 flex items-center justify-end">
-        {!collapsed && (
-          <Link href="/" className="flex items-center justify-center flex-1 min-w-0 mr-2 h-full">
-            <Image
-              src="/logo-davara-governance/logo-davara-governance-white.png"
-              alt="Davara Governance"
-              width={860}
-              height={200}
-              className="h-auto w-[170px] object-contain"
-              style={{ filter: "brightness(0) invert(1)" }}
-              priority
-            />
-          </Link>
-        )}
-
+      <div className="flex h-[clamp(62px,3.5vw,80px)] shrink-0 items-start justify-end pt-2">
         <button
           type="button"
           onClick={onToggle}
           aria-label={collapsed ? "Expandir sidebar" : "Colapsar sidebar"}
-          className="h-9 w-9 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 flex items-center justify-center shrink-0"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white hover:bg-white/15"
         >
           <ChevronLeft className={`h-5 w-5 transition-transform ${collapsed ? "rotate-180" : "rotate-0"}`} />
         </button>
       </div>
 
       <nav className="flex-1 overflow-visible">
-        <ul className="h-full flex flex-col justify-evenly gap-1 py-1">
+        <ul className="flex h-full flex-col justify-between gap-1 pb-[clamp(40px,4vw,90px)] pt-2">
           {navigationItems.map((item) => {
             const isActive = pathname === item.href
             const Icon = item.icon
@@ -76,39 +62,23 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <li key={item.key} className="relative">
                 <Link
                   href={item.href}
-                  className={`relative flex items-center transition-colors rounded-xl text-sm ${
-                    item.key === "alicia" ? "justify-center px-2 py-3" : collapsed ? "justify-center px-2 py-3" : "gap-3 px-3 py-3"
-                  } ${isActive ? "bg-white text-gray-900" : "text-white hover:text-white hover:bg-white/10"}`}
+                  className={`relative flex min-h-[42px] items-center rounded-lg transition-colors ${
+                    collapsed ? "justify-center px-2 py-2" : "gap-[clamp(13px,1.33vw,30px)] px-[clamp(10px,0.8vw,18px)] py-2"
+                  } ${isActive ? "bg-white/18 text-white" : "text-white hover:bg-white/10 hover:text-white"}`}
                   title={collapsed ? displayText : undefined}
                 >
                   {item.key === "alicia" ? (
-                    <Image
-                      src="/Alicia_Sin_Despachos.png"
-                      alt="Alicia"
-                      width={645}
-                      height={248}
-                      className={`h-auto object-contain transition-all ${
-                        collapsed ? "w-[74px]" : "w-[98px]"
-                      } ${isActive ? "brightness-0 contrast-200" : ""}`}
-                      unoptimized
-                    />
+                    <>
+                      <Icon className="h-[clamp(22px,1.5vw,34px)] w-[clamp(22px,1.5vw,34px)] shrink-0" strokeWidth={1.7} />
+                      {!collapsed && <Image src="/Alicia_Sin_Despachos.png" alt="Alicia" width={645} height={248} className="h-auto w-[clamp(66px,4.5vw,102px)] object-contain" />}
+                    </>
                   ) : (
                     <>
-                      <Icon className="w-5 h-5 flex-shrink-0" />
-                      {!collapsed && <span className="text-[13px] leading-tight whitespace-normal">{displayText}</span>}
+                      <Icon className="h-[clamp(22px,1.5vw,34px)] w-[clamp(22px,1.5vw,34px)] shrink-0" strokeWidth={1.7} />
+                      {!collapsed && <span className="whitespace-normal text-[clamp(13px,0.8vw,18px)] leading-[1.15]" style={{ fontWeight: 600 }}>{displayText}</span>}
                     </>
                   )}
                 </Link>
-
-                {isActive && (
-                  <span
-                    className={`absolute top-1/2 -translate-y-1/2 h-0 w-0 border-y-transparent border-r-white ${
-                      collapsed
-                        ? "right-[-10px] border-y-[10px] border-r-[10px]"
-                        : "right-[-12px] border-y-[12px] border-r-[12px]"
-                    }`}
-                  />
-                )}
               </li>
             )
           })}
