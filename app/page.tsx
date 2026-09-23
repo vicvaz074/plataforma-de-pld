@@ -121,6 +121,9 @@ export default function Home() {
               </span>
               <span className={styles.cardTitle}>{module.title[language]}</span>
               <MoreHorizontal className={styles.cardMore} aria-hidden="true" />
+              <span className={styles.cardDescription} aria-hidden="true">
+                {module.description[language]}
+              </span>
             </Link>
           )
         })}
