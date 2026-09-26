@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import test from "node:test"
 
-import { buildSatDynamicOperationForm, normalizeSatXlsmLayout, satFieldValuesToWorkbookCells } from "../lib/pld/sat-xlsm"
+import { buildSatDynamicOperationForm, buildSatWorkbookDownloadValues, normalizeSatXlsmLayout, satFieldValuesToWorkbookCells } from "../lib/pld/sat-xlsm"
 import { getSatOperationBranchGroups, getSatOperationBranchMissingLabels, getSatPrimaryAmountFieldIds, getSatRepeatRowControlId, getSatRepeatRowGroups, withSatParticipantOptions } from "../lib/pld/sat-operation-branches"
 import { hasSatTemplateWorkbook, resolveSatTemplateForActividad, SAT_TEMPLATE_CATALOG } from "../lib/pld/sat-template-catalog"
 import { getSatCatalogValueCode, isSatXlsmFieldActive, isSatXlsmFieldRequired, pruneInactiveSatFieldValues } from "../lib/pld/ui-workflow"
@@ -21,6 +21,16 @@ function fieldAt(book: SatXlsmLayout, sheet: string, cell: string): SatXlsmField
 function captureBranch(templateId: string, key: string): Record<string, string> {
   return { [`sat.branch.${templateId}.${key}`]: "si" }
 }
+
+test("an RFC matching a demo never injects fictitious people or instrument dates", () => {
+  const values = buildSatWorkbookDownloadValues({ satTemplateId: "sat-fraccion-v-inmuebles",
+    tenantRfc: "ISN2103158Q7", clienteRfc: "DLV190624M32", clienteNombre: "CLIENTE REAL",
+    packageId: "satpkg-operacion-123", values: { "acto.fecha_operacion": "26/09/2026" } })
+  assert.equal(values["beneficiario.pf.nombre"], undefined)
+  assert.equal(values["persona_aviso.representante.nombre"], undefined)
+  assert.equal(values["instrumento.fecha"], undefined)
+  assert.equal(values["instrumento.fecha_contrato"], undefined)
+})
 
 test("VIII declares vehicle kinds explicitly: terrestrial does not require or export aircraft/marine data", () => {
   const book = layout("sat-fraccion-viii-vehiculos")

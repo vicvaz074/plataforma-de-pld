@@ -640,10 +640,9 @@ export function buildSatWorkbookDownloadValues(input: {
     values[key] = normalizeSatDownloadValueForKey(key, value)
   }
 
-  const isDemoPackage =
-    Boolean(input.packageId?.toLowerCase().includes("demo")) ||
-    input.clienteRfc === "DLV190624M32" ||
-    input.tenantRfc === "ISN2103158Q7"
+  // Only an explicitly demo-owned package may receive fictitious enrichment.
+  // An RFC coincidence is never evidence of a demo or of identity.
+  const isDemoPackage = /^(satpkg-demo-|sat-demo-)/i.test(input.packageId || "")
   const clienteRfc = (input.clienteRfc || "").trim().toUpperCase()
   const clienteNombre = (input.clienteNombre || "").trim()
   const isPersonaMoral =
@@ -673,12 +672,14 @@ export function buildSatWorkbookDownloadValues(input: {
   }
 
   setIfEmpty("pago.fecha", values["acto.fecha_operacion"])
-  if (isInmueblesTemplate) {
-    setIfEmpty("instrumento.fecha", values["acto.fecha_operacion"])
-    setIfEmpty("instrumento.fecha_contrato", values["acto.fecha_operacion"])
-  }
-
   if (isDemoPackage && isInmueblesTemplate) {
+    const contract = "sat.branch.sat-fraccion-v-inmuebles.contrato"
+    const instrument = "sat.branch.sat-fraccion-v-inmuebles.instrumento-publico"
+    if (values[contract] === undefined && values[instrument] === undefined) {
+      values[contract] = "si"
+      values[instrument] = "no"
+    }
+    if (values[contract] === "si") setIfEmpty("instrumento.fecha_contrato", values["acto.fecha_operacion"])
     setIfEmpty("persona_aviso.pm.fecha_constitucion", "24/06/2019")
     setIfEmpty("persona_aviso.pm.giro_mercantil", "NO APLICA||1000000")
     setIfEmpty("persona_aviso.representante.nombre", "Ricardo")
@@ -704,9 +705,12 @@ export function buildSatWorkbookDownloadValues(input: {
     setIfEmpty("beneficiario.pf.rfc", "LUPA760912QA1")
     setIfEmpty("beneficiario.pf.curp", "LUPA760912MNLNRD04")
     setIfEmpty("beneficiario.pf.pais_nacionalidad", "MEXICO,MX")
-    setIfEmpty("instrumento.numero", "INS-DEMO-2026-184")
-    setIfEmpty("instrumento.notario", "28")
-    setIfEmpty("instrumento.entidad", "19,NUEVO LEÓN")
+    if (values[instrument] === "si") {
+      setIfEmpty("instrumento.numero", "INS-DEMO-2026-184")
+      setIfEmpty("instrumento.fecha", values["acto.fecha_operacion"])
+      setIfEmpty("instrumento.notario", "28")
+      setIfEmpty("instrumento.entidad", "19,NUEVO LEÓN")
+    }
   }
 
   for (const [key, value] of Object.entries(values)) {

@@ -763,6 +763,9 @@ test("filled Inmuebles XLSM normalizes periodo, postal codes and date-visible ce
       "acto.figura_sujeto_obligado": "3,Intermediario",
       "instrumento.fecha": "05/05/2026",
       "instrumento.fecha_contrato": "05/05/2026",
+      "instrumento.valor_avaluo": "1700000",
+      "sat.branch.sat-fraccion-v-inmuebles.instrumento-publico": "si",
+      "sat.branch.sat-fraccion-v-inmuebles.contrato": "no",
       "inmueble.tipo_bien": "12,Terreno urbano habitacional",
       "inmueble.valor_pactado": "1850000",
       "inmueble.codigo_postal": "CP 66260, San Pedro Garza García",
@@ -808,9 +811,11 @@ test("filled Inmuebles XLSM normalizes periodo, postal codes and date-visible ce
   assert.equal(String(acto.D42.v), "66260")
   assert.equal(acto.E42.f?.includes("VLOOKUP(D42"), true)
   assert.equal(acto.F42.f?.includes("VLOOKUP(D42"), true)
-  assert.equal(acto.B56.w, "05/05/2026")
-  assert.notEqual(acto.B56.w, "46147")
-  assert.notEqual(acto.G56.w, "46147")
+  assert.equal(acto.B56.w, "INS-DEMO-2026-184")
+  const instrumentDate = XLSX.SSF.parse_date_code(acto.C56.v)
+  assert.deepEqual([instrumentDate.y, instrumentDate.m, instrumentDate.d], [2026, 5, 5])
+  assert.notEqual(acto.C56.w, "46147")
+  assert.equal(acto.G56?.v ?? "", "")
   assert.notEqual(acto.B70.w, "46147")
 })
 
