@@ -210,7 +210,7 @@ test("EBR methodology applies 30/30/20/20 weighting and mitigants to residual ri
   assert.equal(evaluation.actionPlan.some((action) => action.priority === "Prioridad 1"), true)
 })
 
-test("SAT XML generation validates required data and escapes special characters", () => {
+test("SAT XML generation refuses an incomplete generic notice without its activity cells", () => {
   const tenants = buildDefaultPldTenants("tenant-demo-001")
   const tenant = tenants.tenants[0]
   const operationalCase = buildPldOperationalCase({
@@ -242,16 +242,10 @@ test("SAT XML generation validates required data and escapes special characters"
 
   const result = generateSatXml(operationalCase)
 
-  assert.equal(result.valid, true)
-  assert.equal(result.errors.length, 0)
+  assert.equal(result.valid, false)
+  assert.ok(result.errors.some((error) => error.includes("celdas")))
   assert.equal(result.fileName, "aviso-fraccion-vi-202605-RJC240101AB1.xml")
-  assert.match(result.xml, /<mes_reportado>202605<\/mes_reportado>/)
-  assert.match(result.xml, /Relojes &amp; Joyas del Centro &lt;Sucursal Norte&gt;/)
-  assert.match(result.xml, /Cliente se rehusa a proporcionar documentos &amp; solicita facturar a tercero/)
-  assert.doesNotMatch(result.xml, /<tipo_salida>|<borrador_no_cargable>|<validacion>|<trazabilidad>/)
-  assert.match(result.xml, /<prioridad>2<\/prioridad>/)
-  assert.match(result.xml, /<detalle_operaciones>/)
-  assert.doesNotMatch(result.xml, /sat-local-first-v1/)
+  assert.equal(result.xml, "")
 })
 
 test("SAT output packages distinguish ready XML, blocked draft, zero report and 27 Bis", () => {
@@ -268,6 +262,33 @@ test("SAT output packages distinguish ready XML, blocked draft, zero report and 
     fechaOperacion: "2026-05-05",
     montoMxn: 500000,
     formaPago: "transferencia",
+    satFieldValues: {
+      "persona_aviso.referencia": "DEMO202605",
+      "persona_aviso.pm.razon_social": "ARRENDADORA DELTA SA DE CV",
+      "persona_aviso.pm.pais_nacionalidad": "MEXICO,MX",
+      "persona_aviso.pm.giro_mercantil": "NO APLICA||1000000",
+      "persona_aviso.representante.nombre": "ANA",
+      "persona_aviso.representante.apellido_paterno": "PEREZ",
+      "persona_aviso.representante.apellido_materno": "LOPEZ",
+      "persona_aviso.domicilio_nacional.codigo_postal": "06000",
+      "persona_aviso.domicilio_nacional.colonia": "CENTRO",
+      "persona_aviso.domicilio_nacional.calle": "REFORMA",
+      "persona_aviso.domicilio_nacional.numero_exterior": "123",
+      "acto.tipo_operacion": "1501,Arrendamiento de inmuebles",
+      "inmueble.tipo_bien": "11,Nave Industrial",
+      "inmueble.valor_referencia": "10000000.00",
+      "inmueble.fecha_inicio": "2026-05-01",
+      "inmueble.fecha_termino": "2026-05-31",
+      "inmueble.folio_real": "12345678",
+      "inmueble.colonia": "CENTRO",
+      "inmueble.calle": "REFORMA",
+      "inmueble.numero_exterior": "123",
+      "inmueble.codigo_postal": "06000",
+      "pago.fecha": "2026-05-05",
+      "pago.forma_pago": "1,Contado",
+      "pago.instrumento_monetario": "8,Transferencia Interbancaria",
+      "pago.moneda": "1,Peso mexicano",
+    },
     completedEvidence: {
       "pm-acta-constitutiva": true,
       "pm-rfc-constancia": true,
@@ -281,7 +302,7 @@ test("SAT output packages distinguish ready XML, blocked draft, zero report and 
   })
 
   const ready = generateSatOutputPackage(baseCase)
-  assert.equal(ready.validation.status, "listo")
+  assert.equal(ready.validation.status, "listo", JSON.stringify(ready.validation))
   assert.equal(ready.schemaVersion, 1)
   assert.equal(ready.sourceOperationId, undefined)
   assert.equal(ready.downloads.some((download) => download.kind === "official_template"), true)
@@ -353,7 +374,8 @@ test("SAT output packages distinguish ready XML, blocked draft, zero report and 
     },
   })
   assert.equal(bis27.outputKind, "informe_27_bis")
-  assert.doesNotMatch(bis27.xml, /<exento>|<tipo_salida>/)
+  assert.match(bis27.xml, /<exento>1<\/exento>/)
+  assert.doesNotMatch(bis27.xml, /<aviso>|<tipo_salida>/)
 })
 
 test("demo dataset links SAT registration, EUI and prebuilt SAT output packages", () => {

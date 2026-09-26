@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-05-12T18:05:49.837Z",
+  "generatedAt": "2026-09-26T18:34:20.076Z",
   "items": [
     {
       "templateId": "sat-fraccion-i-juegos",
@@ -22,7 +22,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-ii-tarjetas-servicios",
@@ -44,7 +44,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-ii-tarjetas-prepagadas",
@@ -66,7 +66,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-ii-instrumentos-valor",
@@ -74,7 +74,8 @@
       "fraccion": "Fracción II",
       "anexo": "Anexo 2-C",
       "actividadKeys": [
-        "fraccion-ii-instrumentos-valor"
+        "fraccion-ii-instrumentos-valor",
+        "fraccion-ii-vales"
       ],
       "nombre": "Instrumentos de almacenamiento de valor monetario",
       "claveActividad": "TAV",
@@ -88,7 +89,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-iii-cheques",
@@ -110,7 +111,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-iv-prestamos",
@@ -132,7 +133,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-v-inmuebles",
@@ -155,7 +156,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-v-bis-desarrollo",
@@ -178,7 +179,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-vi-metales",
@@ -200,7 +201,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-vii-arte",
@@ -222,7 +223,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-viii-vehiculos",
@@ -244,7 +245,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-ix-blindaje",
@@ -266,7 +267,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-x-traslado",
@@ -288,7 +289,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-xi-a-inmuebles",
@@ -343,7 +344,8 @@
           "variantId": "spr-03-administracion-recursos",
           "label": "Administración y manejo de recursos",
           "actividadKeys": [
-            "fraccion-xi-b-administracion"
+            "fraccion-xi-b-administracion",
+            "fraccion-xi-c-cuentas"
           ],
           "officialXlsmName": "SPR03_AdministracionDeRecursos_v5_0.xlsm",
           "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
@@ -355,7 +357,6 @@
           "variantId": "spr-04-constitucion-personas-morales",
           "label": "Constitución de personas morales",
           "actividadKeys": [
-            "fraccion-xi-c-cuentas",
             "fraccion-xi-e-corporativo"
           ],
           "officialXlsmName": "SPR04_ConstitucionDePersonasMorales_v5_0.xlsm",
@@ -437,7 +438,7 @@
         }
       ],
       "requiresVariantSelection": true,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-xii-notarios-a",
@@ -453,7 +454,10 @@
         "fraccion-xii-corredores-a",
         "fraccion-xii-corredores-b",
         "fraccion-xii-corredores-c",
-        "fraccion-xii-corredores-d"
+        "fraccion-xii-corredores-d",
+        "fraccion-xii-servidores-inmuebles",
+        "fraccion-xii-servidores-poderes",
+        "fraccion-xii-servidores-sociedades"
       ],
       "nombre": "Servicios de fe pública",
       "claveActividad": "FEP",
@@ -472,7 +476,7 @@
           "variantId": "fep-inmuebles",
           "label": "Transmisión o constitución de derechos reales sobre inmuebles",
           "actividadKeys": [
-            "fraccion-xii-notarios-a"
+            "fraccion-xii-servidores-inmuebles"
           ],
           "officialXlsmName": "FedatariosSP_Inmuebles_v4_4.xlsm",
           "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
@@ -507,7 +511,7 @@
           "label": "Constitución o modificación de fideicomiso traslativo de dominio o garantía sobre inmuebles",
           "actividadKeys": [
             "fraccion-xii-notarios-d",
-            "fraccion-xii-corredores-d"
+            "fraccion-xii-corredores-c"
           ],
           "officialXlsmName": "FedatarioConstitucionFid_v4_6.xlsm",
           "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
@@ -518,7 +522,8 @@
           "variantId": "fep-mutuo",
           "label": "Otorgamiento de contratos de mutuo o crédito",
           "actividadKeys": [
-            "fraccion-xii-notarios-e"
+            "fraccion-xii-notarios-e",
+            "fraccion-xii-corredores-d"
           ],
           "officialXlsmName": "FedatarioMutuo_v4_4.xlsm",
           "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
@@ -540,7 +545,8 @@
           "variantId": "fep-compra-venta-acciones",
           "label": "Compra o venta de acciones o partes sociales",
           "actividadKeys": [
-            "fraccion-xii-corredores-c"
+            "fraccion-xii-notarios-c",
+            "fraccion-xii-corredores-b"
           ],
           "officialXlsmName": "FedatarioCompraVenta_v4_3.xlsm",
           "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
@@ -551,7 +557,8 @@
           "variantId": "fep-fusion",
           "label": "Fusión",
           "actividadKeys": [
-            "fraccion-xii-corredores-c"
+            "fraccion-xii-notarios-c",
+            "fraccion-xii-corredores-b"
           ],
           "officialXlsmName": "FedatarioFusion_v4_3.xlsm",
           "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
@@ -562,7 +569,8 @@
           "variantId": "fep-escision",
           "label": "Escisión",
           "actividadKeys": [
-            "fraccion-xii-corredores-c"
+            "fraccion-xii-notarios-c",
+            "fraccion-xii-corredores-b"
           ],
           "officialXlsmName": "FedatarioEscision_v4_3.xlsm",
           "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
@@ -573,7 +581,8 @@
           "variantId": "fep-modificacion-patrimonial",
           "label": "Modificación patrimonial por aumento o disminución de capital",
           "actividadKeys": [
-            "fraccion-xii-corredores-c"
+            "fraccion-xii-notarios-c",
+            "fraccion-xii-corredores-b"
           ],
           "officialXlsmName": "FedatarioModifPatrimonial_v4_4.xlsm",
           "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
@@ -584,7 +593,7 @@
           "variantId": "fep-sp-poder",
           "label": "Poder irrevocable ante servidor público",
           "actividadKeys": [
-            "fraccion-xii-notarios-b"
+            "fraccion-xii-servidores-poderes"
           ],
           "officialXlsmName": "FedatariosSP_Poder_v4_3.xlsm",
           "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
@@ -595,7 +604,7 @@
           "variantId": "fep-sp-modificacion-patrimonial",
           "label": "Modificación patrimonial ante servidor público",
           "actividadKeys": [
-            "fraccion-xii-corredores-c"
+            "fraccion-xii-servidores-sociedades"
           ],
           "officialXlsmName": "FedatariosSP_ModifPatrimonial_v4_3.xlsm",
           "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
@@ -607,7 +616,7 @@
           "label": "Cesión de derechos de fideicomitente o fideicomisario",
           "actividadKeys": [
             "fraccion-xii-notarios-d",
-            "fraccion-xii-corredores-d"
+            "fraccion-xii-corredores-c"
           ],
           "officialXlsmName": "FedatarioCesion_v4_3.xlsm",
           "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XII/avisos.zip",
@@ -615,7 +624,7 @@
         }
       ],
       "requiresVariantSelection": true,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-xiii-donativos",
@@ -637,7 +646,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-xiv-comercio-exterior",
@@ -664,7 +673,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-xv-arrendamiento",
@@ -675,7 +684,7 @@
         "fraccion-xv-uso-goce"
       ],
       "nombre": "Derechos personales de uso o goce de bienes inmuebles",
-      "claveActividad": "ARR",
+      "claveActividad": "ARI",
       "officialXlsmName": "Arrendamiento_v4_5.xlsm",
       "sourceZipUrl": "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XV/arrendamiento.zip",
       "localPath": "/sat-templates/sat-fraccion-xv-arrendamiento/Arrendamiento_v4_5.xlsm",
@@ -687,7 +696,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     },
     {
       "templateId": "sat-fraccion-xvi-activos-virtuales",
@@ -711,7 +720,7 @@
       ],
       "variants": [],
       "requiresVariantSelection": false,
-      "sourceLastVerified": "2026-05-12"
+      "sourceLastVerified": "2026-09-26"
     }
   ]
 }

@@ -1256,7 +1256,7 @@ export const actividadesVulnerables: ActividadVulnerable[] = [
       identificacion:
         "Identificar siempre a usuarios y beneficiarios finales, verificando su perfil transaccional.",
       aviso:
-        "Avisar operaciones cuyo equivalente mensual supere 210 UMA y aquellas que impliquen retiros en efectivo mayores a 4 UMA conforme a las disposiciones.",
+        "Avisar cuando el monto de la operación alcance 210 UMA o la contraprestación por el servicio alcance 4 UMA; se evalúan ambos supuestos.",
     },
     criteriosUif: [
       "Registrar wallets utilizadas y su vinculación con clientes identificados.",
@@ -1269,8 +1269,8 @@ export const actividadesVulnerables: ActividadVulnerable[] = [
         descripcion: "El cliente convierte activos virtuales cuyo valor mensual supera 210 UMA y genera aviso.",
       },
       {
-        titulo: "Retiro en efectivo",
-        descripcion: "Se retiran activos virtuales por monto equivalente a 4 UMA en efectivo, activando reporte inmediato.",
+        titulo: "Contraprestación por el servicio",
+        descripcion: "La contraprestación cobrada alcanza 4 UMA y activa aviso, aun si la operación no alcanza 210 UMA.",
       },
     ],
     clienteObligaciones: buildClienteObligaciones({
@@ -1281,3 +1281,23 @@ export const actividadesVulnerables: ActividadVulnerable[] = [
     }),
   },
 ]
+
+// Distinct roles and workbook families published in SPPLD /servidores.html.
+for (const [suffix, name, description] of [
+  ["inmuebles", "Inmuebles", "Revisar el criterio específico vigente de servidores públicos antes de determinar el aviso."],
+  ["poderes", "Poderes irrevocables", "El otorgamiento de poderes irrevocables para actos de administración o dominio es objeto de aviso."],
+  ["sociedades", "Constitución o modificación patrimonial", "Actos societarios en ejercicio de facultades de fe pública; conservar instrumento y soporte del aviso."],
+]) {
+  actividadesVulnerables.push({
+    key: `fraccion-xii-servidores-${suffix}`,
+    fraccion: "Fracción XII",
+    nombre: `Fe pública — Servidores públicos: ${name}`,
+    descripcion: description,
+    identificacionUmbralUma: 0,
+    avisoUmbralUma: 0,
+    obligaciones: { sinUmbral: description, identificacion: "Identificar a las personas intervinientes y conservar el instrumento público.", aviso: description },
+    criteriosUif: ["Usar exclusivamente la plantilla para servidores públicos, no la de notarios o corredores."],
+    ejemplosOperaciones: [],
+    clienteObligaciones: buildClienteObligaciones(),
+  })
+}

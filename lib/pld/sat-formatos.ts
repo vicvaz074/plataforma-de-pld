@@ -2,7 +2,7 @@ import type { SatFormatSnapshot, SatFormatoManifestItem } from "./types"
 
 const SAT_PAGE = "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/index.html"
 const SAT_FORMATOS_BASE = "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos"
-const VERIFIED_AT = "2026-05-12"
+const VERIFIED_AT = "2026-09-26"
 const DEFAULT_ZERO_REPORT_XLSM = "0-InformeEnCeros.xlsm"
 const DEFAULT_ZERO_REPORT_SIZE = 1196727
 
@@ -21,7 +21,9 @@ function formato(
     xmlLayoutId?: string
   },
 ): SatFormatoManifestItem {
-  const xmlActivityCode = input.xmlActivityCode || input.claveActividad
+  // Actual XML constants in the official workbooks; preserve legacy business codes.
+  const xmlCodes: Record<string, string> = { JAS: "JYS", TAV: "TDR", MCG: "MPC", VBI: "DIN", MJO: "MJR", AVT: "AVI" }
+  const xmlActivityCode = input.xmlActivityCode || xmlCodes[input.claveActividad] || input.claveActividad
   const xmlNamespace = input.xmlNamespace || `http://www.uif.shcp.gob.mx/recepcion/${xmlActivityCode.toLowerCase()}`
   return {
     ...input,
@@ -349,6 +351,9 @@ export const SAT_FORMATOS_ACTIVIDADES: SatFormatoManifestItem[] = [
       "fraccion-xii-corredores-b",
       "fraccion-xii-corredores-c",
       "fraccion-xii-corredores-d",
+      "fraccion-xii-servidores-inmuebles",
+      "fraccion-xii-servidores-poderes",
+      "fraccion-xii-servidores-sociedades",
     ],
     nombre: "Servicios de fe pública",
     claveActividad: "FEP",
@@ -474,6 +479,13 @@ export function resolveSatFormatoForActividad(actividadKey: string): SatFormatoM
     throw new Error(`Formato SAT no configurado para actividad vulnerable: ${actividadKey}`)
   }
 
+  // XII-C has its own namespace even though the SAT download ZIP groups fedatarios.
+  if (actividadKey.startsWith("fraccion-xii-servidores-")) return {
+    ...formato,
+    xmlActivityCode: "FES",
+    xmlNamespace: "http://www.uif.shcp.gob.mx/recepcion/fes",
+    xmlSchemaLocation: "http://www.uif.shcp.gob.mx/recepcion/fes fes.xsd",
+  }
   return formato
 }
 

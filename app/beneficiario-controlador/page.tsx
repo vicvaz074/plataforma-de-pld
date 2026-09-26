@@ -51,6 +51,8 @@ import {
   Trash2,
 } from "lucide-react"
 import { motion } from "framer-motion"
+import { parseStoredObject, reviewSignature } from "@/lib/pld/module-continuity"
+import { notifyPldIntegrationChange } from "@/lib/pld/integration-records"
 
 // Tipos de datos para el módulo
 interface ChecklistItem {
@@ -218,13 +220,21 @@ export default function BeneficiarioControladorPage() {
   const [declarationNotes, setDeclarationNotes] = useState("")
   const [documentoAEliminar, setDocumentoAEliminar] = useState<DocumentUpload | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [storageReady, setStorageReady] = useState(false)
+  const [validation, setValidation] = useState<{ validatedAt: string; signature: string } | null>(null)
+  const currentReviewSignature = reviewSignature({
+    preguntas: preguntasState.map(({ id, answer, notes }) => ({ id, answer, notes })),
+    documentos: documentos.map(({ id, category, uploadDate, expiryDate, status }) => ({ id, category, uploadDate, expiryDate, status })),
+    clientType, propertyChain, screeningResults, lastBCUpdate,
+  })
+  const isValidated = Boolean(validation && validation.signature === currentReviewSignature)
 
   // Cargar datos del localStorage
   useEffect(() => {
     const savedData = localStorage.getItem("beneficiario-controlador-data")
     if (savedData) {
       try {
-        const data = JSON.parse(savedData)
+        const data = parseStoredObject(savedData)
         if (Array.isArray(data.preguntas)) {
           setPreguntasState(
             preguntasGenerales.map((pregunta) => {
@@ -285,10 +295,13 @@ export default function BeneficiarioControladorPage() {
         if (typeof data.folioCounter === "number") {
           setFolioCounter(data.folioCounter)
         }
+        if (typeof data.validation?.validatedAt === "string" && typeof data.validation?.signature === "string") setValidation(data.validation)
+        setStorageReady(true)
       } catch (error) {
         console.error("Error al cargar datos:", error)
+        toast({ title: "No se pudo cargar el expediente", description: "Se conservó la información original; no se guardarán cambios hasta recuperar el registro local.", variant: "destructive" })
       }
-    }
+    } else setStorageReady(true)
   }, [])
 
   // Calcular progreso
@@ -301,6 +314,7 @@ export default function BeneficiarioControladorPage() {
 
   // Guardar datos en localStorage
   useEffect(() => {
+    if (!storageReady) return
     const data = {
       preguntas: preguntasState,
       documentos,
@@ -311,8 +325,14 @@ export default function BeneficiarioControladorPage() {
       declaraciones,
       lastBCUpdate,
       folioCounter,
+      validation,
     }
-    localStorage.setItem("beneficiario-controlador-data", JSON.stringify(data))
+    try {
+      localStorage.setItem("beneficiario-controlador-data", JSON.stringify({ ...parseStoredObject(localStorage.getItem("beneficiario-controlador-data")), ...data }))
+      notifyPldIntegrationChange("beneficiario-controlador-data")
+    } catch {
+      toast({ title: "No se pudo guardar el expediente", description: "Los cambios no se han conservado. Revisa el almacenamiento local antes de salir.", variant: "destructive" })
+    }
   }, [
     preguntasState,
     documentos,
@@ -323,6 +343,9 @@ export default function BeneficiarioControladorPage() {
     declaraciones,
     lastBCUpdate,
     folioCounter,
+    storageReady,
+    validation,
+    toast,
   ])
 
   // Actualizar respuesta de pregunta
@@ -539,7 +562,7 @@ export default function BeneficiarioControladorPage() {
     if (!bcScreeningName.trim()) {
       toast({
         title: "Falta información",
-        description: "Debes indicar el nombre del beneficiario controlador para ejecutar el screening.",
+        description: "Debes indicar el nombre del beneficiario controlador para registrar la consulta realizada.",
         variant: "destructive",
       })
       return
@@ -550,7 +573,7 @@ export default function BeneficiarioControladorPage() {
       bcName: bcScreeningName.trim(),
       list: bcScreeningList,
       status,
-      source: `Consulta automática en lista ${bcScreeningList}`,
+      source: `Verificación manual registrada por el usuario · lista ${bcScreeningList}`,
       checkedAt: new Date(),
       observations: screeningObservation || undefined,
     }
@@ -562,7 +585,7 @@ export default function BeneficiarioControladorPage() {
     setTrazabilidad((prev) => [
       {
         id: Date.now().toString(),
-        action: "Screening ejecutado",
+        action: "Verificación manual registrada",
         user: "Usuario actual",
         timestamp: new Date(),
         details: `Resultado ${status === "sin-coincidencias" ? "sin coincidencias" : "coincidencia potencial"} para ${nuevoResultado.bcName}`,
@@ -573,11 +596,15 @@ export default function BeneficiarioControladorPage() {
 
     toast({
       title: "Screening registrado",
-      description: `Se documentó el resultado del screening en la lista ${bcScreeningList}.`,
+      description: `Se documentó el resultado que indicaste para ${bcScreeningList}. Esta acción no consulta servicios externos.`,
     })
   }
 
   const cerrarExpediente = () => {
+    if (!storageReady || !clientType || preguntasState.some((question) => question.required && question.answer === null)) {
+      toast({ title: "Revisión incompleta", description: "Selecciona el tipo de cliente y responde los controles obligatorios antes de validar.", variant: "destructive" })
+      return
+    }
     if (isBeneficiarioControladorObligatorio && !hasDeclaracionDocumento) {
       toast({
         title: "No es posible cerrar el expediente",
@@ -587,13 +614,14 @@ export default function BeneficiarioControladorPage() {
       return
     }
 
+    setValidation({ validatedAt: new Date().toISOString(), signature: currentReviewSignature })
     setTrazabilidad((prev) => [
       {
         id: Date.now().toString(),
         action: "Expediente validado",
         user: "Usuario actual",
         timestamp: new Date(),
-        details: "Se validó el cumplimiento del módulo de beneficiario controlador.",
+        details: "Revisión interna registrada por el usuario; no sustituye una validación de autoridad.",
         section: "Control de Expediente",
       },
       ...prev,
@@ -601,7 +629,7 @@ export default function BeneficiarioControladorPage() {
 
     toast({
       title: "Expediente validado",
-      description: "El módulo se marcó como completo con la documentación requerida.",
+      description: "Se guardó la revisión interna. Los cambios posteriores requerirán una nueva confirmación.",
     })
   }
 
@@ -742,8 +770,8 @@ export default function BeneficiarioControladorPage() {
                   <div className="flex items-start gap-2 text-sm text-muted-foreground">
                     <BellRing className="h-4 w-4 mt-0.5 text-amber-500" />
                     <span>
-                      Programa la actualización anual del beneficiario controlador. El sistema enviará recordatorios hasta
-                      registrar una nueva fecha.
+                      Programa la actualización anual del beneficiario controlador. Este aviso permanecerá visible hasta
+                      registrar una nueva fecha; no se envían notificaciones externas.
                     </span>
                   </div>
                 ) : (
@@ -755,10 +783,11 @@ export default function BeneficiarioControladorPage() {
                   <Button size="sm" variant="outline" onClick={registrarActualizacionBC}>
                     <Clock className="h-4 w-4 mr-2" /> Registrar actualización
                   </Button>
-                  <Button size="sm" onClick={cerrarExpediente}>
-                    <Lock className="h-4 w-4 mr-2" /> Validar expediente
+                  <Button size="sm" onClick={cerrarExpediente} disabled={isValidated || !storageReady}>
+                    <Lock className="h-4 w-4 mr-2" /> {isValidated ? "Revisión interna confirmada" : "Validar expediente"}
                   </Button>
                 </div>
+                {validation && <p className="text-xs text-muted-foreground">{isValidated ? `Confirmado el ${new Date(validation.validatedAt).toLocaleString()}` : "El expediente cambió después de la última revisión. Confirma nuevamente."}</p>}
               </div>
             </div>
           </div>
@@ -1214,7 +1243,7 @@ export default function BeneficiarioControladorPage() {
                     <p className="text-sm font-medium">Screening en listas restrictivas</p>
                     <p className="text-sm text-muted-foreground">
                       {ultimoScreening
-                        ? `Último screening (${ultimoScreening.list}) ejecutado el ${ultimoScreening.checkedAt.toLocaleDateString()}.`
+                        ? `Última revisión manual (${ultimoScreening.list}) registrada el ${ultimoScreening.checkedAt.toLocaleDateString()}.`
                         : "Registra al menos una verificación en listas UIF, OFAC u ONU para documentar el control continuo."}
                     </p>
                   </div>
@@ -1230,9 +1259,9 @@ export default function BeneficiarioControladorPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5" />
-                Screening automático (UIF / OFAC / ONU / PEP)
+                Registro de verificación manual (UIF / OFAC / ONU / PEP)
               </CardTitle>
-              <CardDescription>Registra consultas automáticas y resultados de validación</CardDescription>
+              <CardDescription>Documenta consultas realizadas fuera de esta pantalla. Los resultados los proporciona el usuario; no se consulta automáticamente ninguna lista.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-6 lg:grid-cols-2">
@@ -1270,10 +1299,10 @@ export default function BeneficiarioControladorPage() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" onClick={() => ejecutarScreening("sin-coincidencias")}>
-                      <ShieldCheck className="h-4 w-4 mr-2" /> Sin coincidencias
+                      <ShieldCheck className="h-4 w-4 mr-2" /> Registrar sin coincidencias
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => ejecutarScreening("coincidencia-potencial")}>
-                      <AlertCircle className="h-4 w-4 mr-2 text-amber-500" /> Coincidencia potencial
+                      <AlertCircle className="h-4 w-4 mr-2 text-amber-500" /> Registrar coincidencia potencial
                     </Button>
                   </div>
                 </div>

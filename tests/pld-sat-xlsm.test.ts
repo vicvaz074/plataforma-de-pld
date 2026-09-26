@@ -69,7 +69,7 @@ test("SAT template resolver maps fraction V to the current official Inmuebles XL
 
 test("SAT template resolver only exposes subformats compatible with the selected activity", () => {
   const xi = resolveSatTemplateForActividad("fraccion-xi-a-inmuebles")
-  const xii = resolveSatTemplateForActividad("fraccion-xii-notarios-a")
+  const xii = resolveSatTemplateForActividad("fraccion-xii-servidores-inmuebles")
 
   assert.equal(xi.fraccion, "Fracción XI")
   assert.equal(xi.requiresVariantSelection, true)
@@ -94,8 +94,8 @@ test("SAT template resolver only exposes subformats compatible with the selected
   )
 })
 
-test("XII Notarios A only activates, requires and exports F18 when F17 uses SAT code 9", () => {
-  const template = resolveSatTemplateForActividad("fraccion-xii-notarios-a")
+test("XII public servants real estate only activates, requires and exports F18 when F17 uses SAT code 9", () => {
+  const template = resolveSatTemplateForActividad("fraccion-xii-servidores-inmuebles")
   const workbookPath = path.join(repoRoot, getSatTemplateCachePath(template))
   assert.equal(existsSync(workbookPath), true, "Run pnpm sync:sat:formatos to cache official SAT XLSM templates")
   const workbook = readFileSync(workbookPath)
@@ -373,8 +373,9 @@ test("dynamic Actos y Operaciones form is generated from the selected SAT XLSM t
   assert.equal(form.templateId, "sat-fraccion-v-inmuebles")
   assert.equal(form.sections.some((section) => section.fields.some((field) => field.id === "inmueble.codigo_postal")), true)
   assert.equal(form.initialValues["acto.fecha_operacion"], "12/05/2026")
-  assert.equal(form.initialValues["inmueble.valor_pactado"], "4850000")
-  assert.equal(form.initialValues["pago.moneda"], "MXN")
+  assert.equal(form.initialValues["inmueble.valor_pactado"], undefined)
+  assert.equal(form.initialValues["pago.monto"], "4850000")
+  assert.match(form.initialValues["pago.moneda"], /^1,Peso\s+mexicano$/)
 })
 
 test("Inmuebles questionnaire maps Persona Objeto and only the primary PF Beneficiario controlador row", () => {
@@ -762,6 +763,9 @@ test("filled Inmuebles XLSM normalizes periodo, postal codes and date-visible ce
       "acto.figura_sujeto_obligado": "3,Intermediario",
       "instrumento.fecha": "05/05/2026",
       "instrumento.fecha_contrato": "05/05/2026",
+      "instrumento.valor_avaluo": "1700000",
+      "sat.branch.sat-fraccion-v-inmuebles.instrumento-publico": "si",
+      "sat.branch.sat-fraccion-v-inmuebles.contrato": "no",
       "inmueble.tipo_bien": "12,Terreno urbano habitacional",
       "inmueble.valor_pactado": "1850000",
       "inmueble.codigo_postal": "CP 66260, San Pedro Garza García",
@@ -807,13 +811,15 @@ test("filled Inmuebles XLSM normalizes periodo, postal codes and date-visible ce
   assert.equal(String(acto.D42.v), "66260")
   assert.equal(acto.E42.f?.includes("VLOOKUP(D42"), true)
   assert.equal(acto.F42.f?.includes("VLOOKUP(D42"), true)
-  assert.equal(acto.B56.w, "05/05/2026")
-  assert.notEqual(acto.B56.w, "46147")
-  assert.notEqual(acto.G56.w, "46147")
+  assert.equal(acto.B56.w, "INS-DEMO-2026-184")
+  const instrumentDate = XLSX.SSF.parse_date_code(acto.C56.v)
+  assert.deepEqual([instrumentDate.y, instrumentDate.m, instrumentDate.d], [2026, 5, 5])
+  assert.notEqual(acto.C56.w, "46147")
+  assert.equal(acto.G56?.v ?? "", "")
   assert.notEqual(acto.B70.w, "46147")
 })
 
-test("filled SAT XLSM keeps macros and writes mapped values into official workbook cells", () => {
+test("filled SAT XLSM keeps macros and captured cells while blocking incomplete additional rows", () => {
   const template = resolveSatTemplateForActividad("fraccion-v-inmuebles")
   const workbookPath = path.join(repoRoot, getSatTemplateCachePath(template))
   assert.equal(existsSync(workbookPath), true, "Run pnpm sync:sat:formatos to cache official SAT XLSM templates")
@@ -867,7 +873,8 @@ test("filled SAT XLSM keeps macros and writes mapped values into official workbo
   const acto = workbook.Sheets["Acto u operación"]
 
   assert.equal(Boolean(zip["xl/vbaProject.bin"]), true)
-  assert.equal(filled.status, "filled")
+  assert.equal(filled.status, "blocked")
+  assert.ok(filled.missingRequiredFields.length > 0)
   assert.match(personaSheet, /SAN910101AB1/)
   assert.match(personaSheet, /Desarrollos Lago Verde/)
   assert.match(beneficiarioSheet, /Adriana/)

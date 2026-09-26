@@ -14,12 +14,20 @@ import {
   columnToNumber,
   expandRange,
   numberToColumn,
+  optionCode,
+  optionLabel,
   slug,
   splitCell,
   stripRequiredMarker,
   type CellMap,
 } from "./sat-xlsm-grid"
 import { buildStructuredSheetFields, type SheetDataValidation } from "./sat-xlsm-structure"
+import {
+  applySatOperationBranchRules,
+  applySatRepeatRowRules,
+  getSatOperationBranchMissingLabels,
+  getSatPrimaryAmountFieldIds,
+} from "./sat-operation-branches"
 import {
   isSatXlsmFieldActive,
   isSatXlsmFieldRequired,
@@ -68,6 +76,13 @@ const XII_NOTARIOS_A_TIPO_ACTO_OTRO_FIELD_ID = "aviso.descripcion-tipo-de-acto-o
 const XII_NOTARIOS_A_TIPO_ACTO_OTRO_CONDITION = [
   { fieldId: XII_NOTARIOS_A_TIPO_ACTO_FIELD_ID, equals: ["9"] },
 ]
+// Constants printed in the official books also belong in the XML. These cells
+// have no list validation because the activity allows only this operation.
+const FIXED_OPERATION_VALUES: Record<string, string> = {
+  "sat-fraccion-ii-tarjetas-servicios": "211, Consumo en Tarjetas de Crédito o Servicio",
+  "sat-fraccion-ix-blindaje": "901,Servicios de blindaje",
+  "sat-fraccion-xiii-donativos": "1301, Recepción de donativos",
+}
 
 
 export function extractSatXlsmLayoutFromBuffer(
@@ -98,6 +113,7 @@ export function extractSatXlsmLayoutFromBuffer(
           cells,
           validations,
           optionLists,
+          mergedRanges: [...xml.matchAll(/<mergeCell\b[^>]*\bref="([^"]+)"/g)].map((match) => match[1]),
         }),
       ])
       const fields = template.templateId.includes("fraccion-v-inmuebles")
@@ -113,7 +129,7 @@ export function extractSatXlsmLayoutFromBuffer(
       }
     })
 
-  return {
+  return normalizeSatXlsmLayout({
     schemaVersion: 1,
     templateId: template.templateId,
     officialXlsmName: template.officialXlsmName,
@@ -122,7 +138,7 @@ export function extractSatXlsmLayoutFromBuffer(
     sections: applySatTemplateFieldRules(template.templateId, sections),
     optionLists,
     source: XML_SOURCE,
-  }
+  })
 }
 
 export function buildSatDynamicOperationForm(input: {
@@ -154,13 +170,21 @@ export function buildSatDynamicOperationForm(input: {
   const allFields = sections.flatMap((section) => section.fields)
   for (const field of allFields) {
     if (field.activeWhen?.length) continue
-    const value = prefillValueForField(field, prefill)
+    const value = prefillValueForField(field, prefill, false)
     if (value) initialValues[field.id] = value
   }
   for (const field of allFields) {
     if (!field.activeWhen?.length) continue
     if (!isSatXlsmFieldActive(field, initialValues)) continue
-    const value = prefillValueForField(field, prefill)
+    const value = prefillValueForField(field, prefill, false)
+    if (value) initialValues[field.id] = value
+  }
+  // El monto general sólo es autoridad sobre una única liquidación inicial.
+  // Se resuelve después de los controladores, nunca sobre otras filas ni avalúos.
+  const primaryAmounts = new Set(getSatPrimaryAmountFieldIds(allFields, initialValues))
+  for (const field of allFields) {
+    if (!primaryAmounts.has(field.id)) continue
+    const value = prefillValueForField(field, prefill, true)
     if (value) initialValues[field.id] = value
   }
 
@@ -281,7 +305,8 @@ export function normalizeSatXlsmLayout(input: SatXlsmLayout): SatXlsmLayout {
         const fields = mergeFields([
           ...manualFields,
           ...sourceFields.map((field) =>
-            field.source === "manual-sat-map" ? field : { ...field, required: false },
+            layout.templateId.includes("fraccion-xi-b-administracion") || field.source === "manual-sat-map"
+              ? field : { ...field, required: false },
           ),
         ])
         return { ...section, fields }
@@ -300,10 +325,44 @@ function applySatTemplateFieldRules(
   templateId: string,
   sections: SatXlsmSection[],
 ): SatXlsmSection[] {
-  const sectionsWithBeneficiaryRules = sections.map((section) => ({
+  const fixedOperation = FIXED_OPERATION_VALUES[templateId]
+  const sectionsWithConstants = fixedOperation ? sections.map((section) => {
+    if (section.sheetName !== "Acto u operación" || section.fields.some((field) => field.cell === "C6")) return section
+    return { ...section, fields: [...section.fields, {
+      id: "acto-u-operacion.tipo-de-operacion.c6", label: "Tipo de Operación", sheetName: section.sheetName,
+      cell: "C6", required: true, dataType: "catalogo" as const, options: [fixedOperation],
+      source: "manual-sat-map" as const, targetCell: `${section.sheetName}!C6`,
+    }] }
+  }) : sections
+  // Cells used unconditionally by the official XML routines but omitted from
+  // dataValidation or from the workbook's asterisk markings. These are exact
+  // addresses, not label-based guesses (SAT source consulted 2026-09-26).
+  const requiredCells: Record<string, Array<[string, string, string, string[]?]>> = {
+    "sat-fraccion-v-bis-desarrollo": [["Aviso", "C17", "Tipo de Operación", ["1601,Aportación a Desarrollo(s) Inmobiliario(s)"]]],
+    "sat-fraccion-xii-notarios-e": [["Persona Objeto del aviso", "C23", "Número de Instrumento Público"]],
+    "sat-fraccion-xii-notarios-d": [["Persona Objeto del aviso", "C118", "Se cuenta con un comité técnico?", ["SI", "NO"]], ["Persona Objeto del aviso", "E118", "Se modifica el comité técnico?", ["SI", "NO"]]],
+    "sat-fraccion-xii-corredores-a": [["Persona Objeto del aviso", "D29", "El propietario del bien solicita el instrumento público?", ["SI", "NO"]]],
+    "sat-fraccion-xii-corredores-c-escision": [["Persona Objeto del aviso", "D32", "La persona moral escindente subsiste?", ["SI", "NO"]]],
+  }
+  const completeSections = sectionsWithConstants.map((section) => {
+    const fields = [...section.fields]
+    const additions = [...(requiredCells[templateId] || [])]
+    if (["sat-fraccion-xii-sp-poder", "sat-fraccion-xii-sp-modif-patrimonial"].includes(templateId)) {
+      additions.push(["Aviso", "G33", "Número exterior"], ["Aviso", "G37", "Número exterior"])
+    }
+    for (const [sheet, cell, label, options] of additions) {
+      if (sheet !== section.sheetName) continue
+      const index = fields.findIndex((field) => field.cell === cell)
+      if (index >= 0) fields[index] = { ...fields[index], required: true }
+      else fields.push({ id: `${slug(sheet)}.${slug(label)}.${cell.toLowerCase()}`, label, sheetName: sheet, cell,
+        required: true, dataType: options ? "catalogo" : "texto", options, source: "manual-sat-map", targetCell: `${sheet}!${cell}` })
+    }
+    return { ...section, fields }
+  })
+  const sectionsWithBeneficiaryRules = applySatRepeatRowRules(applySatOperationBranchRules(templateId, completeSections.map((section) => ({
     ...section,
     fields: section.fields.map(applyBeneficiaryFieldRules).map(applyPersonaObjetoFieldRules),
-  }))
+  }))))
   if (templateId !== XII_NOTARIOS_A_TEMPLATE_ID) return sectionsWithBeneficiaryRules
 
   return sectionsWithBeneficiaryRules.map((section) => {
@@ -515,6 +574,7 @@ export function fillSatXlsmTemplate(
         })
         .map((field) => field.id)
     : []
+  if (layout) missingRequiredFields.push(...getSatOperationBranchMissingLabels(layout.templateId, activeValues, layout.sections.flatMap((section) => section.fields)))
 
   return {
     status: missingRequiredFields.length ? "blocked" : "filled",
@@ -537,6 +597,7 @@ export function satFieldValuesToWorkbookCells(
     Object.entries(values).map(([key, value]) => [key, normalizeString(value)]),
   )
   const activeValues = pruneInactiveSatFieldValues({ fields, values: normalizedValues })
+  const knownCells = new Set(fields.map((field) => `${field.sheetName}!${field.cell}`))
 
   for (const field of fields) {
     if (!isSatXlsmFieldActive(field, activeValues)) continue
@@ -546,7 +607,7 @@ export function satFieldValuesToWorkbookCells(
   }
 
   for (const [key, value] of Object.entries(activeValues)) {
-    if (!key.includes("!") || value === undefined || value === null || value === "") continue
+    if (!knownCells.has(key) || value === undefined || value === null || value === "") continue
     cells[key] = String(value)
   }
 
@@ -579,10 +640,9 @@ export function buildSatWorkbookDownloadValues(input: {
     values[key] = normalizeSatDownloadValueForKey(key, value)
   }
 
-  const isDemoPackage =
-    Boolean(input.packageId?.toLowerCase().includes("demo")) ||
-    input.clienteRfc === "DLV190624M32" ||
-    input.tenantRfc === "ISN2103158Q7"
+  // Only an explicitly demo-owned package may receive fictitious enrichment.
+  // An RFC coincidence is never evidence of a demo or of identity.
+  const isDemoPackage = /^(satpkg-demo-|sat-demo-)/i.test(input.packageId || "")
   const clienteRfc = (input.clienteRfc || "").trim().toUpperCase()
   const clienteNombre = (input.clienteNombre || "").trim()
   const isPersonaMoral =
@@ -612,12 +672,14 @@ export function buildSatWorkbookDownloadValues(input: {
   }
 
   setIfEmpty("pago.fecha", values["acto.fecha_operacion"])
-  if (isInmueblesTemplate) {
-    setIfEmpty("instrumento.fecha", values["acto.fecha_operacion"])
-    setIfEmpty("instrumento.fecha_contrato", values["acto.fecha_operacion"])
-  }
-
   if (isDemoPackage && isInmueblesTemplate) {
+    const contract = "sat.branch.sat-fraccion-v-inmuebles.contrato"
+    const instrument = "sat.branch.sat-fraccion-v-inmuebles.instrumento-publico"
+    if (values[contract] === undefined && values[instrument] === undefined) {
+      values[contract] = "si"
+      values[instrument] = "no"
+    }
+    if (values[contract] === "si") setIfEmpty("instrumento.fecha_contrato", values["acto.fecha_operacion"])
     setIfEmpty("persona_aviso.pm.fecha_constitucion", "24/06/2019")
     setIfEmpty("persona_aviso.pm.giro_mercantil", "NO APLICA||1000000")
     setIfEmpty("persona_aviso.representante.nombre", "Ricardo")
@@ -643,9 +705,12 @@ export function buildSatWorkbookDownloadValues(input: {
     setIfEmpty("beneficiario.pf.rfc", "LUPA760912QA1")
     setIfEmpty("beneficiario.pf.curp", "LUPA760912MNLNRD04")
     setIfEmpty("beneficiario.pf.pais_nacionalidad", "MEXICO,MX")
-    setIfEmpty("instrumento.numero", "INS-DEMO-2026-184")
-    setIfEmpty("instrumento.notario", "28")
-    setIfEmpty("instrumento.entidad", "19,NUEVO LEÓN")
+    if (values[instrument] === "si") {
+      setIfEmpty("instrumento.numero", "INS-DEMO-2026-184")
+      setIfEmpty("instrumento.fecha", values["acto.fecha_operacion"])
+      setIfEmpty("instrumento.notario", "28")
+      setIfEmpty("instrumento.entidad", "19,NUEVO LEÓN")
+    }
   }
 
   for (const [key, value] of Object.entries(values)) {
@@ -883,7 +948,9 @@ function parseDataValidations(xml: string): SheetDataValidation[] {
       operator: getAttr(attrs, "operator") || undefined,
       sqref,
       formula1: formula,
-      optionListId: type === "list" && /^[A-Za-z_][\w.]*$/.test(formula) ? formula : undefined,
+      formula2: decodeXml((body.match(/<formula2>([\s\S]*?)<\/formula2>/) || [])[1] || "").trim() || undefined,
+      // Excel defined names can contain accents (e.g. OPERACIÓN in SPR10).
+      optionListId: type === "list" && /^[\p{L}_][\p{L}\p{N}_.]*$/u.test(formula) ? formula : undefined,
       inlineOptions:
         type === "list" && formula.includes(",")
           ? formula.split(",").map((item) => item.trim()).filter(Boolean)
@@ -1202,10 +1269,10 @@ function getManualFields(templateId: string, sheetName: string, optionLists: Sat
       optionalFirstRowKeys: ["estado", "municipio", "numero_interior"],
       field,
     }),
-    field("instrumento.fecha", "Fecha del instrumento", "B56", "fecha", undefined, false, {
+    field("instrumento.fecha", "Fecha del instrumento", "C56", "fecha", undefined, false, {
       sectionKind: "instrumento",
     }),
-    field("instrumento.numero", "Número de instrumento", "C56", "texto", undefined, false, {
+    field("instrumento.numero", "Número de instrumento", "B56", "texto", undefined, false, {
       sectionKind: "instrumento",
     }),
     field("instrumento.notario", "Número de notario", "D56", "texto", undefined, false, {
@@ -2144,7 +2211,15 @@ function insertCellSorted(body: string, cellRef: string, cellXml: string): strin
   return `${body}${cellXml}`
 }
 
-function prefillValueForField(field: SatXlsmField, prefill: Record<string, unknown>): string {
+function prefillValueForField(field: SatXlsmField, prefill: Record<string, unknown>, isPrimaryAmount: boolean): string {
+  // Additional workbook rows are independent operations/disbursements, not copies
+  // of the guided capture. Only explicitly entered row data may activate them.
+  if ((field.repeatIndex || 1) > 1) return ""
+  if (field.id === "aviso.rfc-del-tribunal-o-dependencia.c4") return stringPrefill(prefill.sujetoObligadoRfc || prefill.tenantRfc)
+  if (field.options?.length === 1) return field.options[0]
+  if (field.optionListId === "LISTA_DE_PERSONAS_REPORTADAS" && prefill.clienteNombre) {
+    return `R01 - ${String(prefill.clienteNombre).trim().toUpperCase()}`
+  }
   const beneficiaryBranch = beneficiaryFieldBranch(field)
   if (beneficiaryBranch) {
     if (beneficiaryRepeatIndex(field) > 1) return ""
@@ -2225,8 +2300,8 @@ function prefillValueForField(field: SatXlsmField, prefill: Record<string, unkno
     "acto.tipo_operacion": prefill.tipoOperacion,
     "acto.figura_cliente": prefill.figuraCliente,
     "acto.figura_sujeto_obligado": prefill.figuraSujetoObligado,
-    "inmueble.valor_pactado": prefill.montoMxn,
-    "pago.monto": prefill.montoMxn,
+    "inmueble.valor_pactado": prefill.inmuebleValorPactado,
+    "pago.monto": isPrimaryAmount ? prefill.montoMxn : undefined,
     "pago.fecha": prefill.fechaOperacion,
     "pago.forma_pago": prefill.formaPago,
     "pago.instrumento_monetario": prefill.instrumentoMonetario || prefill.instrumento,
@@ -2250,14 +2325,32 @@ function prefillValueForField(field: SatXlsmField, prefill: Record<string, unkno
     "instrumento.valor_avaluo": prefill.instrumentoValorAvaluo,
     "instrumento.valor_catastral": prefill.instrumentoValorCatastral,
     "instrumento.fecha_contrato": prefill.instrumentoFechaContrato,
-    "operacion_financiera.monto": prefill.montoMxn,
+    "operacion_financiera.monto": isPrimaryAmount ? prefill.montoMxn : undefined,
     "operacion_financiera.instrumento_monetario": prefill.instrumentoMonetario || prefill.instrumento,
     "operacion_financiera.moneda": prefill.monedaSat || prefill.moneda,
     "persona.rfc": prefill.clienteRfc,
     "persona.nombre": prefill.clienteNombre,
   }
-  const raw = lookup[field.id] ?? inferPrefillValueForExtractedField(field, prefill)
+  const raw = lookup[field.id] ?? (isPrimaryAmount ? prefill.montoMxn : inferPrefillValueForExtractedField(field, prefill))
   if (raw === undefined || raw === null || raw === "") return ""
+  if (field.options?.length) {
+    const value = String(raw).trim()
+    const exact = field.options.find((option) => slug(option) === slug(value))
+    if (exact) return exact
+    // Only a bare code or an exact label can resolve to an official option.
+    // A legacy "1,Transferencia" must not silently become "1,Contado".
+    const label = field.options.find((option) => slug(optionLabel(option)) === slug(value))
+    if (label) return label
+    if (/^\d+$/.test(value)) return field.options.find((option) => optionCode(option) === value) || ""
+    if (/^[A-Z]{2,3}$/.test(value)) {
+      const country = field.options.find((option) => option.endsWith(`,${value}`))
+      if (country) return country
+      if (value === "MXN" && /moneda|divisa/i.test(field.label)) {
+        return field.options.find((option) => optionCode(option) === "1" && /peso.*mexicano/i.test(option)) || ""
+      }
+    }
+    return ""
+  }
   return String(raw)
 }
 
@@ -2410,8 +2503,7 @@ function inferPrefillValueForExtractedField(field: SatXlsmField, prefill: Record
     if (label.includes("valor-catastral")) {
       return prefill.instrumentoValorCatastral || prefill.inmuebleValorCatastral
     }
-    const isAuthoritativeMoney = /monto|importe|contraprestacion|precio-pactado|valor-pactado/.test(label)
-    if (isAuthoritativeMoney && !isSurface) return prefill.montoMxn
+    if (!isSurface && /^(precio-pactado|valor-pactado)/.test(label)) return prefill.inmuebleValorPactado
     if (label.includes("moneda") || label.includes("divisa")) return prefill.monedaSat || prefill.moneda
     if (label.includes("instrumento-monetario")) return prefill.instrumentoMonetario || prefill.instrumento
     if (label.includes("codigo-postal")) return prefill.codigoPostal || prefill.clienteCodigoPostal
@@ -2424,7 +2516,6 @@ function inferPrefillValueForExtractedField(field: SatXlsmField, prefill: Record
 
   if (sheet.includes("recpropios") || sheet.includes("prestamo") || sheet.includes("finbursatil")) {
     if (label.includes("moneda") || label.includes("divisa")) return prefill.monedaSat || prefill.moneda
-    if (label.includes("monto")) return prefill.montoMxn
     if (label.includes("instrumento")) return prefill.instrumentoMonetario || prefill.instrumento
   }
 

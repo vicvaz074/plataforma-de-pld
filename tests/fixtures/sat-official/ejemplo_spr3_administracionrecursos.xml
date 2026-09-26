@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<archivo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"  xsi:schemaLocation="http://www.uif.shcp.gob.mx/recepcion/spr spr.xsd"  xmlns="http://www.uif.shcp.gob.mx/recepcion/spr"> 
+    <informe>
+        <mes_reportado>201408</mes_reportado>
+        <sujeto_obligado>
+            <clave_sujeto_obligado>ROAA640817A82</clave_sujeto_obligado>
+            <clave_actividad>SPR</clave_actividad>
+        </sujeto_obligado>
+        <aviso>
+            <referencia_aviso>SERVICIOSPROF3</referencia_aviso>
+            <prioridad>1</prioridad>
+            <alerta>
+                <tipo_alerta>100</tipo_alerta>
+                <descripcion_alerta>SERVICIOS PROFESIONALES 3</descripcion_alerta>
+            </alerta>
+            <persona_aviso>
+                <tipo_persona>
+                    <persona_fisica>
+                        <nombre>RUSBELI</nombre>
+                        <apellido_paterno>ANGON</apellido_paterno>
+                        <apellido_materno>VAZQUEZ</apellido_materno>
+                        <fecha_nacimiento>20140806</fecha_nacimiento>
+                        <pais_nacionalidad>US</pais_nacionalidad>
+                        <actividad_economica>9911018</actividad_economica>
+                    </persona_fisica>
+                </tipo_persona>
+                <tipo_domicilio>
+                    <nacional>
+                        <colonia>CERRITOS</colonia>
+                        <calle>AVENIDA</calle>
+                        <numero_exterior>48</numero_exterior>
+                        <codigo_postal>42376</codigo_postal>
+                    </nacional>
+                </tipo_domicilio>
+            </persona_aviso>
+            <detalle_operaciones>
+                <datos_operacion>
+                    <fecha_operacion>20140812</fecha_operacion>
+                    <tipo_actividad>
+                        <administracion_recursos>
+                            <tipo_activo>
+                                <activo_inmobiliario>
+                                    <tipo_inmueble>1</tipo_inmueble>
+                                    <valor_referencia>123456.00</valor_referencia>
+                                    <colonia>AGOSTADERITO</colonia>
+                                    <calle>AVENIDA</calle>
+                                    <numero_exterior>45</numero_exterior>
+                                    <codigo_postal>20391</codigo_postal>
+                                    <folio_real>1</folio_real>
+                                </activo_inmobiliario>
+                            </tipo_activo>
+                            <tipo_activo>
+                                <activo_banco>
+                                    <estatus_manejo>1</estatus_manejo>
+                                    <clave_tipo_institucion>43</clave_tipo_institucion>
+                                    <nombre_institucion>BANCOBTITO</nombre_institucion>
+                                    <numero_cuenta>1</numero_cuenta>
+                                    <saldo>12345.00</saldo>
+                                    <moneda>2</moneda>
+                                </activo_banco>
+                            </tipo_activo>
+                            <tipo_activo>
+                                <activo_otros>
+                                    <descripcion>OTRO ACTIVO ........</descripcion>
+                                </activo_otros>
+                            </tipo_activo>
+                        </administracion_recursos>
+                    </tipo_actividad>
+                </datos_operacion>
+            </detalle_operaciones>
+        </aviso>
+    </informe>
+</archivo>

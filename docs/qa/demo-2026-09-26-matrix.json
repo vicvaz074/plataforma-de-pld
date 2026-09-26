@@ -1,0 +1,2581 @@
+[
+  {
+    "templateId": "sat-fraccion-i-juegos",
+    "activityKey": "fraccion-i-juegos",
+    "workbook": "JuegosySorteos_v4_3.xlsm",
+    "source": {
+      "file": "JuegosySorteos_v4_3.xlsm",
+      "sha256": "68b48519539e883ba613a8bab31660b93b860eb3c4cb3b558272fa1323a2006c",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-i-juegos.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 413,
+        "conditionalFields": 392,
+        "catalogs": [
+          "ColoniaPR1",
+          "ColoniaPR2",
+          "ColoniaPR3",
+          "ColoniaPR4",
+          "ColoniaPR5",
+          "ColoniaPR6",
+          "ColoniaPR7",
+          "ColoniaPR8",
+          "ColoniaPR9",
+          "Alertas",
+          "Actividades",
+          "Paises",
+          "Prioridades",
+          "ColoniaPR10",
+          "Giros"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 331,
+        "conditionalFields": 325,
+        "catalogs": [
+          "MedioEmp",
+          "LineaNego",
+          "TipoOpe",
+          "InstrumentoMonetario",
+          "TipoBien1",
+          "Monedas",
+          "TipoInm"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-ii-tarjetas-servicios",
+    "activityKey": "fraccion-ii-tarjetas-servicios",
+    "workbook": "TarjetasServCred_v4_3.xlsm",
+    "source": {
+      "file": "TarjetasServCred_v4_3.xlsm",
+      "sha256": "cf02a4fe74e5f4373ad2c4e576e6675efae9a833e18c9506db70b46a95be3746",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-ii-tarjetas-servicios.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 413,
+        "conditionalFields": 392,
+        "catalogs": [
+          "ColoniaPR1",
+          "ColoniaPR2",
+          "ColoniaPR3",
+          "ColoniaPR4",
+          "ColoniaPR5",
+          "ColoniaPR6",
+          "ColoniaPR7",
+          "ColoniaPR8",
+          "ColoniaPR9",
+          "Alertas",
+          "Actividades",
+          "Paises",
+          "Prioridades",
+          "ColoniaPR10",
+          "Giros"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 5,
+        "conditionalFields": 0,
+        "catalogs": [
+          "TipoTarjeta"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-ii-tarjetas-prepagadas",
+    "activityKey": "fraccion-ii-tarjetas-prepagadas",
+    "workbook": "TarjetasPrepago_v4_3.xlsm",
+    "source": {
+      "file": "TarjetasPrepago_v4_3.xlsm",
+      "sha256": "2784bd52bc1fb8e61641f12e472acfca1aa5027986df6e53d8a3b05620803871",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-ii-tarjetas-prepagadas.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 413,
+        "conditionalFields": 392,
+        "catalogs": [
+          "ColoniaPR1",
+          "ColoniaPR2",
+          "ColoniaPR3",
+          "ColoniaPR4",
+          "ColoniaPR5",
+          "ColoniaPR6",
+          "ColoniaPR7",
+          "ColoniaPR8",
+          "ColoniaPR9",
+          "Alertas",
+          "Actividades",
+          "Paises",
+          "Prioridades",
+          "ColoniaPR10",
+          "Giros"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 104,
+        "conditionalFields": 96,
+        "catalogs": [
+          "InstrumentoMonetario",
+          "Monedas",
+          "TipoOperacion"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-ii-instrumentos-valor",
+    "activityKey": "fraccion-ii-instrumentos-valor",
+    "workbook": "TarjetasDevRwd_v4_3.xlsm",
+    "source": {
+      "file": "TarjetasDevRwd_v4_3.xlsm",
+      "sha256": "258fdfd01bb0733e00c2e0fae539fc92ad5ab1db01b875d8beb76dff44e9bf8f",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-ii-instrumentos-valor.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 413,
+        "conditionalFields": 392,
+        "catalogs": [
+          "ColoniaPR1",
+          "ColoniaPR2",
+          "ColoniaPR3",
+          "ColoniaPR4",
+          "ColoniaPR5",
+          "ColoniaPR6",
+          "ColoniaPR7",
+          "ColoniaPR8",
+          "ColoniaPR9",
+          "Alertas",
+          "Actividades",
+          "Paises",
+          "Prioridades",
+          "ColoniaPR10",
+          "Giros"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 6,
+        "conditionalFields": 0,
+        "catalogs": [
+          "Monedas",
+          "TipoOperacion"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-iii-cheques",
+    "activityKey": "fraccion-iii-cheques",
+    "workbook": "ChequesViajero_v4_4.xlsm",
+    "source": {
+      "file": "ChequesViajero_v4_4.xlsm",
+      "sha256": "91664894cda4b94dcf7409cd914042c06feb6efffdd307a41a7b131f9859da46",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-iii-cheques.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 413,
+        "conditionalFields": 392,
+        "catalogs": [
+          "ColoniaPR1",
+          "ColoniaPR2",
+          "ColoniaPR3",
+          "ColoniaPR4",
+          "ColoniaPR5",
+          "ColoniaPR6",
+          "ColoniaPR7",
+          "ColoniaPR8",
+          "ColoniaPR9",
+          "Alertas",
+          "Actividades",
+          "Paises",
+          "Prioridades",
+          "ColoniaPR10",
+          "Giros"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 110,
+        "conditionalFields": 103,
+        "catalogs": [
+          "InstrumentoMonetario",
+          "Monedas",
+          "tipo_op_cheque"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-iv-prestamos",
+    "activityKey": "fraccion-iv-prestamos",
+    "workbook": "MutuoPrestCred_v4_3.xlsm",
+    "source": {
+      "file": "MutuoPrestCred_v4_3.xlsm",
+      "sha256": "25c9b4a164dbdbf3d5cdc010334991b8e1490db1aff474ec7709b6ccfda8b3e3",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-iv-prestamos.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 413,
+        "conditionalFields": 392,
+        "catalogs": [
+          "ColoniaPR1",
+          "ColoniaPR2",
+          "ColoniaPR3",
+          "ColoniaPR4",
+          "ColoniaPR5",
+          "ColoniaPR6",
+          "ColoniaPR7",
+          "ColoniaPR8",
+          "ColoniaPR9",
+          "Alertas",
+          "Actividades",
+          "Paises",
+          "Prioridades",
+          "ColoniaPR10",
+          "Giros"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 77,
+        "conditionalFields": 77,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 1203,
+        "conditionalFields": 1177,
+        "catalogs": [
+          "TipoOperacion",
+          "TipoGarantia",
+          "TipoInmueble",
+          "Monedas",
+          "InstrumentoMonetario"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-v-inmuebles",
+    "activityKey": "fraccion-v-inmuebles",
+    "workbook": "Inmuebles_v4_5.xlsm",
+    "source": {
+      "file": "Inmuebles_v4_5.xlsm",
+      "sha256": "4bb7ef75ad7d370537a57fde49bc92e8504606e1f88988a609ff8c135a8a78ff",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-v-inmuebles.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 414,
+        "conditionalFields": 375,
+        "catalogs": [
+          "Prioridades",
+          "Alertas",
+          "Paises",
+          "Actividades",
+          "Giros"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 395,
+        "conditionalFields": 360,
+        "catalogs": [
+          "FiguraCliente",
+          "FiguraPersona",
+          "Paises",
+          "TipoInmueble",
+          "Entidades",
+          "FormasPago",
+          "InstrumentoMonetario",
+          "Monedas"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-v-bis-desarrollo",
+    "activityKey": "fraccion-v-bis-desarrollo",
+    "workbook": "DesarrollosInmobiliarios_v4_7.xlsm",
+    "source": {
+      "file": "DesarrollosInmobiliarios_v4_7.xlsm",
+      "sha256": "12614507d1cda152d9ded56cb36a95d62fd46f815ed51f225cab92036ef7e475",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-v-bis-desarrollo.json",
+    "sections": [
+      {
+        "name": "Aviso",
+        "fields": 167,
+        "conditionalFields": 138,
+        "catalogs": [
+          "Alertas",
+          "Prioridades",
+          "ColoniaINM8",
+          "ColoniaINM7",
+          "ColoniaINM6",
+          "ColoniaINM5",
+          "ColoniaINM4",
+          "ColoniaINM3",
+          "ColoniaINM2",
+          "ColoniaINM1",
+          "ColoniaINM10",
+          "ColoniaINM9",
+          "SiNo",
+          "Entidades",
+          "TipoDesarrollo"
+        ]
+      },
+      {
+        "name": "RecPropios",
+        "fields": 70,
+        "conditionalFields": 70,
+        "catalogs": [
+          "Monedas",
+          "InstrumentoMonetario",
+          "SiNo"
+        ]
+      },
+      {
+        "name": "Socios",
+        "fields": 511,
+        "conditionalFields": 511,
+        "catalogs": [
+          "SiNo",
+          "Pais",
+          "ColoniaSocio10",
+          "ColoniaSocio9",
+          "ColoniaSocio8",
+          "ColoniaSocio7",
+          "ColoniaSocio6",
+          "ColoniaSocio5",
+          "ColoniaSocio4",
+          "ColoniaSocio3",
+          "ColoniaSocio2",
+          "ColoniaSocio1",
+          "Actividades",
+          "Giros",
+          "InstrumentoMonetario",
+          "Monedas"
+        ]
+      },
+      {
+        "name": "Terceros",
+        "fields": 361,
+        "conditionalFields": 361,
+        "catalogs": [
+          "Monedas",
+          "InstrumentoMonetario",
+          "Giros",
+          "Actividades",
+          "SiNo",
+          "TipoTercero",
+          "Pais"
+        ]
+      },
+      {
+        "name": "PrestamoFin",
+        "fields": 60,
+        "conditionalFields": 60,
+        "catalogs": [
+          "TipoCredito",
+          "TipoInstitucion",
+          "Monedas"
+        ]
+      },
+      {
+        "name": "PrestamoNoFin",
+        "fields": 250,
+        "conditionalFields": 250,
+        "catalogs": [
+          "Monedas",
+          "Actividades",
+          "Giros",
+          "Pais"
+        ]
+      },
+      {
+        "name": "FinBursatil",
+        "fields": 3,
+        "conditionalFields": 3,
+        "catalogs": []
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-vi-metales",
+    "activityKey": "fraccion-vi-metales",
+    "workbook": "MetalesyJoyas_v4_3.xlsm",
+    "source": {
+      "file": "MetalesyJoyas_v4_3.xlsm",
+      "sha256": "54f7ed2b56431be7050183e9274cddd9e624d286bc865cf4847e988654e5490d",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-vi-metales.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 413,
+        "conditionalFields": 392,
+        "catalogs": [
+          "ColoniaPR1",
+          "ColoniaPR2",
+          "ColoniaPR3",
+          "ColoniaPR4",
+          "ColoniaPR5",
+          "ColoniaPR6",
+          "ColoniaPR7",
+          "ColoniaPR8",
+          "ColoniaPR9",
+          "Alertas",
+          "Actividades",
+          "Paises",
+          "Prioridades",
+          "ColoniaPR10",
+          "Giros"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 278,
+        "conditionalFields": 267,
+        "catalogs": [
+          "InstrumentoMonetario",
+          "FormasPago",
+          "tipo_operacion",
+          "Monedas",
+          "Unidades",
+          "TipoBien"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-vii-arte",
+    "activityKey": "fraccion-vii-arte",
+    "workbook": "ObrasArte_v4_3.xlsm",
+    "source": {
+      "file": "ObrasArte_v4_3.xlsm",
+      "sha256": "53b5d045f699d07740b0a4fb2d0e29e46b783f400d58c2ed9acd803b3856c770",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-vii-arte.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 413,
+        "conditionalFields": 392,
+        "catalogs": [
+          "ColoniaPR1",
+          "ColoniaPR2",
+          "ColoniaPR3",
+          "ColoniaPR4",
+          "ColoniaPR5",
+          "ColoniaPR6",
+          "ColoniaPR7",
+          "ColoniaPR8",
+          "ColoniaPR9",
+          "Alertas",
+          "Actividades",
+          "Paises",
+          "Prioridades",
+          "ColoniaPR10",
+          "Giros"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 328,
+        "conditionalFields": 316,
+        "catalogs": [
+          "InstrumentoMonetario",
+          "FormasPago",
+          "TipoOperacion",
+          "Monedas",
+          "TipoObjeto"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-viii-vehiculos",
+    "activityKey": "fraccion-viii-vehiculos",
+    "workbook": "Vehiculos_v4_4.xlsm",
+    "source": {
+      "file": "Vehiculos_v4_4.xlsm",
+      "sha256": "b115b85e7eff3afeb0f665321e7ea2b467885b74f55e70251ca3f94fd67ee91f",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-viii-vehiculos.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 413,
+        "conditionalFields": 392,
+        "catalogs": [
+          "ColoniaPR1",
+          "ColoniaPR2",
+          "ColoniaPR3",
+          "ColoniaPR4",
+          "ColoniaPR5",
+          "ColoniaPR6",
+          "ColoniaPR7",
+          "ColoniaPR8",
+          "ColoniaPR9",
+          "Alertas",
+          "Actividades",
+          "Paises",
+          "Prioridades",
+          "ColoniaPR10",
+          "Giros"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 640,
+        "conditionalFields": 632,
+        "catalogs": [
+          "InstrumentoMonetario",
+          "Monedas",
+          "Nivle_Blindaje",
+          "TipoOperacion",
+          "Pais",
+          "FormasPago"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-ix-blindaje",
+    "activityKey": "fraccion-ix-blindaje",
+    "workbook": "Blindaje_v4_4.xlsm",
+    "source": {
+      "file": "Blindaje_v4_4.xlsm",
+      "sha256": "d394f7981d48ba13403653cb50efb24369456215d94aa235a54ce44e01fea080",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-ix-blindaje.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 413,
+        "conditionalFields": 392,
+        "catalogs": [
+          "ColoniaPR1",
+          "ColoniaPR2",
+          "ColoniaPR3",
+          "ColoniaPR4",
+          "ColoniaPR5",
+          "ColoniaPR6",
+          "ColoniaPR7",
+          "ColoniaPR8",
+          "ColoniaPR9",
+          "Alertas",
+          "Actividades",
+          "Paises",
+          "Prioridades",
+          "ColoniaPR10",
+          "Giros"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 121,
+        "conditionalFields": 114,
+        "catalogs": [
+          "InstrumentoMonetario",
+          "Monedas",
+          "Nivle_Blindaje",
+          "Estado_BIen",
+          "Tipo_Inmueble"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-x-traslado",
+    "activityKey": "fraccion-x-traslado",
+    "workbook": "TraslCustValores_v4_3.xlsm",
+    "source": {
+      "file": "TraslCustValores_v4_3.xlsm",
+      "sha256": "8438b0312f31e1dfcdfcb1f615b81dc9c6cd946f1e7c929306cdf165f3ecdecd",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-x-traslado.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 413,
+        "conditionalFields": 384,
+        "catalogs": [
+          "ColoniaPR1",
+          "ColoniaPR2",
+          "ColoniaPR3",
+          "ColoniaPR4",
+          "ColoniaPR5",
+          "ColoniaPR6",
+          "ColoniaPR7",
+          "ColoniaPR8",
+          "ColoniaPR9",
+          "Alertas",
+          "Actividades",
+          "Paises",
+          "Prioridades",
+          "ColoniaPR10",
+          "Giros"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 209,
+        "conditionalFields": 206,
+        "catalogs": [
+          "tipoCustodia",
+          "tipoDomicilio",
+          "Pais",
+          "tipoValor",
+          "tipoServicio",
+          "Modif",
+          "colSuc1",
+          "TipoBien",
+          "TipoOperacion",
+          "InstrumentoMonetario",
+          "Monedas"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xi-a-inmuebles",
+    "activityKey": "fraccion-xi-a-inmuebles",
+    "workbook": "SPR01_CompraventaInmuebles_v5_0.xlsm",
+    "source": {
+      "file": "SPR01_CompraventaInmuebles_v5_0.xlsm",
+      "sha256": "763fac0bbc0cf0b6b0f52d1077d33e96aeb54e267e53804297f2a55a921b8964",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xi-a-inmuebles.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 840,
+        "conditionalFields": 817,
+        "catalogs": [
+          "CATALOGO_DE_ALERTAS",
+          "CATALOGO_DE_ACTIVIDADES_ECONOMICAS",
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_PRIORIDAD",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "CATALOGO_DE_OCUPACION",
+          "LISTA_DE_PERSONAS_REPORTADAS",
+          "COLONIA_DOM_NAC_01",
+          "COLONIA_DOM_NAC_02",
+          "COLONIA_DOM_NAC_03",
+          "COLONIA_DOM_NAC_04",
+          "COLONIA_DOM_NAC_05",
+          "COLONIA_DOM_NAC_06",
+          "COLONIA_DOM_NAC_07",
+          "COLONIA_DOM_NAC_08",
+          "COLONIA_DOM_NAC_09",
+          "COLONIA_DOM_NAC_10",
+          "COLONIA_DOM_NAC_11",
+          "COLONIA_DOM_NAC_12",
+          "COLONIA_DOM_NAC_13",
+          "COLONIA_DOM_NAC_14",
+          "COLONIA_DOM_NAC_15"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 210,
+        "conditionalFields": 210,
+        "catalogs": [
+          "CATALOGO_DE_PAISES"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 963,
+        "conditionalFields": 942,
+        "catalogs": [
+          "CATALOGO_SP1101_TIPO_DE_OPERACION",
+          "CATALOGO_TIPO_DE_INMUEBLE",
+          "CATALOGO_DE_ENTIDADES_FEDERATIVAS",
+          "CATALOGO_DE_PAISES",
+          "COLONIA_SP01_INM_01",
+          "COLONIA_SP01_INM_02",
+          "COLONIA_SP01_INM_03",
+          "COLONIA_SP01_INM_04",
+          "COLONIA_SP01_INM_05",
+          "COLONIA_SP01_INM_06",
+          "COLONIA_SP01_INM_07",
+          "COLONIA_SP01_INM_08",
+          "COLONIA_SP01_INM_09",
+          "COLONIA_SP01_INM_10",
+          "COLONIA_SP01_INM_11",
+          "COLONIA_SP01_INM_12",
+          "COLONIA_SP01_INM_13",
+          "COLONIA_SP01_INM_14",
+          "COLONIA_SP01_INM_15",
+          "COLONIA_SP01_INM_16",
+          "COLONIA_SP01_INM_17",
+          "COLONIA_SP01_INM_18",
+          "COLONIA_SP01_INM_19",
+          "COLONIA_SP01_INM_20",
+          "COLONIA_SP01_INM_21",
+          "COLONIA_SP01_INM_22",
+          "COLONIA_SP01_INM_23",
+          "COLONIA_SP01_INM_24",
+          "COLONIA_SP01_INM_25",
+          "COLONIA_SP01_INM_26",
+          "COLONIA_SP01_INM_27",
+          "COLONIA_SP01_INM_28",
+          "COLONIA_SP01_INM_29",
+          "COLONIA_SP01_INM_30"
+        ]
+      },
+      {
+        "name": "Operaciones financieras",
+        "fields": 700,
+        "conditionalFields": 697,
+        "catalogs": [
+          "CATALOGO_INSTRUMENTO_MONETARIO",
+          "CATALOGO_DE_MONEDAS",
+          "CATALOGO_DE_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "ListasCombos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      },
+      {
+        "name": "Catalogos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xi-a-inmuebles-cesion",
+    "activityKey": "fraccion-xi-a-inmuebles",
+    "workbook": "SPR02_CesionDerechosInmuebles_v5_0.xlsm",
+    "source": {
+      "file": "SPR02_CesionDerechosInmuebles_v5_0.xlsm",
+      "sha256": "038e5ad623079a79763fa2108116b88bc5ed3edb717a109b98f6b3d2b641a0b0",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xi-a-inmuebles-cesion.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 840,
+        "conditionalFields": 817,
+        "catalogs": [
+          "CATALOGO_DE_ALERTAS",
+          "CATALOGO_DE_ACTIVIDADES_ECONOMICAS",
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_PRIORIDAD",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "CATALOGO_DE_OCUPACION",
+          "LISTA_DE_PERSONAS_REPORTADAS",
+          "COLONIA_DOM_NAC_01",
+          "COLONIA_DOM_NAC_02",
+          "COLONIA_DOM_NAC_03",
+          "COLONIA_DOM_NAC_04",
+          "COLONIA_DOM_NAC_05",
+          "COLONIA_DOM_NAC_06",
+          "COLONIA_DOM_NAC_07",
+          "COLONIA_DOM_NAC_08",
+          "COLONIA_DOM_NAC_09",
+          "COLONIA_DOM_NAC_10",
+          "COLONIA_DOM_NAC_11",
+          "COLONIA_DOM_NAC_12",
+          "COLONIA_DOM_NAC_13",
+          "COLONIA_DOM_NAC_14",
+          "COLONIA_DOM_NAC_15"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 210,
+        "conditionalFields": 210,
+        "catalogs": [
+          "CATALOGO_DE_PAISES"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 783,
+        "conditionalFields": 768,
+        "catalogs": [
+          "CATALOGO_SP1102_FIGURA_DEL_CLIENTE",
+          "CATALOGO_SP1102_TIPO_DE_CESION",
+          "CATALOGO_DE_PAISES",
+          "COLONIA_SP02_INM_01",
+          "COLONIA_SP02_INM_02",
+          "COLONIA_SP02_INM_03",
+          "COLONIA_SP02_INM_04",
+          "COLONIA_SP02_INM_05",
+          "COLONIA_SP02_INM_06",
+          "COLONIA_SP02_INM_07",
+          "COLONIA_SP02_INM_08",
+          "COLONIA_SP02_INM_09",
+          "COLONIA_SP02_INM_10",
+          "COLONIA_SP02_INM_11",
+          "COLONIA_SP02_INM_12",
+          "COLONIA_SP02_INM_13",
+          "COLONIA_SP02_INM_14",
+          "COLONIA_SP02_INM_15",
+          "COLONIA_SP02_INM_16",
+          "COLONIA_SP02_INM_17",
+          "COLONIA_SP02_INM_18",
+          "COLONIA_SP02_INM_19",
+          "COLONIA_SP02_INM_20",
+          "COLONIA_SP02_INM_21",
+          "COLONIA_SP02_INM_22",
+          "COLONIA_SP02_INM_23",
+          "COLONIA_SP02_INM_24",
+          "COLONIA_SP02_INM_25",
+          "COLONIA_SP02_INM_26",
+          "COLONIA_SP02_INM_27",
+          "COLONIA_SP02_INM_28",
+          "COLONIA_SP02_INM_29",
+          "COLONIA_SP02_INM_30",
+          "CATALOGO_TIPO_DE_INMUEBLE"
+        ]
+      },
+      {
+        "name": "Operaciones financieras",
+        "fields": 700,
+        "conditionalFields": 697,
+        "catalogs": [
+          "CATALOGO_INSTRUMENTO_MONETARIO",
+          "CATALOGO_DE_MONEDAS",
+          "CATALOGO_DE_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "ListasCombos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      },
+      {
+        "name": "Catalogos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xi-b-administracion",
+    "activityKey": "fraccion-xi-b-administracion",
+    "workbook": "SPR03_AdministracionDeRecursos_v5_0.xlsm",
+    "source": {
+      "file": "SPR03_AdministracionDeRecursos_v5_0.xlsm",
+      "sha256": "a41087a77bb417b98736264ee6f65fca5baa40ed7cf44ead8df29817efebf011",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xi-b-administracion.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 840,
+        "conditionalFields": 817,
+        "catalogs": [
+          "CATALOGO_DE_OCUPACION",
+          "CATALOGO_DE_ALERTAS",
+          "CATALOGO_DE_ACTIVIDADES_ECONOMICAS",
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_PRIORIDAD",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "LISTA_DE_PERSONAS_REPORTADAS",
+          "COLONIA_DOM_NAC_01",
+          "COLONIA_DOM_NAC_02",
+          "COLONIA_DOM_NAC_03",
+          "COLONIA_DOM_NAC_04",
+          "COLONIA_DOM_NAC_05",
+          "COLONIA_DOM_NAC_06",
+          "COLONIA_DOM_NAC_07",
+          "COLONIA_DOM_NAC_08",
+          "COLONIA_DOM_NAC_09",
+          "COLONIA_DOM_NAC_10",
+          "COLONIA_DOM_NAC_11",
+          "COLONIA_DOM_NAC_12",
+          "COLONIA_DOM_NAC_13",
+          "COLONIA_DOM_NAC_14",
+          "COLONIA_DOM_NAC_15"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 210,
+        "conditionalFields": 210,
+        "catalogs": [
+          "CATALOGO_DE_PAISES"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 265,
+        "conditionalFields": 260,
+        "catalogs": [
+          "CATALOGO_SP1103_AREA_DE_SERVICIO",
+          "CATALOGO_SP1103_ACTIVO_ADMINISTRADO",
+          "CATALOGO_TIPO_DE_INMUEBLE",
+          "COLONIA_SP03_INM_001",
+          "CATALOGO_SP1103_ESTATUS_DE_MANEJO",
+          "CATALOGO_SP1103_INSTITUCIONES_FINANCIERAS"
+        ]
+      },
+      {
+        "name": "Operaciones financieras",
+        "fields": 6,
+        "conditionalFields": 4,
+        "catalogs": [
+          "CATALOGO_INSTRUMENTO_MONETARIO",
+          "CATALOGO_DE_MONEDAS",
+          "CATALOGO_DE_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "ListasCombos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      },
+      {
+        "name": "Catalogos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xi-c-cuentas",
+    "activityKey": "fraccion-xi-e-corporativo",
+    "workbook": "SPR04_ConstitucionDePersonasMorales_v5_0.xlsm",
+    "source": {
+      "file": "SPR04_ConstitucionDePersonasMorales_v5_0.xlsm",
+      "sha256": "c3d110929556e2893f026a252b7b238f39299d07136d6a3d9cf445983a3da9e8",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xi-c-cuentas.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 840,
+        "conditionalFields": 817,
+        "catalogs": [
+          "CATALOGO_DE_ALERTAS",
+          "CATALOGO_DE_ACTIVIDADES_ECONOMICAS",
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_PRIORIDAD",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "CATALOGO_DE_OCUPACION",
+          "LISTA_DE_PERSONAS_REPORTADAS",
+          "COLONIA_DOM_NAC_01",
+          "COLONIA_DOM_NAC_02",
+          "COLONIA_DOM_NAC_03",
+          "COLONIA_DOM_NAC_04",
+          "COLONIA_DOM_NAC_05",
+          "COLONIA_DOM_NAC_06",
+          "COLONIA_DOM_NAC_07",
+          "COLONIA_DOM_NAC_08",
+          "COLONIA_DOM_NAC_09",
+          "COLONIA_DOM_NAC_10",
+          "COLONIA_DOM_NAC_11",
+          "COLONIA_DOM_NAC_12",
+          "COLONIA_DOM_NAC_13",
+          "COLONIA_DOM_NAC_14",
+          "COLONIA_DOM_NAC_15"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 210,
+        "conditionalFields": 210,
+        "catalogs": [
+          "CATALOGO_DE_PAISES"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 613,
+        "conditionalFields": 600,
+        "catalogs": [
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_SP1104_TIPO_DE_PERSONAS_MORALES",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "CATALOGO_DE_ENTIDADES_FEDERATIVAS",
+          "CATALOGO_SI_NO",
+          "CATALOGO_SP1104_MOTIVO_DE_CONSTITUCION",
+          "CATALOGO_SP1104_CARGO_DEL_ACCIONISTA"
+        ]
+      },
+      {
+        "name": "Operaciones financieras",
+        "fields": 700,
+        "conditionalFields": 697,
+        "catalogs": [
+          "CATALOGO_INSTRUMENTO_MONETARIO",
+          "CATALOGO_DE_MONEDAS",
+          "CATALOGO_DE_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "ListasCombos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      },
+      {
+        "name": "Catalogos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xi-d-aportaciones",
+    "activityKey": "fraccion-xi-d-aportaciones",
+    "workbook": "SPR05_OrganizacionDeAportaciones_v5_0.xlsm",
+    "source": {
+      "file": "SPR05_OrganizacionDeAportaciones_v5_0.xlsm",
+      "sha256": "5513ac5da682908e02c2b63f9964da59ef2f259b24807f1b6081c7c467a2c0fa",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xi-d-aportaciones.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 840,
+        "conditionalFields": 817,
+        "catalogs": [
+          "CATALOGO_DE_ALERTAS",
+          "CATALOGO_DE_ACTIVIDADES_ECONOMICAS",
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_PRIORIDAD",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "CATALOGO_DE_OCUPACION",
+          "LISTA_DE_PERSONAS_REPORTADAS",
+          "COLONIA_DOM_NAC_01",
+          "COLONIA_DOM_NAC_02",
+          "COLONIA_DOM_NAC_03",
+          "COLONIA_DOM_NAC_04",
+          "COLONIA_DOM_NAC_05",
+          "COLONIA_DOM_NAC_06",
+          "COLONIA_DOM_NAC_07",
+          "COLONIA_DOM_NAC_08",
+          "COLONIA_DOM_NAC_09",
+          "COLONIA_DOM_NAC_10",
+          "COLONIA_DOM_NAC_11",
+          "COLONIA_DOM_NAC_12",
+          "COLONIA_DOM_NAC_13",
+          "COLONIA_DOM_NAC_14",
+          "COLONIA_DOM_NAC_15"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 210,
+        "conditionalFields": 210,
+        "catalogs": [
+          "CATALOGO_DE_PAISES"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 1682,
+        "conditionalFields": 1679,
+        "catalogs": [
+          "CATALOGO_SP1105_MOTIVO_DE_LA_APORTACION",
+          "CATALOGO_INSTRUMENTO_MONETARIO",
+          "CATALOGO_DE_MONEDAS",
+          "SP1105_LISTA_PERSONA_APORTA",
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_DE_ACTIVIDADES_ECONOMICAS",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "CATALOGO_TIPO_DE_INMUEBLE"
+        ]
+      },
+      {
+        "name": "Operaciones financieras",
+        "fields": 700,
+        "conditionalFields": 697,
+        "catalogs": [
+          "CATALOGO_INSTRUMENTO_MONETARIO",
+          "CATALOGO_DE_MONEDAS",
+          "CATALOGO_DE_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "ListasCombos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      },
+      {
+        "name": "Catalogos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xi-e-fusion",
+    "activityKey": "fraccion-xi-e-corporativo",
+    "workbook": "SPR06_Fusion_v5_0.xlsm",
+    "source": {
+      "file": "SPR06_Fusion_v5_0.xlsm",
+      "sha256": "76badea11a245bcee92917b8c7019b986ee5d70c9915b474cc30da31b369302e",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xi-e-fusion.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 840,
+        "conditionalFields": 817,
+        "catalogs": [
+          "CATALOGO_DE_ALERTAS",
+          "CATALOGO_DE_ACTIVIDADES_ECONOMICAS",
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_PRIORIDAD",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "CATALOGO_DE_OCUPACION",
+          "LISTA_DE_PERSONAS_REPORTADAS",
+          "COLONIA_DOM_NAC_01",
+          "COLONIA_DOM_NAC_02",
+          "COLONIA_DOM_NAC_03",
+          "COLONIA_DOM_NAC_04",
+          "COLONIA_DOM_NAC_05",
+          "COLONIA_DOM_NAC_06",
+          "COLONIA_DOM_NAC_07",
+          "COLONIA_DOM_NAC_08",
+          "COLONIA_DOM_NAC_09",
+          "COLONIA_DOM_NAC_10",
+          "COLONIA_DOM_NAC_11",
+          "COLONIA_DOM_NAC_12",
+          "COLONIA_DOM_NAC_13",
+          "COLONIA_DOM_NAC_14",
+          "COLONIA_DOM_NAC_15"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 210,
+        "conditionalFields": 210,
+        "catalogs": [
+          "CATALOGO_DE_PAISES"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 727,
+        "conditionalFields": 707,
+        "catalogs": [
+          "CATALOGO_SP1106_TIPO_DE_FUSION",
+          "CATALOGO_SI_NO",
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_DE_GIRO_MERCANTIL"
+        ]
+      },
+      {
+        "name": "Operaciones financieras",
+        "fields": 700,
+        "conditionalFields": 697,
+        "catalogs": [
+          "CATALOGO_INSTRUMENTO_MONETARIO",
+          "CATALOGO_DE_MONEDAS",
+          "CATALOGO_DE_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "ListasCombos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      },
+      {
+        "name": "Catalogos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xi-e-escision",
+    "activityKey": "fraccion-xi-e-corporativo",
+    "workbook": "SPR07_Escision_v5_0.xlsm",
+    "source": {
+      "file": "SPR07_Escision_v5_0.xlsm",
+      "sha256": "9a0764a0de6eb6dff12e058423e21a29eb0c6844c2cf20506afd40323e69c4e9",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xi-e-escision.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 840,
+        "conditionalFields": 817,
+        "catalogs": [
+          "CATALOGO_DE_ALERTAS",
+          "CATALOGO_DE_ACTIVIDADES_ECONOMICAS",
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_PRIORIDAD",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "CATALOGO_DE_OCUPACION",
+          "LISTA_DE_PERSONAS_REPORTADAS",
+          "COLONIA_DOM_NAC_01",
+          "COLONIA_DOM_NAC_02",
+          "COLONIA_DOM_NAC_03",
+          "COLONIA_DOM_NAC_04",
+          "COLONIA_DOM_NAC_05",
+          "COLONIA_DOM_NAC_06",
+          "COLONIA_DOM_NAC_07",
+          "COLONIA_DOM_NAC_08",
+          "COLONIA_DOM_NAC_09",
+          "COLONIA_DOM_NAC_10",
+          "COLONIA_DOM_NAC_11",
+          "COLONIA_DOM_NAC_12",
+          "COLONIA_DOM_NAC_13",
+          "COLONIA_DOM_NAC_14",
+          "COLONIA_DOM_NAC_15"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 210,
+        "conditionalFields": 210,
+        "catalogs": [
+          "CATALOGO_DE_PAISES"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 2301,
+        "conditionalFields": 2281,
+        "catalogs": [
+          "CATALOGO_SI_NO",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "CATALOGO_DE_PAISES",
+          "SP1107_LISTA_PERSONAS_MORALES_ESCINDIDAS"
+        ]
+      },
+      {
+        "name": "Operaciones financieras",
+        "fields": 700,
+        "conditionalFields": 697,
+        "catalogs": [
+          "CATALOGO_INSTRUMENTO_MONETARIO",
+          "CATALOGO_DE_MONEDAS",
+          "CATALOGO_DE_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "ListasCombos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      },
+      {
+        "name": "Catalogos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xi-e-administracion-pm",
+    "activityKey": "fraccion-xi-e-corporativo",
+    "workbook": "SPR08_AdministracionDePersonasMorales_v5_0.xlsm",
+    "source": {
+      "file": "SPR08_AdministracionDePersonasMorales_v5_0.xlsm",
+      "sha256": "868821c6ff065162c023110408f2884681055a5bf37bc176dcedff2eeeea993f",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xi-e-administracion-pm.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 840,
+        "conditionalFields": 817,
+        "catalogs": [
+          "CATALOGO_DE_ALERTAS",
+          "CATALOGO_DE_ACTIVIDADES_ECONOMICAS",
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_PRIORIDAD",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "CATALOGO_DE_OCUPACION",
+          "LISTA_DE_PERSONAS_REPORTADAS",
+          "COLONIA_DOM_NAC_01",
+          "COLONIA_DOM_NAC_02",
+          "COLONIA_DOM_NAC_03",
+          "COLONIA_DOM_NAC_04",
+          "COLONIA_DOM_NAC_05",
+          "COLONIA_DOM_NAC_06",
+          "COLONIA_DOM_NAC_07",
+          "COLONIA_DOM_NAC_08",
+          "COLONIA_DOM_NAC_09",
+          "COLONIA_DOM_NAC_10",
+          "COLONIA_DOM_NAC_11",
+          "COLONIA_DOM_NAC_12",
+          "COLONIA_DOM_NAC_13",
+          "COLONIA_DOM_NAC_14",
+          "COLONIA_DOM_NAC_15"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 210,
+        "conditionalFields": 210,
+        "catalogs": [
+          "CATALOGO_DE_PAISES"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 11,
+        "conditionalFields": 0,
+        "catalogs": [
+          "CATALOGO_SI_NO",
+          "CATALOGO_DE_PAISES"
+        ]
+      },
+      {
+        "name": "Operaciones financieras",
+        "fields": 700,
+        "conditionalFields": 697,
+        "catalogs": [
+          "CATALOGO_INSTRUMENTO_MONETARIO",
+          "CATALOGO_DE_MONEDAS",
+          "CATALOGO_DE_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "ListasCombos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      },
+      {
+        "name": "Catalogos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xi-e-fideicomisos",
+    "activityKey": "fraccion-xi-e-corporativo",
+    "workbook": "SPR09_ConstitucionDeFideicomisos_v5_0.xlsm",
+    "source": {
+      "file": "SPR09_ConstitucionDeFideicomisos_v5_0.xlsm",
+      "sha256": "879f1417b916722600413ba0a1251ea105479032e9c66d3cea92ed61b9cb4c4c",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xi-e-fideicomisos.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 840,
+        "conditionalFields": 817,
+        "catalogs": [
+          "CATALOGO_DE_ALERTAS",
+          "CATALOGO_DE_ACTIVIDADES_ECONOMICAS",
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_PRIORIDAD",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "CATALOGO_DE_OCUPACION",
+          "LISTA_DE_PERSONAS_REPORTADAS",
+          "COLONIA_DOM_NAC_01",
+          "COLONIA_DOM_NAC_02",
+          "COLONIA_DOM_NAC_03",
+          "COLONIA_DOM_NAC_04",
+          "COLONIA_DOM_NAC_05",
+          "COLONIA_DOM_NAC_06",
+          "COLONIA_DOM_NAC_07",
+          "COLONIA_DOM_NAC_08",
+          "COLONIA_DOM_NAC_09",
+          "COLONIA_DOM_NAC_10",
+          "COLONIA_DOM_NAC_11",
+          "COLONIA_DOM_NAC_12",
+          "COLONIA_DOM_NAC_13",
+          "COLONIA_DOM_NAC_14",
+          "COLONIA_DOM_NAC_15"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 210,
+        "conditionalFields": 210,
+        "catalogs": [
+          "CATALOGO_DE_PAISES"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 1657,
+        "conditionalFields": 1649,
+        "catalogs": [
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "SP1109_LISTA_DE_FIDEICOMITENTES",
+          "CATALOGO_SI_NO",
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_DE_MONEDAS",
+          "CATALOGO_TIPO_DE_INMUEBLE"
+        ]
+      },
+      {
+        "name": "Operaciones financieras",
+        "fields": 700,
+        "conditionalFields": 697,
+        "catalogs": [
+          "CATALOGO_INSTRUMENTO_MONETARIO",
+          "CATALOGO_DE_MONEDAS",
+          "CATALOGO_DE_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "ListasCombos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      },
+      {
+        "name": "Catalogos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xi-e-compraventa-entidades",
+    "activityKey": "fraccion-xi-e-corporativo",
+    "workbook": "SPR10_ComparaventaDeEntidadesMercantiles_v5_0.xlsm",
+    "source": {
+      "file": "SPR10_ComparaventaDeEntidadesMercantiles_v5_0.xlsm",
+      "sha256": "2ff42e37860f151561decb48e9d75d4d5a1e8a7b1bc571cf936207de561e071c",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xi-e-compraventa-entidades.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 840,
+        "conditionalFields": 817,
+        "catalogs": [
+          "CATALOGO_DE_ALERTAS",
+          "CATALOGO_DE_ACTIVIDADES_ECONOMICAS",
+          "CATALOGO_DE_PAISES",
+          "CATALOGO_PRIORIDAD",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "CATALOGO_DE_OCUPACION",
+          "LISTA_DE_PERSONAS_REPORTADAS",
+          "COLONIA_DOM_NAC_01",
+          "COLONIA_DOM_NAC_02",
+          "COLONIA_DOM_NAC_03",
+          "COLONIA_DOM_NAC_04",
+          "COLONIA_DOM_NAC_05",
+          "COLONIA_DOM_NAC_06",
+          "COLONIA_DOM_NAC_07",
+          "COLONIA_DOM_NAC_08",
+          "COLONIA_DOM_NAC_09",
+          "COLONIA_DOM_NAC_10",
+          "COLONIA_DOM_NAC_11",
+          "COLONIA_DOM_NAC_12",
+          "COLONIA_DOM_NAC_13",
+          "COLONIA_DOM_NAC_14",
+          "COLONIA_DOM_NAC_15"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 210,
+        "conditionalFields": 210,
+        "catalogs": [
+          "CATALOGO_DE_PAISES"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 332,
+        "conditionalFields": 322,
+        "catalogs": [
+          "CATALOGO_SP1110_TIPO_DE_OPERACIÓN_COMPRAVENTA",
+          "CATALOGO_DE_GIRO_MERCANTIL",
+          "CATALOGO_DE_PAISES"
+        ]
+      },
+      {
+        "name": "Operaciones financieras",
+        "fields": 700,
+        "conditionalFields": 697,
+        "catalogs": [
+          "CATALOGO_INSTRUMENTO_MONETARIO",
+          "CATALOGO_DE_MONEDAS",
+          "CATALOGO_DE_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "ListasCombos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      },
+      {
+        "name": "Catalogos",
+        "fields": 0,
+        "conditionalFields": 0,
+        "catalogs": []
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xii-notarios-a",
+    "activityKey": "fraccion-xii-servidores-inmuebles",
+    "workbook": "FedatariosSP_Inmuebles_v4_4.xlsm",
+    "source": {
+      "file": "FedatariosSP_Inmuebles_v4_4.xlsm",
+      "sha256": "be6bf9552ae279362b5eb6ad14e8875543896929336642bbd9d4c0d3cd140bdc",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xii-notarios-a.json",
+    "sections": [
+      {
+        "name": "Aviso",
+        "fields": 635,
+        "conditionalFields": 592,
+        "catalogs": [
+          "pais",
+          "prioridad",
+          "alerta",
+          "tipoActo",
+          "tipoInmueble",
+          "tipoCaracter",
+          "coloniaINM1",
+          "coloniaINM2",
+          "coloniaINM3",
+          "coloniaINM4",
+          "coloniaINM5",
+          "coloniaINM6",
+          "coloniaINM7",
+          "coloniaINM8",
+          "coloniaINM9",
+          "coloniaINM10",
+          "coloniaDOM1",
+          "coloniaDOM2",
+          "coloniaDOM3",
+          "coloniaDOM4",
+          "coloniaDOM5",
+          "coloniaDOM6",
+          "coloniaDOM7",
+          "coloniaDOM8",
+          "coloniaDOM9",
+          "coloniaDOM10"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": false,
+    "errors": [
+      "/archivo/informe/aviso/detalle_operaciones/datos_operacion/tipo_actividad/derechos_inmuebles/personas_acto/datos_persona_acto: nodo fuera del formato tipo_domicilio."
+    ],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xii-notarios-b",
+    "activityKey": "fraccion-xii-notarios-b",
+    "workbook": "FedatarioPoder_v4_3.xlsm",
+    "source": {
+      "file": "FedatarioPoder_v4_3.xlsm",
+      "sha256": "d3dfdc650aabd6bfc429419c890d5beaccb077c9c7a27dd874d376e9b2e610ea",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xii-notarios-b.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 351,
+        "conditionalFields": 331,
+        "catalogs": [
+          "Alertas",
+          "Paises",
+          "Prioridades",
+          "Giros",
+          "Actividades",
+          "tipoPoder"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xii-notarios-c",
+    "activityKey": "fraccion-xii-notarios-c",
+    "workbook": "FedatarioConstitucionPM_v4_4.xlsm",
+    "source": {
+      "file": "FedatarioConstitucionPM_v4_4.xlsm",
+      "sha256": "ded26c4d853dac9f090a167385704e0b9deef59e54b837441954c4ed85428ad7",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xii-notarios-c.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 229,
+        "conditionalFields": 201,
+        "catalogs": [
+          "Alertas",
+          "Paises",
+          "Prioridades",
+          "Giros",
+          "Entidades",
+          "Modif",
+          "tipoPersonaMoral",
+          "motivoConstitucion",
+          "cargoAccionista"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xii-notarios-d",
+    "activityKey": "fraccion-xii-notarios-d",
+    "workbook": "FedatarioConstitucionFid_v4_6.xlsm",
+    "source": {
+      "file": "FedatarioConstitucionFid_v4_6.xlsm",
+      "sha256": "a2846118179f5d9734838667eca6304d36235f94865d0ae6b8ec03adb5bd7cb6",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xii-notarios-d.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 549,
+        "conditionalFields": 520,
+        "catalogs": [
+          "Alertas",
+          "Paises",
+          "Prioridades",
+          "Monedas",
+          "TipoInm",
+          "Modif",
+          "Giros",
+          "Actividades",
+          "TipoMovio",
+          "TipoFidei",
+          "TipoMovi",
+          "TIPOFIDE"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xii-notarios-e",
+    "activityKey": "fraccion-xii-notarios-e",
+    "workbook": "FedatarioMutuo_v4_4.xlsm",
+    "source": {
+      "file": "FedatarioMutuo_v4_4.xlsm",
+      "sha256": "a416405e0315153840763ac1c50039ed3d6f624986aeb8866e91cf1e4dd5649c",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xii-notarios-e.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 435,
+        "conditionalFields": 393,
+        "catalogs": [
+          "Alertas",
+          "Paises",
+          "Prioridades",
+          "Actividades",
+          "Monedas",
+          "TipoInm",
+          "Giros",
+          "tipoOtorgamiento",
+          "tipoGarantia"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xii-corredores-a",
+    "activityKey": "fraccion-xii-corredores-a",
+    "workbook": "FedatarioAvaluo_v4_3.xlsm",
+    "source": {
+      "file": "FedatarioAvaluo_v4_3.xlsm",
+      "sha256": "46a293f5e8e4068ec17ae99354217692c58ff57b50e2c1c25b5b256afe51f597",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xii-corredores-a.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 39,
+        "conditionalFields": 2,
+        "catalogs": [
+          "Alertas",
+          "Paises",
+          "Prioridades",
+          "Modif",
+          "TipBienAv"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xii-corredores-c-compra-venta",
+    "activityKey": "fraccion-xii-notarios-c",
+    "workbook": "FedatarioCompraVenta_v4_3.xlsm",
+    "source": {
+      "file": "FedatarioCompraVenta_v4_3.xlsm",
+      "sha256": "a4d669a85c2daad6fa66a5f0e80a0aaabea55a2f934f584a655a989b272e9e5a",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xii-corredores-c-compra-venta.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 450,
+        "conditionalFields": 416,
+        "catalogs": [
+          "Alertas",
+          "Paises",
+          "Prioridades",
+          "Monedas",
+          "PERSONAMORAL",
+          "InstMone",
+          "Forpago1"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": false,
+    "errors": [
+      "/archivo/informe/aviso/detalle_operaciones/datos_operacion/tipo_actividad/compra_venta_acciones/tipo_operacion: valor no válido (pattern).",
+      "/archivo/informe/aviso/detalle_operaciones/datos_operacion/tipo_actividad/compra_venta_acciones/persona_moral_acciones: falta datos_vendedor.",
+      "/archivo/informe/aviso/detalle_operaciones/datos_operacion/tipo_actividad/compra_venta_acciones/persona_moral_acciones: falta datos_comprador.",
+      "/archivo/informe/aviso/detalle_operaciones/datos_operacion/tipo_actividad/compra_venta_acciones/datos_liquidacion: falta moneda.",
+      "/archivo/informe/aviso/detalle_operaciones/datos_operacion/tipo_actividad/compra_venta_acciones/datos_liquidacion: falta monto_operacion.",
+      "/archivo/informe/aviso/detalle_operaciones/datos_operacion/tipo_actividad/compra_venta_acciones/datos_liquidacion: nodo fuera del formato forma_pago."
+    ],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xii-corredores-c-fusion",
+    "activityKey": "fraccion-xii-notarios-c",
+    "workbook": "FedatarioFusion_v4_3.xlsm",
+    "source": {
+      "file": "FedatarioFusion_v4_3.xlsm",
+      "sha256": "8989f2cb39b664c17fd94af0ab78bdfdda091f772d495d897ab06ebdad67d013",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xii-corredores-c-fusion.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 282,
+        "conditionalFields": 251,
+        "catalogs": [
+          "Alertas",
+          "Paises",
+          "Prioridades",
+          "Giros",
+          "Modif",
+          "Tipoabsor"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xii-corredores-c-escision",
+    "activityKey": "fraccion-xii-notarios-c",
+    "workbook": "FedatarioEscision_v4_3.xlsm",
+    "source": {
+      "file": "FedatarioEscision_v4_3.xlsm",
+      "sha256": "00af1820aaa89eab0a50766933c4a39091409d829067fddc495298d79322eff3",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xii-corredores-c-escision.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 491,
+        "conditionalFields": 452,
+        "catalogs": [
+          "Alertas",
+          "Paises",
+          "Prioridades",
+          "Giros",
+          "Modif"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": false,
+    "errors": [
+      "/archivo/informe/aviso/detalle_operaciones/datos_operacion/tipo_actividad/escision/datos_escindidas/dato_escindida: falta datos_accionista."
+    ],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xii-corredores-c-modif-patrimonial",
+    "activityKey": "fraccion-xii-notarios-c",
+    "workbook": "FedatarioModifPatrimonial_v4_4.xlsm",
+    "source": {
+      "file": "FedatarioModifPatrimonial_v4_4.xlsm",
+      "sha256": "8f0fe17cc6b6781edaa487ebc5b790aaa99bbe1707018c4997baeb4756bba97a",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xii-corredores-c-modif-patrimonial.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 205,
+        "conditionalFields": 171,
+        "catalogs": [
+          "Alertas",
+          "Paises",
+          "Prioridades",
+          "Giros",
+          "tipoModifPat",
+          "tipoMotivoConst"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xii-sp-poder",
+    "activityKey": "fraccion-xii-servidores-poderes",
+    "workbook": "FedatariosSP_Poder_v4_3.xlsm",
+    "source": {
+      "file": "FedatariosSP_Poder_v4_3.xlsm",
+      "sha256": "84b7224ec588dd13bf61a97fb90734ed8550d9f30d1d01807c4aced8dabcc1ae",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xii-sp-poder.json",
+    "sections": [
+      {
+        "name": "Aviso",
+        "fields": 337,
+        "conditionalFields": 305,
+        "catalogs": [
+          "pais",
+          "prioridad",
+          "alerta",
+          "tipoPoder",
+          "tipoAutoridad",
+          "colonia"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xii-sp-modif-patrimonial",
+    "activityKey": "fraccion-xii-servidores-sociedades",
+    "workbook": "FedatariosSP_ModifPatrimonial_v4_3.xlsm",
+    "source": {
+      "file": "FedatariosSP_ModifPatrimonial_v4_3.xlsm",
+      "sha256": "7655338bc7017e753d723b2ba5991fc46084a3e7cca5b68d77bed8c366b7231d",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xii-sp-modif-patrimonial.json",
+    "sections": [
+      {
+        "name": "Aviso",
+        "fields": 214,
+        "conditionalFields": 191,
+        "catalogs": [
+          "pais",
+          "prioridad",
+          "alerta",
+          "tipoAutoridad",
+          "giroMercantil",
+          "tipoMotivo",
+          "tipoModificacion",
+          "colonia"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xii-cesion-fideicomiso",
+    "activityKey": "fraccion-xii-notarios-d",
+    "workbook": "FedatarioCesion_v4_3.xlsm",
+    "source": {
+      "file": "FedatarioCesion_v4_3.xlsm",
+      "sha256": "b696dc264e9c1b655044e1a9753b2b90b5e281ceed1ce7112176b8e9803d197e",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xii-cesion-fideicomiso.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 58,
+        "conditionalFields": 1,
+        "catalogs": [
+          "Alertas",
+          "Paises",
+          "Prioridades",
+          "Giros",
+          "Actividades",
+          "Tipocess"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xiii-donativos",
+    "activityKey": "fraccion-xiii-donativos",
+    "workbook": "Donativos_v4_3.xlsm",
+    "source": {
+      "file": "Donativos_v4_3.xlsm",
+      "sha256": "3cf1138678841bf24ea1b7b75b028566b61fcc4917a9f7940df91b84c1eae305",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xiii-donativos.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 413,
+        "conditionalFields": 392,
+        "catalogs": [
+          "ColoniaPR1",
+          "ColoniaPR2",
+          "ColoniaPR3",
+          "ColoniaPR4",
+          "ColoniaPR5",
+          "ColoniaPR6",
+          "ColoniaPR7",
+          "ColoniaPR8",
+          "ColoniaPR9",
+          "Alertas",
+          "Actividades",
+          "Paises",
+          "Prioridades",
+          "ColoniaPR10",
+          "Giros"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 328,
+        "conditionalFields": 325,
+        "catalogs": [
+          "InstrumentoMonetario",
+          "TipoBien1",
+          "Monedas",
+          "TipoInm"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xiv-comercio-exterior",
+    "activityKey": "fraccion-xiv-aduanal-a",
+    "workbook": "0-InformeEnCeros.xlsm",
+    "source": {
+      "file": "0-InformeEnCeros.xlsm",
+      "sha256": "cc92cbe8349327e7472cb0a97a22a9a6436c15f3d53aae803eff0a5efcc8d9a9",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xiv-comercio-exterior.json",
+    "sections": [
+      {
+        "name": "Informe en Ceros",
+        "fields": 4,
+        "conditionalFields": 0,
+        "catalogs": [
+          "Actividad"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "pedimento — no transaction XML",
+    "xmlGenerated": false,
+    "xsdValid": null,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xv-arrendamiento",
+    "activityKey": "fraccion-xv-uso-goce",
+    "workbook": "Arrendamiento_v4_5.xlsm",
+    "source": {
+      "file": "Arrendamiento_v4_5.xlsm",
+      "sha256": "c72074d61531a39729814d25b8903856a3c8d662ec7634b32357b5a8db6a5880",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xv-arrendamiento.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 413,
+        "conditionalFields": 384,
+        "catalogs": [
+          "Prioridades",
+          "Alertas",
+          "Paises",
+          "Giros",
+          "Actividades"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Acto u operación",
+        "fields": 247,
+        "conditionalFields": 228,
+        "catalogs": [
+          "TipoOperacion",
+          "TipoInmueble",
+          "FormasPago",
+          "InstrumentoMonetario",
+          "Monedas"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  },
+  {
+    "templateId": "sat-fraccion-xvi-activos-virtuales",
+    "activityKey": "fraccion-xvi-activos-virtuales",
+    "workbook": "ActivosVirtuales_v1.2.xlsm",
+    "source": {
+      "file": "ActivosVirtuales_v1.2.xlsm",
+      "sha256": "7a8ee727ad42199c921fe8ff86117d0ede500b73442b72b1bfbdcd6a7e061c23",
+      "verifiedAt": "2026-09-26"
+    },
+    "layout": "public/data/sat-xlsm-layouts/sat-fraccion-xvi-activos-virtuales.json",
+    "sections": [
+      {
+        "name": "Persona Objeto del aviso",
+        "fields": 58,
+        "conditionalFields": 1,
+        "catalogs": [
+          "ColoniaPR1",
+          "Alertas",
+          "Paises",
+          "Prioridades",
+          "Giros",
+          "Actividades",
+          "DocumentoIdentificacion",
+          "Monedas"
+        ]
+      },
+      {
+        "name": "Beneficiario controlador",
+        "fields": 140,
+        "conditionalFields": 140,
+        "catalogs": [
+          "Paises"
+        ]
+      },
+      {
+        "name": "Compras",
+        "fields": 800,
+        "conditionalFields": 800,
+        "catalogs": [
+          "Monedas",
+          "CAT_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "Ventas",
+        "fields": 800,
+        "conditionalFields": 800,
+        "catalogs": [
+          "CAT_ACTIVOS_VIRTUALES",
+          "Monedas"
+        ]
+      },
+      {
+        "name": "Intercambios",
+        "fields": 1200,
+        "conditionalFields": 1200,
+        "catalogs": [
+          "CAT_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "Transferencias Enviadas",
+        "fields": 700,
+        "conditionalFields": 700,
+        "catalogs": [
+          "CAT_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "Transferencias Recibidas",
+        "fields": 700,
+        "conditionalFields": 700,
+        "catalogs": [
+          "CAT_ACTIVOS_VIRTUALES"
+        ]
+      },
+      {
+        "name": "Fondos Retirados",
+        "fields": 600,
+        "conditionalFields": 600,
+        "catalogs": [
+          "INSTITUCIONES_FINANCIERAS_AVI",
+          "Monedas",
+          "INSTRUMENTO_AVI"
+        ]
+      },
+      {
+        "name": "Fondos Depositados",
+        "fields": 600,
+        "conditionalFields": 600,
+        "catalogs": [
+          "INSTRUMENTO_AVI",
+          "Monedas",
+          "INSTITUCIONES_FINANCIERAS_AVI"
+        ]
+      }
+    ],
+    "scenario": "synthetic — not manual/browser acceptance",
+    "output": "XML",
+    "xmlGenerated": true,
+    "xsdValid": true,
+    "errors": [],
+    "manualCapture": "pending",
+    "browser": "pending",
+    "xlsmComparison": "pending"
+  }
+]

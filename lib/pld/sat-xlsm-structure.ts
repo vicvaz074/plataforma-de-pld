@@ -39,6 +39,7 @@ export interface SheetDataValidation {
   operator?: string
   sqref: string[]
   formula1: string
+  formula2?: string
   optionListId?: string
   inlineOptions?: string[]
 }
@@ -48,6 +49,7 @@ export interface StructuredSheetInput {
   cells: CellMap
   validations: SheetDataValidation[]
   optionLists: SatXlsmOptionList[]
+  mergedRanges?: string[]
 }
 
 interface RepeatBlock {
@@ -70,6 +72,7 @@ interface CellValidation {
   type: string
   operator?: string
   formula1: string
+  formula2?: string
   optionListId?: string
   inlineOptions?: string[]
   /** Número de celdas cubiertas por el rango de origen; desempata solapes. */
@@ -92,12 +95,21 @@ const OTHER_DETAIL_LABEL =
   /(descripcion|especificar|especifique|detalle|cual|indique)/
 
 export function buildStructuredSheetFields(input: StructuredSheetInput): SatXlsmField[] {
-  const inputCells = collectInputCells(input.validations, input.cells)
+  const optionsById = new Map(input.optionLists.map((list) => [list.id, list.options]))
+  const inputCells = collectInputCells(input.validations, input.cells, optionsById)
+  for (const range of input.mergedRanges || []) {
+    const bounds = rangeBounds(range)
+    for (const cell of inputCells.keys()) {
+      const { col, row } = splitCell(cell)
+      const column = columnToNumber(col)
+      if (row >= bounds.startRow && row <= bounds.endRow && column >= bounds.startCol && column <= bounds.endCol &&
+        !(row === bounds.startRow && column === bounds.startCol)) inputCells.delete(cell)
+    }
+  }
   if (!inputCells.size) return []
 
   const blocks = detectRepeatBlocks(input.cells, inputCells)
   completeTabularBlocks({ blocks, cells: input.cells, inputCells })
-  const optionsById = new Map(input.optionLists.map((list) => [list.id, list.options]))
 
   const headedRows = findHeadedRows(input.cells, inputCells)
 
@@ -150,6 +162,7 @@ function dedupeRepeatedRequirements(fields: SatXlsmField[]): SatXlsmField[] {
 function collectInputCells(
   validations: SheetDataValidation[],
   sheetCells: CellMap,
+  optionsById: Map<string, string[]>,
 ): Map<string, CellValidation> {
   const cells = new Map<string, CellValidation>()
 
@@ -167,12 +180,17 @@ function collectInputCells(
           const ref = `${numberToColumn(col)}${row}`
           // Algunas plantillas dejan la validación sobre el propio encabezado.
           // Una celda con texto es rótulo, no captura.
-          if (sheetCells[ref]?.trim()) continue
+          // A selected catalogue value is still an editable input, not a
+          // heading. Do not copy the workbook's sample/default into capture.
+          const existingText = sheetCells[ref]?.trim()
+          const options = validation.optionListId ? optionsById.get(validation.optionListId) : validation.inlineOptions
+          if (existingText && !(type === "list" && options?.includes(existingText))) continue
           const existing = cells.get(ref)
           const candidate: CellValidation = {
             type,
             operator: validation.operator,
             formula1: validation.formula1,
+            formula2: validation.formula2,
             optionListId: validation.optionListId,
             inlineOptions: validation.inlineOptions,
             spread,
@@ -577,10 +595,14 @@ function inferDataType(validation: CellValidation, label: string): SatXlsmField[
 function inferMaxLength(validation: CellValidation): number | undefined {
   if (validation.type !== "textlength") return undefined
   const operator = (validation.operator || "").toLowerCase()
-  if (operator && operator !== "lessthanorequal" && operator !== "equal" && operator !== "lessthan") {
+  if (operator && !["lessthanorequal", "equal", "lessthan", "between"].includes(operator)) {
     return undefined
   }
-  const parsed = Number(validation.formula1)
+  // OOXML defaults to "between" when operator is omitted. formula1 is the
+  // minimum in that case; treating it as a maximum truncated names to 1 char.
+  const upperBound = (!operator || operator === "between") && validation.formula2
+    ? validation.formula2 : validation.formula1
+  const parsed = Number(upperBound)
   if (!Number.isFinite(parsed) || parsed <= 0) return undefined
   return operator === "lessthan" ? parsed - 1 : parsed
 }

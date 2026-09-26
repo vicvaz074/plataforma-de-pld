@@ -68,6 +68,7 @@ import {
 } from "lucide-react"
 import type { ActividadVulnerable } from "@/lib/data/actividades"
 import { actividadesVulnerables } from "@/lib/data/actividades"
+import { findActividadByKey } from "@/lib/pld/actividades"
 import { cn } from "@/lib/utils"
 import {
   centsToDecimalString,
@@ -87,6 +88,10 @@ import {
   type StoredPldOperationV3,
 } from "@/lib/pld/stored-operations"
 import { SAT_INSTRUMENTO_MONETARIO_OPTIONS } from "@/lib/pld/sat-instrumentos-monetarios"
+import { resolveOperationFinance, resolveNotarialNoticeBase, type OperationFinance } from "@/lib/pld/operation-finance"
+import { applySatPersonEdit, applySatBeneficiaryEdit } from "@/lib/pld/sat-person-edit"
+import { getSatPrimaryAmountFieldIds, getSatOperationBranchMissingLabels } from "@/lib/pld/sat-operation-branches"
+import { buildExpedienteFromActo, saveExpedienteRecord, readPldSubjects, integrationSubjectToTenant, notifyPldIntegrationChange } from "@/lib/pld/integration-records"
 import { UMA_MONTHS, findUmaByMonthYear } from "@/lib/data/uma"
 import { CLIENTE_TIPOS, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
 import { CIUDADES_MEXICO, findCodigoPostalInfo } from "@/lib/data/codigos-postales"
@@ -186,8 +191,9 @@ function getSujetoObligadoOptionValueFromSnapshot(
 }
 
 function hasRealSatOutput(
-  operacion: Pick<OperacionCliente, "avisoSalidaTipo" | "umbralStatus" | "sospecha24h">,
+  operacion: Pick<OperacionCliente, "avisoSalidaTipo" | "umbralStatus" | "sospecha24h" | "captureStatus">,
 ) {
+  if (operacion.captureStatus === "draft") return false
   if (
     operacion.avisoSalidaTipo === "aviso_normal" ||
     operacion.avisoSalidaTipo === "informe_27_bis" ||
@@ -837,6 +843,15 @@ interface OperacionCliente {
   schemaVersion?: number
   id: string
   montoCentavos?: number
+  finance?: OperationFinance
+  financeReviewRequired?: boolean
+  captureStatus?: "draft" | "complete"
+  captureDraft?: {amountText: string; currency: string; exchangeRate?: string; exchangeRateDate?: string; exchangeRateSource?: string}
+  operacionFinancieraPorCuentaCliente?: boolean
+  contraprestacionCentavos?: number
+  montoBaseAvisoCentavos?: number
+  notarialValues?: {valorCatastral: string; valorComercial: string; principalGarantizado: string}
+  montoNoDeterminado?: boolean
   revision?: number
   createdAt?: string
   updatedAt?: string
@@ -1246,6 +1261,7 @@ function isOperacionCancelada(operacion: OperacionCliente) {
 
 function getOperacionLifecycleLabel(operacion: OperacionCliente) {
   if (isOperacionCancelada(operacion)) return "Cancelada"
+  if (operacion.captureStatus === "draft") return "Borrador"
   if (operacion.submission?.status === "correction-pending") return "Corrección pendiente"
   if (operacion.submission?.wasEverPresented || operacion.avisoPresentado) return "Presentada"
   return getStatusLabel(operacion.umbralStatus)
@@ -1340,6 +1356,15 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
     schemaVersion: 3,
     id,
     montoCentavos,
+    finance: raw.finance,
+    financeReviewRequired: raw.financeReviewRequired,
+    captureStatus: raw.captureStatus,
+    captureDraft: raw.captureDraft,
+    operacionFinancieraPorCuentaCliente: raw.operacionFinancieraPorCuentaCliente,
+    contraprestacionCentavos: raw.contraprestacionCentavos,
+    montoBaseAvisoCentavos: raw.montoBaseAvisoCentavos,
+    notarialValues: raw.notarialValues,
+    montoNoDeterminado: raw.montoNoDeterminado,
     revision: Number.isInteger(raw.revision) && raw.revision > 0 ? raw.revision : 1,
     createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString(),
@@ -1669,6 +1694,7 @@ function buildBeneficiarioPersonaFromEui(raw: any, index: number): ExpedientePer
     apellidoPaterno: raw.apellidoPaterno,
     apellidoMaterno: raw.apellidoMaterno,
     fechaNacimiento: raw.fechaNacimiento,
+    fechaConstitucion: raw.fechaConstitucion,
     rfc: raw.rfc,
     nif: raw.nif,
     curp: raw.curp,
@@ -1740,7 +1766,7 @@ function sanitizeExpediente(raw: any): ExpedienteDetalle | null {
     .filter((item): item is ExpedientePersona => Boolean(item))
   const personaEui = buildExpedientePersonaFromEui(expedienteEui)
   const personas = personasSanitizadas.length > 0
-    ? personasSanitizadas
+    ? personasSanitizadas.map((persona, index) => index === 0 && personaEui ? {...personaEui, ...Object.fromEntries(Object.entries(persona).filter(([,value]) => value !== undefined && value !== null && value !== ""))} as ExpedientePersona : persona)
     : personaEui
       ? [personaEui]
       : []
@@ -1748,7 +1774,11 @@ function sanitizeExpediente(raw: any): ExpedienteDetalle | null {
     ? raw.beneficiariosControladores
     : [expedienteEui?.beneficiario1, expedienteEui?.beneficiario2].filter(Boolean)
   const beneficiariosControladores = beneficiariosRaw
-    .map((item, index) => buildBeneficiarioPersonaFromEui(item, index))
+    .map((item, index) => {
+      const fallback = buildBeneficiarioPersonaFromEui(index === 0 ? expedienteEui?.beneficiario1 : index === 1 ? expedienteEui?.beneficiario2 : null, index)
+      const primary = buildBeneficiarioPersonaFromEui(item, index)
+      return primary ? {...fallback, ...Object.fromEntries(Object.entries(primary).filter(([,value]) => value !== undefined && value !== null && value !== ""))} as ExpedientePersona : fallback
+    })
     .filter((item): item is ExpedientePersona => Boolean(item))
 
   return {
@@ -2070,7 +2100,6 @@ function sanitizeLiquidacion(
   const fechaPago = typeof raw.fechaPago === "string" ? raw.fechaPago : ""
   const formaPago = typeof raw.formaPago === "string" ? raw.formaPago : ""
   const instrumento = typeof raw.instrumento === "string" ? raw.instrumento : ""
-  if (!fechaPago || !formaPago || !instrumento) return null
 
   return {
     fechaPago,
@@ -2210,12 +2239,19 @@ export default function ActividadesVulnerablesPage() {
   const [moneda, setMoneda] = useState<string>("MXN")
   const [monedaPersonalizadaCodigo, setMonedaPersonalizadaCodigo] = useState<string>("")
   const [monedaPersonalizadaDescripcion, setMonedaPersonalizadaDescripcion] = useState<string>("")
+  const [exchangeRate, setExchangeRate] = useState("")
+  const [exchangeRateDate, setExchangeRateDate] = useState("")
+  const [exchangeRateSource, setExchangeRateSource] = useState("")
+  const [operacionFinancieraCliente, setOperacionFinancieraCliente] = useState("")
+  const [contraprestacion, setContraprestacion] = useState("")
+  const [montoNoDeterminado, setMontoNoDeterminado] = useState(false)
+  const [notarialValues, setNotarialValues] = useState({valorCatastral: "", valorComercial: "", principalGarantizado: ""})
   const [fechaOperacion, setFechaOperacion] = useState<string>(new Date().toISOString().substring(0, 10))
   const [pagoRecurrenteMeses, setPagoRecurrenteMeses] = useState<string>("1")
   const [pagoRecurrenteMensualidad, setPagoRecurrenteMensualidad] = useState<string>("")
   const [pagoRecurrenteNota, setPagoRecurrenteNota] = useState<string>("")
   const [evidencia, setEvidencia] = useState<string>("")
-  const [tenantState, setTenantState] = useState(() => buildDefaultPldTenants("tenant-demo-pld"))
+  const [tenantState, setTenantState] = useState<ReturnType<typeof buildDefaultPldTenants>>({schemaVersion: 1, activeTenantId: "", tenants: []})
   const [tenantsLoaded, setTenantsLoaded] = useState(false)
   const [draftEvidenceChecklist, setDraftEvidenceChecklist] = useState<Record<string, boolean>>({})
   const [draftEvidenceJustifications, setDraftEvidenceJustifications] = useState<Record<string, string>>({})
@@ -2306,9 +2342,11 @@ export default function ActividadesVulnerablesPage() {
   const [satLayoutsLoaded, setSatLayoutsLoaded] = useState(false)
   const demoCargaRef = useRef(false)
   const preserveSatValuesOnActivityChangeRef = useRef(false)
-  const satEditInitializationRef = useRef<string | null>(null)
   const primaryBeneficiarySatFieldIdsRef = useRef<Set<string>>(new Set())
   const satAllFieldsActualRef = useRef<SatXlsmField[]>([])
+  const satInitialValuesRef = useRef<Record<string, string>>({})
+  const preservedExpedienteSnapshotRef = useRef<string | null>(null)
+  const editingOperationVersionRef = useRef<{revision?: number; updatedAt?: string} | null>(null)
 
   const actualizarInmuebleForm = useCallback(
     (campo: keyof DatosInmuebleFormState, valor: string) => {
@@ -2320,6 +2358,9 @@ export default function ActividadesVulnerablesPage() {
   const actualizarLiquidacionForm = useCallback(
     (campo: keyof DatosLiquidacionFormState, valor: string) => {
       setLiquidacionForm((prev) => ({ ...prev, [campo]: valor }))
+      const labels = campo === "instrumento" ? ["instrumento monetario"] : campo === "formaPago" ? ["forma de pago", "forma de liquidacion"] : ["fecha de pago", "fecha de liquidacion"]
+      const ids = new Set(satAllFieldsActualRef.current.filter((field) => (field.repeatIndex || 1) === 1 && labels.includes(normalizarBusqueda(field.label))).map((field) => field.id))
+      setSatFieldValues((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !ids.has(id))))
     },
     [],
   )
@@ -2377,6 +2418,7 @@ export default function ActividadesVulnerablesPage() {
 
   const actualizarSatField = useCallback((fieldId: string, value: string) => {
     const normalizedFieldId = normalizarBusqueda(fieldId)
+    const editedField = satAllFieldsActualRef.current.find((field) => field.id === fieldId)
     setSatFieldValues((prev) => {
       const next = { ...prev, [fieldId]: value }
       const selectedCode = value.split(/[,|]/)[0]?.trim()
@@ -2397,14 +2439,38 @@ export default function ActividadesVulnerablesPage() {
           }
         })
       }
-      return pruneInactiveSatFieldValues({
+      const effective = pruneInactiveSatFieldValues({
         fields: satAllFieldsActualRef.current,
-        values: next,
+        values: { ...satInitialValuesRef.current, ...next },
       })
+      // Preserve only overrides, while conditions also see the current EUI/operation prefill.
+      return Object.fromEntries(Object.entries(next).map(([id, entry]) => [id, effective[id] ?? ""]))
     })
 
     if (normalizedFieldId.includes("beneficiario")) {
       setDatosEuiConfirmados(false)
+    }
+    if (editedField && (editedField.repeatIndex || 1) === 1) {
+      if (editedField.sectionKind === "beneficiario_controlador") {
+        setBeneficiarioForm((current) => applySatBeneficiaryEdit(current, editedField, value))
+        setDatosEuiConfirmados(false)
+      }
+      const label = normalizarBusqueda(editedField.label)
+      if ((label === "referencia" || label === "referencia del aviso") && !editedField.repeatGroup) setReferenciaAviso(value)
+      if (label === "prioridad" && !editedField.repeatGroup) setPrioridadAviso(value)
+      if (label === "tipo de alerta" && !editedField.repeatGroup) setAlertaCodigo(value)
+      if (label === "descripcion de alerta" && !editedField.repeatGroup) setAlertaDescripcion(value)
+      if (label === "instrumento monetario") setLiquidacionForm((prev) => ({...prev, instrumento: value}))
+      if (label === "forma de pago" || label === "forma de liquidacion") setLiquidacionForm((prev) => ({...prev, formaPago: value}))
+      if (label === "fecha de pago" || label === "fecha de liquidacion") setLiquidacionForm((prev) => ({...prev, fechaPago: value}))
+      if (editedField.sectionKind === "persona_objeto") {
+        setPersonaAvisoActual((current) => applySatPersonEdit<PersonaAvisoOperacion>(current ?? {tipo: tipoCliente.startsWith("pf") ? "persona_fisica" : tipoCliente.includes("fideicomiso") ? "fideicomiso" : "persona_moral"}, editedField, value))
+        const scope = normalizarBusqueda(editedField.repeatGroup || editedField.id)
+        if (/persona-fisica|persona-moral|persona_objeto_pf|persona_objeto_pm/.test(scope)) {
+          if (label === "rfc" && !(tipoCliente.includes("fideicomiso") && /\.h\d+$/.test(editedField.id))) setRfc(value.toUpperCase())
+          if (label === "denominacion o razon social" || label === "razon social") setClienteNombre(value)
+        }
+      }
     }
 
     if (fieldId === "acto.tipo_operacion") setTipoOperacion(value)
@@ -2485,7 +2551,7 @@ export default function ActividadesVulnerablesPage() {
       setInmuebleForm((prev) => ({ ...prev, valorCatastral: value }))
       setInstrumentoForm((prev) => ({ ...prev, valorCatastral: value }))
     }
-  }, [])
+  }, [tipoCliente])
 
   const tipoClienteSeleccionado = useMemo(
     () => obtenerOpcionTipoCliente(tipoCliente),
@@ -2539,7 +2605,7 @@ export default function ActividadesVulnerablesPage() {
     [umaVentana],
   )
 
-  useEffect(() => {
+    useEffect(() => {
     if (typeof window === "undefined") return
 
     try {
@@ -2556,14 +2622,8 @@ export default function ActividadesVulnerablesPage() {
           activeTenantId = activeTenantRaw
         }
       }
-      if (!stored) return
-
-      const parsed = JSON.parse(stored) as { tenants?: unknown[]; activeTenantId?: unknown }
-      if (!Array.isArray(parsed.tenants)) return
-
-      const tenants = parsed.tenants.map((tenant, index) =>
-        sanitizePldTenant(tenant, `tenant-${index + 1}`),
-      )
+      const parsed = stored ? JSON.parse(stored) as { tenants?: unknown[]; activeTenantId?: unknown } : {}
+      const tenants = readPldSubjects(window.localStorage).map(integrationSubjectToTenant)
       if (tenants.length === 0) return
 
       const resolvedActiveTenant =
@@ -2579,7 +2639,7 @@ export default function ActividadesVulnerablesPage() {
         tenants,
       })
     } catch (_error) {
-      // Mantener el sujeto obligado demo si los datos locales no son legibles.
+      // Una identidad ilegible nunca se sustituye por el sujeto obligado demo.
     } finally {
       setTenantsLoaded(true)
     }
@@ -2589,8 +2649,7 @@ export default function ActividadesVulnerablesPage() {
     if (!tenantsLoaded) return
     if (typeof window === "undefined") return
 
-    window.localStorage.setItem(PLD_TENANTS_STORAGE_KEY, JSON.stringify(tenantState))
-    window.localStorage.setItem(PLD_ACTIVE_TENANT_STORAGE_KEY, tenantState.activeTenantId)
+    // Actos consumes the registered subjects; it must not manufacture or overwrite Alta records.
   }, [tenantState, tenantsLoaded])
 
   useEffect(() => {
@@ -2600,6 +2659,7 @@ export default function ActividadesVulnerablesPage() {
     }
     setSatTemplateVariantId("")
     setSatFieldValues({})
+    setDatosEuiConfirmados(false)
   }, [actividadKey])
 
   useEffect(() => {
@@ -2628,15 +2688,18 @@ export default function ActividadesVulnerablesPage() {
   }, [])
 
   useEffect(() => {
-    if (!operacionesCargadas || !operacionesStorageValido) return
-    if (typeof window === "undefined") return
-
-    try {
-      window.localStorage.setItem(OPERACIONES_STORAGE_KEY, JSON.stringify(operaciones))
-    } catch (error) {
-      console.error("No fue posible persistir las operaciones PLD", error)
+    const refresh = (event: StorageEvent) => {
+      if (event.key !== OPERACIONES_STORAGE_KEY) return
+      try {
+        const parsed = JSON.parse(window.localStorage.getItem(OPERACIONES_STORAGE_KEY) || "[]")
+        if (!Array.isArray(parsed)) throw new Error("Formato de operaciones inválido")
+        setOperaciones(parsed.map(sanitizeOperacion).filter((item): item is OperacionCliente => Boolean(item)))
+        setOperacionesStorageValido(true)
+      } catch { setOperacionesStorageValido(false) }
     }
-  }, [operaciones, operacionesCargadas, operacionesStorageValido])
+    window.addEventListener("storage", refresh)
+    return () => window.removeEventListener("storage", refresh)
+  }, [])
 
   useEffect(() => {
     if (!operacionesCargadas || !operacionesStorageValido || typeof window === "undefined") return
@@ -2676,12 +2739,17 @@ export default function ActividadesVulnerablesPage() {
           (tenant) =>
             tenant.id === operacion.sujetoObligado?.id ||
             (operacion.sujetoObligado?.rfc && tenant.rfc === operacion.sujetoObligado.rfc),
-        ) ?? activeTenant ?? buildDefaultPldTenants("tenant-demo-pld").tenants[0]
+        )
+      if (!operacion.sujetoObligado?.rfc || operacion.captureStatus === "draft") {
+        if (!everPresented) nextPackages = removeLinkedSatPackage(nextPackages, operacion.id)
+        continue
+      }
+      const resolvedTenant = tenantBase ?? integrationSubjectToTenant({id: operacion.sujetoObligado.id || operacion.sujetoObligado.rfc, rfc: operacion.sujetoObligado.rfc, nombre: operacion.sujetoObligado.nombre || "", activityKeys: [operacion.actividadKey], source: "expediente"})
       const tenant = {
-        ...tenantBase,
-        id: operacion.sujetoObligado?.id || tenantBase.id,
-        rfc: operacion.sujetoObligado?.rfc || tenantBase.rfc,
-        razonSocial: operacion.sujetoObligado?.nombre || tenantBase.razonSocial,
+        ...resolvedTenant,
+        id: operacion.sujetoObligado.id || resolvedTenant.id,
+        rfc: operacion.sujetoObligado.rfc,
+        razonSocial: operacion.sujetoObligado.nombre || resolvedTenant.razonSocial,
       }
       const operationalCase = buildPldOperationalCase({
         tenant,
@@ -2697,6 +2765,12 @@ export default function ActividadesVulnerablesPage() {
         ),
         montoCentavos:
           operacion.montoCentavos ?? coerceLegacyMoneyToCents(operacion.monto),
+        captureStatus: operacion.captureStatus,
+        finance: operacion.finance,
+        operacionFinancieraPorCuentaCliente: operacion.operacionFinancieraPorCuentaCliente,
+        contraprestacionCentavos: operacion.contraprestacionCentavos,
+        montoBaseAvisoCentavos: operacion.montoBaseAvisoCentavos,
+        montoNoDeterminado: operacion.montoNoDeterminado,
         formaPago: operacion.liquidacion?.formaPago ?? operacion.monedaDescripcion,
         sospecha24h: Boolean(operacion.sospecha24h),
         supuesto27Bis: operacion.mismoGrupo && operacion.umbralStatus === "aviso",
@@ -2733,6 +2807,7 @@ export default function ActividadesVulnerablesPage() {
     const nextSerialized = JSON.stringify(nextPackages)
     if (currentSerialized !== nextSerialized) {
       window.localStorage.setItem(SAT_OUTPUT_PACKAGES_STORAGE_KEY, nextSerialized)
+      notifyPldIntegrationChange(SAT_OUTPUT_PACKAGES_STORAGE_KEY)
     }
   }, [activeTenant, operaciones, operacionesCargadas, operacionesStorageValido, tenantState.tenants])
 
@@ -2841,6 +2916,7 @@ export default function ActividadesVulnerablesPage() {
       let actualizado = false
 
       operaciones.forEach((operacion) => {
+        if (!operacion.rfc.trim()) return
         const datos: ClienteGuardado = {
           rfc: operacion.rfc,
           nombre: operacion.cliente,
@@ -2959,15 +3035,16 @@ export default function ActividadesVulnerablesPage() {
         (tenant) =>
           tenant.id === sujetoObligadoSnapshotActual?.id ||
           Boolean(sujetoObligadoSnapshotActual?.rfc && tenant.rfc === sujetoObligadoSnapshotActual.rfc),
-      ) ?? activeTenant ?? buildDefaultPldTenants("tenant-demo-pld").tenants[0]
-    if (!base) return null
+      )
+    if (!sujetoObligadoSnapshotActual?.rfc) return null
+    const resolvedBase = base ?? integrationSubjectToTenant({id: sujetoObligadoSnapshotActual.id || sujetoObligadoSnapshotActual.rfc, rfc: sujetoObligadoSnapshotActual.rfc, nombre: sujetoObligadoSnapshotActual.nombre || "", source: "expediente", activityKeys: actividadKey ? [actividadKey] : []})
     return {
-      ...base,
-      id: sujetoObligadoSnapshotActual?.id || base.id,
-      rfc: sujetoObligadoSnapshotActual?.rfc || base.rfc,
-      razonSocial: sujetoObligadoSnapshotActual?.nombre || base.razonSocial,
+      ...resolvedBase,
+      id: sujetoObligadoSnapshotActual.id || resolvedBase.id,
+      rfc: sujetoObligadoSnapshotActual.rfc,
+      razonSocial: sujetoObligadoSnapshotActual.nombre || resolvedBase.razonSocial,
     }
-  }, [activeTenant, sujetoObligadoSnapshotActual, tenantState.tenants])
+  }, [actividadKey, sujetoObligadoSnapshotActual, tenantState.tenants])
 
   const requisitosDocumentalesActuales = useMemo<DocumentRequirement[]>(
     () => getDocumentRequirementsForCliente(tipoCliente, actividadSeleccionada?.key),
@@ -3090,12 +3167,12 @@ export default function ActividadesVulnerablesPage() {
         clienteNombrePf: personaAvisoActual?.nombre,
         clienteApellidoPaterno: personaAvisoActual?.apellidoPaterno,
         clienteApellidoMaterno: personaAvisoActual?.apellidoMaterno,
-        clienteTipoPersona: personaAvisoActual?.tipo,
-        clienteRazonSocial: personaAvisoActual?.denominacion,
+        clienteTipoPersona: personaAvisoActual?.tipo ?? (tipoCliente.startsWith("pf") ? "persona_fisica" : tipoCliente.includes("fideicomiso") ? "fideicomiso" : "persona_moral"),
+        clienteRazonSocial: personaAvisoActual?.denominacion || (!tipoCliente.startsWith("pf") ? clienteNombre : ""),
         fideicomisoFiduciarioDenominacion: fideicomisoForm.fiduciarioDenominacion || personaAvisoActual?.fiduciarioDenominacion,
         fideicomisoFiduciarioRfc: fideicomisoForm.fiduciarioRfc || personaAvisoActual?.fiduciarioRfc,
         fideicomisoIdentificador: fideicomisoForm.identificador || personaAvisoActual?.identificadorFideicomiso,
-        clienteRfc: personaAvisoActual?.rfc ?? expedienteActual?.identifiers.rfc ?? "",
+        clienteRfc: personaAvisoActual?.rfc || expedienteActual?.identifiers.rfc || (rfc.length === 12 || rfc.length === 13 ? rfc : ""),
         clienteFechaNacimiento: personaAvisoActual?.fechaNacimiento,
         clienteFechaConstitucion: personaAvisoActual?.fechaConstitucion,
         clienteCurp: personaAvisoActual?.curp,
@@ -3198,6 +3275,7 @@ export default function ActividadesVulnerablesPage() {
     satTemplateActual,
     satTemplateVariantId,
     tipoOperacion,
+    tipoCliente,
   ])
 
   const tipoOperacionSatField = useMemo(() => {
@@ -3225,9 +3303,14 @@ export default function ActividadesVulnerablesPage() {
     () => satDynamicFormActual?.sections.flatMap((section) => section.fields) ?? [],
     [satDynamicFormActual],
   )
+  const formaPagoSatOptions = useMemo(() => {
+    const field = satAllFieldsActual.find((field) => (field.repeatIndex || 1) === 1 && ["forma de pago", "forma de liquidacion"].includes(normalizarBusqueda(field.label)))
+    return (field?.options ?? []).map((value) => ({value, label: value}))
+  }, [satAllFieldsActual])
 
   useEffect(() => {
     satAllFieldsActualRef.current = satAllFieldsActual
+    satInitialValuesRef.current = satDynamicFormActual?.initialValues ?? {}
     primaryBeneficiarySatFieldIdsRef.current = new Set(
       satAllFieldsActual
         .filter((field) => field.sectionKind === "beneficiario_controlador")
@@ -3238,35 +3321,7 @@ export default function ActividadesVulnerablesPage() {
         })
         .map((field) => field.id),
     )
-  }, [satAllFieldsActual])
-
-  useEffect(() => {
-    if (!operacionEditandoId) {
-      satEditInitializationRef.current = null
-      return
-    }
-    if (!satDynamicFormActual) return
-
-    const signature = `${operacionEditandoId}:${satDynamicFormActual.templateId}`
-    if (satEditInitializationRef.current === signature) return
-    satEditInitializationRef.current = signature
-
-    const managedFieldIds = new Set(Object.keys(satDynamicFormActual.initialValues))
-    satAllFieldsActual.forEach((field) => {
-      if (
-        field.sectionKind === "alta_sat" ||
-        field.sectionKind === "persona_objeto" ||
-        field.sectionKind === "beneficiario_controlador"
-      ) {
-        managedFieldIds.add(field.id)
-      }
-    })
-    setSatFieldValues((current) =>
-      Object.fromEntries(
-        Object.entries(current).filter(([fieldId]) => !managedFieldIds.has(fieldId)),
-      ),
-    )
-  }, [operacionEditandoId, satAllFieldsActual, satDynamicFormActual])
+  }, [satAllFieldsActual, satDynamicFormActual])
 
   const satRawEffectiveFieldValues = useMemo(
     () => ({
@@ -3301,11 +3356,11 @@ export default function ActividadesVulnerablesPage() {
       .filter((field) => isSatXlsmFieldRequired(field, satEffectiveFieldValues))
       .filter((field) => !(satEffectiveFieldValues[field.id] ?? "").trim())
       .map((field) => field.id)
-    return getActionableSatMissingFieldIds({
+    return [...getActionableSatMissingFieldIds({
       fields: satAllFieldsActual,
       missingRequiredIds,
       values: satEffectiveFieldValues,
-    })
+    }), ...getSatOperationBranchMissingLabels(satDynamicFormActual.templateId, satEffectiveFieldValues, satAllFieldsActual).map((label) => `Bloque aplicable: ${label}`)]
   }, [satAllFieldsActual, satDynamicFormActual, satEffectiveFieldValues])
 
   const beneficiarioSatMissingFields = useMemo(() => {
@@ -3321,7 +3376,10 @@ export default function ActividadesVulnerablesPage() {
   }, [satDynamicFormActual, satMissingRequiredFields.length])
 
   useEffect(() => {
-    if (!satTemplateActual) return
+    if (!satTemplateActual?.localPath) {
+      setSatLayoutsLoaded(true)
+      return
+    }
     if (satLayouts[satTemplateActual.templateId]) {
       setSatLayoutsLoaded(true)
       return
@@ -3380,24 +3438,7 @@ export default function ActividadesVulnerablesPage() {
 
   const resolveSujetoObligadoOptionValue = useCallback(
     (expediente: ExpedienteDetalle) => {
-      const matchingTenant = tenantState.tenants.find((tenant) => {
-        const tenantTokens = [
-          tenant.id,
-          tenant.rfc,
-          tenant.razonSocial,
-          tenant.nombreComercial,
-        ].filter((item): item is string => Boolean(item))
-        const expedienteTokens = [
-          expediente.sujetoObligadoId,
-          expediente.sujetoObligadoRfc,
-          expediente.sujetoObligadoNombre,
-          expediente.claveSujetoObligado,
-        ].filter((item): item is string => Boolean(item))
-
-        return expedienteTokens.some((expedienteToken) =>
-          tenantTokens.some((tenantToken) => normalizarBusqueda(tenantToken) === normalizarBusqueda(expedienteToken)),
-        )
-      })
+      const matchingTenant = tenantState.tenants.find((tenant) => Boolean(expediente.sujetoObligadoId && tenant.id === expediente.sujetoObligadoId)) ?? tenantState.tenants.find((tenant) => Boolean(expediente.sujetoObligadoRfc && tenant.rfc === expediente.sujetoObligadoRfc))
 
       if (matchingTenant) return `tenant:${matchingTenant.id}`
 
@@ -3670,83 +3711,25 @@ export default function ActividadesVulnerablesPage() {
       })
       return
     }
-    const baseRaw =
-      rawRecords.find(
-        (item: any) =>
-          item?.expedienteId === expedienteActual.expedienteId ||
-          (expedienteActual.rfc && item?.rfc === expedienteActual.rfc),
-      ) ?? expedienteActual
-    const expedienteEui = baseRaw.expedienteEui && typeof baseRaw.expedienteEui === "object"
-      ? baseRaw.expedienteEui
-      : {}
-    const clienteEui = expedienteEui.cliente && typeof expedienteEui.cliente === "object"
-      ? expedienteEui.cliente
-      : {}
-    const updatedRaw = {
-      ...baseRaw,
-      schemaVersion: 2,
+    const baseRaw = rawRecords.find((item: any) => item?.expedienteId === expedienteActual.expedienteId) ?? expedienteActual
+    const updatedRaw = buildExpedienteFromActo(baseRaw, {
       expedienteId: expedienteActual.expedienteId,
-      rfc: identifiers.rfc,
       identifiers,
-      activityKey: expedienteActual.activityKey,
-      activityLabel: expedienteActual.activityLabel,
-      nombre: denominacion,
-      personas,
+      persona: personaActualizada,
       beneficiariosControladores,
       operationContext: {
         tipoActoOperacion: tipoOperacion,
         fechaActoOperacion: fechaOperacion,
         relacionNegocios: relacionNegocios ? "si" : "no",
       },
-      actualizadoEn,
-      expedienteEui: {
-        ...expedienteEui,
-        schemaVersion: 2,
-        expedienteId: expedienteActual.expedienteId,
-        activityKey: expedienteActual.activityKey,
-        activityLabel: expedienteActual.activityLabel,
-        identifiers,
-        tipoActoOperacion: tipoOperacion,
-        fechaActoOperacion: fechaOperacion,
-        relacionNegocios: relacionNegocios ? "si" : "no",
-        cliente: {
-          ...clienteEui,
-          denominacion:
-            personaAvisoActual.tipo === "persona_moral" ? denominacion : clienteEui.denominacion,
-          nombres:
-            personaAvisoActual.tipo === "persona_fisica" ? personaAvisoActual.nombre : clienteEui.nombres,
-          apellidoPaterno:
-            personaAvisoActual.tipo === "persona_fisica"
-              ? personaAvisoActual.apellidoPaterno
-              : clienteEui.apellidoPaterno,
-          apellidoMaterno:
-            personaAvisoActual.tipo === "persona_fisica"
-              ? personaAvisoActual.apellidoMaterno
-              : clienteEui.apellidoMaterno,
-          rfc: identifiers.rfc,
-          nif: identifiers.nif,
-          curp: identifiers.curp,
-        },
-      },
-    }
-    const updatedRecords = rawRecords.some(
-      (item: any) =>
-        item?.expedienteId === expedienteActual.expedienteId ||
-        (expedienteActual.rfc && item?.rfc === expedienteActual.rfc),
-    )
-      ? rawRecords.map((item: any) =>
-          item?.expedienteId === expedienteActual.expedienteId ||
-          (expedienteActual.rfc && item?.rfc === expedienteActual.rfc)
-            ? updatedRaw
-            : item,
-        )
-      : [...rawRecords, updatedRaw]
+      updatedAt: actualizadoEn,
+    })
     try {
-      window.localStorage.setItem(EXPEDIENTE_DETALLE_STORAGE_KEY, JSON.stringify(updatedRecords))
-    } catch (_error) {
+      saveExpedienteRecord(window.localStorage, updatedRaw, {expectedUpdatedAt: expedienteActual.actualizadoEn})
+    } catch (error) {
       toast({
         title: "No se pudo sincronizar",
-        description: "El almacenamiento local no está disponible o no tiene espacio suficiente.",
+        description: error instanceof Error ? error.message : "El almacenamiento local no está disponible o no tiene espacio suficiente.",
         variant: "destructive",
       })
       return
@@ -3844,6 +3827,8 @@ export default function ActividadesVulnerablesPage() {
   }, [personasExpedienteOpciones, personaExpedienteSeleccionada])
 
   useEffect(() => {
+    if (preservedExpedienteSnapshotRef.current === (expedienteSeleccionado || "manual")) return
+    preservedExpedienteSnapshotRef.current = null
     setEditandoDatosEui(false)
     if (!personaExpediente) {
       setPersonaAvisoActual(null)
@@ -3886,7 +3871,7 @@ export default function ActividadesVulnerablesPage() {
     setPersonaAvisoActual(personaAviso)
 
     const nombreCliente = personaAviso
-      ? personaAviso.tipo === "persona_moral"
+      ? personaAviso.tipo !== "persona_fisica"
         ? personaAviso.denominacion ?? ""
         : [personaAviso.nombre, personaAviso.apellidoPaterno, personaAviso.apellidoMaterno]
             .filter((parte) => typeof parte === "string" && parte.trim().length > 0)
@@ -3961,7 +3946,7 @@ export default function ActividadesVulnerablesPage() {
     if (expedienteActual?.operationContext?.relacionNegocios) {
       setRelacionNegocios(expedienteActual.operationContext.relacionNegocios === "si")
     }
-  }, [personaExpediente, expedienteActual])
+  }, [personaExpediente, expedienteActual, expedienteSeleccionado])
 
   useEffect(() => {
     setDatosEuiConfirmados(false)
@@ -3987,6 +3972,7 @@ export default function ActividadesVulnerablesPage() {
   }, [activeTenant?.id, sujetoObligadoOperacion, sujetosObligadosDisponibles])
 
   useEffect(() => {
+    if (preservedExpedienteSnapshotRef.current === (expedienteSeleccionado || "manual")) return
     const clienteActualDisponible = clientesPorSujetoObligado.some(
       (cliente) => cliente.value === clienteOperacionSeleccionado,
     )
@@ -4157,11 +4143,14 @@ export default function ActividadesVulnerablesPage() {
     return operaciones.filter(
       (operacion) =>
         operacion.actividadKey === actividadSeleccionada.key &&
-        operacion.rfc.toUpperCase() === rfc.trim().toUpperCase() &&
+        (expedienteSeleccionado && operacion.expedienteReferenciado
+          ? operacion.expedienteReferenciado === expedienteSeleccionado
+          : operacion.rfc.toUpperCase() === rfc.trim().toUpperCase()) &&
         getSujetoObligadoIdentityKey(operacion.sujetoObligado) ===
           getSujetoObligadoIdentityKey(sujetoObligadoSnapshotActual) &&
         operacion.id !== operacionEditandoId &&
         !isOperacionCancelada(operacion) &&
+        operacion.captureStatus !== "draft" &&
         !operacion.avisoPresentado,
     )
   }, [
@@ -4170,6 +4159,7 @@ export default function ActividadesVulnerablesPage() {
     operaciones,
     rfc,
     sujetoObligadoSnapshotActual,
+    expedienteSeleccionado,
   ])
 
   const pepScreeningCliente = useMemo(() => {
@@ -4184,11 +4174,25 @@ export default function ActividadesVulnerablesPage() {
   }, [clienteNombre, pepCargoCliente, pepDependenciaCliente, pepRelacionCliente])
 
   const montoOperacionParseado = useMemo(
-    () => parseMoneyToCents(montoOperacion, { allowZero: sospecha24h }),
-    [montoOperacion, sospecha24h],
+    () => parseMoneyToCents(montoOperacion, { allowZero: sospecha24h || montoNoDeterminado }),
+    [montoOperacion, sospecha24h, montoNoDeterminado],
   )
-  const montoOperacionCentavos = montoOperacionParseado.ok ? montoOperacionParseado.cents : 0
+  const financeActual = useMemo(() => resolveOperationFinance({
+    amountText: montoOperacion || (sospecha24h || montoNoDeterminado ? "0" : ""),
+    currency: moneda === "OTRA" ? monedaPersonalizadaCodigo : moneda,
+    exchangeRate, exchangeRateDate, exchangeRateSource,
+  }), [montoOperacion, moneda, monedaPersonalizadaCodigo, exchangeRate, exchangeRateDate, exchangeRateSource, sospecha24h, montoNoDeterminado])
+  const montoOperacionCentavos = financeActual.ok ? financeActual.montoCentavos : 0
   const montoOperacionNumero = centsToMoney(montoOperacionCentavos)
+  const contraprestacionParseada = parseMoneyToCents(contraprestacion || "0", {allowZero: true})
+  const notarialAmounts = Object.fromEntries(Object.entries(notarialValues).map(([key, value]) => [key, parseMoneyToCents(value || "0", {allowZero: true})]))
+  const notarialAmountsValid = Object.values(notarialAmounts).every((value) => value.ok)
+  const montoBaseAvisoCentavos = actividadKey === "fraccion-xii-notarios-a" && notarialAmountsValid ? resolveNotarialNoticeBase({
+    precioPactadoCentavos: montoOperacionCentavos,
+    valorCatastralCentavos: notarialAmounts.valorCatastral.ok ? notarialAmounts.valorCatastral.cents : undefined,
+    valorComercialCentavos: notarialAmounts.valorComercial.ok ? notarialAmounts.valorComercial.cents : undefined,
+    principalGarantizadoCentavos: notarialAmounts.principalGarantizado.ok ? notarialAmounts.principalGarantizado.cents : undefined,
+  }) : undefined
 
   const evaluacionActual = useMemo(() => {
     if (!actividadSeleccionada || !umaSeleccionada || !umbralPesos) return null
@@ -4219,12 +4223,17 @@ export default function ActividadesVulnerablesPage() {
         salida,
       }
     }
-    if (!montoOperacionParseado.ok || monto <= 0) return null
+    if (!financeActual.ok || (monto <= 0 && !montoNoDeterminado)) return null
     const resultado = evaluarOperacionVulnerable({
       actividadKey: actividadSeleccionada.key,
       clienteKey: rfc.trim().toUpperCase(),
       fechaOperacion,
       montoMxn: monto,
+      montoCentavos: montoOperacionCentavos,
+      operacionFinancieraPorCuentaCliente: actividadKey.startsWith("fraccion-xi-") ? operacionFinancieraCliente === "si" : undefined,
+      contraprestacionCentavos: actividadKey.startsWith("fraccion-xvi-") && contraprestacionParseada.ok ? contraprestacionParseada.cents : undefined,
+      montoNoDeterminado: actividadKey.startsWith("fraccion-x-") && montoNoDeterminado,
+      montoBaseAvisoCentavos,
       operacionesHistoricas: operacionesRelacionadas.map((operacion) => ({
         id: operacion.id,
         actividadKey: operacion.actividadKey,
@@ -4272,6 +4281,12 @@ export default function ActividadesVulnerablesPage() {
     mismoGrupo,
     rfc,
     sospecha24h,
+    financeActual,
+    montoOperacionCentavos,
+    operacionFinancieraCliente,
+    contraprestacion,
+    montoNoDeterminado,
+    montoBaseAvisoCentavos,
   ])
 
   const controlesEvaluacion = useMemo(() => {
@@ -4317,6 +4332,13 @@ export default function ActividadesVulnerablesPage() {
     }
     return evaluacionActual?.status === "aviso" ? "aviso_normal" : "informe_ceros"
   }, [evaluacionActual, mismoGrupo, sospecha24h])
+  const satOutputLabelActual = !evaluacionActual
+    ? "Sin evaluación"
+    : evaluacionActual.status === "identificacion"
+      ? "Sólo identificación"
+      : evaluacionActual.status === "sin-obligacion"
+        ? "Registro interno"
+        : formatSalidaTipo(satOutputKindActual)
 
   const evidenceDecisionActual = useMemo(
     () =>
@@ -4441,7 +4463,12 @@ export default function ActividadesVulnerablesPage() {
       fechaOperacion,
       montoMxn: montoOperacionNumero,
       montoCentavos: montoOperacionCentavos,
-      formaPago: moneda === "OTRA" ? monedaPersonalizadaCodigo.trim().toUpperCase() || "OTRA" : moneda,
+      formaPago: liquidacionForm.formaPago || liquidacionForm.instrumento,
+      finance: financeActual.ok ? financeActual.finance : undefined,
+      operacionFinancieraPorCuentaCliente: actividadKey.startsWith("fraccion-xi-") && operacionFinancieraCliente ? operacionFinancieraCliente === "si" : undefined,
+      contraprestacionCentavos: actividadKey.startsWith("fraccion-xvi-") && contraprestacionParseada.ok ? contraprestacionParseada.cents : undefined,
+      montoNoDeterminado: actividadKey.startsWith("fraccion-x-") && montoNoDeterminado,
+      montoBaseAvisoCentavos,
       sospecha24h,
       supuesto27Bis: mismoGrupo === "si" && evaluacionActual.status === "aviso",
       alertaCodigo,
@@ -4484,6 +4511,14 @@ export default function ActividadesVulnerablesPage() {
     satWorkbookStatusActual,
     sospecha24h,
     tipoCliente,
+    liquidacionForm.formaPago,
+    liquidacionForm.instrumento,
+    financeActual,
+    montoOperacionCentavos,
+    operacionFinancieraCliente,
+    contraprestacion,
+    montoNoDeterminado,
+    montoBaseAvisoCentavos,
   ])
 
   const checklistEntriesOperacion = useMemo(
@@ -4562,7 +4597,7 @@ export default function ActividadesVulnerablesPage() {
   )
 
   const resumenUmbrales = useMemo(() => {
-    const acumulados = operacionesActivas.reduce(
+    const acumulados = operacionesActivas.filter((operacion) => operacion.captureStatus !== "draft").reduce(
       (acc, operacion) => {
         acc[operacion.umbralStatus] = (acc[operacion.umbralStatus] ?? 0) + 1
         return acc
@@ -4578,7 +4613,7 @@ export default function ActividadesVulnerablesPage() {
   }, [operacionesActivas])
 
   const resumenSalidas = useMemo(() => {
-    const acumulados = operacionesActivas.reduce(
+    const acumulados = operacionesActivas.filter((operacion) => operacion.captureStatus !== "draft").reduce(
       (acc, operacion) => {
         const tipo = operacion.avisoSalidaTipo ?? "sin_salida"
         acc[tipo] = (acc[tipo] ?? 0) + 1
@@ -4592,17 +4627,14 @@ export default function ActividadesVulnerablesPage() {
       informe27Bis: acumulados.informe_27_bis ?? 0,
       aviso24h: acumulados.aviso_24h ?? 0,
       sinSalida: acumulados.sin_salida ?? 0,
-      informeCeros:
-        (acumulados.aviso_normal ?? 0) + (acumulados.informe_27_bis ?? 0) + (acumulados.aviso_24h ?? 0) === 0
-          ? 1
-          : 0,
+      informeCeros: acumulados.informe_ceros ?? 0,
     }
   }, [operacionesActivas])
 
   const seguimientoMonitoringView = useMemo(
     () =>
       buildOperationalMonitoringView({
-        operations: operacionesActivas.map((operacion) => ({
+        operations: operacionesActivas.filter((operacion) => operacion.captureStatus !== "draft").map((operacion) => ({
           umbralStatus: operacion.umbralStatus,
           alerta: operacion.alerta,
           alertaResuelta: operacion.alertaResuelta,
@@ -4650,7 +4682,9 @@ export default function ActividadesVulnerablesPage() {
         if (filtroEstadoOperaciones !== "todos") {
           const cancelada = isOperacionCancelada(operacion)
           const coincideEstado =
-            filtroEstadoOperaciones === "cancelled"
+            filtroEstadoOperaciones === "draft"
+              ? !cancelada && operacion.captureStatus === "draft"
+              : filtroEstadoOperaciones === "cancelled"
               ? cancelada
               : filtroEstadoOperaciones === "presented"
                 ? !cancelada &&
@@ -4711,10 +4745,14 @@ export default function ActividadesVulnerablesPage() {
     () => operaciones.find((operacion) => operacion.id === operacionEditandoId) ?? null,
     [operacionEditandoId, operaciones],
   )
+  const actividadRequiereRevisionNormativa = Boolean(
+    actividadKey && findActividadByKey(actividadKey).noticeReviewRequired,
+  )
 
   const clientesRegistrados = useMemo(() => {
     const mapa = new Map<string, { rfc: string; nombre: string }>()
     operacionesActivas.forEach((operacion) => {
+      if (!operacion.rfc.trim()) return
       if (!mapa.has(operacion.rfc)) {
         mapa.set(operacion.rfc, { rfc: operacion.rfc, nombre: operacion.cliente })
       }
@@ -4773,7 +4811,7 @@ export default function ActividadesVulnerablesPage() {
   const alertasActivas = useMemo(
     () =>
       operacionesActivas
-        .filter((operacion) => operacion.alerta && !operacion.alertaResuelta)
+        .filter((operacion) => operacion.captureStatus !== "draft" && operacion.alerta && !operacion.alertaResuelta)
         .sort((a, b) => toDate(b.fechaOperacion).getTime() - toDate(a.fechaOperacion).getTime()),
     [operacionesActivas],
   )
@@ -4814,15 +4852,37 @@ export default function ActividadesVulnerablesPage() {
     setDiaSeleccionado(diaMesActual ? diaMesActual.clave : calendarioDias[0]?.clave ?? null)
   }, [clienteCalendario, calendarioDias, diaSeleccionado])
 
+const beneficiarioCompleto = Boolean(
+  beneficiarioForm.nombre.trim() &&
+    (beneficiarioForm.tipo === "persona_moral"
+      ? beneficiarioForm.rfc.trim()
+      : beneficiarioForm.rfc.trim() || beneficiarioForm.curp.trim()) &&
+    beneficiarioSatMissingFields.length === 0,
+)
 const wizardStepDiagnostics = useMemo<OperationalWizardStepDiagnostics[]>(
   () =>
     STEPS.map((_, index) =>
-      buildOperationalStepDiagnostics({
+      index === 3 && (!beneficiarioCompleto || !datosEuiConfirmados)
+        ? {
+            status: "missing",
+            canContinue: false,
+            alertTitle: "Beneficiario controlador pendiente",
+            alertDescription: "Completa y confirma el beneficiario controlador antes de avanzar.",
+            reasons: [{
+              id: "beneficiario-confirmacion",
+              label: beneficiarioCompleto ? "Confirmar beneficiario controlador" : "Completar beneficiario controlador",
+              description: "Revisa los datos del beneficiario y confirma que corresponden a esta operación.",
+              kind: "field",
+              severity: "required",
+            }],
+          }
+        : buildOperationalStepDiagnostics({
         stepIndex: index,
         hasActiveTenant: Boolean(tenantOperacionalActual),
         hasUma: Boolean(umaSeleccionada),
         hasActividad: Boolean(actividadKey),
         hasSatFormato: Boolean(satFormatoActual),
+        hasSatWorkbook: Boolean(satTemplateActual?.localPath) && !actividadKey.startsWith("fraccion-xiv-"),
         clienteNombre,
         rfc,
         tipoClienteRequiresDetalle: Boolean(tipoClienteSeleccionado?.requiresDetalle),
@@ -4830,6 +4890,7 @@ const wizardStepDiagnostics = useMemo<OperationalWizardStepDiagnostics[]>(
         tipoOperacion,
         montoOperacion,
         sospecha24h,
+        montoNoDeterminado,
         esActividadInmuebles,
         satWorkbookStatus: satWorkbookStatusActual,
         satMissingRequiredFields,
@@ -4844,12 +4905,14 @@ const wizardStepDiagnostics = useMemo<OperationalWizardStepDiagnostics[]>(
     tenantOperacionalActual,
     actividadKey,
     satFormatoActual,
+    satTemplateActual,
     umaSeleccionada,
     clienteNombre,
     rfc,
     tipoOperacion,
     montoOperacion,
     sospecha24h,
+    montoNoDeterminado,
     evaluacionActual,
     evidenceDecisionActual,
     alertaDescripcion,
@@ -4859,16 +4922,11 @@ const wizardStepDiagnostics = useMemo<OperationalWizardStepDiagnostics[]>(
     esActividadInmuebles,
     satWorkbookStatusActual,
     satMissingRequiredFields,
+    beneficiarioCompleto,
+    datosEuiConfirmados,
   ],
 )
 const pasoDiagnostics = wizardStepDiagnostics[pasoActual]
-const beneficiarioCompleto = Boolean(
-  beneficiarioForm.nombre.trim() &&
-    (beneficiarioForm.tipo === "persona_moral"
-      ? beneficiarioForm.rfc.trim()
-      : beneficiarioForm.rfc.trim() || beneficiarioForm.curp.trim()) &&
-    beneficiarioSatMissingFields.length === 0,
-)
 const requiereConfirmacionBeneficiario = pasoActual === 3
 const pasoValido =
   (pasoDiagnostics?.canContinue ?? false) &&
@@ -5002,6 +5060,8 @@ const limpiarClienteSeleccionado = () => {
 }
 
 const limpiarFormulario = () => {
+  preservedExpedienteSnapshotRef.current = null
+  editingOperationVersionRef.current = null
   setOperacionEditandoId(null)
   setMotivoCorreccion("")
   setDatosEuiConfirmados(false)
@@ -5014,6 +5074,13 @@ const limpiarFormulario = () => {
   setMoneda("MXN")
   setMonedaPersonalizadaCodigo("")
   setMonedaPersonalizadaDescripcion("")
+  setExchangeRate("")
+  setExchangeRateDate("")
+  setExchangeRateSource("")
+  setOperacionFinancieraCliente("")
+  setContraprestacion("")
+  setMontoNoDeterminado(false)
+  setNotarialValues({valorCatastral: "", valorComercial: "", principalGarantizado: ""})
   setFechaOperacion(new Date().toISOString().substring(0, 10))
   setPagoRecurrenteMeses("1")
   setPagoRecurrenteMensualidad("")
@@ -5047,6 +5114,7 @@ const DEMO_EVIDENCIA_DESCRIPCION =
   "Contrato marco de arrendamiento 2025 firmado con Corporativo Norte S.A."
 
 const registrarClienteGuardado = (cliente: ClienteGuardado) => {
+  if (!cliente.rfc.trim()) return
   setClientesGuardados((prev) => {
     const existente = prev.find((item) => item.rfc === cliente.rfc)
     if (existente) {
@@ -5164,23 +5232,34 @@ const cargarDemoFraccionXV = () => {
     valorCatastral: "",
   })
   setPersonaAvisoActual(demoFraccionXV.personaAviso as PersonaAvisoOperacion)
+  preservedExpedienteSnapshotRef.current = "manual"
   setPersonaExpedienteSeleccionada("")
 
-  demoCargaRef.current = true
-  setTimeout(() => {
-    agregarOperacion()
-    toast({
-      title: "Demo cargada",
-      description: "Se agregó una operación de ejemplo de la Fracción XV para fines de demostración.",
-    })
-  }, 150)
+  demoCargaRef.current = false
+  toast({
+    title: "Ejemplo ficticio preparado",
+    description: "Revisa los datos y confirma el beneficiario antes de guardar. Todavía no se ha registrado una operación.",
+  })
 }
 
 const actualizarOperaciones = (
   modifier: (operacionesActuales: OperacionCliente[]) => OperacionCliente[],
 ) => {
-  setOperacionesStorageValido(true)
-  setOperaciones((prev) => recalcularOperaciones(modifier(prev), true))
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(OPERACIONES_STORAGE_KEY) || "[]")
+    if (!Array.isArray(parsed)) throw new Error("El registro de operaciones no tiene un formato válido.")
+    const latest = parsed.map(sanitizeOperacion)
+    if (latest.some((operation) => !operation)) throw new Error("Hay registros que no se pueden interpretar. No se sobrescribió el almacenamiento.")
+    const next = recalcularOperaciones(modifier(latest as OperacionCliente[]), true)
+    window.localStorage.setItem(OPERACIONES_STORAGE_KEY, JSON.stringify(next))
+    setOperacionesStorageValido(true)
+    setOperaciones(next)
+    notifyPldIntegrationChange(OPERACIONES_STORAGE_KEY)
+    return true
+  } catch (error) {
+    toast({title: "No se guardaron los cambios", description: error instanceof Error ? error.message : "Revisa el espacio y el almacenamiento del navegador.", variant: "destructive"})
+    return false
+  }
 }
 
 const manejarSeleccionClienteGuardado = (valor: string) => {
@@ -5204,7 +5283,7 @@ const manejarSeleccionClienteGuardado = (valor: string) => {
   setSospecha24h(false)
 }
 
-const agregarOperacion = () => {
+const agregarOperacion = (guardarBorrador = false) => {
   const operacionExistente = operacionEditandoId
     ? operaciones.find((operacion) => operacion.id === operacionEditandoId) ?? null
     : null
@@ -5218,7 +5297,7 @@ const agregarOperacion = () => {
     return
   }
 
-  if (!clienteNombre || !rfc || !tipoOperacion || (!sospecha24h && !montoOperacion)) {
+  if (!clienteNombre || (!guardarBorrador && (!rfc || !tipoOperacion || (!sospecha24h && !montoOperacion && !montoNoDeterminado)))) {
     toast({
       title: "Faltan datos",
       description: sospecha24h
@@ -5229,12 +5308,32 @@ const agregarOperacion = () => {
     return
   }
 
-  if (!beneficiarioCompleto || !datosEuiConfirmados) {
+  if (!guardarBorrador && (!beneficiarioCompleto || !datosEuiConfirmados)) {
     toast({
       title: "Beneficiario pendiente",
       description: "Completa y confirma el beneficiario controlador en el paso 4 antes de guardar.",
       variant: "destructive",
     })
+    return
+  }
+
+  if (!guardarBorrador && actividadRequiereRevisionNormativa) {
+    toast({
+      title: "Criterio normativo pendiente de revisión",
+      description: "Esta actividad puede conservarse como borrador. No se marcará completa ni se generará una salida oficial hasta verificar su criterio aplicable.",
+      variant: "destructive",
+    })
+    return
+  }
+
+  const pasoIncompleto = wizardStepDiagnostics.findIndex((step) => !step.canContinue)
+  if (!guardarBorrador && ((actividadKey === "fraccion-xii-notarios-a" && !notarialAmountsValid) || (actividadKey.startsWith("fraccion-xvi-") && !contraprestacionParseada.ok))) {
+    toast({title: "Importes adicionales inválidos", description: "Revisa la contraprestación o los valores notariales. Usa un máximo de dos decimales.", variant: "destructive"})
+    return
+  }
+  if (!guardarBorrador && (pasoIncompleto >= 0 || !sujetoObligadoSnapshotActual?.rfc || !financeActual.ok || (actividadKey.startsWith("fraccion-xi-") && !operacionFinancieraCliente))) {
+    setPasoActual(pasoIncompleto >= 0 ? pasoIncompleto : 2)
+    toast({title: "Captura pendiente", description: !financeActual.ok ? financeActual.error : "Revisa los pasos pendientes, el sujeto obligado y las condiciones de la actividad. Puedes guardar un borrador sin generar una salida oficial.", variant: "destructive"})
     return
   }
 
@@ -5251,19 +5350,24 @@ const agregarOperacion = () => {
     return
   }
 
-  const montoParseado =
-    sospecha24h && !montoOperacion.trim()
+  const rawMontoParseado =
+    (sospecha24h || montoNoDeterminado) && !montoOperacion.trim()
       ? ({ ok: true, cents: 0, decimal: "0.00" } as const)
-      : parseMoneyToCents(montoOperacion, { allowZero: sospecha24h })
-  if (!montoParseado.ok) {
+      : parseMoneyToCents(montoOperacion, { allowZero: sospecha24h || montoNoDeterminado })
+  if (!rawMontoParseado.ok && !guardarBorrador) {
     toast({
       title: "Monto inválido",
-      description: montoParseado.message,
+      description: rawMontoParseado.message,
       variant: "destructive",
     })
     return
   }
-  const monto = centsToMoney(montoParseado.cents)
+  const montoParseado = rawMontoParseado.ok ? rawMontoParseado : {ok: true as const, cents: 0, decimal: "0.00"}
+  if (!financeActual.ok && !guardarBorrador) {
+    toast({title: "Conversión monetaria pendiente", description: financeActual.error, variant: "destructive"})
+    return
+  }
+  const monto = financeActual.ok ? centsToMoney(financeActual.montoCentavos) : 0
 
   const valorAvaluoInmuebleParseado =
     esActividadInmuebles && inmuebleForm.valorAvaluo.trim()
@@ -5299,7 +5403,7 @@ const agregarOperacion = () => {
     return
   }
 
-  if (tipoClienteSeleccionado?.requiresDetalle && !detalleTipoCliente.trim()) {
+  if (!guardarBorrador && tipoClienteSeleccionado?.requiresDetalle && !detalleTipoCliente.trim()) {
     toast({
       title: "Detalle requerido",
       description: "Indica el tipo específico de entidad para el cliente seleccionado.",
@@ -5313,7 +5417,7 @@ const agregarOperacion = () => {
 
   if (moneda === "OTRA") {
     const codigoLimpio = monedaPersonalizadaCodigo.trim().toUpperCase()
-    if (!codigoLimpio || codigoLimpio.length !== 3) {
+    if ((!codigoLimpio || codigoLimpio.length !== 3) && !guardarBorrador) {
       toast({
         title: "Código de moneda requerido",
         description: "Ingresa el código ISO de tres letras para la divisa personalizada.",
@@ -5337,10 +5441,23 @@ const agregarOperacion = () => {
 
   const personaAvisoSnapshot = personaAvisoActual
     ? { ...personaAvisoActual }
-    : buildPersonaAvisoFromExpediente(personaExpediente)
+    : buildPersonaAvisoFromExpediente(personaExpediente) ?? {
+      tipo: tipoCliente.startsWith("pf") ? "persona_fisica" : tipoCliente.includes("fideicomiso") ? "fideicomiso" : "persona_moral",
+      ...(tipoCliente.startsWith("pf") ? {nombre: clienteNombre.trim()} : {denominacion: clienteNombre.trim()}),
+      rfc: rfc.length === 12 || rfc.length === 13 ? rfc.trim().toUpperCase() : undefined,
+      ...(tipoCliente.includes("fideicomiso") ? {fiduciarioDenominacion: fideicomisoForm.fiduciarioDenominacion, fiduciarioRfc: fideicomisoForm.fiduciarioRfc, identificadorFideicomiso: fideicomisoForm.identificador} : {}),
+    } as PersonaAvisoOperacion
 
   let inmuebleOperacion: DatosInmuebleOperacion | null = null
-  let liquidacionOperacion: DatosLiquidacionOperacion | null = null
+  let liquidacionOperacion: DatosLiquidacionOperacion | null = {
+    fechaPago: liquidacionForm.fechaPago || fechaOperacion,
+    formaPago: liquidacionForm.formaPago,
+    instrumento: liquidacionForm.instrumento,
+    moneda: monedaCodigoFinal,
+    monedaDescripcion: monedaDescripcionFinal,
+    monto: centsToMoney(montoParseado.cents),
+    montoCentavos: montoParseado.cents,
+  }
   let beneficiarioOperacion: BeneficiarioControladorOperacion | null = null
   let contraparteOperacion: ContraparteOperacion | null = null
   let instrumentoOperacion: InstrumentoPublicoOperacion | null = null
@@ -5389,16 +5506,6 @@ const agregarOperacion = () => {
       numeroInterior: inmuebleForm.numeroInterior.trim() ? inmuebleForm.numeroInterior : undefined,
     }
 
-    liquidacionOperacion = {
-      fechaPago: liquidacionForm.fechaPago,
-      formaPago: liquidacionForm.formaPago,
-      instrumento: liquidacionForm.instrumento,
-      moneda: monedaCodigoFinal,
-      monedaDescripcion: monedaDescripcionFinal,
-      monto,
-      montoCentavos: montoParseado.cents,
-    }
-
     contraparteOperacion = {
       tipo: contraparteForm.tipo,
       nombre: contraparteForm.nombre,
@@ -5438,7 +5545,7 @@ const agregarOperacion = () => {
     }
   }
 
-  const status: UmbralStatus = evaluacionActual?.status ?? "sin-obligacion"
+  const status: UmbralStatus = guardarBorrador ? "sin-obligacion" : evaluacionActual?.status ?? "sin-obligacion"
   const acumuladoCliente = evaluacionActual?.acumulado ?? monto
   const alerta = obtenerAlertaPorStatus(status)
   const omitirToast = demoCargaRef.current
@@ -5504,7 +5611,16 @@ const agregarOperacion = () => {
     ...(operacionExistente ?? {}),
     schemaVersion: 3,
     id: operacionId,
-    montoCentavos: montoParseado.cents,
+    montoCentavos: financeActual.ok ? financeActual.montoCentavos : 0,
+    finance: financeActual.ok ? financeActual.finance : undefined,
+    financeReviewRequired: !financeActual.ok,
+    captureStatus: guardarBorrador ? "draft" : "complete",
+    captureDraft: guardarBorrador ? {amountText: montoOperacion, currency: monedaCodigoFinal, exchangeRate, exchangeRateDate, exchangeRateSource} : undefined,
+    operacionFinancieraPorCuentaCliente: actividadKey.startsWith("fraccion-xi-") && operacionFinancieraCliente ? operacionFinancieraCliente === "si" : undefined,
+    contraprestacionCentavos: actividadKey.startsWith("fraccion-xvi-") && contraprestacionParseada.ok ? contraprestacionParseada.cents : undefined,
+    montoNoDeterminado: actividadKey.startsWith("fraccion-x-") && montoNoDeterminado,
+    montoBaseAvisoCentavos,
+    notarialValues: actividadKey === "fraccion-xii-notarios-a" ? notarialValues : undefined,
     revision: (operacionExistente?.revision ?? 0) + 1,
     createdAt: operacionExistente?.createdAt ?? ahora,
     updatedAt: ahora,
@@ -5538,7 +5654,7 @@ const agregarOperacion = () => {
     satFieldValues: satEffectiveFieldValues,
     satCellValues: satEffectiveCellValues,
     satMissingRequiredFields,
-    satWorkbookStatus: satWorkbookStatusActual,
+    satWorkbookStatus: guardarBorrador ? "borrador_bloqueado" : satWorkbookStatusActual,
     tipoCliente,
     detalleTipoCliente: detalleClienteNormalizado,
     cliente: clienteNombre.trim(),
@@ -5570,17 +5686,17 @@ const agregarOperacion = () => {
         : [...documentosCargaRapida, ...documentosArchivos, ...documentosJustificados],
     requisitosChecklist,
     kycIntegrado: operacionExistente?.kycIntegrado ?? false,
-    referenciaAviso: esActividadInmuebles ? referenciaAviso.trim() : undefined,
-    alertaCodigo: esActividadInmuebles ? alertaCodigo : undefined,
+    referenciaAviso: referenciaAviso.trim() || undefined,
+    alertaCodigo,
     alertaDescripcion:
-      esActividadInmuebles && alertaDescripcion.trim().length > 0
+      alertaDescripcion.trim().length > 0
         ? alertaDescripcion.trim()
         : undefined,
-    prioridadAviso: esActividadInmuebles ? prioridadAviso : undefined,
+    prioridadAviso,
     sospecha24h,
-    avisoSalidaTipo: salidaOperacion.tipo,
-    avisoSalidaLabel: salidaOperacion.label,
-    avisoSalidaDescripcion: salidaOperacion.descripcion,
+    avisoSalidaTipo: guardarBorrador ? "sin_salida" : salidaOperacion.tipo,
+    avisoSalidaLabel: guardarBorrador ? "Borrador" : salidaOperacion.label,
+    avisoSalidaDescripcion: guardarBorrador ? "Captura incompleta; sin salida SAT" : salidaOperacion.descripcion,
     evidenciaCanClose: evidenciaDecision.canClose,
     evidenciaFaltantesCriticos: evidenciaEvaluada.missingCritical.length,
     evidenciaFaltantesOpcionales: evidenciaEvaluada.missingOptional.length,
@@ -5657,11 +5773,16 @@ const agregarOperacion = () => {
   }
   nuevaOperacion = operacionNormalizada
 
-  actualizarOperaciones((prev) =>
-    operacionExistente
-      ? prev.map((operacion) => (operacion.id === operacionExistente.id ? nuevaOperacion : operacion))
-      : [...prev, nuevaOperacion],
-  )
+  const guardada = actualizarOperaciones((prev) => {
+    if (operacionExistente) {
+      const latest = prev.find((operation) => operation.id === operacionExistente.id)
+      const expected = editingOperationVersionRef.current ?? operacionExistente
+      if (!latest || latest.revision !== expected.revision || latest.updatedAt !== expected.updatedAt) throw new Error("La operación cambió en otra pestaña. Vuelve a abrirla antes de guardar.")
+      return prev.map((operacion) => operacion.id === operacionExistente.id ? nuevaOperacion : operacion)
+    }
+    return [...prev, nuevaOperacion]
+  })
+  if (!guardada) return
   registrarClienteGuardado({
     rfc: nuevaOperacion.rfc,
     nombre: nuevaOperacion.cliente,
@@ -5671,7 +5792,9 @@ const agregarOperacion = () => {
   })
 
   if (!omitirToast) {
-    if (status !== "sin-obligacion") {
+    if (guardarBorrador) {
+      toast({title: "Borrador guardado", description: "Se conservó la captura pendiente. No genera salida SAT ni participa en acumulaciones hasta completarse."})
+    } else if (status !== "sin-obligacion") {
       toast({
         title: getStatusLabel(status),
         description: alerta ?? "Revisar obligaciones aplicables.",
@@ -5699,6 +5822,10 @@ const agregarOperacion = () => {
 const marcarAvisoPresentado = (id: string) => {
   const operacion = operaciones.find((item) => item.id === id)
   if (!operacion) return
+  if (operacion.captureStatus === "draft" || !operacion.referenciaAviso?.trim()) {
+    toast({title: "Presentación pendiente de evidencia", description: "Completa la captura y registra una referencia o folio verificable. Esta acción es un registro manual, no un envío al SAT.", variant: "destructive"})
+    return
+  }
 
   const evidenciaEvaluada = evaluarEvidenciaOperacion(operacion)
   if (!evidenciaEvaluada.canClose) {
@@ -5730,13 +5857,15 @@ const marcarAvisoPresentado = (id: string) => {
   })
   if (!actualizada) return
 
-  actualizarOperaciones((prev) =>
-    prev.map((item) => (item.id === id ? actualizada : item)),
-  )
+  if (!actualizarOperaciones((prev) => {
+    const latest = prev.find((item) => item.id === id)
+    if (!latest || latest.revision !== operacion.revision || latest.updatedAt !== operacion.updatedAt) throw new Error("El registro cambió; recarga antes de registrar la presentación.")
+    return prev.map((item) => item.id === id ? actualizada : item)
+  })) return
 
   toast({
     title: "Aviso actualizado",
-    description: "Se marcó la operación como atendida ante la autoridad.",
+    description: "Se registró manualmente la presentación declarada. Conserva el acuse de la autoridad.",
   })
 }
 
@@ -5785,7 +5914,11 @@ const confirmarEliminarOCancelarOperacion = () => {
   const operacionesActualizadas = result.operations
     .map((operacion) => sanitizeOperacion(operacion))
     .filter((operacion): operacion is OperacionCliente => Boolean(operacion))
-  actualizarOperaciones(() => operacionesActualizadas)
+  if (!actualizarOperaciones((latest) => {
+    const target = latest.find((item) => item.id === operacionParaEliminar.id)
+    if (!target || target.revision !== operacionParaEliminar.revision || target.updatedAt !== operacionParaEliminar.updatedAt) throw new Error("La operación cambió en otra vista; revisa su estado antes de eliminarla o cancelarla.")
+    return latest.flatMap((item) => item.id !== operacionParaEliminar.id ? [item] : operacionesActualizadas.filter((updated) => updated.id === item.id))
+  })) return
 
   if (result.action === "cancelled") {
     toast({
@@ -6040,12 +6173,17 @@ const exportarXml = (operacion: OperacionCliente) => {
       (tenant) =>
         tenant.id === operacion.sujetoObligado?.id ||
         Boolean(operacion.sujetoObligado?.rfc && tenant.rfc === operacion.sujetoObligado.rfc),
-    ) ?? activeTenant ?? buildDefaultPldTenants("tenant-demo-pld").tenants[0]
+    )
+  if (!operacion.sujetoObligado?.rfc || operacion.captureStatus === "draft") {
+    toast({title: "Salida SAT pendiente", description: "Completa la captura y vincula un sujeto obligado registrado antes de generar el paquete.", variant: "destructive"})
+    return
+  }
+  const resolvedTenant = tenantBase ?? integrationSubjectToTenant({id: operacion.sujetoObligado.id || operacion.sujetoObligado.rfc, rfc: operacion.sujetoObligado.rfc, nombre: operacion.sujetoObligado.nombre || "", activityKeys: [operacion.actividadKey], source: "expediente"})
   const tenant = {
-    ...tenantBase,
-    id: operacion.sujetoObligado?.id || tenantBase.id,
-    rfc: operacion.sujetoObligado?.rfc || tenantBase.rfc,
-    razonSocial: operacion.sujetoObligado?.nombre || tenantBase.razonSocial,
+    ...resolvedTenant,
+    id: operacion.sujetoObligado.id || resolvedTenant.id,
+    rfc: operacion.sujetoObligado.rfc,
+    razonSocial: operacion.sujetoObligado.nombre || resolvedTenant.razonSocial,
   }
   const salida = classifyAvisoSalida({
     status: operacion.umbralStatus,
@@ -6068,6 +6206,12 @@ const exportarXml = (operacion: OperacionCliente) => {
     ),
     montoCentavos:
       operacion.montoCentavos ?? coerceLegacyMoneyToCents(operacion.monto),
+    captureStatus: operacion.captureStatus,
+    finance: operacion.finance,
+    operacionFinancieraPorCuentaCliente: operacion.operacionFinancieraPorCuentaCliente,
+    contraprestacionCentavos: operacion.contraprestacionCentavos,
+    montoBaseAvisoCentavos: operacion.montoBaseAvisoCentavos,
+    montoNoDeterminado: operacion.montoNoDeterminado,
     formaPago: operacion.liquidacion?.formaPago ?? operacion.monedaDescripcion,
     sospecha24h: Boolean(operacion.sospecha24h),
     supuesto27Bis: operacion.mismoGrupo && operacion.umbralStatus === "aviso",
@@ -6112,6 +6256,7 @@ const exportarXml = (operacion: OperacionCliente) => {
 }
 
 const reutilizarDatosCliente = (operacion: OperacionCliente, modo: "reusar" | "editar" = "reusar") => {
+  editingOperationVersionRef.current = modo === "editar" ? {revision: operacion.revision, updatedAt: operacion.updatedAt} : null
   setTabActiva("captura")
   preserveSatValuesOnActivityChangeRef.current = true
   setActividadKey(operacion.actividadKey)
@@ -6151,10 +6296,17 @@ const reutilizarDatosCliente = (operacion: OperacionCliente, modo: "reusar" | "e
   setDraftEvidenceFiles({})
   setDraftEvidenceUploads([])
   setMontoOperacion(
-    operacion.montoCentavos !== undefined
+    operacion.captureDraft?.amountText ?? operacion.finance?.originalAmount ?? (operacion.montoCentavos !== undefined
       ? centsToDecimalString(operacion.montoCentavos)
-      : String(operacion.monto || ""),
+      : String(operacion.monto || "")),
   )
+  setExchangeRate(operacion.captureDraft?.exchangeRate ?? operacion.finance?.exchangeRate ?? "")
+  setExchangeRateDate(operacion.captureDraft?.exchangeRateDate ?? operacion.finance?.exchangeRateDate ?? "")
+  setExchangeRateSource(operacion.captureDraft?.exchangeRateSource ?? operacion.finance?.exchangeRateSource ?? "")
+  setOperacionFinancieraCliente(operacion.operacionFinancieraPorCuentaCliente === undefined ? "" : operacion.operacionFinancieraPorCuentaCliente ? "si" : "no")
+  setContraprestacion(operacion.contraprestacionCentavos !== undefined ? centsToDecimalString(operacion.contraprestacionCentavos) : "")
+  setMontoNoDeterminado(Boolean(operacion.montoNoDeterminado))
+  setNotarialValues(operacion.notarialValues ?? {valorCatastral: "", valorComercial: "", principalGarantizado: ""})
   setPagoRecurrenteMeses(String(operacion.pagoRecurrenteMeses ?? 1))
   setPagoRecurrenteMensualidad(
     operacion.pagoRecurrenteMensualidadCentavos !== undefined
@@ -6252,6 +6404,7 @@ const reutilizarDatosCliente = (operacion: OperacionCliente, modo: "reusar" | "e
   const expedienteOperacion = operacion.expedienteReferenciado
     ? expedientesDetalle[operacion.expedienteReferenciado] ?? null
     : null
+  preservedExpedienteSnapshotRef.current = expedienteOperacion?.expedienteId || "manual"
   setExpedienteSeleccionado(expedienteOperacion?.expedienteId ?? null)
   setClienteOperacionSeleccionado(expedienteOperacion?.expedienteId ?? "")
   setPersonaExpedienteSeleccionada(operacion.personaExpedienteId ?? "")
@@ -6268,7 +6421,7 @@ const reutilizarDatosCliente = (operacion: OperacionCliente, modo: "reusar" | "e
       ? { ...(operacion.satFieldValues ?? {}) }
       : buildReusableSatFieldValues(operacion.satFieldValues),
   )
-  setDatosEuiConfirmados(Boolean(operacion.beneficiario?.nombre))
+  setDatosEuiConfirmados(false)
   setPasoActual(modo === "editar" ? 0 : 1)
   if (modo === "editar") {
     setOperacionEditandoId(operacion.id)
@@ -6711,6 +6864,7 @@ const cambiarMesCalendario = (delta: number) => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos los estados</SelectItem>
+                    <SelectItem value="draft">Borradores</SelectItem>
                     <SelectItem value="aviso">Aviso</SelectItem>
                     <SelectItem value="identificacion">Identificación</SelectItem>
                     <SelectItem value="sin-obligacion">Sin obligación</SelectItem>
@@ -6841,7 +6995,17 @@ const cambiarMesCalendario = (delta: number) => {
                   </p>
                 </div>
               ) : null}
+              {operacionEnEdicionCompleta.financeReviewRequired ? (
+                <p role="alert" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                  Conversión monetaria pendiente: este registro histórico no tiene un equivalente MXN verificable. Revisa el importe original, la divisa, el tipo de cambio, su fecha y fuente en el paso 3. Se conserva como borrador y no participa en acumulaciones hasta completar la revisión.
+                </p>
+              ) : null}
             </section>
+          ) : null}
+          {actividadRequiereRevisionNormativa ? (
+            <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+              Esta actividad tiene un criterio de aviso pendiente de revisión normativa. Puedes guardar el trabajo como borrador, pero no marcarlo completo ni generar una salida oficial.
+            </div>
           ) : null}
           <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
             <div className="border-b border-emerald-100 bg-emerald-50/60 px-5 py-4">
@@ -6916,7 +7080,7 @@ const cambiarMesCalendario = (delta: number) => {
                     </Select>
                   ) : (
                     <div className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
-                      <p className="truncate font-medium">{activeTenant?.razonSocial ?? "Demo PLD Multi-cliente"}</p>
+                      <p className="truncate font-medium">{activeTenant?.razonSocial ?? "Sujeto obligado pendiente"}</p>
                       <p className="truncate text-xs text-slate-500">RFC {activeTenant?.rfc ?? "pendiente"}</p>
                     </div>
                   )}
@@ -7055,7 +7219,7 @@ const cambiarMesCalendario = (delta: number) => {
                 </div>
                 <div className="min-w-0 rounded-xl border bg-slate-50 p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Salida preliminar</p>
-                  <p className="mt-1 truncate text-sm font-semibold text-slate-900">{formatSalidaTipo(satOutputKindActual)}</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-slate-900">{satOutputLabelActual}</p>
                   <p className="line-clamp-2 text-xs leading-snug text-slate-500">{satWorkbookStatusLabel}</p>
                 </div>
                 <label className="flex min-w-0 items-start gap-3 rounded-xl border bg-slate-50 p-3 text-sm">
@@ -7106,7 +7270,7 @@ const cambiarMesCalendario = (delta: number) => {
             rfc={rfc}
             actividadFraccion={actividadSeleccionada?.fraccion ?? ""}
             actividadNombre={actividadSeleccionada?.nombre ?? ""}
-            salidaLabel={formatSalidaTipo(satOutputKindActual)}
+            salidaLabel={satOutputLabelActual}
             fechaLimiteLabel={
               operationalCasePreview?.satOutputStatus.fechaLimite
                 ? `Límite ${formatDateDisplay(operationalCasePreview.satOutputStatus.fechaLimite)}`
@@ -7120,7 +7284,7 @@ const cambiarMesCalendario = (delta: number) => {
             evidenciaInfo={ACTOS_INFO_HINTS.evidenciaCritica}
           />
 
-          <div className="grid gap-4 lg:grid-cols-[170px_minmax(0,1fr)] lg:items-start">
+          <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[170px_minmax(0,1fr)] lg:items-start [&>*]:min-w-0">
             <OperationalProgressRail
               steps={STEPS}
               diagnostics={wizardStepDiagnostics}
@@ -7144,7 +7308,7 @@ const cambiarMesCalendario = (delta: number) => {
                       <div className="rounded-xl border bg-slate-50 p-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sujeto obligado</p>
                         <p className="mt-1 line-clamp-2 break-words font-semibold leading-snug text-slate-900">
-                          {tenantOperacionalActual?.razonSocial ?? "Demo PLD Multi-cliente"}
+                          {tenantOperacionalActual?.razonSocial ?? "Sujeto obligado pendiente"}
                         </p>
                         <p className="text-xs text-slate-500">
                           RFC {tenantOperacionalActual?.rfc ?? "pendiente"} · {tenantOperacionalActual?.representanteCumplimiento.nombre ?? "Responsable pendiente"}
@@ -7909,18 +8073,10 @@ const cambiarMesCalendario = (delta: number) => {
                       onChange={(event) => {
                         const value = event.target.value
                         setMontoOperacion(value)
-                        const parsed = parseMoneyToCents(value, { allowZero: sospecha24h })
+                        const parsed = parseMoneyToCents(value, { allowZero: sospecha24h || montoNoDeterminado })
                         if (!parsed.ok) return
-                        setSatFieldValues((current) =>
-                          Object.fromEntries(
-                            Object.entries(current).map(([fieldId, fieldValue]) => {
-                              const normalized = normalizarBusqueda(fieldId)
-                              const isSurface = /superficie|terreno|construccion|m2/.test(normalized)
-                              const isAmount = /monto|importe|contraprestacion|valor-pactado|precio-pactado/.test(normalized)
-                              return isAmount && !isSurface ? [fieldId, parsed.decimal] : [fieldId, fieldValue]
-                            }),
-                          ),
-                        )
+                        const primaryIds = getSatPrimaryAmountFieldIds(satAllFieldsActual, satEffectiveFieldValues)
+                        setSatFieldValues((current) => ({...current, ...Object.fromEntries(primaryIds.map((id) => [id, parsed.decimal]))}))
                       }}
                       aria-invalid={Boolean(montoOperacion && !montoOperacionParseado.ok)}
                     />
@@ -7950,7 +8106,45 @@ const cambiarMesCalendario = (delta: number) => {
                       Catálogo SAT: {SAT_INSTRUMENTO_MONETARIO_OPTIONS.length} opciones, con búsqueda y desplazamiento.
                     </p>
                   </div>
+                  <div className="space-y-2">
+                    <Label>Fecha de pago</Label>
+                    <Input type="date" value={liquidacionForm.fechaPago} onChange={(event) => actualizarLiquidacionForm("fechaPago", event.target.value)} />
+                  </div>
+                  {formaPagoSatOptions.length > 0 && <div className="space-y-2">
+                    <Label>Forma de pago</Label>
+                    <SearchableSelect ariaLabel="Forma de pago" value={liquidacionForm.formaPago} options={formaPagoSatOptions} onChange={(value) => actualizarLiquidacionForm("formaPago", value)} placeholder="Selecciona forma de pago" searchPlaceholder="Buscar forma de pago" emptyLabel="Sin coincidencias" />
+                  </div>}
                 </div>
+
+                {actividadKey.startsWith("fraccion-xi-") && (
+                  <div className="space-y-2 rounded-xl border bg-slate-50 p-4">
+                    <Label>¿Se realiza una operación financiera en nombre y representación del cliente?</Label>
+                    <Select value={operacionFinancieraCliente} onValueChange={setOperacionFinancieraCliente}>
+                      <SelectTrigger><SelectValue placeholder="Selecciona sí o no" /></SelectTrigger>
+                      <SelectContent><SelectItem value="si">Sí</SelectItem><SelectItem value="no">No</SelectItem></SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Esta condición determina el aviso de servicios profesionales. La identificación permanece aplicable.</p>
+                  </div>
+                )}
+                {actividadKey.startsWith("fraccion-xvi-") && (
+                  <div className="space-y-2 rounded-xl border bg-slate-50 p-4">
+                    <Label>Contraprestación por el servicio (equivalente en MXN)</Label>
+                    <Input type="text" inputMode="decimal" value={contraprestacion} onChange={(event) => setContraprestacion(event.target.value)} placeholder="0.00" />
+                    <p className="text-xs text-muted-foreground">Se evalúa separadamente del importe de la operación; captura cero cuando no se cobró contraprestación.</p>
+                  </div>
+                )}
+                {actividadKey === "fraccion-xii-notarios-a" && (
+                  <div className="grid gap-3 rounded-xl border bg-slate-50 p-4 md:grid-cols-3">
+                    {([['valorCatastral', 'Valor catastral (MXN)'], ['valorComercial', 'Valor comercial (MXN)'], ['principalGarantizado', 'Principal garantizado (MXN)']] as const).map(([key, label]) => <div key={key} className="space-y-2"><Label>{label}</Label><Input type="text" inputMode="decimal" value={notarialValues[key]} onChange={(event) => setNotarialValues((current) => ({...current, [key]: event.target.value}))} placeholder="No aplica / 0.00" /></div>)}
+                    <p className="text-xs text-muted-foreground md:col-span-3">La base del aviso usa el mayor de los valores aplicables y el precio pactado; estos importes no rellenan superficies ni avalúos del Excel.</p>
+                  </div>
+                )}
+                {actividadKey.startsWith("fraccion-x-") && (
+                  <label className="flex items-center gap-2 rounded-xl border p-4 text-sm">
+                    <Checkbox checked={montoNoDeterminado} onCheckedChange={(checked) => {setMontoNoDeterminado(checked === true); if (checked === true) setMontoOperacion("0")}} />
+                    No es posible determinar el monto de lo trasladado o custodiado
+                  </label>
+                )}
 
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
@@ -7959,6 +8153,8 @@ const cambiarMesCalendario = (delta: number) => {
                       value={moneda}
                       onValueChange={(value) => {
                         setMoneda(value)
+                        const ids = new Set(satAllFieldsActual.filter((field) => (field.repeatIndex || 1) === 1 && normalizarBusqueda(field.label) === "moneda").map((field) => field.id))
+                        setSatFieldValues((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !ids.has(id))))
                         if (value !== "OTRA") {
                           setMonedaPersonalizadaCodigo("")
                           setMonedaPersonalizadaDescripcion("")
@@ -8007,18 +8203,26 @@ const cambiarMesCalendario = (delta: number) => {
                       onChange={(event) => {
                         const value = event.target.value
                         setFechaOperacion(value)
-                        if (operacionEditandoId) {
-                          const [year, month] = value.split("-").map(Number)
-                          if (year && month) {
-                            setAnioSeleccionado(year)
-                            setMesSeleccionado(month)
-                            setAnioOperacionCaptura(year)
-                            setMesOperacionCaptura(month)
-                          }
+                        const dateIds = new Set(satAllFieldsActual.filter((field) => (field.repeatIndex || 1) === 1 && ["fecha de operacion", "fecha de la operacion", "fecha del acto u operacion", "fecha de realizacion"].includes(normalizarBusqueda(field.label))).map((field) => field.id))
+                        setSatFieldValues((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !dateIds.has(id))))
+                        const [year, month] = value.split("-").map(Number)
+                        if (year && month) {
+                          setAnioSeleccionado(year)
+                          setMesSeleccionado(month)
+                          setAnioOperacionCaptura(year)
+                          setMesOperacionCaptura(month)
                         }
                       }}
                     />
                   </div>
+                  {moneda !== "MXN" && (
+                    <div className="grid gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 md:col-span-3 md:grid-cols-3">
+                      <div className="space-y-2"><Label>Tipo de cambio a MXN</Label><Input type="text" inputMode="decimal" value={exchangeRate} onChange={(event) => setExchangeRate(event.target.value)} placeholder="MXN por unidad de divisa" /></div>
+                      <div className="space-y-2"><Label>Fecha del tipo de cambio</Label><Input type="date" value={exchangeRateDate} onChange={(event) => setExchangeRateDate(event.target.value)} /></div>
+                      <div className="space-y-2"><Label>Fuente del tipo de cambio</Label><Input value={exchangeRateSource} onChange={(event) => setExchangeRateSource(event.target.value)} placeholder="Fuente verificable" /></div>
+                      <p className="text-xs md:col-span-3">{financeActual.ok ? `Equivalente para umbrales: ${formatMoneyFromCents(financeActual.montoCentavos)}` : financeActual.error}</p>
+                    </div>
+                  )}
                   {esActividadInmuebles && (
                     <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 md:col-span-3">
                       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
@@ -8266,7 +8470,7 @@ const cambiarMesCalendario = (delta: number) => {
                   </>
                 )}
 
-                <SatDynamicOperationFormView
+                {satTemplateActual?.localPath && !actividadKey.startsWith("fraccion-xiv-") ? <SatDynamicOperationFormView
                   form={satDynamicFormActual}
                   values={satEffectiveFieldValues}
                   missingRequired={satMissingRequiredFields}
@@ -8281,7 +8485,7 @@ const cambiarMesCalendario = (delta: number) => {
                     "instrumento",
                     "liquidacion",
                   ]}
-                />
+                /> : <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Esta actividad utiliza un canal externo (DeclaraNOT o pedimento). Puedes conservar el registro interno; aquí no se fabrica un XML ni se considera presentada la operación.</div>}
 
                 {false && esActividadInmuebles && (
                   <div className="space-y-6">
@@ -9040,7 +9244,7 @@ const cambiarMesCalendario = (delta: number) => {
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
                       <Badge variant="outline" className="bg-white">
-                        {satOutputKindActual === "aviso_24h" ? "Revisión urgente" : formatSalidaTipo(satOutputKindActual)}
+                        {satOutputKindActual === "aviso_24h" ? "Revisión urgente" : satOutputLabelActual}
                       </Badge>
                       <InfoHint
                         content={{
@@ -9152,6 +9356,7 @@ const cambiarMesCalendario = (delta: number) => {
                           onValueChange={(value) => {
                             setSatTemplateVariantId(value)
                             setSatFieldValues({})
+                            setDatosEuiConfirmados(false)
                           }}
                         >
                           <SelectTrigger className="bg-white">
@@ -9533,7 +9738,7 @@ const cambiarMesCalendario = (delta: number) => {
                       >
                         Vista previa
                       </Button>
-                      <Button type="button" onClick={agregarOperacion} disabled={!pasoValido}>
+                      <Button type="button" onClick={() => agregarOperacion()} disabled={!pasoValido}>
                         {operacionEditandoId ? "Guardar cambios" : "Guardar operación y semáforo"}
                       </Button>
                     </div>
@@ -9572,6 +9777,7 @@ const cambiarMesCalendario = (delta: number) => {
               )}
             </div>
             <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => agregarOperacion(true)}>Guardar borrador</Button>
               {pasoActual < STEPS.length - 1 && (
                 <Button onClick={avanzar} disabled={!pasoValido}>
                   Siguiente
@@ -9579,7 +9785,7 @@ const cambiarMesCalendario = (delta: number) => {
                 </Button>
               )}
               {pasoActual === STEPS.length - 1 && (
-                <Button onClick={agregarOperacion} disabled={!pasoValido}>
+                <Button onClick={() => agregarOperacion()} disabled={!pasoValido}>
                   {operacionEditandoId ? "Guardar cambios" : "Guardar caso operativo PLD"}
                 </Button>
               )}
@@ -9682,14 +9888,14 @@ const cambiarMesCalendario = (delta: number) => {
                               <div className="flex min-w-0 flex-wrap items-center gap-2">
                                 <h3 className="truncate text-base font-semibold text-slate-950">{operacion.cliente}</h3>
                                 <Badge variant="outline" className={getMonitoringStatusBadge(operacion.umbralStatus)}>
-                                  {getStatusLabel(operacion.umbralStatus)}
+                                  {getOperacionLifecycleLabel(operacion)}
                                 </Badge>
                                 <Badge variant="outline" className="bg-white text-slate-600">
                                   {operacion.periodo}
                                 </Badge>
                               </div>
                               <p className="mt-1 truncate text-xs text-slate-500">
-                                {operacion.rfc} · {formatSalidaTipo(operacion.avisoSalidaTipo ?? "sin_salida")} · {formatMontoOperacion(operacion)}
+                                {operacion.rfc} · {operacion.captureStatus === "draft" ? "Borrador sin salida SAT" : formatSalidaTipo(operacion.avisoSalidaTipo ?? "sin_salida")} · {formatMontoOperacion(operacion)}
                               </p>
                             </div>
                           </div>

@@ -14,6 +14,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
+import { parseStoredObject, readGovernanceIntegrationSnapshot } from "@/lib/pld/module-continuity"
+import { notifyPldIntegrationChange, PLD_INTEGRATION_EVENT } from "@/lib/pld/integration-records"
 import {
   Activity,
   AlertCircle,
@@ -142,7 +144,7 @@ const defaultAlerts: AlertSetting[] = [
   {
     id: "alert-capacitacion",
     title: "Renovación anual de capacitación del Oficial",
-    description: "Recordatorio automático para renovar y cargar la constancia de capacitación (art. 39 RCG).",
+    description: "Seguimiento interno para renovar y cargar la constancia de capacitación (art. 39 RCG).",
     targetDate: new Date(new Date().getFullYear(), 11, 15).toISOString(),
     responsible: "Área de Cumplimiento",
     channelEmail: true,
@@ -406,6 +408,7 @@ export default function GobernanzaControlPage() {
   const [committeeSessions, setCommitteeSessions] = useState<CommitteeSession[]>([])
   const [alerts, setAlerts] = useState<AlertSetting[]>(defaultAlerts)
   const [expedienteCerrado, setExpedienteCerrado] = useState(false)
+  const [storageReady, setStorageReady] = useState(false)
   const [uploadContext, setUploadContext] = useState<{ questionId: string | null; open: boolean }>({
     questionId: null,
     open: false,
@@ -430,28 +433,29 @@ export default function GobernanzaControlPage() {
   useEffect(() => {
     if (typeof window === "undefined") return
     const stored = localStorage.getItem(STORAGE_KEY)
-    if (!stored) return
     try {
-      const parsed = JSON.parse(stored) as StoredState
+      const parsed = parseStoredObject(stored) as Partial<StoredState>
       setQuestions((prev) =>
         questionBank.map((question) => {
-          const existing = parsed.questions.find((q) => q.id === question.id)
+          const existing = Array.isArray(parsed.questions) ? parsed.questions.find((q) => q.id === question.id) : undefined
           return existing ? { ...question, ...existing } : question
         }),
       )
-      setDocuments(parsed.documents || [])
-      setTrace(parsed.trace || [])
-      setManualVersions(parsed.manualVersions || [])
-      setCommitteeSessions(parsed.committeeSessions || [])
-      setAlerts(parsed.alerts?.length ? parsed.alerts : defaultAlerts)
+      setDocuments(Array.isArray(parsed.documents) ? parsed.documents : [])
+      setTrace(Array.isArray(parsed.trace) ? parsed.trace : [])
+      setManualVersions(Array.isArray(parsed.manualVersions) ? parsed.manualVersions : [])
+      setCommitteeSessions(Array.isArray(parsed.committeeSessions) ? parsed.committeeSessions : [])
+      setAlerts(Array.isArray(parsed.alerts) && parsed.alerts.length ? parsed.alerts : defaultAlerts)
       setExpedienteCerrado(parsed.expedienteCerrado ?? false)
+      setStorageReady(true)
     } catch (error) {
       console.error("Error cargando módulo de gobernanza", error)
+      toast({ title: "No se pudo cargar Gobernanza", description: "Se conservó el registro local original; no se guardarán cambios hasta recuperar los datos.", variant: "destructive" })
     }
   }, [])
 
   useEffect(() => {
-    if (typeof window === "undefined") return
+    if (typeof window === "undefined" || !storageReady) return
     const stateToPersist: StoredState = {
       questions,
       documents,
@@ -461,24 +465,23 @@ export default function GobernanzaControlPage() {
       alerts,
       expedienteCerrado,
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToPersist))
-  }, [questions, documents, trace, manualVersions, committeeSessions, alerts, expedienteCerrado])
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...parseStoredObject(localStorage.getItem(STORAGE_KEY)), ...stateToPersist }))
+      notifyPldIntegrationChange(STORAGE_KEY)
+    } catch {
+      toast({ title: "No se pudo guardar Gobernanza", description: "Los cambios no se han conservado. Revisa el espacio de almacenamiento local.", variant: "destructive" })
+    }
+  }, [storageReady, questions, documents, trace, manualVersions, committeeSessions, alerts, expedienteCerrado, toast])
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    try {
-      const capacitacion = JSON.parse(localStorage.getItem("capacitacion-control-data") || "null")
-      const auditoria = JSON.parse(localStorage.getItem("auditoria-verificacion-data") || "null")
-      const monitoreo = JSON.parse(localStorage.getItem("monitoreo-operaciones-data") || "null")
-      const evidencias = JSON.parse(localStorage.getItem("evidencias-trazabilidad-data") || "null")
-      setIntegrationSnapshot({
-        capacitacionDocuments: capacitacion?.documentos?.length || 0,
-        auditoriaHallazgos: auditoria?.hallazgos?.length || 0,
-        monitoreoAlertas: monitoreo?.alertas?.length || 0,
-        evidenciasResguardadas: evidencias?.documentos?.length || 0,
-      })
-    } catch (error) {
-      console.warn("No se pudo obtener información de otros módulos", error)
+    const refresh = () => setIntegrationSnapshot(readGovernanceIntegrationSnapshot(localStorage))
+    refresh()
+    window.addEventListener("storage", refresh)
+    window.addEventListener(PLD_INTEGRATION_EVENT, refresh)
+    return () => {
+      window.removeEventListener("storage", refresh)
+      window.removeEventListener(PLD_INTEGRATION_EVENT, refresh)
     }
   }, [])
 
@@ -717,8 +720,8 @@ export default function GobernanzaControlPage() {
   function handleSendReminder(alert: AlertSetting) {
     const now = new Date().toISOString()
     setAlerts((prev) => prev.map((item) => (item.id === alert.id ? { ...item, lastReminder: now } : item)))
-    appendTrace(`Envió recordatorio: ${alert.title}`, "Alertas y recordatorios")
-    toast({ title: "Recordatorio enviado", description: `Notificación emitida a ${alert.responsible}.` })
+    appendTrace(`Registró recordatorio interno: ${alert.title}`, "Alertas y recordatorios")
+    toast({ title: "Recordatorio registrado", description: `Se guardó el seguimiento para ${alert.responsible}. No se envió correo ni notificación externa.` })
   }
 
   function handleAlertChange(alertId: string, key: keyof AlertSetting, value: string | boolean) {
@@ -825,7 +828,7 @@ export default function GobernanzaControlPage() {
     }
     setExpedienteCerrado(true)
     appendTrace("Cierre del expediente de Gobernanza", "Resumen del módulo")
-    toast({ title: "Expediente cerrado", description: "Se bloquea la edición salvo reapertura manual." })
+    toast({ title: "Expediente cerrado", description: "El checklist queda cerrado; puedes reabrirlo para realizar correcciones." })
   }
 
   function handleExportPDF() {
@@ -940,7 +943,7 @@ export default function GobernanzaControlPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle>Alertas próximas</CardTitle>
-            <CardDescription>Gestión automática de vencimientos y sesiones pendientes.</CardDescription>
+            <CardDescription>Seguimiento local de vencimientos y sesiones pendientes. Registrar un recordatorio no envía correos ni notificaciones externas.</CardDescription>
           </CardHeader>
           <CardContent>
             {pendingAlerts.length === 0 ? (
@@ -962,7 +965,7 @@ export default function GobernanzaControlPage() {
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="text-muted-foreground">Responsable: {alert.responsible}</span>
                         <Button size="sm" variant="secondary" onClick={() => handleSendReminder(alert)}>
-                          Enviar recordatorio
+                          Registrar recordatorio
                         </Button>
                       </div>
                     </div>
@@ -1013,6 +1016,7 @@ export default function GobernanzaControlPage() {
         >
           <Lock className="h-4 w-4" /> {expedienteCerrado ? "Expediente cerrado" : "Cerrar expediente"}
         </Button>
+        {expedienteCerrado && <Button variant="outline" onClick={() => { setExpedienteCerrado(false); appendTrace("Reapertura del expediente de Gobernanza", "Resumen del módulo") }}>Reabrir expediente</Button>}
       </section>
 
       <Tabs defaultValue="oficial" className="space-y-6">

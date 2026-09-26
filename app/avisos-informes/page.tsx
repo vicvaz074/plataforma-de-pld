@@ -34,10 +34,24 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { InfoHint } from "@/components/pld/info-hint"
 import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
+import { SearchableSelect } from "@/components/pld/searchable-select"
+import { revalidateStoredSatPackage } from "@/lib/pld/sat-stored-validation"
 import {
   loadStoredPldOperations,
   type StoredPldOperationV3,
 } from "@/lib/pld/stored-operations"
+import {
+  buildIntegrationClients,
+  findClientEbrEvaluation,
+  getIntegrationClient,
+  matchesIntegrationClient,
+  matchesIntegrationSubject,
+  normalizeEbrEvaluations,
+  PLD_INTEGRATION_EVENT,
+  readPldSubjects,
+  type IntegrationClient,
+  type IntegrationSubject,
+} from "@/lib/pld/integration-records"
 import {
   Activity,
   AlertCircle,
@@ -118,12 +132,7 @@ interface RegistroSujetoResumen {
   representante?: string | null
 }
 
-interface ExpedienteResumen {
-  rfc: string
-  nombre: string
-  tipoCliente?: string
-  actualizadoEn?: string
-}
+type ExpedienteResumen = IntegrationClient
 
 type OperacionResumen = StoredPldOperationV3
 
@@ -173,6 +182,9 @@ interface SatOutputPackageResumen {
 }
 
 interface EvaluacionEbrResumen {
+  clientId?: string
+  expedienteId?: string
+  riskSummary?: { level: string; score: number; percent: number }
   rfc: string
   updatedAt: string
   notes: string
@@ -450,7 +462,9 @@ export default function AvisosInformesPage() {
   const [evaluacionesEbr, setEvaluacionesEbr] = useState<EvaluacionEbrResumen[]>([])
   const [satOutputPackages, setSatOutputPackages] = useState<SatOutputPackageResumen[]>([])
   const [satLayouts, setSatLayouts] = useState<Record<string, SatXlsmLayout>>({})
-  const [selectedRfc, setSelectedRfc] = useState<string>("")
+  const [selectedClientId, setSelectedClientId] = useState("__all__")
+  const [selectedSubjectId, setSelectedSubjectId] = useState("__all__")
+  const [integrationSubjects, setIntegrationSubjects] = useState<IntegrationSubject[]>([])
   const [selectedOperacionId, setSelectedOperacionId] = useState<string>("")
   const [selectedSatPackageId, setSelectedSatPackageId] = useState<string>("")
   const [overrideDialogOpen, setOverrideDialogOpen] = useState(false)
@@ -464,6 +478,7 @@ export default function AvisosInformesPage() {
 
   const loadIntegrationData = useCallback(() => {
     if (typeof window === "undefined") return
+    setIntegrationSubjects(readPldSubjects(window.localStorage))
 
     const registroRaw = window.localStorage.getItem(REGISTRO_STORAGE_KEY)
     if (registroRaw) {
@@ -513,17 +528,8 @@ export default function AvisosInformesPage() {
         const parsed = JSON.parse(expedientesRaw)
         const expedientes = Array.isArray(parsed)
           ? parsed
-              .map((item) => {
-                if (!item || typeof item !== "object") return null
-                const record = item as Record<string, unknown>
-                return {
-                  rfc: typeof record.rfc === "string" ? record.rfc : "",
-                  nombre: typeof record.nombre === "string" ? record.nombre : "",
-                  tipoCliente: typeof record.tipoCliente === "string" ? record.tipoCliente : undefined,
-                  actualizadoEn: typeof record.actualizadoEn === "string" ? record.actualizadoEn : undefined,
-                }
-              })
-              .filter((item) => Boolean(item?.rfc)) as ExpedienteResumen[]
+              .map(getIntegrationClient)
+              .filter((item): item is IntegrationClient => Boolean(item))
           : []
         setExpedientesEui(expedientes)
       } catch (error) {
@@ -547,26 +553,7 @@ export default function AvisosInformesPage() {
     if (ebrRaw) {
       try {
         const parsed = JSON.parse(ebrRaw)
-        const evaluaciones = Array.isArray(parsed)
-          ? parsed
-              .map((item) => {
-                if (!item || typeof item !== "object") return null
-                const record = item as Record<string, unknown>
-                return {
-                  rfc: typeof record.rfc === "string" ? record.rfc : "",
-                  updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : "",
-                  notes: typeof record.notes === "string" ? record.notes : "",
-                  riskQuestions: Array.isArray(record.riskQuestions)
-                    ? (record.riskQuestions as EvaluacionEbrResumen["riskQuestions"])
-                    : undefined,
-                  clientProfile:
-                    record.clientProfile && typeof record.clientProfile === "object"
-                      ? (record.clientProfile as EvaluacionEbrResumen["clientProfile"])
-                      : undefined,
-                }
-              })
-              .filter((item) => Boolean(item?.rfc)) as EvaluacionEbrResumen[]
-          : []
+        const evaluaciones = normalizeEbrEvaluations(parsed) as EvaluacionEbrResumen[]
         setEvaluacionesEbr(evaluaciones)
       } catch (error) {
         console.error("Error al leer evaluaciones EBR", error)
@@ -703,7 +690,7 @@ export default function AvisosInformesPage() {
               })
               .filter((item) => Boolean(item)) as SatOutputPackageResumen[]
           : []
-        setSatOutputPackages(packages)
+        setSatOutputPackages(packages.map(revalidateStoredSatPackage))
       } catch (error) {
         console.error("Error al leer paquetes SAT", error)
         setSatOutputPackages([])
@@ -732,52 +719,30 @@ export default function AvisosInformesPage() {
     }
 
     window.addEventListener("storage", handleStorageChange)
-    return () => window.removeEventListener("storage", handleStorageChange)
+    window.addEventListener(PLD_INTEGRATION_EVENT, loadIntegrationData)
+    return () => {
+      window.removeEventListener("storage", handleStorageChange)
+      window.removeEventListener(PLD_INTEGRATION_EVENT, loadIntegrationData)
+    }
   }, [loadIntegrationData])
 
   const operacionesActivas = useMemo(
-    () => operaciones.filter((operacion) => operacion.lifecycle.status === "active"),
+    () => operaciones.filter((operacion) => operacion.lifecycle.status === "active" && operacion.captureStatus !== "draft"),
     [operaciones],
   )
 
-  const sujetosDisponibles = useMemo(() => {
-    const map = new Map<string, { rfc: string; nombre: string; fuente: string }>()
-
-    sujetosRegistro.forEach((sujeto) => {
-      if (!sujeto.rfc) return
-      map.set(sujeto.rfc, { rfc: sujeto.rfc, nombre: sujeto.nombre, fuente: "Alta y registro" })
-    })
-
-    expedientesEui.forEach((expediente) => {
-      if (!expediente.rfc) return
-      if (!map.has(expediente.rfc)) {
-        map.set(expediente.rfc, {
-          rfc: expediente.rfc,
-          nombre: expediente.nombre,
-          fuente: "Expediente único",
-        })
-      }
-    })
-
-    operacionesActivas.forEach((operacion) => {
-      if (!operacion.rfc) return
-      if (!map.has(operacion.rfc)) {
-        map.set(operacion.rfc, {
-          rfc: operacion.rfc,
-          nombre: operacion.cliente || "Cliente sin nombre",
-          fuente: "Actos y operaciones",
-        })
-      }
-    })
-
-    return Array.from(map.values())
-  }, [expedientesEui, operacionesActivas, sujetosRegistro])
+  const sujetoSeleccionado = useMemo(() => integrationSubjects.find((subject) => (subject.id || subject.rfc) === selectedSubjectId) ?? null, [integrationSubjects, selectedSubjectId])
+  const operacionesDelSujeto = useMemo(() => sujetoSeleccionado ? operacionesActivas.filter((operation) => matchesIntegrationSubject(operation, sujetoSeleccionado)) : operacionesActivas, [operacionesActivas, sujetoSeleccionado])
+  const clientesDisponibles = useMemo(() => {
+    const expedientes = sujetoSeleccionado ? expedientesEui.filter((item) => matchesIntegrationSubject(item, sujetoSeleccionado) || operacionesDelSujeto.some((operation) => matchesIntegrationClient(operation, item))) : expedientesEui
+    return buildIntegrationClients(expedientes, operacionesDelSujeto)
+  }, [expedientesEui, operacionesDelSujeto, sujetoSeleccionado])
+  const clienteSeleccionado = useMemo(() => clientesDisponibles.find((item) => item.id === selectedClientId) ?? null, [clientesDisponibles, selectedClientId])
 
   useEffect(() => {
-    if (selectedRfc && sujetosDisponibles.some((sujeto) => sujeto.rfc === selectedRfc)) return
-    const primerRfc = sujetosDisponibles[0]?.rfc
-    setSelectedRfc(primerRfc ?? "")
-  }, [selectedRfc, sujetosDisponibles])
+    if (selectedClientId === "__all__" || clientesDisponibles.some((client) => client.id === selectedClientId)) return
+    setSelectedClientId("__all__")
+  }, [selectedClientId, clientesDisponibles])
 
   const detectionDateTime = useMemo(() => buildDate(noticeForm.detectionDate, noticeForm.detectionTime), [
     noticeForm.detectionDate,
@@ -826,17 +791,17 @@ export default function AvisosInformesPage() {
   }, [selectedOperationType])
 
   const operacionesFiltradas = useMemo(
-    () => operacionesActivas.filter((operacion) => (selectedRfc ? operacion.rfc === selectedRfc : true)),
-    [operacionesActivas, selectedRfc],
+    () => clienteSeleccionado ? operacionesDelSujeto.filter((operation) => matchesIntegrationClient(operation, clienteSeleccionado)) : operacionesDelSujeto,
+    [operacionesDelSujeto, clienteSeleccionado],
   )
 
   const satQueueItems = useMemo(
     () =>
       buildSatQueueItems({
-        operations: operaciones,
-        packages: satOutputPackages as unknown as SatOutputPackage[],
+        operations: sujetoSeleccionado ? operaciones.filter((operation) => matchesIntegrationSubject(operation, sujetoSeleccionado)) : operaciones,
+        packages: (sujetoSeleccionado ? satOutputPackages.filter((satPackage) => matchesIntegrationSubject(satPackage, sujetoSeleccionado)) : satOutputPackages) as unknown as SatOutputPackage[],
       }),
-    [operaciones, satOutputPackages],
+    [operaciones, satOutputPackages, sujetoSeleccionado],
   )
 
   useEffect(() => {
@@ -882,22 +847,17 @@ export default function AvisosInformesPage() {
   }, [operacionesFiltradas, selectedOperacionId])
 
   const evaluacionSeleccionada = useMemo(() => {
-    if (!selectedRfc) return null
-    const evaluations = evaluacionesEbr.filter((item) => item.rfc === selectedRfc)
-    if (evaluations.length === 0) return null
-    return evaluations
-      .slice()
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0]
-  }, [evaluacionesEbr, selectedRfc])
+    return findClientEbrEvaluation(evaluacionesEbr, clienteSeleccionado) as EvaluacionEbrResumen | null
+  }, [evaluacionesEbr, clienteSeleccionado])
 
   const sujetoRegistroSeleccionado = useMemo(
-    () => sujetosRegistro.find((sujeto) => sujeto.rfc === selectedRfc) ?? null,
-    [selectedRfc, sujetosRegistro],
+    () => sujetoSeleccionado ? sujetosRegistro.find((sujeto) => sujeto.id === sujetoSeleccionado.id || Boolean(sujetoSeleccionado.rfc && sujeto.rfc === sujetoSeleccionado.rfc)) ?? null : null,
+    [sujetoSeleccionado, sujetosRegistro],
   )
 
   const expedienteSeleccionado = useMemo(
-    () => expedientesEui.find((expediente) => expediente.rfc === selectedRfc) ?? null,
-    [expedientesEui, selectedRfc],
+    () => expedientesEui.find((expediente) => expediente.id === selectedClientId) ?? null,
+    [expedientesEui, selectedClientId],
   )
 
   const operacionesStats = useMemo(() => {
@@ -914,6 +874,7 @@ export default function AvisosInformesPage() {
   }, [sujetoRegistroSeleccionado])
 
   const riskScore = useMemo(() => {
+    if (typeof evaluacionSeleccionada?.riskSummary?.score === "number") return evaluacionSeleccionada.riskSummary.score
     if (!evaluacionSeleccionada?.riskQuestions) return null
     return evaluacionSeleccionada.riskQuestions.reduce((acc, question) => {
       const option = question.options.find((item) => item.value === question.selectedValue)
@@ -922,11 +883,12 @@ export default function AvisosInformesPage() {
   }, [evaluacionSeleccionada])
 
   const riskLevel = useMemo(() => {
+    if (evaluacionSeleccionada?.riskSummary?.level) return evaluacionSeleccionada.riskSummary.level
     if (riskScore === null) return null
     if (riskScore <= 12) return "Bajo"
     if (riskScore <= 20) return "Medio"
     return "Alto"
-  }, [riskScore])
+  }, [riskScore, evaluacionSeleccionada])
 
   const alerts = useMemo(() => {
     const items: { type: "warning" | "danger" | "info"; title: string; description: string }[] = []
@@ -1073,17 +1035,16 @@ export default function AvisosInformesPage() {
 
   const handleDownloadConsolidated = () => {
     const rows = [
-      ["RFC", "Cliente", "Tipo cliente", "Registro completo", "Operaciones", "Alertas", "Avisos pendientes", "Riesgo EBR"],
-      ...sujetosDisponibles.map((sujeto) => {
-        const ops = operacionesActivas.filter((op) => op.rfc === sujeto.rfc)
+      ["Identificador cliente", "Cliente", "Tipo cliente", "Sujeto obligado", "Registro completo", "Operaciones", "Alertas", "Avisos pendientes", "Riesgo EBR"],
+      ...clientesDisponibles.map((cliente) => {
+        const ops = operacionesDelSujeto.filter((op) => matchesIntegrationClient(op, cliente))
         const alertas = ops.filter((op) => op.alerta).length
         const pendientes = ops.filter((op) => op.umbralStatus === "aviso" && !op.avisoPresentado).length
-        const registro = sujetosRegistro.find((item) => item.rfc === sujeto.rfc)
-        const expediente = expedientesEui.find((item) => item.rfc === sujeto.rfc)
-        const ebr = evaluacionesEbr
-          .filter((item) => item.rfc === sujeto.rfc)
-          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0]
-        const score = ebr?.riskQuestions
+        const subject = sujetoSeleccionado ?? integrationSubjects.find((item) => matchesIntegrationSubject(cliente, item))
+        const registro = subject ? sujetosRegistro.find((item) => item.id === subject.id || Boolean(subject.rfc && item.rfc === subject.rfc)) : undefined
+        const expediente = expedientesEui.find((item) => item.id === cliente.id)
+        const ebr = findClientEbrEvaluation(evaluacionesEbr, cliente) as EvaluacionEbrResumen | null
+        const score = typeof ebr?.riskSummary?.score === "number" ? ebr.riskSummary.score : ebr?.riskQuestions
           ? ebr.riskQuestions.reduce((acc, question) => {
               const option = question.options.find((item) => item.value === question.selectedValue)
               return acc + (option?.score ?? 0)
@@ -1091,19 +1052,20 @@ export default function AvisosInformesPage() {
           : null
 
         return [
-          sujeto.rfc,
-          sujeto.nombre,
-          registro?.tipo ?? expediente?.tipoCliente ?? "",
-          registro?.registroCompleto ? "Sí" : "No",
+          cliente.identifier,
+          cliente.nombre,
+          expediente?.tipoCliente ?? "",
+          subject?.nombre ?? "Sin sujeto seleccionado",
+          registro ? registro.registroCompleto ? "Sí" : "No" : "Sin registro vinculado",
           String(ops.length),
           String(alertas),
           String(pendientes),
-          score === null ? "Sin evaluación" : `${score}`,
+          ebr?.riskSummary?.level ?? (score === null ? ebr ? "Evaluación guardada; consultar EBR" : "Sin evaluación" : `${score}`),
         ]
       }),
     ]
 
-    const content = rows.map((row) => row.map((value) => `"${value}"`).join(",")).join("\n")
+    const content = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\n")
     downloadReport(`reporte-consolidado-avisos-${new Date().toISOString().slice(0, 10)}.csv`, content)
     toast({ title: "Reporte generado", description: "Se descargó el reporte consolidado de avisos y operaciones." })
   }
@@ -1148,13 +1110,15 @@ export default function AvisosInformesPage() {
   }
 
   const handleDownloadSatXml = (satPackage: SatOutputPackageResumen) => {
+    const checked = revalidateStoredSatPackage(satPackage)
+    if (checked.validation.status !== "listo") {
+      toast({ title: "XML bloqueado", description: checked.validation.errors[0] || "Completa y valida los datos antes de descargar la salida SAT.", variant: "destructive" })
+      return
+    }
     downloadReport(satPackage.xmlFileName, satPackage.xml, "application/xml")
     toast({
-      title: satPackage.validation.status === "listo" ? "XML SAT generado" : "XML borrador generado",
-      description:
-        satPackage.validation.status === "listo"
-          ? "El archivo se descargó con los campos mínimos completos para revisión y carga manual en SPPLD."
-          : "El XML se descargó como borrador no cargable; revisa los campos faltantes antes de presentarlo.",
+      title: "XML validado localmente",
+      description: "La descarga pasó la validación local del formato. No acredita presentación ni aceptación por el SAT.",
     })
   }
 
@@ -1572,7 +1536,7 @@ export default function AvisosInformesPage() {
                 </div>
               </div>
 
-              {sujetosDisponibles.length === 0 && (
+              {clientesDisponibles.length === 0 && integrationSubjects.length === 0 && (
                 <Alert>
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>No hay datos vinculados</AlertTitle>
@@ -1584,19 +1548,26 @@ export default function AvisosInformesPage() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
+                  <Label htmlFor="sujeto-integracion">Sujeto obligado</Label>
+                  <SearchableSelect
+                    id="sujeto-integracion"
+                    ariaLabel="Sujeto obligado"
+                    value={selectedSubjectId}
+                    onChange={setSelectedSubjectId}
+                    options={[{ value: "__all__", label: "Todos los sujetos obligados" }, ...integrationSubjects.map((subject) => ({ value: subject.id || subject.rfc, label: `${subject.nombre} · ${subject.rfc || "RFC pendiente"}` }))]}
+                    searchPlaceholder="Buscar sujeto obligado"
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="cliente-rfc">Selecciona un cliente</Label>
-                  <Select value={selectedRfc} onValueChange={setSelectedRfc}>
-                    <SelectTrigger id="cliente-rfc">
-                      <SelectValue placeholder="Selecciona un RFC" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sujetosDisponibles.map((sujeto) => (
-                        <SelectItem key={sujeto.rfc} value={sujeto.rfc}>
-                          {sujeto.rfc} · {sujeto.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    id="cliente-rfc"
+                    ariaLabel="Selecciona un cliente"
+                    value={selectedClientId}
+                    onChange={setSelectedClientId}
+                    options={[{ value: "__all__", label: "Todos los clientes" }, ...clientesDisponibles.map((client) => ({ value: client.id, label: `${client.identifier} · ${client.nombre}` }))]}
+                    searchPlaceholder="Buscar nombre, RFC, NIF o CURP"
+                  />
                 </div>
                 <div className="grid gap-3 rounded-lg border p-4 text-sm">
                   <div className="flex items-center justify-between">
@@ -1822,9 +1793,9 @@ export default function AvisosInformesPage() {
                 {evaluacionSeleccionada ? (
                   <div className="space-y-3 rounded-lg border p-4 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold">Riesgo {riskLevel ?? ""}</span>
+                      <span className="font-semibold">{riskLevel ? `Riesgo ${riskLevel}` : "Evaluación guardada"}</span>
                       <Badge variant={riskLevel === "Alto" ? "destructive" : riskLevel === "Medio" ? "secondary" : "outline"}>
-                        {riskScore ?? "Sin score"}
+                        {riskScore ?? "Consultar EBR"}
                       </Badge>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -1846,7 +1817,7 @@ export default function AvisosInformesPage() {
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>EBR pendiente</AlertTitle>
                     <AlertDescription>
-                      Realiza la evaluación EBR para este RFC y obtén el nivel de riesgo integrado.
+                      Selecciona un cliente y realiza su evaluación EBR para consultar el nivel de riesgo integrado.
                     </AlertDescription>
                   </Alert>
                 )}

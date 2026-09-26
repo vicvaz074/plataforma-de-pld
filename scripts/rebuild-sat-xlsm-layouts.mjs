@@ -14,7 +14,7 @@ import * as satTemplateCatalog from "../lib/pld/sat-template-catalog.ts"
 import * as satXlsm from "../lib/pld/sat-xlsm.ts"
 
 const { SAT_TEMPLATE_CATALOG } = satTemplateCatalog.default || satTemplateCatalog
-const { extractSatXlsmLayoutFromBuffer, serializeSatXlsmLayout } = satXlsm.default || satXlsm
+const { extractSatXlsmLayoutFromBuffer, normalizeSatXlsmLayout, serializeSatXlsmLayout } = satXlsm.default || satXlsm
 
 function concreteTemplates() {
   const templates = new Map()
@@ -48,8 +48,12 @@ function main() {
       missing.push(`${template.templateId} (${cachePath})`)
       continue
     }
-    const bytes = new Uint8Array(readFileSync(cachePath))
-    const layout = extractSatXlsmLayoutFromBuffer(bytes, template)
+    const publishedPath = `public/data/sat-xlsm-layouts/${template.templateId}.json`
+    const forceExtract = process.argv.includes(`--reextract=${template.templateId}`)
+    const normalizeCached = !forceExtract && process.argv.includes("--normalize-cached") && existsSync(publishedPath)
+    const layout = normalizeCached
+      ? normalizeSatXlsmLayout(JSON.parse(readFileSync(publishedPath, "utf8")))
+      : extractSatXlsmLayoutFromBuffer(new Uint8Array(readFileSync(cachePath)), template)
     layouts.push(layout)
     const fields = layout.sections.reduce((total, section) => total + section.fields.length, 0)
     console.log(`✓ ${template.templateId}: ${fields} campos en ${layout.sections.length} secciones`)
@@ -62,6 +66,12 @@ function main() {
   }
 
   mkdirSync("public/data/sat-xlsm-layouts", { recursive: true })
+  // Publish the same activity/variant mapping consumed by the application.
+  // This is a cache rebuild only; no template or legal source is downloaded.
+  writeFileSync(
+    "public/data/sat-template-catalog-mx.json",
+    `${JSON.stringify({ schemaVersion: 1, generatedAt, items: SAT_TEMPLATE_CATALOG }, null, 2)}\n`,
+  )
   for (const layout of layouts) {
     writeFileSync(
       `public/data/sat-xlsm-layouts/${layout.templateId}.json`,

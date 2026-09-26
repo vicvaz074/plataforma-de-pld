@@ -520,6 +520,7 @@ test("SAT output override requires a reason and preserves the original suggestio
 test("SAT package action view prioritizes downloads or missing fields by package status", () => {
   const ready = buildSatPackageActionView({
     validation: { status: "listo", missingFields: [], errors: [], warnings: [] },
+    satWorkbookStatus: "listo",
     satFieldValues: { "acto.fecha_operacion": "05/05/2026" },
     officialTemplateUrl: "https://sat.gob.mx/demo.zip",
   } as unknown as SatOutputPackage)

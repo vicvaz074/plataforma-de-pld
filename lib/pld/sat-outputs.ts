@@ -1,5 +1,5 @@
 import { resolveSatFormatoForActividad } from "./sat-formatos"
-import { buildOfficialSatXml } from "./sat-xml"
+import { buildSatXmlResult } from "./sat-xml"
 import { resolveSatTemplateForActividad } from "./sat-template-catalog"
 import { centsToDecimalString, parseMoneyToCents } from "./money"
 import type {
@@ -117,12 +117,16 @@ export function generateSatOutputPackage(
   }.xml`
   const fichaFileName = `ficha-captura-${fractionSlug}-${operationalCase.periodo || "SINPERIODO"}-${clienteRfc}.csv`
   const workbookFileName = `${prefix}-${fractionSlug}-${operationalCase.periodo || "SINPERIODO"}-${clienteRfc}.xlsm`
-  const xml = buildOfficialSatXml({
+  const rendered = buildSatXmlResult({
     operationalCase,
     outputKind,
     validation,
     generatedAt,
   })
+  const xml = rendered.xml
+  validation.errors.push(...rendered.errors)
+  if (validation.errors.length || !xml) validation.status = "borrador_bloqueado"
+  validation.warnings.push("Validación local contra el XSD publicado; no equivale a aceptación, acuse o presentación ante SAT.")
   const ficha = buildCaptureSheet(operationalCase, outputKind, validation)
   const downloads = buildDownloads({
     xmlFileName,
@@ -263,6 +267,8 @@ function validateSatOutput(operationalCase: PldOperationalCase, outputKind: SatO
   const missingFields: string[] = []
   const errors: string[] = []
   const warnings: string[] = []
+
+  if (operationalCase.captureStatus === "draft") errors.push("La operación está guardada como borrador.")
 
   if (!operationalCase.periodo || !/^\d{6}$/.test(operationalCase.periodo)) missingFields.push("periodo")
   if (!operationalCase.tenantRfc) missingFields.push("sujeto_obligado.rfc")

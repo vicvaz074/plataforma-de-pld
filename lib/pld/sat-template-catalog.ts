@@ -1,7 +1,9 @@
 import { SAT_FORMATOS_ACTIVIDADES, resolveSatFormatoForActividad } from "./sat-formatos"
 import type { SatFormatoManifestItem, SatTemplateCatalogItem, SatTemplateVariant } from "./types"
 
-const VERIFIED_AT = "2026-05-12"
+const VERIFIED_AT = "2026-09-26"
+// Catálogo cotejado con SAT/SPPLD servicios.html y fedatarios.html (2026-09-26).
+// Los IDs físicos se conservan por compatibilidad; no expresan la actividad legal.
 
 function templatePath(templateId: string, fileName: string) {
   return `/sat-templates/${templateId}/${fileName}`
@@ -37,7 +39,7 @@ const XI_VARIANTS: SatTemplateVariant[] = [
     templateId: "sat-fraccion-xi-b-administracion",
     variantId: "spr-03-administracion-recursos",
     label: "Administración y manejo de recursos",
-    actividadKeys: ["fraccion-xi-b-administracion"],
+    actividadKeys: ["fraccion-xi-b-administracion", "fraccion-xi-c-cuentas"],
     officialXlsmName: "SPR03_AdministracionDeRecursos_v5_0.xlsm",
     sourceZipUrl: "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
     nestedZipName: "spradmonrecursos2 (12).zip",
@@ -46,7 +48,7 @@ const XI_VARIANTS: SatTemplateVariant[] = [
     templateId: "sat-fraccion-xi-c-cuentas",
     variantId: "spr-04-constitucion-personas-morales",
     label: "Constitución de personas morales",
-    actividadKeys: ["fraccion-xi-c-cuentas", "fraccion-xi-e-corporativo"],
+    actividadKeys: ["fraccion-xi-e-corporativo"],
     officialXlsmName: "SPR04_ConstitucionDePersonasMorales_v5_0.xlsm",
     sourceZipUrl: "https://www.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Formatos/Fraccion_XI/avisos.zip",
     nestedZipName: "sprconstitucionpm2 (1).zip",
@@ -113,7 +115,7 @@ const XII_VARIANTS: SatTemplateVariant[] = [
     templateId: "sat-fraccion-xii-notarios-a",
     variantId: "fep-inmuebles",
     label: "Transmisión o constitución de derechos reales sobre inmuebles",
-    actividadKeys: ["fraccion-xii-notarios-a"],
+    actividadKeys: ["fraccion-xii-servidores-inmuebles"],
     officialXlsmName: "FedatariosSP_Inmuebles_v4_4.xlsm",
     sourceZipUrl: XII_SOURCE,
   }),
@@ -137,7 +139,7 @@ const XII_VARIANTS: SatTemplateVariant[] = [
     templateId: "sat-fraccion-xii-notarios-d",
     variantId: "fep-fideicomiso",
     label: "Constitución o modificación de fideicomiso traslativo de dominio o garantía sobre inmuebles",
-    actividadKeys: ["fraccion-xii-notarios-d", "fraccion-xii-corredores-d"],
+    actividadKeys: ["fraccion-xii-notarios-d", "fraccion-xii-corredores-c"],
     officialXlsmName: "FedatarioConstitucionFid_v4_6.xlsm",
     sourceZipUrl: XII_SOURCE,
   }),
@@ -145,7 +147,7 @@ const XII_VARIANTS: SatTemplateVariant[] = [
     templateId: "sat-fraccion-xii-notarios-e",
     variantId: "fep-mutuo",
     label: "Otorgamiento de contratos de mutuo o crédito",
-    actividadKeys: ["fraccion-xii-notarios-e"],
+    actividadKeys: ["fraccion-xii-notarios-e", "fraccion-xii-corredores-d"],
     officialXlsmName: "FedatarioMutuo_v4_4.xlsm",
     sourceZipUrl: XII_SOURCE,
   }),
@@ -161,7 +163,7 @@ const XII_VARIANTS: SatTemplateVariant[] = [
     templateId: "sat-fraccion-xii-corredores-c-compra-venta",
     variantId: "fep-compra-venta-acciones",
     label: "Compra o venta de acciones o partes sociales",
-    actividadKeys: ["fraccion-xii-corredores-c"],
+    actividadKeys: ["fraccion-xii-notarios-c", "fraccion-xii-corredores-b"],
     officialXlsmName: "FedatarioCompraVenta_v4_3.xlsm",
     sourceZipUrl: XII_SOURCE,
   }),
@@ -169,7 +171,7 @@ const XII_VARIANTS: SatTemplateVariant[] = [
     templateId: "sat-fraccion-xii-corredores-c-fusion",
     variantId: "fep-fusion",
     label: "Fusión",
-    actividadKeys: ["fraccion-xii-corredores-c"],
+    actividadKeys: ["fraccion-xii-notarios-c", "fraccion-xii-corredores-b"],
     officialXlsmName: "FedatarioFusion_v4_3.xlsm",
     sourceZipUrl: XII_SOURCE,
   }),
@@ -177,7 +179,7 @@ const XII_VARIANTS: SatTemplateVariant[] = [
     templateId: "sat-fraccion-xii-corredores-c-escision",
     variantId: "fep-escision",
     label: "Escisión",
-    actividadKeys: ["fraccion-xii-corredores-c"],
+    actividadKeys: ["fraccion-xii-notarios-c", "fraccion-xii-corredores-b"],
     officialXlsmName: "FedatarioEscision_v4_3.xlsm",
     sourceZipUrl: XII_SOURCE,
   }),
@@ -185,7 +187,7 @@ const XII_VARIANTS: SatTemplateVariant[] = [
     templateId: "sat-fraccion-xii-corredores-c-modif-patrimonial",
     variantId: "fep-modificacion-patrimonial",
     label: "Modificación patrimonial por aumento o disminución de capital",
-    actividadKeys: ["fraccion-xii-corredores-c"],
+    actividadKeys: ["fraccion-xii-notarios-c", "fraccion-xii-corredores-b"],
     officialXlsmName: "FedatarioModifPatrimonial_v4_4.xlsm",
     sourceZipUrl: XII_SOURCE,
   }),
@@ -193,7 +195,7 @@ const XII_VARIANTS: SatTemplateVariant[] = [
     templateId: "sat-fraccion-xii-sp-poder",
     variantId: "fep-sp-poder",
     label: "Poder irrevocable ante servidor público",
-    actividadKeys: ["fraccion-xii-notarios-b"],
+    actividadKeys: ["fraccion-xii-servidores-poderes"],
     officialXlsmName: "FedatariosSP_Poder_v4_3.xlsm",
     sourceZipUrl: XII_SOURCE,
   }),
@@ -201,7 +203,7 @@ const XII_VARIANTS: SatTemplateVariant[] = [
     templateId: "sat-fraccion-xii-sp-modif-patrimonial",
     variantId: "fep-sp-modificacion-patrimonial",
     label: "Modificación patrimonial ante servidor público",
-    actividadKeys: ["fraccion-xii-corredores-c"],
+    actividadKeys: ["fraccion-xii-servidores-sociedades"],
     officialXlsmName: "FedatariosSP_ModifPatrimonial_v4_3.xlsm",
     sourceZipUrl: XII_SOURCE,
   }),
@@ -209,7 +211,7 @@ const XII_VARIANTS: SatTemplateVariant[] = [
     templateId: "sat-fraccion-xii-cesion-fideicomiso",
     variantId: "fep-cesion-fideicomiso",
     label: "Cesión de derechos de fideicomitente o fideicomisario",
-    actividadKeys: ["fraccion-xii-notarios-d", "fraccion-xii-corredores-d"],
+    actividadKeys: ["fraccion-xii-notarios-d", "fraccion-xii-corredores-c"],
     officialXlsmName: "FedatarioCesion_v4_3.xlsm",
     sourceZipUrl: XII_SOURCE,
   }),
@@ -259,7 +261,20 @@ export function resolveSatTemplateForActividad(
     eligibleVariants.find((item) => item.templateId === variantId) ||
     eligibleVariants[0]
 
-  if (!variant) return base
+  if (!variant) {
+    if (!base.variants.length) return base
+    // Una familia puede publicar libros para otros fedatarios, pero no para
+    // esta actividad/canal. Nunca se ofrece la primera variante ajena.
+    return {
+      ...base,
+      templateId: base.formatoId,
+      actividadKeys: [actividadKey],
+      officialXlsmName: "",
+      localPath: "",
+      variants: [],
+      requiresVariantSelection: false,
+    }
+  }
 
   return {
     ...base,
@@ -271,6 +286,10 @@ export function resolveSatTemplateForActividad(
     variants: eligibleVariants,
     requiresVariantSelection: eligibleVariants.length > 1,
   }
+}
+
+export function hasSatTemplateWorkbook(template: Pick<SatTemplateCatalogItem, "officialXlsmName" | "localPath">): boolean {
+  return Boolean(template.localPath && /\.xlsm$/i.test(template.officialXlsmName))
 }
 
 export function getSatTemplateCachePath(template: SatTemplateCatalogItem | SatTemplateVariant): string {
