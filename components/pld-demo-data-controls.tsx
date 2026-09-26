@@ -29,25 +29,35 @@ export function PldDemoDataControls({ onDataChange }: PldDemoDataControlsProps =
   }, [])
 
   const handleInstall = () => {
+    if (!window.confirm("Se reemplazará la captura local por datos ficticios de demostración. Se conservará un respaldo local para restaurar los datos anteriores. ¿Continuar?")) return
+    try {
     const result = installPldDemoData(window.localStorage, new Date("2026-05-08T12:00:00-06:00"))
     refreshStatus()
     window.dispatchEvent(new CustomEvent("pld-demo-data-changed"))
     onDataChange?.()
     toast({
       title: "Datos demo cargados",
-      description: `${result.counts.expedientes} expedientes, ${result.counts.operaciones} operaciones y ${result.counts.evidencias} evidencias listas para mostrar.`,
+      description: `${result.counts.expedientes} expedientes y ${result.counts.operaciones} operaciones ficticias. Las salidas SAT se validan por separado; la carga no acredita cumplimiento.`,
     })
+    } catch {
+      toast({ title: "No se pudo cargar la demo", description: "Revisa el espacio del navegador. No se anuncia la carga como completada; conserva el respaldo local.", variant: "destructive" })
+    }
   }
 
   const handleClear = () => {
+    if (!window.confirm("Se retirará la demo y se restaurará el respaldo anterior. Se perderán las modificaciones hechas sobre la demo. ¿Continuar?")) return
+    try {
     clearPldDemoData(window.localStorage)
     refreshStatus()
     window.dispatchEvent(new CustomEvent("pld-demo-data-changed"))
     onDataChange?.()
     toast({
-      title: "Datos demo eliminados",
-      description: "Se limpiaron las llaves demo PLD sin tocar idioma ni sesión.",
+      title: "Datos anteriores restaurados",
+      description: "Se retiró la demo y se recuperó el respaldo, sin tocar idioma ni sesión.",
     })
+    } catch (error) {
+      toast({ title: "No se pudo restaurar", description: error instanceof Error ? error.message : "Conserva el respaldo e inténtalo de nuevo.", variant: "destructive" })
+    }
   }
 
   return (
@@ -88,7 +98,7 @@ export function PldDemoDataControls({ onDataChange }: PldDemoDataControlsProps =
           </Button>
           <Button type="button" size="sm" variant="outline" onClick={handleClear} disabled={!status}>
             <Trash2 className="mr-2 h-4 w-4" />
-            Limpiar demo
+            Restaurar datos anteriores
           </Button>
         </div>
       </CardContent>

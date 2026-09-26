@@ -1,0 +1,4 @@
+# Official fixtures are byte-for-byte source evidence; preserve encoding/EOL
+# and hashes, including SAT's original trailing whitespace.
+tests/fixtures/sat-official/*.xml -text -whitespace
+tests/fixtures/sat-official/*.xsd -text -whitespace

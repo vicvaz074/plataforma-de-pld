@@ -59,9 +59,11 @@ export const SAT_INFERABLE_CONTROL_FIELD_IDS: readonly string[] = [
 ]
 
 export function isSatInferableControlFieldId(fieldId: string): boolean {
-  return SAT_INFERABLE_CONTROL_FIELD_IDS.includes(fieldId)
+  // Sólo cuando no existe decisión guardada, los datos de una operación
+  // anterior restauran sus bloques. Un "no" explícito siempre prevalece.
+  return SAT_INFERABLE_CONTROL_FIELD_IDS.includes(fieldId) || fieldId.startsWith("sat.branch.")
 }
 
 export function isSatSyntheticControlFieldId(fieldId: string): boolean {
-  return SAT_SYNTHETIC_CONTROL_FIELD_IDS.includes(fieldId)
+  return SAT_SYNTHETIC_CONTROL_FIELD_IDS.includes(fieldId) || fieldId.startsWith("sat.branch.") || fieldId.startsWith("sat.row.")
 }

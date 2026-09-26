@@ -29,6 +29,8 @@ import { useToast } from "@/components/ui/use-toast"
 import { AlertTriangle, CheckCircle2, CircleDashed, Download, FileCheck, FileWarning, Info, ShieldAlert, UploadCloud } from "lucide-react"
 import jsPDF from "jspdf"
 import { KYC_FORM_TEMPLATES, type KycFormType } from "@/lib/pld"
+import { parseStoredArray, parseStoredObject, readActiveModuleOperations, restoreAuditWorkflow } from "@/lib/pld/module-continuity"
+import { notifyPldIntegrationChange, PLD_INTEGRATION_EVENT, readPldSubjects } from "@/lib/pld/integration-records"
 
 interface EvidenceFile {
   id: string
@@ -359,6 +361,7 @@ const STORAGE_KEYS = {
   auditorias: "auditoria-interna-registros",
   observaciones: "auditoria-observaciones-autoridades",
   planes: "auditoria-planes-accion",
+  workflow: "auditoria-verificacion-workflow",
 } as const
 
 type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS]
@@ -369,6 +372,7 @@ const storeWithDates = <T,>(key: StorageKey, value: T) => {
     storageValue instanceof Date ? storageValue.toISOString() : storageValue
   )
   window.localStorage.setItem(key, payload)
+  notifyPldIntegrationChange(key)
 }
 
 const parseStoredLineamientos = (raw: unknown): LineamientoVersion[] => {
@@ -535,6 +539,29 @@ export default function AuditoriaVerificacionPage() {
       controlQuestions.map((question) => [question.id, { answer: "", evidences: [] }])
     )
   )
+  const [workflowInitialized, setWorkflowInitialized] = useState(false)
+  const persistAudit = useCallback((key: StorageKey, value: unknown) => {
+    try { storeWithDates(key, value) } catch {
+      toast({ title: "No se pudo guardar la auditoría", description: "Los cambios siguen en pantalla, pero no se han conservado. Revisa el espacio de almacenamiento local.", variant: "destructive" })
+    }
+  }, [toast])
+  useEffect(() => {
+    try {
+      const restored = restoreAuditWorkflow(parseStoredObject(localStorage.getItem(STORAGE_KEYS.workflow)), { responses, scopeAnswers, reviewAnswers, finalChecklist })
+      setResponses(restored.responses as Record<string, ControlResponse>)
+      setScopeAnswers(restored.scopeAnswers as Record<string, ScopeSelection>)
+      setReviewAnswers(restored.reviewAnswers as typeof reviewAnswers)
+      setScopeExclusions(restored.scopeExclusions)
+      setFinalChecklist(restored.finalChecklist)
+      setWorkflowInitialized(true)
+    } catch {
+      toast({ title: "No se pudo cargar la revisión", description: "El registro original se conserva sin sobrescribir. Revisa la copia local.", variant: "destructive" })
+    }
+  }, [])
+  useEffect(() => {
+    if (!workflowInitialized) return
+    persistAudit(STORAGE_KEYS.workflow, { schemaVersion: 2, responses, scopeAnswers, scopeExclusions, reviewAnswers, finalChecklist })
+  }, [workflowInitialized, responses, scopeAnswers, scopeExclusions, reviewAnswers, finalChecklist, persistAudit])
 
   const [lineamientosVersions, setLineamientosVersions] = useState<LineamientoVersion[]>([])
   const [lineamientosInitialized, setLineamientosInitialized] = useState(false)
@@ -571,24 +598,8 @@ export default function AuditoriaVerificacionPage() {
   const loadCrossModuleContext = useCallback(() => {
     if (typeof window === "undefined") return
 
-    const safeParse = <T,>(raw: string | null): T | null => {
-      if (!raw) return null
-      try {
-        return JSON.parse(raw) as T
-      } catch {
-        return null
-      }
-    }
-
-    const registro = safeParse<Record<string, unknown>>(window.localStorage.getItem(CROSS_MODULE_KEYS.registroSat))
-    const operaciones = safeParse<Array<Record<string, unknown>>>(window.localStorage.getItem(CROSS_MODULE_KEYS.operaciones)) || []
-
-    const identificacion = (registro?.identificacion as Record<string, unknown> | undefined) || {}
-    const sujetosRegistrados = Array.isArray(registro?.sujetosRegistrados)
-      ? (registro?.sujetosRegistrados as Array<Record<string, unknown>>)
-      : []
-    const primerSujeto = sujetosRegistrados[0] || {}
-    const actividades = Array.isArray(registro?.actividades) ? (registro?.actividades as Array<Record<string, unknown>>) : []
+    const operaciones = readActiveModuleOperations(window.localStorage)
+    const subjects = readPldSubjects(window.localStorage)
 
     const periodos = operaciones
       .map((operacion) => (typeof operacion.periodo === "string" ? operacion.periodo : ""))
@@ -601,42 +612,22 @@ export default function AuditoriaVerificacionPage() {
 
     const totalOperaciones = operaciones.length
     const montoOperado = operaciones.reduce((acc, operacion) => {
-      const monto = typeof operacion.monto === "number" ? operacion.monto : Number(operacion.monto)
-      return acc + (Number.isFinite(monto) ? monto : 0)
-    }, 0)
+      return acc + operacion.montoCentavos
+    }, 0) / 100
 
     const ultimaOperacion = operaciones
       .map((operacion) => (typeof operacion.fechaOperacion === "string" ? new Date(operacion.fechaOperacion) : null))
       .filter((date): date is Date => Boolean(date && !Number.isNaN(date.getTime())))
       .sort((a, b) => b.getTime() - a.getTime())[0] ?? null
 
-    const actividadVulnerable = actividades
-      .map((actividad) => {
-        const actividadKey = typeof actividad.actividadKey === "string" ? actividad.actividadKey : ""
-        return actividadKey || ""
-      })
-      .filter(Boolean)
-      .join(", ") ||
-      (typeof operaciones[0]?.actividadNombre === "string" ? String(operaciones[0].actividadNombre) : "Sin datos")
-
-    const nombreCompleto = [
-      typeof identificacion.nombre === "string" ? identificacion.nombre : "",
-      typeof identificacion.apellidoPaterno === "string" ? identificacion.apellidoPaterno : "",
-    ]
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .join(" ")
+    const actividadVulnerable = Array.from(new Set([
+      ...subjects.flatMap((subject) => subject.activityKeys),
+      ...operaciones.map((operation) => operation.actividadKey),
+    ].filter(Boolean))).join(", ") || "Sin datos"
 
     setCrossModuleContext({
-      sujetoObligado:
-        nombreCompleto ||
-        (typeof primerSujeto.nombre === "string" ? primerSujeto.nombre : "") ||
-        (typeof (registro as Record<string, unknown> | null)?.nombre === "string" ? String((registro as Record<string, unknown>).nombre) : "") ||
-        "Sin datos",
-      rfc:
-        (typeof identificacion.rfc === "string" && identificacion.rfc) ||
-        (typeof primerSujeto.rfc === "string" ? primerSujeto.rfc : "") ||
-        (typeof operaciones[0]?.rfc === "string" ? String(operaciones[0].rfc) : "Sin datos"),
+      sujetoObligado: subjects.length > 1 ? "Varios sujetos obligados" : subjects[0]?.nombre || "Sin datos",
+      rfc: subjects.length > 1 ? "Vista consolidada" : subjects[0]?.rfc || "Sin datos",
       actividadVulnerable,
       periodoRevision,
       totalOperaciones,
@@ -650,9 +641,11 @@ export default function AuditoriaVerificacionPage() {
 
     const refresh = () => loadCrossModuleContext()
     window.addEventListener("storage", refresh)
+    window.addEventListener(PLD_INTEGRATION_EVENT, refresh)
 
     return () => {
       window.removeEventListener("storage", refresh)
+      window.removeEventListener(PLD_INTEGRATION_EVENT, refresh)
     }
   }, [loadCrossModuleContext])
 
@@ -661,21 +654,21 @@ export default function AuditoriaVerificacionPage() {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEYS.lineamientos)
       if (stored) {
-        const parsed = parseStoredLineamientos(JSON.parse(stored))
+        const parsed = parseStoredLineamientos(parseStoredArray(stored))
         if (parsed.length) {
           setLineamientosVersions(sortByRecentDate(parsed, (item) => item.date))
         }
       }
+      setLineamientosInitialized(true)
     } catch (error) {
       console.error("Error al cargar lineamientos desde almacenamiento local", error)
-    } finally {
-      setLineamientosInitialized(true)
+      toast({ title: "No se pudieron cargar los lineamientos", description: "Se conservó el registro local sin sobrescribir.", variant: "destructive" })
     }
   }, [])
 
   useEffect(() => {
     if (!lineamientosInitialized) return
-    storeWithDates(STORAGE_KEYS.lineamientos, lineamientosVersions)
+    persistAudit(STORAGE_KEYS.lineamientos, lineamientosVersions)
   }, [lineamientosInitialized, lineamientosVersions])
 
   useEffect(() => {
@@ -683,21 +676,21 @@ export default function AuditoriaVerificacionPage() {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEYS.auditorias)
       if (stored) {
-        const parsed = parseStoredAudits(JSON.parse(stored))
+        const parsed = parseStoredAudits(parseStoredArray(stored))
         if (parsed.length) {
           setAuditLog(sortByRecentDate(parsed, (item) => item.date))
         }
       }
+      setAuditLogInitialized(true)
     } catch (error) {
       console.error("Error al cargar auditorías internas", error)
-    } finally {
-      setAuditLogInitialized(true)
+      toast({ title: "No se pudieron cargar las auditorías", description: "Se conservó el registro local sin sobrescribir.", variant: "destructive" })
     }
   }, [])
 
   useEffect(() => {
     if (!auditLogInitialized) return
-    storeWithDates(STORAGE_KEYS.auditorias, auditLog)
+    persistAudit(STORAGE_KEYS.auditorias, auditLog)
   }, [auditLogInitialized, auditLog])
 
   useEffect(() => {
@@ -705,21 +698,21 @@ export default function AuditoriaVerificacionPage() {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEYS.observaciones)
       if (stored) {
-        const parsed = parseStoredRequests(JSON.parse(stored))
+        const parsed = parseStoredRequests(parseStoredArray(stored))
         if (parsed.length) {
           setAuthorityRequests(sortByRecentDate(parsed, (item) => item.receivedAt))
         }
       }
+      setAuthorityRequestsInitialized(true)
     } catch (error) {
       console.error("Error al cargar observaciones de autoridades", error)
-    } finally {
-      setAuthorityRequestsInitialized(true)
+      toast({ title: "No se pudieron cargar las observaciones", description: "Se conservó el registro local sin sobrescribir.", variant: "destructive" })
     }
   }, [])
 
   useEffect(() => {
     if (!authorityRequestsInitialized) return
-    storeWithDates(STORAGE_KEYS.observaciones, authorityRequests)
+    persistAudit(STORAGE_KEYS.observaciones, authorityRequests)
   }, [authorityRequestsInitialized, authorityRequests])
 
   useEffect(() => {
@@ -727,21 +720,21 @@ export default function AuditoriaVerificacionPage() {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEYS.planes)
       if (stored) {
-        const parsed = parseStoredActionPlans(JSON.parse(stored))
+        const parsed = parseStoredActionPlans(parseStoredArray(stored))
         if (parsed.length) {
           setActionPlans(sortByRecentDate(parsed, (item) => item.deadline))
         }
       }
+      setActionPlansInitialized(true)
     } catch (error) {
       console.error("Error al cargar planes de acción", error)
-    } finally {
-      setActionPlansInitialized(true)
+      toast({ title: "No se pudieron cargar los planes", description: "Se conservó el registro local sin sobrescribir.", variant: "destructive" })
     }
   }, [])
 
   useEffect(() => {
     if (!actionPlansInitialized) return
-    storeWithDates(STORAGE_KEYS.planes, actionPlans)
+    persistAudit(STORAGE_KEYS.planes, actionPlans)
   }, [actionPlansInitialized, actionPlans])
 
   const [newActionPlan, setNewActionPlan] = useState({
@@ -891,35 +884,6 @@ export default function AuditoriaVerificacionPage() {
   }, [reviewAnswers])
 
   useEffect(() => {
-    const computedChecklist = {
-      idioma: true,
-      tipografia: true,
-      "seccion-a": answeredQuestions > 0,
-      "seccion-b": progressValue >= 50,
-      "seccion-c": actionPlans.length > 0 || authorityRequests.length > 0,
-      "seccion-d": actionPlans.length > 0,
-      seguimiento: auditLog.length > 0,
-      acciones: actionPlans.some((plan) => Boolean(plan.responsible && plan.deadline)),
-      evidencia: allEvidences.length > 0,
-      certificado: Boolean(crossModuleContext.sujetoObligado !== "Sin datos"),
-      pdf: auditLog.length > 0,
-      remision: authorityRequests.length > 0,
-      carta: lineamientosVersions.length > 0,
-      envio: authorityRequests.some((request) => request.status === "Cerrado"),
-    }
-    setFinalChecklist(computedChecklist)
-  }, [
-    answeredQuestions,
-    progressValue,
-    actionPlans,
-    authorityRequests,
-    auditLog,
-    allEvidences.length,
-    crossModuleContext.sujetoObligado,
-    lineamientosVersions.length,
-  ])
-
-  useEffect(() => {
     if (activeTab === "metodologia") {
       loadCrossModuleContext()
     }
@@ -947,7 +911,7 @@ export default function AuditoriaVerificacionPage() {
     }))
   }
 
-  const handleEvidenceUpload = (questionId: string, fileList: FileList | null) => {
+  const handleEvidenceUpload = async (questionId: string, fileList: FileList | null) => {
     if (!fileList?.length) return
 
     const files = Array.from(fileList)
@@ -962,14 +926,25 @@ export default function AuditoriaVerificacionPage() {
       return
     }
 
-    const evidences = files.map<EvidenceFile>((file) => ({
+    let evidences: EvidenceFile[]
+    try {
+      evidences = await Promise.all(files.map(async (file): Promise<EvidenceFile> => ({
       id: crypto.randomUUID(),
       fileName: file.name,
       fileSize: file.size,
       fileType: file.type,
       uploadedAt: new Date(),
-      url: URL.createObjectURL(file),
-    }))
+      url: await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Archivo no legible"))
+        reader.onerror = () => reject(reader.error)
+        reader.readAsDataURL(file)
+      }),
+    })))
+    } catch {
+      toast({ title: "No se pudo leer la evidencia", description: "No se modificaron los archivos existentes. Intenta cargarla de nuevo.", variant: "destructive" })
+      return
+    }
 
     setResponses((prev) => ({
       ...prev,
@@ -1414,13 +1389,13 @@ export default function AuditoriaVerificacionPage() {
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <a
+                              {evidence.url ? <a
                                 href={evidence.url}
                                 download={evidence.fileName}
                                 className="text-xs font-medium text-primary hover:underline"
                               >
                                 Descargar
-                              </a>
+                              </a> : <span className="text-xs text-amber-700">Archivo temporal no disponible; vuelve a adjuntarlo</span>}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1658,7 +1633,7 @@ export default function AuditoriaVerificacionPage() {
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">Lista de verificación final</CardTitle>
-                    <CardDescription>Requisitos formales CNBV previos a la remisión del informe.</CardDescription>
+                    <CardDescription>Confirmación documental manual. Marca únicamente lo que revisaste y resulta aplicable; la existencia de otros registros no acredita estos controles.</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <details className="rounded-md border border-dashed p-3">
@@ -1666,7 +1641,7 @@ export default function AuditoriaVerificacionPage() {
                       <div className="mt-3 space-y-2">
                         {finalChecklistItems.map((item) => (
                           <label key={item.id} className="flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-2">
-                            <Checkbox checked={item.completed} aria-label={item.label} disabled />
+                            <Checkbox checked={item.completed} aria-label={item.label} onCheckedChange={(checked) => setFinalChecklist((previous) => ({ ...previous, [item.id]: checked === true }))} />
                             <span className="text-sm">{item.label}</span>
                           </label>
                         ))}
@@ -2264,9 +2239,9 @@ export default function AuditoriaVerificacionPage() {
             ) : (
               <Alert className="border-emerald-500/40 bg-emerald-500/10">
                 <FileCheck className="h-4 w-4" />
-                <AlertTitle>Lineamientos vigentes</AlertTitle>
+                <AlertTitle>{latestLineamiento ? "Lineamientos vigentes" : "Lineamientos pendientes"}</AlertTitle>
                 <AlertDescription>
-                  La última actualización cumple con la periodicidad anual. Programa la próxima revisión para mantener cumplimiento continuo.
+                  {latestLineamiento ? "La última actualización se encuentra dentro del periodo de seguimiento. Programa la próxima revisión." : "No hay una versión registrada. Carga los lineamientos para poder revisar su vigencia."}
                 </AlertDescription>
               </Alert>
             )}

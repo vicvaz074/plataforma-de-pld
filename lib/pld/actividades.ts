@@ -1,7 +1,7 @@
 import type { ActividadVulnerableCatalogItem } from "./types"
 
 const LFPIORPI_URL = "https://www.diputados.gob.mx/LeyesBiblio/pdf/LFPIORPI.pdf"
-const VERIFIED = "2026-05-08"
+const VERIFIED = "2026-09-26"
 
 const documentosBase = [
   "Formulario de identificacion del cliente o usuario.",
@@ -41,6 +41,8 @@ function activity(
     lastVerified: VERIFIED,
     documentosBase,
     ...overrides,
+    // XI has an additional financial-act condition; an unconditional flag is misleading.
+    avisoSiempre: key.startsWith("fraccion-xi-") ? false : overrides.avisoSiempre,
   }
 }
 
@@ -100,6 +102,10 @@ export const ACTIVIDADES_VULNERABLES_ARTICULO_17: ActividadVulnerableCatalogItem
   activity("fraccion-xii-corredores-b", "Fracción XII", "Fe publica corredor - sociedades mercantiles", "Constitucion, modificacion patrimonial, fusion, escision o compraventa de acciones/partes sociales.", 0, 0, { avisoSiempre: true }),
   activity("fraccion-xii-corredores-c", "Fracción XII", "Fe publica corredor - fideicomisos", "Constitucion, modificacion o cesion de derechos de fideicomisos.", 0, 0, { avisoSiempre: true }),
   activity("fraccion-xii-corredores-d", "Fracción XII", "Fe publica corredor - mutuo mercantil", "Contratos de mutuo o creditos mercantiles permitidos por legislacion aplicable.", 0, 0, { avisoSiempre: true }),
+  // Separate SAT templates/subject role; never reuse FEPSP as a notarial template.
+  activity("fraccion-xii-servidores-inmuebles", "Fracción XII", "Fe pública servidor público - inmuebles", "Transmisión o constitución de derechos reales en ejercicio de facultades públicas. Revisar el criterio específico de servidores públicos antes de determinar el aviso.", 0, 0, { noticeReviewRequired: true, sourceUrl: "https://sppld.sat.gob.mx/pld/interiores/servidores.html" }),
+  activity("fraccion-xii-servidores-poderes", "Fracción XII", "Fe pública servidor público - poderes irrevocables", "Otorgamiento de poderes irrevocables para administración o dominio en ejercicio de facultades públicas.", 0, 0, { avisoSiempre: true, sourceUrl: "https://sppld.sat.gob.mx/pld/interiores/noticias.html" }),
+  activity("fraccion-xii-servidores-sociedades", "Fracción XII", "Fe pública servidor público - sociedades", "Constitución o modificación patrimonial de personas morales en ejercicio de facultades públicas.", 0, 0, { avisoSiempre: true, sourceUrl: "https://sppld.sat.gob.mx/pld/interiores/noticias.html" }),
   activity("fraccion-xiii-donativos", "Fracción XIII", "Donativos a asociaciones y sociedades sin fines de lucro", "Recepcion de donativos por asociaciones y sociedades sin fines de lucro.", 1605, 3210),
   activity("fraccion-xiv-aduanal-a", "Fracción XIV", "Servicios de comercio exterior - vehículos", "Despacho de vehiculos terrestres, aereos o maritimos nuevos o usados.", 0, 0, { inciso: "a", avisoSiempre: true }),
   activity("fraccion-xiv-aduanal-b", "Fracción XIV", "Servicios de comercio exterior - juegos y sorteos", "Despacho de maquinas para juegos de apuesta y sorteos.", 0, 0, { inciso: "b", avisoSiempre: true }),

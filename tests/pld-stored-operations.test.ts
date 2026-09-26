@@ -62,6 +62,21 @@ function operation(overrides: Record<string, unknown> = {}) {
   return sanitized
 }
 
+test("una divisa histórica sin conversión documentada queda en borrador sin alterar su importe", () => {
+  const usd = operation({ moneda: "USD", monto: 10_000_000, captureStatus: "complete" })
+  assert.equal(usd.montoCentavos, 1_000_000_000)
+  assert.equal(usd.financeReviewRequired, true)
+  assert.equal(usd.captureStatus, "draft")
+  assert.equal(usd.captureDraft?.currency, "USD")
+  const recalculated = recalculateStoredPldOperationsChronologically([usd])
+  assert.deepEqual(recalculated[0], usd)
+})
+
+test("un borrador recuperado no expone propiedades de tipos inválidos a la UI", () => {
+  const bad = operation({ captureDraft: { amountText: { unsafe: true }, currency: ["USD"] } })
+  assert.equal(bad.captureDraft, undefined)
+})
+
 test("money parser preserves ten million pesos as exact integer cents", () => {
   for (const input of ["10000000", "10,000,000", "10,000,000.00"]) {
     const parsed = parseMoneyToCents(input)

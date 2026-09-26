@@ -2,6 +2,7 @@ import { classifyAvisoSalida, evaluarOperacionVulnerable } from "./operations"
 import { generateSatOutputPackage } from "./sat-outputs"
 import { resolveSatFormatoForActividad } from "./sat-formatos"
 import { centsToMoney } from "./money"
+import type { PldOperationFinance, PldOperationLegalContext } from "./operation-finance"
 import {
   evaluateEvidenceChecklist,
   getDocumentRequirementsForCliente,
@@ -16,7 +17,9 @@ import type {
   SatXmlGenerationResult,
 } from "./types"
 
-export interface BuildPldOperationalCaseInput {
+export interface BuildPldOperationalCaseInput extends PldOperationLegalContext {
+  captureStatus?: "draft" | "complete"
+  finance?: PldOperationFinance
   tenant: PldTenant
   periodo: string
   actividadKey: string
@@ -53,6 +56,7 @@ export function buildPldOperationalCase(input: BuildPldOperationalCaseInput): Pl
   const montoMxn = montoCentavos === undefined ? input.montoMxn : centsToMoney(montoCentavos)
   const formato = resolveSatFormatoForActividad(input.actividadKey)
   const obligation = evaluarOperacionVulnerable({
+    ...input,
     actividadKey: input.actividadKey,
     clienteKey: input.clienteId,
     fechaOperacion: input.fechaOperacion,
@@ -84,6 +88,13 @@ export function buildPldOperationalCase(input: BuildPldOperationalCaseInput): Pl
   return {
     id: `case-${input.periodo}-${input.actividadKey}-${input.clienteId}-${Date.now()}`,
     schemaVersion: 1,
+    captureStatus: input.captureStatus,
+    finance: input.finance,
+    operacionFinancieraPorCuentaCliente: input.operacionFinancieraPorCuentaCliente,
+    contraprestacionCentavos: input.contraprestacionCentavos,
+    montoBaseAvisoCentavos: input.montoBaseAvisoCentavos,
+    montoNoDeterminado: input.montoNoDeterminado,
+    excluidaPorSupuestoLegal: input.excluidaPorSupuestoLegal,
     tenantId: input.tenant.id,
     tenantRfc: input.tenant.rfc,
     tenantName: input.tenant.razonSocial,

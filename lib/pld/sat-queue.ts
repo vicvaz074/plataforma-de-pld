@@ -24,6 +24,7 @@ export interface SatQueueOperationSource {
   mismoGrupo?: boolean
   createdAt?: string
   updatedAt?: string
+  captureStatus?: "draft" | "complete"
   lifecycle?: {
     status?: "active" | "cancelled"
   }
@@ -67,8 +68,8 @@ export function buildSatQueueItems(input: BuildSatQueueItemsInput): SatQueueItem
       id: `satqueue-operation-${operation.id}`,
       source: "operation" as const,
       kind,
-      label: queueLabel(kind, outputKind, satPackage),
-      description: queueDescription(kind, satPackage, lifecycleStatus),
+      label: operation.captureStatus === "draft" ? "Borrador de captura" : queueLabel(kind, outputKind, satPackage),
+      description: operation.captureStatus === "draft" ? "Captura incompleta guardada; no genera XML ni participa en acumulación." : queueDescription(kind, satPackage, lifecycleStatus),
       sourceOperationId: operation.id,
       sourceOperationRevision: operation.revision,
       operationStatus: operation.umbralStatus,
@@ -183,6 +184,7 @@ function classifyOperationQueueKind(operation: SatQueueOperationSource): SatQueu
 }
 
 function resolveOperationOutputKind(operation: SatQueueOperationSource): SatOutputKind | null {
+  if (operation.captureStatus === "draft") return null
   if (
     operation.avisoSalidaTipo === "aviso_normal" ||
     operation.avisoSalidaTipo === "informe_27_bis" ||
@@ -222,7 +224,7 @@ function queueDescription(
     return "La operación se conserva para monitoreo interno, sin fabricar una salida SAT."
   }
   return satPackage
-    ? "Salida SAT real vinculada a esta operación."
+    ? satPackage.validation.status === "listo" ? "Salida SAT validada localmente, vinculada a esta operación; no presentada." : "Captura vinculada: completar o corregir los datos antes de descargar una salida SAT."
     : "Salida SAT pendiente de generación; las descargas permanecen deshabilitadas."
 }
 

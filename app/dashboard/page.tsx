@@ -8,6 +8,8 @@ import { motion } from "framer-motion"
 import { UserProgressDashboard } from "@/components/user-progress-dashboard"
 import { AdminUserPrivileges } from "@/components/admin-user-privileges"
 import { PLD_DASHBOARD_MODULES } from "@/lib/pld/navigation"
+import { countStoredRecords, readActiveModuleOperations } from "@/lib/pld/module-continuity"
+import { PLD_INTEGRATION_EVENT } from "@/lib/pld/integration-records"
 import Link from "next/link"
 import { AlertTriangle, ArrowRight, CheckCircle2, Database, ShieldCheck, Users } from "lucide-react"
 
@@ -17,18 +19,6 @@ const parseLocalStorageValue = (key: string): unknown => {
   } catch {
     return null
   }
-}
-
-const countStoredRecords = (value: unknown, arrayKeys: string[] = []) => {
-  if (Array.isArray(value)) return value.length
-  if (!value || typeof value !== "object") return 0
-
-  const record = value as Record<string, unknown>
-  for (const key of arrayKeys) {
-    const candidate = record[key]
-    if (Array.isArray(candidate)) return candidate.length
-  }
-  return Object.keys(record).length > 0 ? 1 : 0
 }
 
 export default function DashboardPage() {
@@ -46,13 +36,15 @@ export default function DashboardPage() {
   })
 
   useEffect(() => {
+    const refresh = () => {
     setUserRole(localStorage.getItem("userRole"))
-    const users = JSON.parse(localStorage.getItem("users") || "[]")
+    const storedUsers = parseLocalStorageValue("users")
+    const users = Array.isArray(storedUsers) ? storedUsers.filter((user) => user && typeof user === "object") : []
     setPendingUsers(users.filter((u: any) => !u.approved))
 
     const registroSat = parseLocalStorageValue("registro-sat-data")
     const expedientes = parseLocalStorageValue("kyc_expedientes_detalle")
-    const operaciones = parseLocalStorageValue("actividades_vulnerables_operaciones")
+    const operaciones = readActiveModuleOperations(localStorage)
     const paquetesSat = parseLocalStorageValue("pld-sat-output-packages")
 
     setDashboardData({
@@ -63,6 +55,14 @@ export default function DashboardPage() {
       operaciones: countStoredRecords(operaciones, ["operaciones", "items"]),
       paquetesSat: countStoredRecords(paquetesSat, ["packages", "paquetes", "items"]),
     })
+    }
+    refresh()
+    window.addEventListener("storage", refresh)
+    window.addEventListener(PLD_INTEGRATION_EVENT, refresh)
+    return () => {
+      window.removeEventListener("storage", refresh)
+      window.removeEventListener(PLD_INTEGRATION_EVENT, refresh)
+    }
   }, [])
 
   const handleApprove = (email: string) => {

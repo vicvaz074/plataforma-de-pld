@@ -6,6 +6,7 @@ import {
   parseMoneyToCents,
 } from "./money"
 import type { AvisoSalidaTipo, UmbralStatus } from "./types"
+import { isMxnCurrency, sanitizeOperationFinance, type PldOperationFinance, type PldOperationLegalContext } from "./operation-finance"
 
 export const PLD_OPERATIONS_STORAGE_KEY = "actividades_vulnerables_operaciones"
 export const STORED_PLD_OPERATION_SCHEMA_VERSION = 3 as const
@@ -70,7 +71,11 @@ export interface PldOperationHistoryEntry {
  * `montoCentavos` es canónico; `monto` y los demás campos históricos se
  * conservan para no romper consumidores existentes.
  */
-export interface StoredPldOperationV3 extends Record<string, unknown> {
+export interface StoredPldOperationV3 extends Record<string, unknown>, PldOperationLegalContext {
+  captureStatus?: "draft" | "complete"
+  finance?: PldOperationFinance
+  financeReviewRequired?: boolean
+  captureDraft?: { amountText: string; currency: string; exchangeRate?: string; exchangeRateDate?: string; exchangeRateSource?: string }
   schemaVersion: typeof STORED_PLD_OPERATION_SCHEMA_VERSION
   id: string
   actividadKey: string
@@ -492,6 +497,17 @@ function sanitizeStringRecord(value: unknown) {
   )
 }
 
+function sanitizeCaptureDraft(value: unknown): StoredPldOperationV3["captureDraft"] {
+  if (!isRecord(value) || typeof value.amountText !== "string" || typeof value.currency !== "string") return undefined
+  return {
+    amountText: value.amountText,
+    currency: value.currency,
+    exchangeRate: optionalString(value.exchangeRate),
+    exchangeRateDate: optionalString(value.exchangeRateDate),
+    exchangeRateSource: optionalString(value.exchangeRateSource),
+  }
+}
+
 function canonicalNestedLiquidation(raw: Record<string, unknown>, montoCentavos: number) {
   if (!isRecord(raw.liquidacion)) return raw.liquidacion
   if (!("monto" in raw.liquidacion) && !("montoCentavos" in raw.liquidacion)) {
@@ -557,10 +573,23 @@ export function sanitizeStoredPldOperation(
   const sujetoObligado = sanitizeSubject(value, options.sujetoObligado)
   const monto = centsToMoney(montoCentavos)
   const avisoPresentado = submission.wasEverPresented
+  const finance = sanitizeOperationFinance(value.finance)
+  const currency = asString(value.moneda, "MXN").trim().toUpperCase() || "MXN"
+  const financeReviewRequired = (!isMxnCurrency(currency) && !finance) ||
+    Boolean(value.finance && !finance) || Boolean(finance && finance.mxnAmountCents !== montoCentavos)
 
   return {
     ...value,
     schemaVersion: STORED_PLD_OPERATION_SCHEMA_VERSION,
+    captureStatus: financeReviewRequired || value.captureStatus === "draft" ? "draft" : value.captureStatus === "complete" ? "complete" : undefined,
+    finance,
+    financeReviewRequired,
+    captureDraft: sanitizeCaptureDraft(value.captureDraft) || (financeReviewRequired ? { amountText: String(value.monto ?? monto), currency } : undefined),
+    operacionFinancieraPorCuentaCliente: typeof value.operacionFinancieraPorCuentaCliente === "boolean" ? value.operacionFinancieraPorCuentaCliente : undefined,
+    contraprestacionCentavos: Number.isSafeInteger(value.contraprestacionCentavos) && Number(value.contraprestacionCentavos) >= 0 ? Number(value.contraprestacionCentavos) : undefined,
+    montoBaseAvisoCentavos: Number.isSafeInteger(value.montoBaseAvisoCentavos) && Number(value.montoBaseAvisoCentavos) >= 0 ? Number(value.montoBaseAvisoCentavos) : undefined,
+    montoNoDeterminado: typeof value.montoNoDeterminado === "boolean" ? value.montoNoDeterminado : undefined,
+    excluidaPorSupuestoLegal: typeof value.excluidaPorSupuestoLegal === "boolean" ? value.excluidaPorSupuestoLegal : undefined,
     id,
     actividadKey: asString(value.actividadKey).trim(),
     actividadNombre: asString(value.actividadNombre).trim(),
@@ -1372,11 +1401,11 @@ export function recalculateStoredPldOperationsChronologically(
   const recordHistory = options.recordHistory ?? true
 
   return ordered.map((operation) => {
-    if (operation.lifecycle.status === "cancelled") return operation
+    if (operation.lifecycle.status === "cancelled" || operation.captureStatus === "draft") return operation
     const key = [
       storedPldSubjectIdentity(operation.sujetoObligado),
       operation.actividadKey,
-      operation.rfc.toUpperCase(),
+      storedPldClientIdentity(operation),
     ].join("\u0000")
     const historical = histories.get(key) ?? []
     let derived = derivedFallback(operation)
@@ -1384,14 +1413,19 @@ export function recalculateStoredPldOperationsChronologically(
 
     try {
       const result = evaluarOperacionVulnerable({
+        operacionFinancieraPorCuentaCliente: operation.operacionFinancieraPorCuentaCliente,
+        contraprestacionCentavos: operation.contraprestacionCentavos,
+        montoBaseAvisoCentavos: operation.montoBaseAvisoCentavos,
+        montoNoDeterminado: operation.montoNoDeterminado,
+        excluidaPorSupuestoLegal: operation.excluidaPorSupuestoLegal,
         actividadKey: operation.actividadKey,
-        clienteKey: operation.rfc.toUpperCase(),
+        clienteKey: storedPldClientIdentity(operation),
         fechaOperacion: operation.fechaOperacion,
         montoMxn: centsToMoney(operation.montoCentavos),
         operacionesHistoricas: historical.map((item) => ({
           id: item.id,
           actividadKey: item.actividadKey,
-          clienteKey: item.rfc.toUpperCase(),
+          clienteKey: storedPldClientIdentity(item),
           fechaOperacion: item.fechaOperacion,
           montoMxn: centsToMoney(item.montoCentavos),
         })),
@@ -1463,7 +1497,22 @@ export function recalculateStoredPldOperationsChronologically(
 }
 
 export function activeStoredPldOperations(operations: StoredPldOperationV3[]) {
-  return operations.filter((operation) => operation.lifecycle.status === "active")
+  return operations.filter((operation) => operation.lifecycle.status === "active" && operation.captureStatus !== "draft")
+}
+
+/** An absent RFC must never group otherwise unrelated CURP/NIF-only clients. */
+export function storedPldClientIdentity(operation: StoredPldOperationV3) {
+  const expedienteId = optionalString(operation.expedienteId) || optionalString(operation.expedienteReferenciado)
+  if (expedienteId) return `expediente:${expedienteId}`
+  const clienteId = optionalString(operation.clienteId)
+  if (clienteId) return `cliente:${clienteId}`
+  if (operation.rfc) return `rfc:${operation.rfc.toUpperCase()}`
+  const identifiers = isRecord(operation.identifiers) ? operation.identifiers : {}
+  for (const key of ["curp", "nif"] as const) {
+    const identifier = optionalString(identifiers[key]) || optionalString(operation[key])
+    if (identifier) return `${key}:${identifier.toUpperCase()}`
+  }
+  return `sin-vinculo:${operation.id}`
 }
 
 export function sumStoredOperationCents(operations: StoredPldOperationV3[]) {

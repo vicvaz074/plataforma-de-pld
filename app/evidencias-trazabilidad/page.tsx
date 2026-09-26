@@ -28,6 +28,8 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/components/ui/use-toast"
+import { buildOperationalEvidenceLinks, mergeExternalEvidence, parseStoredArray, resolveEvidenceSource, type EvidenceSourceReference } from "@/lib/pld/module-continuity"
+import { notifyPldIntegrationChange, PLD_INTEGRATION_EVENT } from "@/lib/pld/integration-records"
 
 type ModuleKey =
   | "kyc"
@@ -78,8 +80,11 @@ interface EvidenceDocument {
   version: number
   versionHistory: VersionEntry[]
   archived: boolean
-  source?: "manual" | "gobernanza" | "beneficiario" | "capacitacion"
+  source?: "manual" | "gobernanza" | "beneficiario" | "capacitacion" | "kyc" | "actos" | "sat"
   sourceId?: string
+  sourceRevision?: string
+  sourceReference?: EvidenceSourceReference
+  sourceOverride?: boolean
 }
 
 interface TraceLogEntry {
@@ -252,6 +257,7 @@ export default function EvidenciasTrazabilidadPage() {
   const [selectedModule, setSelectedModule] = useState<ModuleKey>("kyc")
   const [documents, setDocuments] = useState<EvidenceDocument[]>([])
   const [logs, setLogs] = useState<TraceLogEntry[]>([])
+  const [storageReady, setStorageReady] = useState(false)
   const [formState, setFormState] = useState({
     expedienteId: "",
     submodule: "",
@@ -292,30 +298,43 @@ export default function EvidenciasTrazabilidadPage() {
   const getModuleName = (key: ModuleKey) => MODULES.find((module) => module.id === key)?.title || key
 
   useEffect(() => {
+    try {
     const storedDocs = localStorage.getItem(STORAGE_KEYS.documents)
     const storedLogs = localStorage.getItem(STORAGE_KEYS.logs)
     if (storedDocs) {
-      const parsed = JSON.parse(storedDocs) as EvidenceDocument[]
+      const parsed = parseStoredArray(storedDocs) as EvidenceDocument[]
       setDocuments(
         parsed.map((doc) => ({
           ...doc,
           source: doc.source ?? "manual",
           sourceId: doc.sourceId ?? doc.id,
+          versionHistory: Array.isArray(doc.versionHistory) ? doc.versionHistory : [],
         })),
       )
     }
     if (storedLogs) {
-      setLogs(JSON.parse(storedLogs))
+      setLogs(parseStoredArray(storedLogs) as TraceLogEntry[])
+    }
+    setStorageReady(true)
+    } catch {
+      toast({ title: "No se pudo cargar el repositorio", description: "Los documentos y logs originales se conservaron sin sobrescribir. Revisa la copia local.", variant: "destructive" })
     }
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.documents, JSON.stringify(documents))
-    localStorage.setItem(STORAGE_KEYS.logs, JSON.stringify(logs))
-    localStorage.setItem(STORAGE_KEYS.snapshot, JSON.stringify({ documentos: documents, logs }))
-  }, [documents, logs])
+    if (!storageReady) return
+    try {
+      localStorage.setItem(STORAGE_KEYS.documents, JSON.stringify(documents))
+      localStorage.setItem(STORAGE_KEYS.logs, JSON.stringify(logs))
+      localStorage.setItem(STORAGE_KEYS.snapshot, JSON.stringify({ documentos: documents, logs }))
+      notifyPldIntegrationChange(STORAGE_KEYS.documents)
+    } catch {
+      toast({ title: "No se pudo guardar la evidencia", description: "No salgas de esta página sin respaldar los cambios. El almacenamiento local no está disponible o está lleno.", variant: "destructive" })
+    }
+  }, [storageReady, documents, logs, toast])
 
   const syncExternalEvidence = () => {
+    if (!storageReady) return
     const externalDocs: EvidenceDocument[] = []
 
     const gobernanzaRaw = localStorage.getItem("gobernanza-control-data")
@@ -435,29 +454,27 @@ export default function EvidenciasTrazabilidadPage() {
       }
     }
 
-    setDocuments((prev) => {
-      const manualDocs = prev.filter((doc) => doc.source === "manual" || !doc.source)
-      return [...externalDocs, ...manualDocs]
-    })
-    setLastSync(new Date().toISOString())
+    const now = new Date().toISOString()
+    externalDocs.push(...buildOperationalEvidenceLinks(localStorage, now))
+    setDocuments((prev) => mergeExternalEvidence(prev, externalDocs, now))
+    setLastSync(now)
   }
 
   useEffect(() => {
-    if (typeof window === "undefined") return
+    if (typeof window === "undefined" || !storageReady) return
     syncExternalEvidence()
+    const sourceKeys = ["gobernanza-control-data", "beneficiario-controlador-data", "pld-training-module", "capacitacion-control-data", "kyc_expedientes_detalle", "actividades_vulnerables_operaciones", "pld-sat-output-packages"]
     const handleStorage = (event: StorageEvent) => {
-      if (!event.key) return
-      if (
-        ["gobernanza-control-data", "beneficiario-controlador-data", "pld-training-module", "capacitacion-control-data"].includes(
-          event.key,
-        )
-      ) {
-        syncExternalEvidence()
-      }
+      if (!event.key || sourceKeys.includes(event.key)) syncExternalEvidence()
     }
+    const handleIntegration = (event: Event) => { if (sourceKeys.includes((event as CustomEvent).detail?.key)) syncExternalEvidence() }
     window.addEventListener("storage", handleStorage)
-    return () => window.removeEventListener("storage", handleStorage)
-  }, [])
+    window.addEventListener(PLD_INTEGRATION_EVENT, handleIntegration)
+    return () => {
+      window.removeEventListener("storage", handleStorage)
+      window.removeEventListener(PLD_INTEGRATION_EVENT, handleIntegration)
+    }
+  }, [storageReady])
 
   const expedienteMap = useMemo(() => {
     const map = new Map<string, EvidenceDocument[]>()
@@ -586,7 +603,7 @@ export default function EvidenciasTrazabilidadPage() {
 
         const updatedDoc: EvidenceDocument = {
           ...existingDoc,
-          id: randomId(),
+          id: existingDoc.id,
           fileName: selectedFile.name,
           fileSize: selectedFile.size,
           fileType: selectedFile.type,
@@ -599,6 +616,7 @@ export default function EvidenciasTrazabilidadPage() {
           versionHistory: [newVersionEntry, ...existingDoc.versionHistory],
           source: existingDoc.source ?? "manual",
           sourceId: existingDoc.sourceId ?? existingDoc.id,
+          sourceOverride: existingDoc.source !== "manual" && Boolean(existingDoc.source),
         }
 
         setDocuments((prev) => [updatedDoc, ...prev.filter((doc) => doc.id !== existingDoc.id)])
@@ -672,16 +690,18 @@ export default function EvidenciasTrazabilidadPage() {
   }
 
   const handleDownload = (doc: EvidenceDocument) => {
-    if (!doc.fileData) {
+    let fileData = doc.fileData
+    try { if (!fileData && doc.sourceReference) fileData = resolveEvidenceSource(localStorage, doc.sourceReference) } catch { /* keep the metadata even when the source is unavailable */ }
+    if (!fileData) {
       toast({
         title: "Archivo no disponible",
-        description: "Esta evidencia proviene de otro módulo. Adjunta el archivo para habilitar descarga.",
+        description: "No se encontró el archivo en el módulo de origen. La referencia y su historial se conservan.",
         variant: "destructive",
       })
       return
     }
     const link = document.createElement("a")
-    link.href = doc.fileData
+    link.href = fileData
     link.download = doc.fileName
     document.body.appendChild(link)
     link.click()
@@ -1137,11 +1157,11 @@ export default function EvidenciasTrazabilidadPage() {
                                 {doc.source && doc.source !== "manual" && (
                                   <p>Origen: {doc.source}</p>
                                 )}
-                                {!doc.fileData && <p className="text-amber-600">Archivo pendiente</p>}
+                                {!doc.fileData && <p className="text-amber-600">{doc.sourceReference?.kind === "record" ? "Registro vinculado; no acredita documentación cargada" : doc.sourceReference ? "Archivo vinculado al módulo de origen" : "Archivo pendiente"}</p>}
                               </div>
                               <div className="flex flex-wrap items-center gap-2 pt-2">
                                 <Button size="sm" variant="outline" onClick={() => handleDownload(doc)}>
-                                  <Download className="mr-2 h-4 w-4" /> Descargar
+                                  <Download className="mr-2 h-4 w-4" /> {doc.sourceReference?.kind === "record" ? "Exportar registro JSON" : "Descargar"}
                                 </Button>
                                 <Button
                                   size="sm"

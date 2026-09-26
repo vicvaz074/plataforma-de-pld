@@ -1,5 +1,8 @@
 import { resolveSatFormatoForActividad } from "./sat-formatos"
 import { centsToDecimalString, parseMoneyToCents } from "./money"
+import { resolveSatTemplateForActividad } from "./sat-template-catalog"
+import { renderSatWorkbookXml } from "./sat-xml-program"
+import { validateGeneratedSatXml } from "./sat-xml-validation"
 import type {
   PldOperationalCase,
   SatOutputKind,
@@ -31,18 +34,31 @@ export function getSatXmlLayoutForActividad(actividadKey: string): SatXmlLayoutD
 }
 
 export function buildOfficialSatXml(input: SatXmlInput): string {
+  return buildSatXmlResult(input).xml
+}
+
+export function buildSatXmlResult(input: SatXmlInput): { xml: string; errors: string[]; schemaFile?: string } {
   const { operationalCase, outputKind } = input
   const formato = resolveSatFormatoForActividad(operationalCase.actividadKey)
   const layout = getSatXmlLayoutForActividad(operationalCase.actividadKey)
   const values = buildValueMap(operationalCase)
-  const aviso =
-    outputKind === "informe_ceros"
-      ? ""
-      : formato.id === "sat-fraccion-xv-arrendamiento"
-        ? buildArrendamientoAviso(values, operationalCase)
-        : buildGenericAviso(values, operationalCase, outputKind)
+  // XIV is reported through the customs channel. Its cached workbook is ONLY a
+  // zero-report form, not an ordinary transaction notice. Never substitute it.
+  if (operationalCase.actividadKey.startsWith("fraccion-xiv-")) return { xml: "", errors: ["Comercio exterior: utilizar la vía de pedimento aplicable; no se genera un aviso ordinario ni se sustituye por informe en ceros."] }
+  const isReport = outputKind === "informe_ceros" || outputKind === "informe_27_bis"
+  const template = resolveSatTemplateForActividad(operationalCase.actividadKey, operationalCase.satTemplateVariant || operationalCase.satTemplateId)
+  if (!isReport && operationalCase.satCellValues && Object.keys(operationalCase.satCellValues).length) {
+    const rendered = renderSatWorkbookXml(template.templateId, operationalCase.satCellValues)
+    if (rendered.errors.length) return rendered
+    const checked = validateGeneratedSatXml(rendered.xml)
+    return { xml: rendered.xml, errors: checked.errors, schemaFile: checked.schemaFile }
+  }
+  // Preserve the established XV semantic-field adapter for legacy records.
+  // Other activities must provide explicit cells; no incomplete generic XML.
+  if (!isReport && formato.id !== "sat-fraccion-xv-arrendamiento") return { xml: "", errors: ["Completa y vuelve a guardar la captura SAT para generar las celdas de su plantilla. No se genera XML genérico."] }
+  const aviso = isReport ? "" : buildArrendamientoAviso(values, operationalCase)
 
-  return [
+  const xml = [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     "",
     `<archivo xsi:schemaLocation="${escapeXml(layout.schemaLocation)}" xmlns="${escapeXml(
@@ -53,6 +69,7 @@ export function buildOfficialSatXml(input: SatXmlInput): string {
     "<sujeto_obligado>",
     node("clave_sujeto_obligado", value(values, "persona_aviso.sujeto_obligado_rfc") || operationalCase.tenantRfc, true),
     node("clave_actividad", layout.activityCode, true),
+    outputKind === "informe_27_bis" ? node("exento", "1", true) : "",
     "</sujeto_obligado>",
     aviso,
     "</informe>",
@@ -60,6 +77,8 @@ export function buildOfficialSatXml(input: SatXmlInput): string {
   ]
     .filter((line) => line !== "")
     .join("\n")
+  const checked = validateGeneratedSatXml(xml)
+  return { xml, errors: checked.errors, schemaFile: checked.schemaFile }
 }
 
 export function compareSatXmlCanonical(actual: string, expected: string): SatXmlCanonicalComparison {
@@ -136,8 +155,8 @@ export function excelSerialFromDate(raw: unknown): number | null {
 }
 
 function buildArrendamientoAviso(values: SatXmlValueMap, operationalCase: PldOperationalCase): string {
-  const personaMoral = buildPersonaMoral(values, operationalCase)
-  const personaFisica = buildPersonaFisica(values, operationalCase)
+  const personaFisica = operationalCase.tipoCliente.startsWith("pf_") ? buildPersonaFisica(values, operationalCase) : ""
+  const personaMoral = operationalCase.tipoCliente.startsWith("pm_") ? buildPersonaMoral(values, operationalCase) : ""
   const personaAviso = wrap("persona_aviso", [
     wrap("tipo_persona", [personaMoral || personaFisica]),
     wrap("tipo_domicilio", [wrap("nacional", [
@@ -227,32 +246,8 @@ function buildPersonaFisica(values: SatXmlValueMap, operationalCase: PldOperatio
   ])
 }
 
-function buildGenericAviso(values: SatXmlValueMap, operationalCase: PldOperationalCase, outputKind: SatOutputKind) {
-  return wrap("aviso", [
-    node("referencia_aviso", value(values, "persona_aviso.referencia") || operationalCase.id, true),
-    node("prioridad", satCatalogCode(value(values, "persona_aviso.prioridad") || (outputKind === "aviso_24h" ? "2" : "1")), true),
-    wrap("alerta", [
-      node("tipo_alerta", satCatalogCode(value(values, "persona_aviso.tipo_alerta") || operationalCase.alertaCodigo || "100"), true),
-      node("descripcion_alerta", value(values, "persona_aviso.descripcion_alerta") || operationalCase.alertaDescripcion),
-    ]),
-    wrap("persona_aviso", [
-      wrap("tipo_persona", [
-        wrap("persona_moral", [
-          node("denominacion_razon", value(values, "persona_aviso.pm.razon_social") || operationalCase.clienteNombre, true),
-          node("rfc", value(values, "persona_aviso.pm.rfc") || operationalCase.clienteRfc),
-        ]),
-      ]),
-    ]),
-    wrap("detalle_operaciones", [
-      wrap("datos_operacion", [
-        node("fecha_operacion", satDate(value(values, "acto.fecha_operacion") || operationalCase.fechaOperacion), true),
-        node("monto_operacion", operationalAmountForSat(operationalCase, value(values, "pago.monto")), true),
-      ]),
-    ]),
-  ])
-}
-
 function operationalAmountForSat(operationalCase: PldOperationalCase, legacyOverride?: string) {
+  if (operationalCase.finance) return operationalCase.finance.originalAmount
   if (Number.isSafeInteger(operationalCase.montoCentavos) && Number(operationalCase.montoCentavos) >= 0) {
     return centsToDecimalString(Number(operationalCase.montoCentavos))
   }

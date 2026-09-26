@@ -1,0 +1,506 @@
+[
+  {
+    "file": "ejemplo_ari.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_ari.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/arrendamiento.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "d82fc037a62147ffce60f178f96aa738fbfe25c953852842440c3aaa0f49a245"
+  },
+  {
+    "file": "ejemplo_avi.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_avi.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/activos.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "0c48fc0df4d8a304acf31cfc44952b5da3b8a441fe90594ce1ac62655f8cf1f3"
+  },
+  {
+    "file": "ejemplo_bli.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_bli.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/blindaje.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "631eaec9b979363655ec015f799acf485c9121a06b98e1b440114628b81d302e"
+  },
+  {
+    "file": "ejemplo_chv.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_chv.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/cheques_viajero.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "81d086293171bbbd21e2aa2b7a26e33e9e64783ea1c2dbcca83ef10462182a02"
+  },
+  {
+    "file": "ejemplo_din.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_din.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/desarrollo_inmobiliario.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "e8584f722fd98b78be0cb18bcba35291a475178fca98b9e7a7e937edc54ab564"
+  },
+  {
+    "file": "ejemplo_don.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_don.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/donativos.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "8256ce71b62e81294d4e25ec1f011e4ff4417dab41044370207c8cbc921d692c"
+  },
+  {
+    "file": "ejemplo_fep10_avaluo.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fep10_avaluo.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/fedatarios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "0e91c9d1638e88db584c7f9a83b6ec4ee413f91e4af6b742f2311934790bf1fc"
+  },
+  {
+    "file": "ejemplo_fep1_otorgamientopoder.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fep1_otorgamientopoder.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/fedatarios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "bfcc72e36a0951f8e2ce1bf181d10481ce02ec739a0f5f03380a9ed67c6ed718"
+  },
+  {
+    "file": "ejemplo_fep2_constitucionpm.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fep2_constitucionpm.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/fedatarios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "357b7b43dbe697388c7aa5ac965fdd32a708e071bbd67f0675c82a26b00ccbac"
+  },
+  {
+    "file": "ejemplo_fep3_modificacionpatrimonial.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fep3_modificacionpatrimonial.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/fedatarios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "b737e5bcf4458cd336124177a5084e7af7bd72ede1a84cb1916a508ff21c0f91"
+  },
+  {
+    "file": "ejemplo_fep4_fusion.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fep4_fusion.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/fedatarios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "b2e70a5d949bd04aee0496e408c409bb730a20b50cc0e5a9b76d57c6dcd3f4c2"
+  },
+  {
+    "file": "ejemplo_fep5_escision.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fep5_escision.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/fedatarios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "a16398f09a2f80db5cc55bb1931cbc741279cf78bc09434f109d230f33380a99"
+  },
+  {
+    "file": "ejemplo_fep6_compraventaacciones.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fep6_compraventaacciones.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/fedatarios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "0423e6187fd974ef6d44951ffcb2dd857ab6d2aefe56e9f27034a262f967b048"
+  },
+  {
+    "file": "ejemplo_fep7_constitucionfid.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fep7_constitucionfid.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/fedatarios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "bf6146b243a2ed2a4de5b967c2dea69bdcc8c6ea993ecae0270489196f659b0e"
+  },
+  {
+    "file": "ejemplo_fep8_cesion.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fep8_cesion.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/fedatarios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "05fa36d81e777b08472bf9403c916dd4936e94b64801c87182679935d219061e"
+  },
+  {
+    "file": "ejemplo_fep9_mutuo.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fep9_mutuo.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/fedatarios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "f48e94fe46190ea3295f9876ce72d1a7e0cc72c42e5c4d064f045204306862cf"
+  },
+  {
+    "file": "ejemplo_fes1_inmueble.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fes1_inmueble.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servidores.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "13d721763a90d240342ab76b3556cdcc7de9902af0ca53680cd6788bd3cf13fc"
+  },
+  {
+    "file": "ejemplo_fes2_poder.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fes2_poder.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servidores.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "d3f065fa9ed5c9cf220956c52972dc9a790b9285862e2963d91ad6ce16ef99db"
+  },
+  {
+    "file": "ejemplo_fes3_constitucionpm.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fes3_constitucionpm.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servidores.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "4d78eb13ca82dcc43484c1ad40fc78ff0411d1ec399f2a18e0b7b52a53f9d68e"
+  },
+  {
+    "file": "ejemplo_fes4_modifpatrimonial.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fes4_modifpatrimonial.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servidores.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "ebb29860386ead08464209139dbb353bf7f724ffe81f9cca21d2626a0bb268e2"
+  },
+  {
+    "file": "ejemplo_fes5_mutuo.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fes5_mutuo.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servidores.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "461591ed2f8bd712b31bbe5c89895b8dab080e5724889d50ad3c65b8b6415fdb"
+  },
+  {
+    "file": "ejemplo_fes6_avaluo.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_fes6_avaluo.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servidores.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "211df26bc830332a8c272fb95d29b76543c88e7c1a734011e1099945cdb068cc"
+  },
+  {
+    "file": "ejemplo_inm.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_inm.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/inmuebles.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "af3a2de5c9a16b6f4f817eb4b75ac5f47ef50311f7008ff9bcac5100af338a75"
+  },
+  {
+    "file": "ejemplo_jys.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_jys.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/juegosysorteos.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "cdb06b6abdb88882dd70a58411ff869e7e7be83ce42412741263c7c27994c65b"
+  },
+  {
+    "file": "ejemplo_mjr.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_mjr.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/metalesyjoyas.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "1380c5644300db839f3c2d1b65aff9f48264e9becfb6e41060e56e894b397ec1"
+  },
+  {
+    "file": "ejemplo_mpc.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_mpc.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/mutuo.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "c05cdcb024df68183d9551d82bb0b14d57ba98067deef2e1e2d4a4fb7c15c809"
+  },
+  {
+    "file": "ejemplo_oba.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_oba.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/obras.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "ac1a519d390fdae8cd1ccfb0c9526bf82c90d15701ecd9ed6efc0f1aacadd41d"
+  },
+  {
+    "file": "ejemplo_spr10_compraventaentmercantil.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr10_compraventaentmercantil.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "d6bd86dffc5742d5c0f099a0cf435baaa48782e6b496169fa68b5ef546756628"
+  },
+  {
+    "file": "ejemplo_spr10_compraventaentmercantil2.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr10_compraventaentmercantil2.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "800a8fdae558e6e3abeff8363314454633c4a893ec49bbf7699b4262638aa646"
+  },
+  {
+    "file": "ejemplo_spr1_compraventainmuebles.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr1_compraventainmuebles.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "e90d0af566f44a3bfc67acf6d138304c42709ee5d6ff0bdf9141592a500a0130"
+  },
+  {
+    "file": "ejemplo_spr1_compraventainmuebles2.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr1_compraventainmuebles2.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "8c7bb6fedfd3864b930d344602f736cd8d07aaca6670da92e5a9cf11b528969b"
+  },
+  {
+    "file": "ejemplo_spr2_cesioninmuebles.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr2_cesioninmuebles.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "d97a857ca26395dbf47802676d953e7b16c37dcd3355c9146d4b989ee3926c6c"
+  },
+  {
+    "file": "ejemplo_spr2_cesioninmuebles2.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr2_cesioninmuebles2.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "87814586c6df580bf54d658fd1ff5507a964c93f8d0e8d1c0248f6e20ad54ec6"
+  },
+  {
+    "file": "ejemplo_spr3_administracionrecursos.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr3_administracionrecursos.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "9709b1918d8adc3a485a06d64b6644fe8fb9e06ef13b3916512688e50fb09275"
+  },
+  {
+    "file": "ejemplo_spr3_administracionrecursos2.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr3_administracionrecursos2.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "864735915fb73ccdd999de9d8416c48d0f592b670038b4b8ef6ebe22b6ea0908"
+  },
+  {
+    "file": "ejemplo_spr4_constitucionsocmercantiles.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr4_constitucionsocmercantiles.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "df249ccde7bd600b31cdecec576ae5fb22bac15a5a48c84bb4b41aa322c4688b"
+  },
+  {
+    "file": "ejemplo_spr4_constitucionsocmercantiles2.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr4_constitucionsocmercantiles2.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "55995aade53d5d18cfdca7d5fbfa4a95c760f136401bc28c88bd7eb83118fefe"
+  },
+  {
+    "file": "ejemplo_spr5_organizacionaportaciones.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr5_organizacionaportaciones.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "127c19a0ede1e5b140d5fe9487396aa5c7805f1a78459f0bf5744f0b1f074c75"
+  },
+  {
+    "file": "ejemplo_spr5_organizacionaportaciones2.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr5_organizacionaportaciones2.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "e6c8fcab6493cc24767a34308b86fb0d9a0d96bae83b88047887bb9877d1ea40"
+  },
+  {
+    "file": "ejemplo_spr6_fusion.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr6_fusion.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "fd8239dd0bb917b70ad4be529a6c5dfff17160a24ab6e0de4e95d76313957227"
+  },
+  {
+    "file": "ejemplo_spr6_fusion2.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr6_fusion2.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "327b81d0ad1437546cd21235e171945fe461296a2bbd3bb2ca73405dd736f9d9"
+  },
+  {
+    "file": "ejemplo_spr7_escision.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr7_escision.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "3a4eaa4e827393a84229aa1d8d7e73d144446456693b6880fcb6605a3b5de068"
+  },
+  {
+    "file": "ejemplo_spr7_escision2.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr7_escision2.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "ccb37967842894e63ddf7163abd4943513a0106b626d436edd24b31a5f95cd03"
+  },
+  {
+    "file": "ejemplo_spr8_administracionpm.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr8_administracionpm.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "b682f2630b8075f000b630ad6982475529058b04797fa8c752d40bd260a2c35f"
+  },
+  {
+    "file": "ejemplo_spr8_administracionpm2.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr8_administracionpm2.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "d2879c25c953cf785ca030f70dffedbfe77492e99d900814e507d8c8df7d90c8"
+  },
+  {
+    "file": "ejemplo_spr9_constitucionfideicomiso.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr9_constitucionfideicomiso.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "5fbf457d7ff177bbb241d681a17075425b693d036c5c6c9702e7a03bf5aad9a0"
+  },
+  {
+    "file": "ejemplo_spr9_constitucionfideicomiso2.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_spr9_constitucionfideicomiso2.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "d640239d709916237b29889c48353e3699bb5329b7ccafb4bccb466f744148bc"
+  },
+  {
+    "file": "ejemplo_tcv.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_tcv.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/traslado.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "66fd64f026f78dde60eacd837a768acee682caa4e702347ce4d7ff74dd1e1645"
+  },
+  {
+    "file": "ejemplo_tdr.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_tdr.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/tarjetas_devolucion.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "2e192bd1e1f6536a43f57fe441f0422ef7eb98f7a4aca9e1cf7d9ddef41d55d7"
+  },
+  {
+    "file": "ejemplo_tpp.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_tpp.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/tarjetas_prepagadas.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "1e8e77c2396e49db3f7ac4c28ab26526a94acabee34934e604e19c60f22255d4"
+  },
+  {
+    "file": "ejemplo_tsc.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_tsc.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/tarjetas_servicio.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "0f6503b1273728cfdbbbc51c01dcf458cefcf7e8f3e71333457466314e26c777"
+  },
+  {
+    "file": "ejemplo_veh.xml",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/ejemplosxml/ejemplo_veh.xml",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/vehiculos.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "9aa0e62dfe3e1a2cd5a3c884ad914a0840e099bec8a4f51af7ff8c71d4cf2154"
+  },
+  {
+    "file": "ari.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/ari.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/arrendamiento.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "9ff1061c8ce9f4f4b0dea97651a87fe2682e8c8fe77efdd2a43a3b6560cd3636"
+  },
+  {
+    "file": "avi.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/avi.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/activos.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "984d0a31483c7f9ac47c74204505b5dbd2920590476afec979f1942460b964e3"
+  },
+  {
+    "file": "bli.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/bli.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/blindaje.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "fcc7bde9c12dee1e00a06b4a25b05a3d57ac331b85ed1680a50d56901bdedbd1"
+  },
+  {
+    "file": "chv.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/chv.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/cheques_viajero.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "18a2c4b10342a27dd64f6a44db04a92c852350bc04ec44d81790b2dba5ce16d8"
+  },
+  {
+    "file": "din.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/din.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/desarrollo_inmobiliario.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "bd15ec1f3cb1acfb250a10aad683fbd566b738e5a1f5a8fa54b9884df44f3774"
+  },
+  {
+    "file": "don.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/don.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/donativos.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "eb1183ffe73483b947b6f42af550715df2e1c39484e192f4573a5a062981ee58"
+  },
+  {
+    "file": "fep.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/fep.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/fedatarios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "e365d1b9bd5aa89c55b5a06e3d8c7042ff09ae0aa1fe5836c05a46f8fd7eb66b"
+  },
+  {
+    "file": "fes.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/fes.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servidores.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "42141d62ef50c670b28cab71622c20169a5410ff2c556478a6544a0355bc3832"
+  },
+  {
+    "file": "inm.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/inm.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/inmuebles.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "31e98b52f50b8d8944ad31b802856f04de25de36f6a5de31d7a778a6c1949b64"
+  },
+  {
+    "file": "jys.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/jys.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/juegosysorteos.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "2e743ac2c78672c27f178e72f6d6b40a36fd73bc37504b2a38900f6cf51b3ffd"
+  },
+  {
+    "file": "mjr.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/mjr.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/metalesyjoyas.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "420b0295debefa54fb76d74389aff8be90c63ead4dce9ea47c841869321e7c0a"
+  },
+  {
+    "file": "mpc.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/mpc.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/mutuo.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "27f70b1f4e599f67999705a5b78ea4ccd0bd355c021299e5980941dcee37a0ab"
+  },
+  {
+    "file": "oba.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/oba.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/obras.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "066a701c852ff6399e3cf9b269e2acb0ca4fb5ae65c03db7953f96073a15d309"
+  },
+  {
+    "file": "spr.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/spr.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "a06ec1527ffdaa55ebe8aaadd91bad06f63d14082896f4a052537c147ec5ad96"
+  },
+  {
+    "file": "spr2.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/spr2.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/servicios.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "8f262561d2c628654009694d88db15a58f124aaeb2b26c7a1ff8490b6f027299"
+  },
+  {
+    "file": "tcv.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/tcv.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/traslado.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "5957901ee0b41727ba766a5ccc1957dba2e4b7b2e40aa7f6eee2966d09c8dc02"
+  },
+  {
+    "file": "tdr.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/tdr.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/tarjetas_devolucion.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "194655bff68d847d566ea1398295ad0d36433e7bdf68d0c4e789ed9555837409"
+  },
+  {
+    "file": "tpp.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/tpp.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/tarjetas_prepagadas.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "b33b178074406edfbb7b6c7edcdb41b7de73279485018c42b68c3f6936b082e2"
+  },
+  {
+    "file": "tsc.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/tsc.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/tarjetas_servicio.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "919b6ce72553d68d72f01642423c228c5e99001419ac027c6757fa2e756df824"
+  },
+  {
+    "file": "veh.xsd",
+    "url": "https://www.pld.hacienda.gob.mx/work/models/PLD/documentos/xsd/veh.xsd",
+    "sourcePage": "https://sppld.sat.gob.mx/pld/interiores/vehiculos.html",
+    "consultedAt": "2026-09-26",
+    "sha256": "b93dfd3f10c3120fcfb7eeac007804caaf5c4e544629dc702fd14a883bde950e"
+  }
+]

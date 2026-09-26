@@ -1,6 +1,8 @@
 import { findActividadByKey } from "./actividades"
 import { calcularFechaLimiteAvisoOrdinario, subtractMonths } from "./dates"
 import { getUmaForDate, mxnToUma, roundMoney, umaToMxn } from "./uma"
+import { coerceLegacyMoneyToCents, centsToMoney } from "./money"
+import type { PldOperationLegalContext } from "./operation-finance"
 import type {
   AcumulacionRule,
   AvisoSalidaResult,
@@ -10,7 +12,6 @@ import type {
   UmbralStatus,
 } from "./types"
 
-const MONEY_TOLERANCE = 0.01
 const RCG_URL =
   "https://wwwnp.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Normateca/Nacional/LFPIORPI/RCG.pdf"
 const GUIA_SAT_ACUMULACION_URL =
@@ -61,11 +62,12 @@ const RCG_NON_ACCUMULATION_RATIONALE: Record<string, string> = {
   "fraccion-xvi-activos-virtuales-contraprestacion": "RCG art. 19 no lista fraccion XVI; la guia SAT 2026 difiere.",
 }
 
-export interface EvaluarOperacionInput {
+export interface EvaluarOperacionInput extends PldOperationLegalContext {
   actividadKey: string
   clienteKey: string
   fechaOperacion: string
   montoMxn: number
+  montoCentavos?: number
   operacionesHistoricas?: OperacionVulnerable[]
 }
 
@@ -123,14 +125,22 @@ export function evaluarOperacionVulnerable(input: EvaluarOperacionInput): Operac
   const actividad = findActividadByKey(input.actividadKey)
   const uma = getUmaForDate(input.fechaOperacion)
   const identificacionUmbralMxn = umaToMxn(actividad.identificacionUmbralUma, uma)
-  const avisoUmbralMxn = umaToMxn(actividad.avisoUmbralUma, uma)
+  const esActivosVirtuales = actividad.key.startsWith("fraccion-xvi-")
+  const avisoUmbralMxn = umaToMxn(esActivosVirtuales ? 210 : actividad.avisoUmbralUma, uma)
+  const montoCentavos = input.montoCentavos ?? coerceLegacyMoneyToCents(input.montoMxn)
+  if (!Number.isSafeInteger(montoCentavos) || montoCentavos < 0) throw new RangeError("El monto debe ser un entero seguro de centavos no negativo.")
+  const identificacionCentavos = coerceLegacyMoneyToCents(identificacionUmbralMxn)
+  const avisoCentavos = coerceLegacyMoneyToCents(avisoUmbralMxn)
+  const baseAvisoCentavos = actividad.key === "fraccion-xii-notarios-a" && Number.isSafeInteger(input.montoBaseAvisoCentavos)
+    ? Math.max(montoCentavos, input.montoBaseAvisoCentavos!)
+    : montoCentavos
   const acumulacionRule = getAcumulacionRuleForActividad(input.actividadKey)
   const currentOperation: OperacionVulnerable = {
     id: "operacion-actual",
     actividadKey: input.actividadKey,
     clienteKey: input.clienteKey,
     fechaOperacion: input.fechaOperacion,
-    montoMxn: input.montoMxn,
+    montoMxn: centsToMoney(montoCentavos),
   }
 
   const ventanaInicio = subtractMonths(input.fechaOperacion, 6)
@@ -145,23 +155,38 @@ export function evaluarOperacionVulnerable(input: EvaluarOperacionInput): Operac
         .sort((a, b) => a.fechaOperacion.localeCompare(b.fechaOperacion))
     : [currentOperation]
 
-  const montoAcumuladoMxn = roundMoney(candidates.reduce((total, operation) => total + operation.montoMxn, 0))
+  const acumuladoCentavos = candidates.reduce((total, operation) => total + coerceLegacyMoneyToCents(operation.montoMxn), 0)
+  if (!Number.isSafeInteger(acumuladoCentavos)) throw new RangeError("La acumulación excede el máximo exacto en centavos.")
+  const montoAcumuladoMxn = centsToMoney(acumuladoCentavos)
   const currentMeetsIdentification =
-    actividad.identificacionUmbralUma === 0 || input.montoMxn + MONEY_TOLERANCE >= identificacionUmbralMxn
-  const currentMeetsNotice =
-    actividad.avisoSiempre ||
-    (actividad.avisoUmbralUma > 0 && input.montoMxn + MONEY_TOLERANCE >= avisoUmbralMxn) ||
-    (actividad.avisoUmbralUma > 0 && montoAcumuladoMxn + MONEY_TOLERANCE >= avisoUmbralMxn)
+    actividad.identificacionUmbralUma === 0 || montoCentavos >= identificacionCentavos
+  // LFPIORPI art. 17 XI/XII/XVI; SAT/SPPLD umbrales, consulted 2026-09-26.
+  // XI requires the financial act on the client's behalf; XVI has two concurrent triggers.
+  let currentMeetsNotice = Boolean(actividad.avisoSiempre) ||
+    (avisoCentavos > 0 && baseAvisoCentavos >= avisoCentavos) ||
+    (avisoCentavos > 0 && acumuladoCentavos >= avisoCentavos)
+  if (actividad.key.startsWith("fraccion-xi-")) currentMeetsNotice = input.operacionFinancieraPorCuentaCliente === true
+  if (esActivosVirtuales) currentMeetsNotice = montoCentavos >= avisoCentavos ||
+    (Number.isSafeInteger(input.contraprestacionCentavos) && input.contraprestacionCentavos! >= coerceLegacyMoneyToCents(umaToMxn(4, uma)))
+  if (actividad.key === "fraccion-x-traslado" && input.montoNoDeterminado) currentMeetsNotice = true
+  if (actividad.key === "fraccion-xiv-aduanal-d" || actividad.key === "fraccion-xiv-aduanal-e") {
+    currentMeetsNotice = montoCentavos >= avisoCentavos
+  }
+  if (input.excluidaPorSupuestoLegal === true) currentMeetsNotice = false
 
   const status = currentMeetsNotice ? "aviso" : currentMeetsIdentification ? "identificacion" : "sin-obligacion"
   const obligaciones = buildObligaciones(status)
   const alertas = buildAlertas(status, actividad.avisoSiempre, montoAcumuladoMxn, avisoUmbralMxn)
+  if (actividad.noticeReviewRequired) alertas.push("Revisión normativa requerida: confirmar el umbral aplicable a este servidor público. La identificación no constituye una determinación de ausencia de aviso.")
+  if (actividad.key.startsWith("fraccion-xi-") && input.operacionFinancieraPorCuentaCliente === undefined) {
+    alertas.push("Confirma si se realizó una operación financiera en nombre y representación del cliente; no se presupone un aviso.")
+  }
 
   return {
     status,
     actividad,
     uma,
-    montoUma: mxnToUma(input.montoMxn, uma),
+    montoUma: mxnToUma(centsToMoney(montoCentavos), uma),
     identificacionUmbralMxn,
     avisoUmbralMxn,
     fechaLimiteAviso: status === "aviso" ? calcularFechaLimiteAvisoOrdinario(input.fechaOperacion) : undefined,
@@ -208,7 +233,7 @@ function shouldAccumulate(
   avisoUmbralMxn: number,
 ): boolean {
   if (!rule.applies) return false
-  if (avisoUmbralMxn > 0 && operation.montoMxn + MONEY_TOLERANCE >= avisoUmbralMxn) {
+  if (avisoUmbralMxn > 0 && coerceLegacyMoneyToCents(operation.montoMxn) >= coerceLegacyMoneyToCents(avisoUmbralMxn)) {
     return false
   }
 
@@ -216,7 +241,7 @@ function shouldAccumulate(
     return true
   }
 
-  return operation.montoMxn + MONEY_TOLERANCE >= identificacionUmbralMxn
+  return coerceLegacyMoneyToCents(operation.montoMxn) >= coerceLegacyMoneyToCents(identificacionUmbralMxn)
 }
 
 function buildObligaciones(status: OperacionObligacionResult["status"]): string[] {

@@ -58,3 +58,33 @@ test("PLD demo installer writes and clears only demo-owned keys", () => {
   assert.equal(storage.getItem("registro-sat-data"), null)
   assert.equal(storage.getItem("language"), "es")
 })
+
+test("la demo conserva y restaura los datos previos en lugar de borrarlos", () => {
+  const storage = new MemoryStorage()
+  storage.setItem("registro-sat-data", '{"real":true}')
+  storage.setItem("actividades_vulnerables_operaciones", '[{"id":"operacion-previa"}]')
+  installPldDemoData(storage, new Date("2026-09-26T12:00:00Z"))
+  installPldDemoData(storage, new Date("2026-09-26T12:00:00Z"))
+  clearPldDemoData(storage)
+  assert.equal(storage.getItem("registro-sat-data"), '{"real":true}')
+  assert.equal(storage.getItem("actividades_vulnerables_operaciones"), '[{"id":"operacion-previa"}]')
+})
+
+test("la carga fallida por cuota no anuncia éxito y revierte escrituras parciales", () => {
+  const storage = new MemoryStorage()
+  storage.setItem("registro-sat-data", '{"real":true}')
+  const original = storage.setItem.bind(storage)
+  let failed = false
+  storage.setItem = (key, value) => {
+    if (key === "ebr_evaluaciones" && !failed) { failed = true; throw new Error("QuotaExceededError") }
+    original(key, value)
+  }
+  assert.throws(() => installPldDemoData(storage), /QuotaExceededError/)
+  assert.equal(storage.getItem("registro-sat-data"), '{"real":true}')
+  assert.equal(storage.getItem("kyc_expedientes_detalle"), null)
+})
+
+test("la demo tiene IDs y fechas deterministas para el mismo corte", () => {
+  const cutoff = new Date("2026-09-26T12:00:00Z")
+  assert.deepEqual(buildPldDemoDataset(cutoff), buildPldDemoDataset(cutoff))
+})

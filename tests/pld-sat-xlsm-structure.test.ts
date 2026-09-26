@@ -22,6 +22,8 @@ import {
   getExpedienteDocumentsForScope,
 } from "../lib/pld/expediente-document-checklist"
 import { buildStructuredSheetFields } from "../lib/pld/sat-xlsm-structure"
+import { getSatRepeatRowControlId } from "../lib/pld/sat-operation-branches"
+import { hasSatTemplateWorkbook } from "../lib/pld/sat-template-catalog"
 import type { SatTemplateCatalogItem, SatXlsmField, SatXlsmLayout } from "../lib/pld/types"
 
 function concreteTemplates(): SatTemplateCatalogItem[] {
@@ -94,7 +96,7 @@ test("los datos generales del aviso se capturan a la derecha de su rótulo", () 
 
   assert.equal(rfc.label, "RFC")
   assert.equal(rfc.required, true)
-  assert.equal(rfc.maxLength, 12)
+  assert.equal(rfc.maxLength, 13)
   assert.equal(periodo.label, "Periodo (AAAAMM)")
   assert.equal(periodo.maxLength, 6)
   assert.equal(alerta.dataType, "catalogo")
@@ -127,11 +129,12 @@ test("la descripción libre solo aplica al elegir la opción Otro del catálogo"
   assert.equal(tipoBien.label, "Tipo de bien")
   assert.ok(tipoBien.options?.includes("99,Otro (Especificar)"))
 
-  assert.deepEqual(descripcion.activeWhen, [{ fieldId: tipoBien.id, equals: ["99"] }])
+  const inKind = "sat.branch.sat-fraccion-i-juegos.liquidacion.acto-u-operacion.especie"
+  assert.deepEqual(descripcion.activeWhen, [{ fieldId: tipoBien.id, equals: ["99"] }, { fieldId: inKind, equals: ["si"] }])
   assert.equal(descripcion.required, false)
   assert.equal(isSatXlsmFieldActive(descripcion, {}), false)
-  assert.equal(isSatXlsmFieldActive(descripcion, { [tipoBien.id]: "99,Otro (Especificar)" }), true)
-  assert.equal(isSatXlsmFieldRequired(descripcion, { [tipoBien.id]: "99,Otro (Especificar)" }), true)
+  assert.equal(isSatXlsmFieldActive(descripcion, { [inKind]: "si", [tipoBien.id]: "99,Otro (Especificar)" }), true)
+  assert.equal(isSatXlsmFieldRequired(descripcion, { [inKind]: "si", [tipoBien.id]: "99,Otro (Especificar)" }), true)
   assert.equal(isSatXlsmFieldRequired(descripcion, { [tipoBien.id]: "1,Inmueble" }), false)
 })
 
@@ -139,10 +142,11 @@ test("las columnas de inmueble solo aplican cuando el bien declarado es un inmue
   const tipoBien = fieldAt("sat-fraccion-i-juegos", "Acto u operación", "D50")
   const tipoInmueble = fieldAt("sat-fraccion-i-juegos", "Acto u operación", "E50")
   const folioReal = fieldAt("sat-fraccion-i-juegos", "Acto u operación", "I50")
+  const inKind = "sat.branch.sat-fraccion-i-juegos.liquidacion.acto-u-operacion.especie"
 
   for (const field of [tipoInmueble, folioReal]) {
-    assert.deepEqual(field.activeWhen, [{ fieldId: tipoBien.id, equals: ["1"] }])
-    assert.equal(isSatXlsmFieldActive(field, { [tipoBien.id]: "1,Inmueble" }), true)
+    assert.deepEqual(field.activeWhen, [{ fieldId: tipoBien.id, equals: ["1"] }, { fieldId: inKind, equals: ["si"] }])
+    assert.equal(isSatXlsmFieldActive(field, { [inKind]: "si", [tipoBien.id]: "1,Inmueble" }), true)
     assert.equal(isSatXlsmFieldActive(field, { [tipoBien.id]: "99,Otro (Especificar)" }), false)
   }
 })
@@ -153,7 +157,11 @@ test("cada renglón repetido se condiciona con su propio catálogo, no con el de
   const descripcionSegunda = fieldAt("sat-fraccion-i-juegos", "Acto u operación", "J51")
 
   assert.notEqual(primero.id, segundo.id)
-  assert.deepEqual(descripcionSegunda.activeWhen, [{ fieldId: segundo.id, equals: ["99"] }])
+  assert.deepEqual(descripcionSegunda.activeWhen, [
+    { fieldId: segundo.id, equals: ["99"] },
+    { fieldId: "sat.branch.sat-fraccion-i-juegos.liquidacion.acto-u-operacion.especie", equals: ["si"] },
+    { fieldId: getSatRepeatRowControlId(segundo), equals: ["si"] },
+  ])
 })
 
 test("el encabezado de grupo Otro condiciona su columna aunque sea la única variante", () => {
@@ -209,7 +217,10 @@ test("la descripción de otro activo virtual se ata al catálogo de activos", ()
   const descripcion = fieldAt("sat-fraccion-xvi-activos-virtuales", "Compras", "F9")
 
   assert.equal(nombre.dataType, "catalogo")
-  assert.deepEqual(descripcion.activeWhen, [{ fieldId: nombre.id, equals: ["999999"] }])
+  assert.deepEqual(descripcion.activeWhen, [
+    { fieldId: nombre.id, equals: ["999999"] },
+    { fieldId: "sat.branch.sat-fraccion-xvi-activos-virtuales.compras", equals: ["si"] },
+  ])
 })
 
 test("los mapas manuales del SAT siguen mandando sobre la extracción estructural", () => {
@@ -412,6 +423,11 @@ test("la actividad vulnerable resuelve la plantilla y el layout que le correspon
 
   for (const actividadKey of actividades) {
     const template = resolveSatTemplateForActividad(actividadKey)
+    if (!hasSatTemplateWorkbook(template)) {
+      assert.equal(actividadKey, "fraccion-xii-notarios-a")
+      assert.deepEqual(template.variants, [])
+      continue
+    }
     if (!existsSync(getSatTemplateCachePath(template))) {
       failures.push(`${actividadKey}: sin plantilla en caché (${template.templateId})`)
       continue

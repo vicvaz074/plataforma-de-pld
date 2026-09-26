@@ -8,6 +8,7 @@ import { buildSatTemplateDemoScenarios } from "@/lib/pld/sat-demo-scenarios"
 import type { PepScreeningResult, UmbralStatus } from "@/lib/pld/types"
 
 export const DEMO_SEED_METADATA_KEY = "pld-demo-seed-metadata"
+export const DEMO_BACKUP_KEY = "pld-demo-preinstall-backup-v1"
 
 export const DEMO_STORAGE_KEYS = [
   "registro-sat-data",
@@ -618,7 +619,7 @@ function buildOperations(referenceDate: Date) {
       expedienteReferenciado: "ROGM780915K20",
       pepCargo: "DIRECTOR GENERAL DEL INSTITUTO MEXICANO DEL TRANSPORTE",
       pepDependencia: "SECRETARÍA DE COMUNICACIONES Y TRANSPORTES",
-      pepScreening,
+      pepScreening: { ...pepScreening, checkedAt: referenceDate.toISOString() },
       inmueble: { tipo: "Casa habitación", folioReal: "CDMX-BJ-2026-002114", ubicacion: "Benito Juárez, Ciudad de México" },
       liquidacion: { formaPago: "Transferencia SPEI", bancoOrigen: "Citibanamex", cuentaOrdenante: "****4107" },
     },
@@ -742,7 +743,7 @@ function buildOperations(referenceDate: Date) {
       figuraSujetoObligado: seed.actividadKey.includes("inmuebles") ? "intermediario" : undefined,
       pepCargo: seed.pepCargo,
       pepDependencia: seed.pepDependencia,
-      pepScreening: seed.pepScreening,
+      pepScreening: seed.pepScreening ? { ...seed.pepScreening, checkedAt: referenceDate.toISOString() } : undefined,
       demoSeed: true,
     }
   })
@@ -918,7 +919,11 @@ function buildSatOutputPackages(referenceDate: Date) {
       }),
     )
 
-  return [avisoNormal, avisoF4594, informeCeros, informe27Bis, aviso24h, ...satScenarioCases].map(generateSatOutputPackage)
+  return [avisoNormal, avisoF4594, informeCeros, informe27Bis, aviso24h, ...satScenarioCases].map((operation, index) => ({
+    ...generateSatOutputPackage({ ...operation, id: `demo-case-${index + 1}` }),
+    id: `satpkg-demo-${index + 1}`,
+    createdAt: referenceDate.toISOString(),
+  }))
 }
 
 function buildInmueblesSatFieldValues() {
@@ -1071,7 +1076,7 @@ function buildEbrEvaluations(referenceDate: Date) {
       beneficiaryAnswers: low,
       pepCargo: "DIRECTOR GENERAL DEL INSTITUTO MEXICANO DEL TRANSPORTE",
       pepDependencia: "SECRETARÍA DE COMUNICACIONES Y TRANSPORTES",
-      pepScreening,
+      pepScreening: { ...pepScreening, checkedAt: referenceDate.toISOString() },
       notes: "Aplicar debida diligencia reforzada por coincidencia de cargo PEP. Requiere autorización de cumplimiento y evidencia de origen de recursos.",
       updatedAt: isoAt(referenceDate, 0, 7, 12),
     },
@@ -1797,9 +1802,18 @@ export function buildPldDemoDataset(referenceDate = new Date()): PldDemoDataset 
 
 export function installPldDemoData(storage: DemoStorage, referenceDate = new Date()) {
   const dataset = buildPldDemoDataset(referenceDate)
-  DEMO_STORAGE_KEYS.forEach((key) => {
-    storage.setItem(key, JSON.stringify(dataset[key]))
-  })
+  const previous = Object.fromEntries(DEMO_STORAGE_KEYS.map((key) => [key, storage.getItem(key)]))
+  // Save before touching any data. A quota failure must leave the old data intact.
+  if (!storage.getItem(DEMO_BACKUP_KEY)) storage.setItem(DEMO_BACKUP_KEY, JSON.stringify({ schemaVersion: 1, values: previous }))
+  try {
+    DEMO_STORAGE_KEYS.forEach((key) => storage.setItem(key, JSON.stringify(dataset[key])))
+  } catch (error) {
+    for (const key of DEMO_STORAGE_KEYS) {
+      if (previous[key] === null) storage.removeItem(key)
+      else storage.setItem(key, previous[key]!)
+    }
+    throw error
+  }
   const metadata = dataset[DEMO_SEED_METADATA_KEY] as { counts: Record<string, number> }
   return {
     keysWritten: [...DEMO_STORAGE_KEYS],
@@ -1808,7 +1822,18 @@ export function installPldDemoData(storage: DemoStorage, referenceDate = new Dat
 }
 
 export function clearPldDemoData(storage: DemoStorage) {
-  DEMO_STORAGE_KEYS.forEach((key) => storage.removeItem(key))
+  const raw = storage.getItem(DEMO_BACKUP_KEY)
+  if (!raw) throw new Error("No existe respaldo anterior a la demo. No se eliminó ningún dato.")
+  const backup = JSON.parse(raw) as { schemaVersion?: number; values?: Record<string, unknown> }
+  if (backup.schemaVersion !== 1 || !backup.values || DEMO_STORAGE_KEYS.some((key) => backup.values![key] !== null && typeof backup.values![key] !== "string")) {
+    throw new Error("El respaldo no es válido. No se eliminó ningún dato.")
+  }
+  for (const key of DEMO_STORAGE_KEYS) {
+    const value = backup.values[key]
+    if (value === null) storage.removeItem(key)
+    else storage.setItem(key, value as string)
+  }
+  storage.removeItem(DEMO_BACKUP_KEY)
 }
 
 export function getPldDemoSeedStatus(storage: DemoStorage) {

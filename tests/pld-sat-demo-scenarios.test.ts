@@ -19,6 +19,8 @@ import {
 } from "../lib/pld"
 import { buildPldDemoDataset } from "../lib/demo/pld-demo-data"
 import type { SatXlsmLayout } from "../lib/pld"
+import { normalizeSatXlsmLayout, satFieldValuesToWorkbookCells } from "../lib/pld/sat-xlsm"
+import { validateGeneratedSatXml } from "../lib/pld/sat-xml-validation"
 
 const repoRoot = process.cwd()
 
@@ -63,11 +65,11 @@ test("SAT demo scenarios fill every required XLSM field and preserve macros", ()
       values: workbookValues,
       layout,
     })
-    const originalHasMacros = Boolean(unzipSync(readFileSync(workbookPath))["xl/vbaProject.bin"])
-    const filledHasMacros = Boolean(unzipSync(filled.workbook)["xl/vbaProject.bin"])
+    const originalMacros = unzipSync(readFileSync(workbookPath))["xl/vbaProject.bin"]
+    const filledMacros = unzipSync(filled.workbook)["xl/vbaProject.bin"]
 
     if (filled.status !== "filled") failures.push(`${template.templateId}: ${filled.missingRequiredFields.slice(0, 6).join(", ")}`)
-    if (originalHasMacros && !filledHasMacros) failures.push(`${template.templateId}: perdió vbaProject.bin`)
+    if (originalMacros && (!filledMacros || !Buffer.from(originalMacros).equals(Buffer.from(filledMacros)))) failures.push(`${template.templateId}: alteró o perdió vbaProject.bin`)
 
     const fields = layout.sections.flatMap((section) => section.fields)
     for (const field of fields) {
@@ -82,7 +84,7 @@ test("SAT demo scenarios fill every required XLSM field and preserve macros", ()
   assert.deepEqual(failures, [])
 })
 
-test("SAT demo scenarios generate official XML packages without internal platform tags", () => {
+test("SAT demo scenarios distinguish workbook capture from independently validated XML readiness", () => {
   const tenant = {
     ...buildDefaultPldTenants("tenant-demo-sat-i-xvi").tenants[0],
     id: "tenant-demo-sat-i-xvi",
@@ -92,6 +94,9 @@ test("SAT demo scenarios generate official XML packages without internal platfor
   const failures: string[] = []
 
   for (const scenario of buildSatTemplateDemoScenarios()) {
+    const layout = normalizeSatXlsmLayout(JSON.parse(readFileSync(path.join(repoRoot,
+      `public/data/sat-xlsm-layouts/${scenario.templateId}.json`), "utf8")))
+    const values = buildSatTemplateDemoScenarioValues({ scenario, layout })
     const operationalCase = buildPldOperationalCase({
       tenant,
       periodo: scenario.periodo,
@@ -107,16 +112,24 @@ test("SAT demo scenarios generate official XML packages without internal platfor
       satTemplateId: scenario.templateId,
       satTemplateVariant: scenario.templateId,
       satTemplateFile: scenario.template.officialXlsmName,
-      satFieldValues: scenario.satFieldValues,
-      satCellValues: scenario.satCellValues,
+      satFieldValues: values.satFieldValues,
+      satCellValues: { ...values.satCellValues, ...satFieldValuesToWorkbookCells(values.satFieldValues, layout) },
       satMissingRequiredFields: [],
       satWorkbookStatus: "listo",
       actor: "Fixture SAT Demo I-XVI",
     })
     const satPackage = generateSatOutputPackage(operationalCase)
-    if (satPackage.validation.status !== "listo") failures.push(`${scenario.templateId}: ${satPackage.validation.missingFields.join(", ")}`)
-    if (!satPackage.xml.includes(`xsi:schemaLocation="`)) failures.push(`${scenario.templateId}: XML sin schemaLocation`)
-    if (!satPackage.xml.includes("<clave_actividad>")) failures.push(`${scenario.templateId}: XML sin clave_actividad`)
+    const schema = validateGeneratedSatXml(satPackage.xml)
+    // A synthetic complete workbook is not proof of an XML valid for SAT. The
+    // package must fail closed when the actual XSD rejects it (or no XML exists).
+    if (!schema.valid && satPackage.validation.status !== "borrador_bloqueado") {
+      failures.push(`${scenario.templateId}: XML rechazado por XSD marcado como listo`)
+    }
+    if (!schema.valid && !satPackage.validation.errors.length) {
+      failures.push(`${scenario.templateId}: bloqueo XML sin diagnóstico visible`)
+    }
+    if (satPackage.xml && !satPackage.xml.includes(`xsi:schemaLocation="`)) failures.push(`${scenario.templateId}: XML sin schemaLocation`)
+    if (satPackage.xml && !satPackage.xml.includes("<clave_actividad>")) failures.push(`${scenario.templateId}: XML sin clave_actividad`)
     if (/tipo_salida|borrador_no_cargable|validacion|trazabilidad|formato_sat/.test(satPackage.xml)) {
       failures.push(`${scenario.templateId}: XML contiene etiquetas internas`)
     }
@@ -125,7 +138,7 @@ test("SAT demo scenarios generate official XML packages without internal platfor
   assert.deepEqual(failures, [])
 })
 
-test("full PLD demo dataset includes one downloadable SAT package per concrete template scenario", () => {
+test("full PLD demo dataset records every concrete template scenario without certifying synthetic data as SAT acceptance", () => {
   const dataset = buildPldDemoDataset(new Date("2026-05-14T12:00:00-06:00"))
   const packages = dataset["pld-sat-output-packages"] as Array<{ satDemoScenarioId?: string; workbookValidationStatus?: string }>
   const scenarioPackages = packages.filter((item) => item.satDemoScenarioId?.startsWith("sat-demo-"))

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Check, ChevronsUpDown, FileSpreadsheet, ListChecks, PlusCircle, Search } from "lucide-react"
+import { Check, ChevronsUpDown, FileSpreadsheet, ListChecks, Search } from "lucide-react"
 
 import { InfoHint } from "@/components/pld/info-hint"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { getSatOperationBranchGroups, getSatOperationBranchMissingLabels, isSatOperationBranchGroupActive, getSatRepeatRowGroups, getSatRepeatRowControlId } from "@/lib/pld/sat-operation-branches"
 import {
   CODIGOS_POSTALES,
   findCodigoPostalInfoInCatalog,
@@ -22,7 +23,6 @@ import {
   buildSatQuestionnaireFieldView,
   filterActiveSatXlsmFields,
   getActionableSatMissingFieldIds,
-  isSatXlsmFieldActive,
   isSatXlsmFieldRequired,
   isSatFieldManagedByPrimaryCapture,
   type InfoHintContent,
@@ -134,7 +134,6 @@ export function SatDynamicOperationFormView({
   infoHintContent,
   sectionKinds,
 }: SatDynamicOperationFormProps) {
-  const [visibleRows, setVisibleRows] = useState<Record<string, number>>({})
   const [activeStepId, setActiveStepId] = useState<NonNullable<SatXlsmField["sectionKind"]>>("alta_sat")
   const [showResolvedFields, setShowResolvedFields] = useState(false)
   const [showOptionalFields, setShowOptionalFields] = useState(false)
@@ -161,6 +160,8 @@ export function SatDynamicOperationFormView({
     () => filterActiveSatXlsmFields(allFields, values),
     [allFields, values],
   )
+  const branchGroups = useMemo(() => form ? getSatOperationBranchGroups(form.templateId, allFields).filter((group) => isSatOperationBranchGroupActive(group, values)) : [], [form, allFields, values])
+  const rowGroups = useMemo(() => getSatRepeatRowGroups(allFields, values), [allFields, values])
 
   const availableSteps = useMemo(
     () => SAT_STEPS.filter((step) => activeFields.some((field) => field.sectionKind === step.id)),
@@ -189,13 +190,6 @@ export function SatDynamicOperationFormView({
     }
   }, [])
 
-  useEffect(() => {
-    for (const field of allFields) {
-      if (isSatXlsmFieldActive(field, values)) continue
-      if ((values[field.id] ?? "").trim()) onChange(field.id, "")
-    }
-  }, [allFields, onChange, values])
-
   if (!form) {
     return (
       <div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -205,7 +199,7 @@ export function SatDynamicOperationFormView({
     )
   }
 
-  const missingSet = new Set(missingRequired)
+  const missingBranches = getSatOperationBranchMissingLabels(form.templateId, values, allFields)
   const fieldCount = allFields.length
   const actionableMissingRequired = getActionableSatMissingFieldIds({
     fields: allFields,
@@ -220,10 +214,12 @@ export function SatDynamicOperationFormView({
   const missingManagedByPrimaryCapture = managedByPrimaryCapture.filter((field) =>
     actionableMissingSet.has(field.id),
   )
-  const questionnaireFields = activeStepFields.filter((field) => !isSatFieldManagedByPrimaryCapture(field))
+  // Even a normally prefilled field must stay reachable: a manual capture or an
+  // incomplete EUI may not expose another editor for it.
+  const questionnaireFields = activeStepFields
   const dedupedQuestionnaire = buildSatQuestionnaireDedupedFieldView({
     fields: questionnaireFields,
-    values: Object.fromEntries(questionnaireFields.map((field) => [field.id, valueFor(field)])),
+    values: { ...values, ...Object.fromEntries(questionnaireFields.map((field) => [field.id, valueFor(field)])) },
     missingRequiredIds: missingRequired,
   })
   const editedSet = new Set(editedFieldIds)
@@ -235,7 +231,7 @@ export function SatDynamicOperationFormView({
     .map((field) => field.id)
   const activeStepFieldView = buildSatQuestionnaireFieldView({
     fields: dedupedQuestionnaire.fields,
-    values: dedupedQuestionnaire.values,
+    values: { ...values, ...dedupedQuestionnaire.values },
     initialValues: form.initialValues,
     missingRequiredIds: dedupedQuestionnaire.missingRequiredIds,
     showResolvedFields,
@@ -280,10 +276,6 @@ export function SatDynamicOperationFormView({
     }
   }
 
-  const addRepeatRow = (groupId: string, limit: number) => {
-    setVisibleRows((prev) => ({ ...prev, [groupId]: Math.min((prev[groupId] || 1) + 1, limit) }))
-  }
-
   return (
     <div className="min-w-0 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/70">
       <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 md:flex-row md:items-start md:justify-between">
@@ -309,12 +301,28 @@ export function SatDynamicOperationFormView({
                 : "border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700"
             }
           >
-            {actionableMissingRequired.length
-              ? `${actionableMissingRequired.length} pendiente(s) por revisar`
+            {actionableMissingRequired.length || missingBranches.length
+              ? `${actionableMissingRequired.length + missingBranches.length} pendiente(s) por revisar`
               : "Excel listo"}
           </Badge>
         </div>
       </div>
+
+      {branchGroups.length > 0 && !sectionKinds?.includes("beneficiario_controlador") && (
+        <div className="space-y-4 border-b border-slate-100 p-5">
+          <p className="text-sm font-semibold">Selecciona los bloques aplicables a esta operación</p>
+          {branchGroups.map((group) => <fieldset key={group.id} className="rounded-lg border p-3">
+            <legend className="px-1 text-xs font-semibold">{group.label}</legend>
+            <div className="flex flex-wrap gap-4">{group.options.map((option) => <label key={option.id} className="flex items-center gap-2 text-sm">
+              <input type={group.multiple ? "checkbox" : "radio"} name={group.id} checked={values[option.id] === "si"} onChange={(event) => {
+                if (!group.multiple) for (const other of group.options) if (other.id !== option.id) onChange(other.id, "no")
+                onChange(option.id, event.target.checked ? "si" : "no")
+              }} />{option.label}
+            </label>)}</div>
+          </fieldset>)}
+          {missingBranches.length > 0 && <p className="text-xs text-amber-700">Selecciona al menos una opción en: {missingBranches.join(" · ")}</p>}
+        </div>
+      )}
 
       {availableSteps.length === 0 ? (
         <div className="m-5 rounded-lg bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-200">
@@ -325,7 +333,7 @@ export function SatDynamicOperationFormView({
           </p>
         </div>
       ) : (
-      <div className="grid min-w-0 lg:grid-cols-[250px_minmax(0,1fr)]">
+      <div className="grid min-w-0 grid-cols-1 lg:grid-cols-[250px_minmax(0,1fr)]">
         <aside className="min-w-0 border-b border-slate-100 bg-slate-50/70 p-4 lg:min-h-[560px] lg:border-b-0 lg:border-r lg:sticky lg:top-16 lg:self-start">
           <p className="px-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Secciones del Excel</p>
           <div className="mt-3 flex min-w-0 gap-1 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0">
@@ -378,6 +386,15 @@ export function SatDynamicOperationFormView({
         </aside>
 
         <main className="min-w-0 px-5 py-5 lg:px-7">
+          {rowGroups.filter((group) => allFields.some((field) => field.sectionKind === activeStep?.id && group.rows.some((row) => row.controlId === getSatRepeatRowControlId(field)))).map((group) => {
+            const nextRow = group.rows.find((row) => !row.active)
+            const lastActive = [...group.rows].reverse().find((row) => row.active && row.index > 1)
+            return <div key={group.id} className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-slate-50 p-3 text-xs">
+              <span className="flex-1">{group.label}: {group.rows.filter((row) => row.active).length} fila(s)</span>
+              <Button type="button" variant="outline" size="sm" disabled={!nextRow} onClick={() => nextRow && onChange(nextRow.controlId, "si")}>Agregar fila vacía</Button>
+              {lastActive && <Button type="button" variant="ghost" size="sm" onClick={() => {if (window.confirm("¿Quitar esta fila y sus valores de la operación?")) onChange(lastActive.controlId, "no")}}>Quitar última fila</Button>}
+            </div>
+          })}
           {activeStep && (
             <>
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -456,7 +473,7 @@ export function SatDynamicOperationFormView({
               </div>
 
               {plainFields.length > 0 && (
-                <div className="mt-5 grid min-w-0 gap-4">
+                <div className="mt-5 grid min-w-0 grid-cols-1 gap-4">
                   {plainFields.map((field) => (
                     <SatFieldControl
                       key={`${field.sheetName}-${field.cell}-${field.id}`}
@@ -488,15 +505,7 @@ export function SatDynamicOperationFormView({
                   const rowIndexes = Array.from(
                     new Set(groupFields.map((field) => field.repeatIndex || 1)),
                   ).sort((a, b) => a - b)
-                  const maxFilledRow = Math.max(
-                    1,
-                    ...groupFields
-                      .filter((field) => valueFor(field).trim())
-                      .map((field) => field.repeatIndex || 1),
-                  )
-                  const limit = Math.max(...rowIndexes)
-                  const visibleCount = Math.min(Math.max(visibleRows[groupId] || 1, maxFilledRow), limit)
-                  const visibleIndexes = rowIndexes.filter((index) => index <= visibleCount)
+                  const visibleIndexes = rowIndexes
 
                   return (
                     <section key={groupId} className="border-t border-slate-100 pt-5">
@@ -509,17 +518,6 @@ export function SatDynamicOperationFormView({
                             Agrega otra fila solo si el aviso requiere registrar mas de un elemento.
                           </p>
                         </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="bg-white shadow-none"
-                          disabled={visibleCount >= limit}
-                          onClick={() => addRepeatRow(groupId, limit)}
-                        >
-                          <PlusCircle className="mr-2 h-4 w-4" />
-                          Agregar fila
-                        </Button>
                       </div>
 
                       <div className="mt-3 space-y-3">
@@ -535,7 +533,7 @@ export function SatDynamicOperationFormView({
                                   fila SAT {rowFields[0]?.cell.match(/\d+/)?.[0] ?? rowIndex}
                                 </Badge>
                               </div>
-                              <div className="grid min-w-0 gap-4">
+                              <div className="grid min-w-0 grid-cols-1 gap-4">
                                 {rowFields.map((field) => (
                                   <SatFieldControl
                                     key={`${field.sheetName}-${field.cell}-${field.id}`}
@@ -624,6 +622,7 @@ function SatFieldControl({
         <div className="p-1">
           <SatOptionCombobox
             value={value}
+            ariaLabel={field.label}
             options={options}
             placeholder={isPostalCodeField(field) ? "Busca o captura CP" : "Selecciona opción del Excel SAT"}
             allowCustomValue={isPostalCodeField(field)}
@@ -635,6 +634,10 @@ function SatFieldControl({
           <div className="p-1">
             <Input
               value={value}
+              aria-label={field.label}
+              aria-required={isRequired}
+              aria-invalid={isMissing}
+              maxLength={field.maxLength}
               inputMode={field.dataType === "numero" || field.dataType === "moneda" ? "decimal" : "text"}
               placeholder={field.dataType === "fecha" ? "dd/mm/aaaa" : field.placeholder ?? "Captura valor"}
               className="bg-white"
@@ -685,12 +688,14 @@ function SatOptionCombobox({
   value,
   options,
   placeholder,
+  ariaLabel,
   allowCustomValue = false,
   onChange,
 }: {
   value: string
   options: string[]
   placeholder: string
+  ariaLabel: string
   allowCustomValue?: boolean
   onChange: (value: string) => void
 }) {
@@ -711,6 +716,7 @@ function SatOptionCombobox({
           type="button"
           variant="outline"
           role="combobox"
+          aria-label={ariaLabel}
           aria-expanded={open}
           className="h-auto min-h-10 w-full min-w-0 justify-between gap-2 bg-white px-3 py-2 text-left font-normal"
         >

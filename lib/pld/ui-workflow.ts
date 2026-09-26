@@ -1,4 +1,7 @@
 import { isSatInferableControlFieldId } from "./sat-field-controls"
+import { getSatOperationBranchGroups, inferSatRepeatRowControls } from "./sat-operation-branches"
+import { optionCode } from "./sat-xlsm-grid"
+import { parseMoneyToCents } from "./money"
 import type {
   OperationalWizardStepDiagnostics,
   BlockingReasonsView,
@@ -27,7 +30,10 @@ export interface BuildOperationalStepDiagnosticsInput {
   tipoOperacion: string
   montoOperacion: string
   sospecha24h: boolean
+  montoNoDeterminado?: boolean
   esActividadInmuebles: boolean
+  /** External channels (for example DeclaraNOT) do not have an applicable XLSM. */
+  hasSatWorkbook?: boolean
   satWorkbookStatus: "pendiente" | "borrador_bloqueado" | "listo"
   satMissingRequiredFields: string[]
   evidenceCanSave: boolean
@@ -76,7 +82,7 @@ export function getFixedSatTipoOperacion(templateId: string | undefined): string
 export function getSatCatalogValueCode(value: unknown): string {
   const normalized = String(value ?? "").trim()
   if (!normalized) return ""
-  return (normalized.split("||")[0] ?? normalized).split(",")[0]?.trim().toLowerCase() ?? ""
+  return optionCode(normalized).toLowerCase()
 }
 
 function normalizeSatConditionalValue(value: unknown): string {
@@ -136,28 +142,31 @@ export function pruneInactiveSatFieldValues(input: {
   fields: SatXlsmField[]
   values: Record<string, string>
 }): Record<string, string> {
-  const valuesWithControls = inferSyntheticControlValues(input.fields, input.values)
-  const conditionalValues = { ...valuesWithControls }
-  for (const field of input.fields) {
-    if (conditionalValues[field.id] !== undefined) continue
-    const aliasValue = getSatXlsmFieldValueKeys(field)
-      .slice(1)
-      .map((key) => valuesWithControls[key])
-      .find((value) => value !== undefined)
-    if (aliasValue !== undefined) conditionalValues[field.id] = aliasValue
-  }
-
-  const activeByValueKey = new Map<string, boolean>()
-  for (const field of input.fields) {
-    const active = isSatXlsmFieldActive(field, conditionalValues)
-    for (const key of getSatXlsmFieldValueKeys(field)) {
-      activeByValueKey.set(key, Boolean(activeByValueKey.get(key)) || active)
+  const valuesWithControls = inferSatRepeatRowControls(input.fields, inferSyntheticControlValues(input.fields, input.values))
+  let effectiveValues = valuesWithControls
+  // Reevaluate descendants after removing a hidden controller. A stale value
+  // in an inactive parent must not keep a grandchild visible or exportable.
+  for (let pass = 0; pass <= input.fields.length; pass += 1) {
+    const conditionalValues = { ...effectiveValues }
+    for (const field of input.fields) {
+      if (conditionalValues[field.id] !== undefined) continue
+      const aliasValue = getSatXlsmFieldValueKeys(field).slice(1)
+        .map((key) => effectiveValues[key]).find((value) => value !== undefined)
+      if (aliasValue !== undefined) conditionalValues[field.id] = aliasValue
     }
+    const activeByValueKey = new Map<string, boolean>()
+    for (const field of input.fields) {
+      const active = isSatXlsmFieldActive(field, conditionalValues)
+      for (const key of getSatXlsmFieldValueKeys(field)) {
+        activeByValueKey.set(key, Boolean(activeByValueKey.get(key)) || active)
+      }
+    }
+    const next = Object.fromEntries(Object.entries(effectiveValues)
+      .filter(([key]) => activeByValueKey.get(key) !== false))
+    if (Object.keys(next).length === Object.keys(effectiveValues).length) return next
+    effectiveValues = next
   }
-
-  return Object.fromEntries(
-    Object.entries(valuesWithControls).filter(([key]) => activeByValueKey.get(key) !== false),
-  )
+  return effectiveValues
 }
 
 /**
@@ -174,6 +183,16 @@ function inferSyntheticControlValues(
 ): Record<string, string> {
   const output = { ...values }
   const candidateValues = new Map<string, Set<string>>()
+  const templateIds = new Set(fields.flatMap((field) => (field.activeWhen || [])
+    .flatMap((condition) => condition.fieldId.match(/^sat\.branch\.(sat-fraccion-[^.]+)\./)?.[1] || [])))
+  // A declared exclusive choice beats legacy values in the opposite branch.
+  // Otherwise reopening a public instrument could reactivate a stale contract.
+  for (const templateId of templateIds) {
+    for (const group of getSatOperationBranchGroups(templateId, fields)) {
+      if (group.multiple || !group.options.some((option) => values[option.id] === "si")) continue
+      for (const option of group.options) if (output[option.id] === undefined) output[option.id] = "no"
+    }
+  }
 
   for (const field of fields) {
     const fieldValue = getSatXlsmFieldValueKeys(field)
@@ -316,7 +335,8 @@ export function buildSatQuestionnaireDedupedFieldView(input: {
   }
 
   const fields: SatXlsmField[] = [...passthroughFields]
-  const values: Record<string, string> = {}
+  // Branch/row controls have no workbook field and must survive deduplication.
+  const values: Record<string, string> = { ...input.values }
   const duplicateFieldIdsByRepresentative: Record<string, string[]> = {}
   const missingRequiredIds: string[] = []
   let duplicateHiddenCount = 0
@@ -562,10 +582,11 @@ export function buildOperationalStepDiagnostics(
     if (!input.tipoOperacion.trim()) {
       addReason(required("tipo-operacion", "Tipo de operación", "Selecciona o captura el tipo de acto u operación."))
     }
-    if (!input.sospecha24h && !input.montoOperacion.trim()) {
-      addReason(required("monto-operacion", "Monto de operación", "Captura el monto o activa aviso 24 horas si no hubo operación."))
+    const amount = parseMoneyToCents(input.montoOperacion, { allowZero: input.sospecha24h || input.montoNoDeterminado })
+    if (!input.sospecha24h && !amount.ok) {
+      addReason(required("monto-operacion", "Monto de operación", amount.message))
     }
-    if (input.esActividadInmuebles && !input.sospecha24h && input.satWorkbookStatus !== "listo") {
+    if (input.hasSatWorkbook !== false && !input.sospecha24h && input.satWorkbookStatus !== "listo") {
       const fields = input.satMissingRequiredFields.length
         ? input.satMissingRequiredFields.join(", ")
         : "campos obligatorios del XLSM"
@@ -662,6 +683,7 @@ export function applySatOutputOverride<T extends SatOutputPackage>(
 export function buildSatPackageActionView(satPackage: SatOutputPackage): SatPackageActionView[] {
   const isReady = satPackage.validation.status === "listo"
   const hasWorkbookValues = Boolean(satPackage.satFieldValues)
+  const workbookReady = satPackage.satWorkbookStatus === "listo" && hasWorkbookValues && !(satPackage.satMissingRequiredFields?.length)
   const missingCount = satPackage.validation.missingFields.length + (satPackage.satMissingRequiredFields?.length || 0)
 
   return [
@@ -675,20 +697,20 @@ export function buildSatPackageActionView(satPackage: SatOutputPackage): SatPack
     {
       id: "filled-workbook",
       label: "Excel SAT rellenado",
-      enabled: isReady && hasWorkbookValues,
-      emphasis: isReady && hasWorkbookValues ? "primary" : "secondary",
+      enabled: workbookReady,
+      emphasis: workbookReady ? "primary" : "secondary",
       reason: !hasWorkbookValues
         ? "Este paquete no tiene valores XLSM capturados."
-        : !isReady
+        : !workbookReady
           ? "Completa los faltantes antes de descargar el Excel final."
           : undefined,
     },
     {
       id: "xml",
-      label: isReady ? "XML SAT" : "XML borrador",
-      enabled: true,
+      label: isReady ? "XML SAT" : "XML bloqueado",
+      enabled: isReady,
       emphasis: isReady ? "primary" : "secondary",
-      reason: isReady ? undefined : "XML borrador no cargable hasta resolver faltantes.",
+      reason: isReady ? undefined : "Completa los datos y la validación XML antes de descargar.",
     },
     {
       id: "capture-sheet",

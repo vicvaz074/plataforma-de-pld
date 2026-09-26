@@ -1,6 +1,8 @@
 import { SAT_TEMPLATE_CATALOG } from "./sat-template-catalog"
 import { normalizeSatXlsmLayout } from "./sat-xlsm"
 import { isSatXlsmFieldRequired } from "./ui-workflow"
+import { getSatOperationBranchGroups, isSatOperationBranchGroupActive, withSatParticipantOptions } from "./sat-operation-branches"
+import { BENEFICIARY_PERSON_TYPE_FIELD_ID, BENEFICIARY_REPEAT_MODE_FIELD_ID, BENEFICIARY_TRUST_MODE_FIELD_ID, PERSONA_OBJETO_DOMICILIO_FIELD_ID, PERSONA_OBJETO_TYPE_FIELD_ID } from "./sat-field-controls"
 import type {
   SatTemplateCatalogItem,
   SatTemplateDemoScenario,
@@ -85,16 +87,31 @@ export function buildSatTemplateDemoScenarioValues(input: {
   layout: SatXlsmLayout
 }): { satFieldValues: Record<string, string>; satCellValues: Record<string, string> } {
   const layout = normalizeSatXlsmLayout(input.layout)
-  const satFieldValues = { ...input.scenario.satFieldValues }
+  const satFieldValues: Record<string, string> = {
+    [PERSONA_OBJETO_TYPE_FIELD_ID]: "persona_moral",
+    [PERSONA_OBJETO_DOMICILIO_FIELD_ID]: "nacional",
+    [BENEFICIARY_PERSON_TYPE_FIELD_ID]: "persona_fisica",
+    [BENEFICIARY_REPEAT_MODE_FIELD_ID]: "no",
+    [BENEFICIARY_TRUST_MODE_FIELD_ID]: "no",
+    ...input.scenario.satFieldValues,
+  }
   const satCellValues = { ...(input.scenario.satCellValues || {}) }
   const fields = layout.sections.flatMap((section) => section.fields)
+  // Fixtures choose a concrete path explicitly. Production capture keeps
+  // optional branches unselected until the user declares the operation.
+  for (const group of getSatOperationBranchGroups(layout.templateId, fields)) {
+    if (!isSatOperationBranchGroupActive(group, satFieldValues)) continue
+    if (!group.options.some((option) => satFieldValues[option.id] === "si")) {
+      group.options.forEach((option, index) => { satFieldValues[option.id] = index === 0 ? "si" : "no" })
+    }
+  }
 
   // Elegir una opción puede volver obligatorios campos que dependen de ella
   // (por ejemplo el domicilio del inmueble al declarar un bien inmueble), así
   // que se recorre hasta que no aparezcan nuevos pendientes.
   for (let pass = 0; pass < MAX_DEMO_FILL_PASSES; pass += 1) {
     let filled = 0
-    for (const field of fields) {
+    for (const field of withSatParticipantOptions(fields, satFieldValues)) {
       if (!isSatXlsmFieldRequired(field, satFieldValues)) continue
       const cellKey = `${field.sheetName}!${field.cell}`
       if (satFieldValues[field.id] || satCellValues[cellKey]) {
@@ -113,7 +130,7 @@ export function buildSatTemplateDemoScenarioValues(input: {
 }
 
 function buildBaseSatFieldValues(template: SatTemplateCatalogItem): Record<string, string> {
-  const reference = `DEMO-${template.claveActividad}-${DEMO_PERIOD}`.replace(/[^A-Z0-9-]/g, "")
+  const reference = demoReference(template.claveActividad, DEMO_PERIOD)
   return {
     "persona_aviso.sujeto_obligado_rfc": DEMO_TENANT_RFC,
     "persona_aviso.periodo": DEMO_PERIOD,
@@ -198,36 +215,58 @@ function buildF4594SatFieldValues(): Record<string, string> {
 }
 
 function demoValueForField(field: SatXlsmField, scenario: SatTemplateDemoScenario): string {
-  const normalized = slug(`${field.id} ${field.label} ${field.sheetName}`)
+  // IDs include table headings (e.g. fecha-de-disposicion) and are not data
+  // semantics: using them first turned installment amounts into date strings.
+  const normalized = slug(field.label)
+  if (/^SP110[59]_LISTA_/.test(field.optionListId || "")) return field.options?.[0] || ""
+  if (field.optionListId === "LISTA_DE_PERSONAS_REPORTADAS") return `R01 - ${scenario.clienteNombre.toUpperCase()}`
   if (field.options?.length) return selectDemoOption(field, scenario)
+  if (normalized === "ano" || normalized === "anio") return "2026"
+  if (normalized.includes("licencia")) return "DEMO123"
+  if (normalized.includes("dominio")) return "PLATAFORMADEMO"
+  if (normalized.includes("usuario")) return "USUARIODEMO"
+  if (normalized.includes("hash")) return "ABCDEF0123456789"
+  if (normalized.includes("tipo-de-cambio") || normalized.includes("tipo-cambio")) return "100.00"
+  if (normalized === "cantidad-operada" || (normalized.includes("cantidad") && normalized.includes("activo"))) return "12.00"
+  if (field.dataType === "moneda") return String(scenario.montoMxn)
+  if (field.dataType === "numero") return "12"
+  if (field.dataType === "fecha" || normalized.includes("fecha")) {
+    if (normalized.includes("nacimiento")) return "23/09/1977"
+    if (normalized.includes("constitucion")) return "25/11/2016"
+    const date = scenario.fechaOperacion.includes("-") ? toDisplayDate(scenario.fechaOperacion) : scenario.fechaOperacion
+    return normalized.includes("hora") ? `${date} 12:00:00` : date
+  }
   if (normalized.includes("periodo") || normalized.includes("mes-reportado")) return scenario.periodo
-  if (normalized.includes("referencia")) return `DEMO-${scenario.template.claveActividad}-${scenario.periodo}`
-  if (normalized.includes("sujeto-obligado") && normalized.includes("rfc")) return scenario.tenantRfc
-  if (normalized.includes("rfc")) return normalized.includes("representante") ? "LEXC770923XX1" : scenario.clienteRfc
+  if (normalized === "referencia") return demoReference(scenario.template.claveActividad, scenario.periodo)
+  if (normalized.includes("rfc")) {
+    const row = Number(field.cell.replace(/\D/g, ""))
+    if (field.id === "persona_aviso.sujeto_obligado_rfc" || field.id === "aviso.rfc-del-tribunal-o-dependencia.c4" || (!field.repeatGroup && row <= 10 && normalized === "rfc")) return scenario.tenantRfc
+    return /representante|apoderado|persona-fisica|\.pf\./.test(`${field.id} ${field.repeatGroup || ""}`)
+      ? "LEXC770923XX1" : scenario.clienteRfc
+  }
   if (normalized.includes("curp")) return "LEXC770923HNEXXH07"
   if (normalized.includes("correo")) return "SANTANA@LOGISALL.COM"
-  if (normalized.includes("telefono")) return "66926318336"
+  if (normalized.includes("telefono")) return "5555550101"
   if (normalized.includes("codigo-postal")) return normalized.includes("inmueble") || normalized.includes("acto") ? "66679" : "66650"
   if (normalized.includes("colonia")) return normalized.includes("inmueble") ? "LA ARENA" : "PESQUERIA"
   if (normalized.includes("calle") || normalized.includes("avenida") || normalized.includes("via")) return "ARMONIA"
   if (normalized.includes("numero-exterior")) return "104"
   if (normalized.includes("numero-interior")) return ""
-  if (normalized.includes("fecha")) return scenario.fechaOperacion.includes("-") ? toDisplayDate(scenario.fechaOperacion) : scenario.fechaOperacion
   if (normalized.includes("monto") || normalized.includes("valor") || normalized.includes("importe")) return String(scenario.montoMxn)
-  if (normalized.includes("cantidad") || normalized.includes("plazo") || normalized.includes("superficie")) return "12"
+  if (normalized.includes("cantidad") || normalized.includes("plazo") || normalized.includes("superficie") || normalized.includes("dimensiones") || normalized.includes("numero")) return "12"
   if (normalized.includes("pais") || normalized.includes("nacionalidad")) return "MEXICO,MX"
   if (normalized.includes("razon-social") || normalized.includes("denominacion")) return scenario.clienteNombre
   if (normalized.includes("apellido-paterno")) return "CHUNWOO"
   if (normalized.includes("apellido-materno")) return "N"
   if (normalized.includes("nombre")) return "LEE"
-  if (normalized.includes("folio")) return `FOLIO-${scenario.template.claveActividad}-${scenario.periodo}`
-  if (normalized.includes("descripcion")) return `Operación demo ${scenario.template.fraccion}`
+  if (normalized.includes("folio")) return demoReference(scenario.template.claveActividad, scenario.periodo)
+  if (normalized.includes("descripcion")) return `OPERACION DEMO ${scenario.template.fraccion.normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase()}`
   return `DATO DEMO ${scenario.template.claveActividad}`
 }
 
 function selectDemoOption(field: SatXlsmField, scenario: SatTemplateDemoScenario): string {
   const options = field.options || []
-  const normalized = slug(`${field.id} ${field.label}`)
+  const normalized = slug(field.label)
   const preferred = [
     normalized.includes("prioridad") ? /^1,\s*NORMAL/i : undefined,
     normalized.includes("alerta") ? /^100,/i : undefined,
@@ -248,6 +287,10 @@ function selectDemoOption(field: SatXlsmField, scenario: SatTemplateDemoScenario
   }
 
   return options.find((item) => item.trim()) || "1"
+}
+
+function demoReference(activityCode: string, period: string): string {
+  return `DEMO${activityCode}${period}`.replace(/[^A-Z0-9]/g, "").slice(0, 14)
 }
 
 function toDisplayDate(value: string): string {

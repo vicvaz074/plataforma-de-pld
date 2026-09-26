@@ -57,6 +57,11 @@ import {
   normalizeExpedientePmDocumentManualState,
 } from "@/lib/pld/expediente-document-checklist"
 import { resolveExpedientePaisCode } from "@/lib/pld/expediente-address-catalogs"
+import {
+  PLD_INTEGRATION_EVENT,
+  readExpedienteRecords,
+  saveExpedienteRecord,
+} from "@/lib/pld/integration-records"
 
 const NO_SUJETO_OBLIGADO_VALUE = "__sin_sujeto_obligado__"
 
@@ -242,6 +247,9 @@ interface ServidorPublicoState {
 }
 
 interface BeneficiarioState {
+  tipo?: "persona_fisica" | "persona_moral"
+  fechaConstitucion?: string
+  nif?: string
   nombres: string
   apellidoPaterno: string
   apellidoMaterno: string
@@ -268,6 +276,7 @@ interface ExpedienteEuiPersonaMoral {
   identifiers: ExpedienteIdentifiers
   sujetoObligadoId: string
   sujetoObligadoNombre: string
+  sujetoObligadoRfc?: string
   tipoCliente: string
   tipoActoOperacion: string
   fechaActoOperacion: string
@@ -411,6 +420,10 @@ interface ExpedientePersonaResumen {
   fiduciarioRfc?: string
   identificadorFideicomiso?: string
   denominacion?: string
+  nombre?: string
+  apellidoPaterno?: string
+  apellidoMaterno?: string
+  fechaNacimiento?: string
   fechaConstitucion?: string
   rfc?: string
   nif?: string
@@ -464,6 +477,7 @@ interface ExpedienteDetalle {
   detalleTipoCliente?: string
   sujetoObligadoId?: string
   sujetoObligadoNombre?: string
+  sujetoObligadoRfc?: string
   expedienteEui?: ExpedienteEuiPersonaMoral | ExpedienteEuiPersonaFisica | ExpedienteEuiPersonaMoralDerechoPublico
   personas?: ExpedientePersonaResumen[]
   beneficiariosControladores?: ExpedientePersonaResumen[]
@@ -748,6 +762,7 @@ function sanitizeDetalle(raw: any): ExpedienteDetalle | null {
       } as ExpedienteDetalle["expedienteEui"])
     : undefined
   return {
+    ...raw,
     schemaVersion: EXPEDIENTE_EUI_SCHEMA_VERSION,
     expedienteId,
     rfc: identifiers.rfc,
@@ -800,6 +815,8 @@ function sanitizeDetalle(raw: any): ExpedienteDetalle | null {
         : typeof expedienteRaw?.sujetoObligadoNombre === "string" && expedienteRaw.sujetoObligadoNombre.trim()
           ? expedienteRaw.sujetoObligadoNombre
           : undefined,
+    sujetoObligadoRfc:
+      typeof raw.sujetoObligadoRfc === "string" ? raw.sujetoObligadoRfc : expedienteRaw?.sujetoObligadoRfc,
     expedienteEui,
     personas: Array.isArray(raw.personas) ? (raw.personas as ExpedientePersonaResumen[]) : undefined,
     beneficiariosControladores: Array.isArray(raw.beneficiariosControladores)
@@ -885,14 +902,20 @@ function buildBeneficiarioResumen(
   expedienteId: string,
   index: number,
 ): ExpedientePersonaResumen | null {
-  const denominacion =
+  const denominacion = beneficiario.tipo === "persona_moral" ? beneficiario.nombres :
     `${beneficiario.nombres} ${beneficiario.apellidoPaterno} ${beneficiario.apellidoMaterno}`.trim()
   if (!denominacion && !beneficiario.rfc && !beneficiario.curp) return null
   return {
     id: `beneficiario-${expedienteId}-${index}`,
-    tipo: "persona_fisica",
+    tipo: beneficiario.tipo ?? "persona_fisica",
     denominacion,
+    nombre: beneficiario.nombres,
+    apellidoPaterno: beneficiario.apellidoPaterno,
+    apellidoMaterno: beneficiario.apellidoMaterno,
+    fechaNacimiento: beneficiario.fechaNacimiento,
+    fechaConstitucion: beneficiario.fechaConstitucion,
     rfc: beneficiario.rfc,
+    nif: beneficiario.nif,
     curp: beneficiario.curp,
     pais: beneficiario.paisNacionalidad,
     rolRelacion: "Beneficiario controlador",
@@ -934,8 +957,11 @@ function KycExpedienteContent() {
   const { toast } = useToast()
   const searchParams = useSearchParams()
   const [sujetosRegistrados, setSujetosRegistrados] = useState<SujetoObligadoResumen[]>([])
+  const [registroRevision, setRegistroRevision] = useState(0)
   const [tipoExpediente, setTipoExpediente] = useState<string>(EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral")
   const [expedienteIdActual, setExpedienteIdActual] = useState("")
+  const expedienteBaseActualizadoEnRef = useRef<string | undefined>()
+  const loadedSearchRef = useRef("")
   const [sujetoObligadoId, setSujetoObligadoId] = useState("")
   const [activityKey, setActivityKey] = useState("")
   const previousActivityLabelRef = useRef("")
@@ -1039,6 +1065,14 @@ function KycExpedienteContent() {
   const [busquedaExpedientes, setBusquedaExpedientes] = useState("")
   const [actividadesEconomicas, setActividadesEconomicas] = useState<SatEuiCatalogOption[]>([])
   const [girosMercantiles, setGirosMercantiles] = useState<SatEuiCatalogOption[]>([])
+
+  useEffect(() => {
+    const refresh = (event: StorageEvent) => {
+      if (event.key === null || event.key === "registro-sat-data") setRegistroRevision((revision) => revision + 1)
+    }
+    window.addEventListener("storage", refresh)
+    return () => window.removeEventListener("storage", refresh)
+  }, [])
 
   const tipoClienteLabel = useMemo(() => findClienteTipoLabel(tipoCliente), [tipoCliente])
   useEffect(() => {
@@ -1175,7 +1209,7 @@ function KycExpedienteContent() {
     } catch (error) {
       console.error("No se pudo leer sujetos obligados:", error)
     }
-  }, [])
+  }, [registroRevision])
 
   useEffect(() => {
     if (!sujetoObligadoId) return
@@ -1275,30 +1309,28 @@ function KycExpedienteContent() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const storedDetalle = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
-    if (!storedDetalle) {
-      setExpedientesCargados(true)
-      return
-    }
-    try {
-      const parsed = JSON.parse(storedDetalle) as unknown[]
-      if (!Array.isArray(parsed)) {
+    const load = () => {
+      try {
+        const detalleList = readExpedienteRecords(window.localStorage)
+          .map(sanitizeDetalle)
+          .filter((item): item is ExpedienteDetalle => Boolean(item))
+        setExpedientesDetalle(Object.fromEntries(detalleList.map((detalle) => [detalle.expedienteId, detalle])))
+        setExpedientesResumen(detalleList.map(buildResumen))
+      } catch (error) {
+        console.error("No se pudo cargar expedientes:", error)
+      } finally {
         setExpedientesCargados(true)
-        return
       }
-      const detalleList = parsed
-        .map((item) => sanitizeDetalle(item))
-        .filter((item): item is ExpedienteDetalle => Boolean(item))
-      const mapa = new Map<string, ExpedienteDetalle>()
-      detalleList.forEach((detalle) => {
-        mapa.set(detalle.expedienteId, detalle)
-      })
-      setExpedientesDetalle(Object.fromEntries(mapa))
-      setExpedientesResumen(detalleList.map(buildResumen))
-    } catch (error) {
-      console.error("No se pudo cargar expedientes:", error)
-    } finally {
-      setExpedientesCargados(true)
+    }
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === EXPEDIENTE_DETALLE_STORAGE_KEY) load()
+    }
+    load()
+    window.addEventListener("storage", handleStorage)
+    window.addEventListener(PLD_INTEGRATION_EVENT, load)
+    return () => {
+      window.removeEventListener("storage", handleStorage)
+      window.removeEventListener(PLD_INTEGRATION_EVENT, load)
     }
   }, [])
 
@@ -1388,6 +1420,7 @@ function KycExpedienteContent() {
     (detalle: ExpedienteDetalle) => {
       const expediente = detalle.expedienteEui
       if (!expediente) return
+      expedienteBaseActualizadoEnRef.current = detalle.actualizadoEn || ""
       setExpedienteIdActual(detalle.expedienteId)
       setActivityKey(detalle.activityKey)
       setSujetoObligadoId(detalle.sujetoObligadoId ?? "")
@@ -1511,6 +1544,7 @@ function KycExpedienteContent() {
   )
 
   const limpiarFormulario = useCallback(() => {
+    expedienteBaseActualizadoEnRef.current = undefined
     setExpedienteIdActual("")
     setTipoExpediente(EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral")
     setSujetoObligadoId("")
@@ -1604,11 +1638,12 @@ function KycExpedienteContent() {
   useEffect(() => {
     if (!expedientesCargados) return
     const buscar = searchParams?.get("buscar")
-    if (!buscar) return
+    if (!buscar || loadedSearchRef.current === buscar) return
     const coincidencia = expedientesDisponibles.find(
       (item) => item.expedienteId === buscar || item.rfc === buscar || item.identificador === buscar,
     )
     if (coincidencia?.detalle) {
+      loadedSearchRef.current = buscar
       setExpedienteSeleccionado(coincidencia.expedienteId)
       aplicarDetalleEnFormulario(coincidencia.detalle)
       toast({
@@ -1619,18 +1654,22 @@ function KycExpedienteContent() {
   }, [aplicarDetalleEnFormulario, expedientesCargados, expedientesDisponibles, searchParams, toast])
 
   const persistirExpediente = (detalle: ExpedienteDetalle, pendingDocuments?: number) => {
-    const nextDetalle = { ...expedientesDetalle, [detalle.expedienteId]: detalle }
+    let nextDetalle: Record<string, ExpedienteDetalle>
     try {
-      window.localStorage.setItem(EXPEDIENTE_DETALLE_STORAGE_KEY, JSON.stringify(Object.values(nextDetalle)))
-    } catch (_error) {
+      const merged = saveExpedienteRecord(window.localStorage, detalle, {
+        expectedUpdatedAt: expedienteIdActual ? expedienteBaseActualizadoEnRef.current : undefined,
+      }).map(sanitizeDetalle).filter((item): item is ExpedienteDetalle => Boolean(item))
+      nextDetalle = Object.fromEntries(merged.map((item) => [item.expedienteId, item]))
+    } catch (error) {
       toast({
         title: "No se pudo guardar el expediente",
-        description: "El almacenamiento local no está disponible o no tiene espacio suficiente.",
+        description: error instanceof Error ? error.message : "El almacenamiento local no está disponible o no tiene espacio suficiente.",
         variant: "destructive",
       })
       return
     }
     setExpedientesDetalle(nextDetalle)
+    expedienteBaseActualizadoEnRef.current = detalle.actualizadoEn || ""
     setExpedientesResumen((prev) => {
       const resumen = buildResumen(detalle)
       return prev.some((item) => item.expedienteId === detalle.expedienteId)
@@ -1750,12 +1789,17 @@ function KycExpedienteContent() {
         tipoCliente: tipoClienteFisica,
         sujetoObligadoId: sujetoSeleccionado?.id,
         sujetoObligadoNombre: expedienteEui.sujetoObligadoNombre,
+        sujetoObligadoRfc: expedienteEui.sujetoObligadoRfc,
         expedienteEui,
         personas: [
           {
             id: `cliente-${expedienteId}`,
             tipo: "persona_fisica",
             denominacion: nombre,
+            nombre: clienteFisicaNombres,
+            apellidoPaterno: clienteFisicaApellidoPaterno,
+            apellidoMaterno: clienteFisicaApellidoMaterno,
+            fechaNacimiento: clienteFisicaFechaNacimiento,
             rfc: identifiers.rfc,
             nif: identifiers.nif,
             curp: identifiers.curp,
@@ -1780,7 +1824,7 @@ function KycExpedienteContent() {
             },
           },
         ],
-        beneficiariosControladores: [],
+        beneficiariosControladores: expedientesDetalle[expedienteId]?.beneficiariosControladores ?? [],
         actualizadoEn: new Date().toISOString(),
       }
       persistirExpediente(detalle)
@@ -1853,6 +1897,7 @@ function KycExpedienteContent() {
         tipoCliente: "pm_derecho_publico",
         sujetoObligadoId: sujetoSeleccionado?.id,
         sujetoObligadoNombre: expedienteEui.sujetoObligadoNombre,
+        sujetoObligadoRfc: expedienteEui.sujetoObligadoRfc,
         expedienteEui,
         personas: [
           {
@@ -1881,7 +1926,7 @@ function KycExpedienteContent() {
             },
           },
         ],
-        beneficiariosControladores: [],
+        beneficiariosControladores: expedientesDetalle[expedienteId]?.beneficiariosControladores ?? [],
         actualizadoEn: new Date().toISOString(),
       }
       persistirExpediente(detalle)
@@ -1898,6 +1943,7 @@ function KycExpedienteContent() {
       identifiers,
       sujetoObligadoId,
       sujetoObligadoNombre: sujetoSeleccionado?.nombre ?? "",
+      sujetoObligadoRfc: sujetoSeleccionado?.identificacion.rfc ?? "",
       tipoCliente,
       tipoActoOperacion,
       fechaActoOperacion,
@@ -1969,6 +2015,7 @@ function KycExpedienteContent() {
       tipoCliente,
       sujetoObligadoId: expedienteEui.sujetoObligadoId,
       sujetoObligadoNombre: expedienteEui.sujetoObligadoNombre,
+      sujetoObligadoRfc: expedienteEui.sujetoObligadoRfc,
       expedienteEui,
       personas: buildPersonasDesdeExpediente(expedienteEui),
       beneficiariosControladores,

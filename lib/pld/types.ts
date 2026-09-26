@@ -1,3 +1,5 @@
+import type { PldOperationFinance, PldOperationLegalContext } from "./operation-finance"
+
 export type UmbralStatus = "sin-obligacion" | "identificacion" | "aviso"
 export type AvisoSalidaTipo = "aviso_normal" | "informe_ceros" | "informe_27_bis" | "aviso_24h" | "sin_salida"
 export type SatOutputKind = "aviso_normal" | "informe_ceros" | "informe_27_bis" | "aviso_24h"
@@ -72,6 +74,7 @@ export interface ActividadVulnerableCatalogItem {
   identificacionUmbralUma: number
   avisoUmbralUma: number
   avisoSiempre?: boolean
+  noticeReviewRequired?: boolean
   acumulacion: "umbral-identificacion" | "todas-las-operaciones"
   fundamento: string
   sourceUrl: string
@@ -898,7 +901,9 @@ export interface PldOperationalAuditEvent {
   detail: string
 }
 
-export interface PldOperationalCase {
+export interface PldOperationalCase extends PldOperationLegalContext {
+  captureStatus?: "draft" | "complete"
+  finance?: PldOperationFinance
   id: string
   schemaVersion: 1
   tenantId: string
