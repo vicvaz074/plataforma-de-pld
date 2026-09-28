@@ -1200,6 +1200,7 @@ export function buildPldDemoDataset(referenceDate = new Date(PRESENTATION_CUTOFF
     rfc: DEMO_SUBJECT.rfc,
     razonSocial: DEMO_SUBJECT.nombre,
     nombreComercial: "Sierra Norte Demo PLD",
+    actividades: tenantState.tenants[0].actividades.filter((activity) => activity.actividadKey === PRESENTATION_ACTIVITY),
     representanteCumplimiento: {
       ...tenantState.tenants[0].representanteCumplimiento,
       nombre: DEMO_SUBJECT.oficial,
@@ -1210,6 +1211,12 @@ export function buildPldDemoDataset(referenceDate = new Date(PRESENTATION_CUTOFF
   tenantState.activeTenantId = DEMO_SUBJECT.id
   const { operations: operaciones, packages: satOutputPackages } = buildPresentationCases(tenantState.tenants[0], referenceDate)
   const latest = operaciones[operaciones.length - 1]
+  const euiInmueble = (operation: (typeof operaciones)[number]) => {
+    const inmueble = operation.inmueble as Record<string, string>
+    return { ...inmueble, tipo: inmueble.tipoInmueble,
+      ubicacion: demoDireccion({ nombreVialidad: inmueble.calle, numeroExterior: inmueble.numeroExterior,
+        numeroInterior: "", codigoPostal: inmueble.codigoPostal, colonia: inmueble.colonia }) }
+  }
   const expedientes = previousExpedientes.map((base, index) => {
     const expedienteId = index === 0 ? PRESENTATION_CLIENT_ID : "eui-demo-revision-pep"
     const persona = { ...base.personas[0], giro: index === 0 ? "1000000" : base.personas[0].giro }
@@ -1221,15 +1228,21 @@ export function buildPldDemoDataset(referenceDate = new Date(PRESENTATION_CUTOFF
       expedienteId, identifiers: { rfc: base.rfc }, persona,
       beneficiariosControladores: beneficiary ? [{ ...beneficiary, nombre: beneficiary.nombres }] : [],
       operationContext: index === 0 ? { tipoActoOperacion: "Arrendamiento de inmuebles", fechaActoOperacion: latest.fechaOperacion,
-        valorReferencia: "10000000.00", montoOperacion: String(latest.monto), inmueble: latest.inmueble } : { tipoActoOperacion: "Caso ficticio de revisión manual PEP, sin operación registrada" },
+        valorReferencia: "10000000.00", montoOperacion: String(latest.monto), inmueble: euiInmueble(latest) } : { tipoActoOperacion: "Caso ficticio de revisión manual PEP, sin operación registrada" },
       updatedAt: referenceDate.toISOString(),
     })
   })
   const primaryPerson = expedientes[0].personas[0]
   for (const operation of operaciones) {
     operation.personaAviso = { ...primaryPerson }
+    operation.documentosSoporte = ["Soporte del acto u operacion.", "Evidencia de forma de pago."].map((requisito, index) => ({
+      id: `${operation.id}-evidencia-${index + 1}`, requisito,
+      notas: "DEMO FICTICIA: documento de ejemplo sin validez oficial.",
+      archivoNombre: `${operation.id}-${index === 0 ? "contrato" : "pago"}-FICTICIO.pdf`,
+      archivoContenido: PDF_DATA_URL, fechaRegistro: referenceDate.toISOString(),
+    }))
     operation.expedienteIdentifiers = expedientes[0].identifiers
-    operation.expedienteEui = { ...expedientes[0].expedienteEui, inmueble: operation.inmueble,
+    operation.expedienteEui = { ...expedientes[0].expedienteEui, inmueble: euiInmueble(operation),
       fechaActoOperacion: operation.fechaOperacion, montoOperacion: String(operation.monto) }
     operation.beneficiariosControladores = expedientes[0].beneficiariosControladores
   }
