@@ -1235,6 +1235,12 @@ export function buildPldDemoDataset(referenceDate = new Date(PRESENTATION_CUTOFF
   const primaryPerson = expedientes[0].personas[0]
   for (const operation of operaciones) {
     operation.personaAviso = { ...primaryPerson }
+    operation.documentosSoporte = ["Soporte del acto u operacion.", "Evidencia de forma de pago."].map((requisito, index) => ({
+      id: `${operation.id}-evidencia-${index + 1}`, requisito,
+      notas: "DEMO FICTICIA: documento de ejemplo sin validez oficial.",
+      archivoNombre: `${operation.id}-${index === 0 ? "contrato" : "pago"}-FICTICIO.pdf`,
+      archivoContenido: PDF_DATA_URL, fechaRegistro: referenceDate.toISOString(),
+    }))
     operation.expedienteIdentifiers = expedientes[0].identifiers
     operation.expedienteEui = { ...expedientes[0].expedienteEui, inmueble: euiInmueble(operation),
       fechaActoOperacion: operation.fechaOperacion, montoOperacion: String(operation.monto) }
