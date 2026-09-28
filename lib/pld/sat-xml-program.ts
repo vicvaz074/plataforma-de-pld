@@ -289,7 +289,19 @@ export function renderSatWorkbookXml(templateId: string, cells: Record<string, s
     }
     const moduleName = findRoutine(name, context)
     if (!moduleName) throw new Error(`Función XML no soportada: ${name}`)
-    const module = program.modules[moduleName], routine = module.routines[name]
+    const module = program.modules[moduleName]
+    let routine = module.routines[name]
+    // FedatarioCompraVenta_v4_3 emits forma_pago, absent from the published
+    // fep.xsd datos_liquidacion_type and ejemplo_fep6_compraventaacciones.xml.
+    // Keep the workbook/macros and captured value intact; correct ONLY this
+    // XML node. A changed source requires a new review (consulted 2026-09-28).
+    if (templateId === "sat-fraccion-xii-corredores-c-compra-venta" && name === "xmlliquidacionoperacion") {
+      const incompatible = 's = s & valor("forma_pago", clave1(Range("C" & r)))'
+      if (program.sourceSha256 !== "a4d669a85c2daad6fa66a5f0e80a0aaabea55a2f934f584a655a989b272e9e5a" || !routine.lines.includes(incompatible)) {
+        throw new Error("El mapeo de liquidación FEP cambió y requiere cotejo con el XSD oficial.")
+      }
+      routine = { ...routine, lines: routine.lines.filter((line) => line !== incompatible) }
+    }
     const nested: Context = { module: moduleName, sheet: module.sheet || context.sheet, vars: { [name]: "" }, depth: context.depth + 1 }
     for (let i = 0; i < routine.params.length; i++) {
       const param = routine.params[i]

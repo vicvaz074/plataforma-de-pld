@@ -1,4 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate"
+import { normalizeXiiFields } from "./sat-xii-rules"
 
 import {
   BENEFICIARY_PERSON_TYPE_FIELD_ID,
@@ -275,7 +276,7 @@ export function hydrateSatXlsmLayout(layout: SatXlsmLayout): SatXlsmLayout {
 
 export function normalizeSatXlsmLayout(input: SatXlsmLayout): SatXlsmLayout {
   const layout = hydrateSatXlsmLayout(input)
-  const sectionsWithTemplateRules = applySatTemplateFieldRules(layout.templateId, layout.sections)
+  const sectionsWithTemplateRules = applySatTemplateFieldRules(layout.templateId, normalizeXiiFields(layout.templateId, layout.sections))
   const sectionsWithoutAuxiliaryFields = sectionsWithTemplateRules.map((section) => ({
     ...section,
     fields: section.fields.filter((field) => !isAuxiliarySatXlsmField(field)),
@@ -338,6 +339,7 @@ function applySatTemplateFieldRules(
   // dataValidation or from the workbook's asterisk markings. These are exact
   // addresses, not label-based guesses (SAT source consulted 2026-09-26).
   const requiredCells: Record<string, Array<[string, string, string, string[]?]>> = {
+    "sat-fraccion-xii-corredores-c-compra-venta": [["Persona Objeto del aviso", "C27", "Tipo de Operación", ["1,Compra de acciones o partes sociales"]]],
     "sat-fraccion-v-bis-desarrollo": [["Aviso", "C17", "Tipo de Operación", ["1601,Aportación a Desarrollo(s) Inmobiliario(s)"]]],
     "sat-fraccion-xii-notarios-e": [["Persona Objeto del aviso", "C23", "Número de Instrumento Público"]],
     "sat-fraccion-xii-notarios-d": [["Persona Objeto del aviso", "C118", "Se cuenta con un comité técnico?", ["SI", "NO"]], ["Persona Objeto del aviso", "E118", "Se modifica el comité técnico?", ["SI", "NO"]]],
@@ -359,10 +361,13 @@ function applySatTemplateFieldRules(
     }
     return { ...section, fields }
   })
-  const sectionsWithBeneficiaryRules = applySatRepeatRowRules(applySatOperationBranchRules(templateId, completeSections.map((section) => ({
+  const sectionsWithBeneficiaryRules = applySatRepeatRowRules(applySatOperationBranchRules(templateId, normalizeXiiFields(templateId, completeSections.map((section) => ({
     ...section,
-    fields: section.fields.map(applyBeneficiaryFieldRules).map(applyPersonaObjetoFieldRules),
-  }))))
+    fields: section.fields.map((field) =>
+      field.dataType === "moneda" && /^fecha(?:-|$)/.test(slug(field.label))
+        ? { ...field, dataType: "fecha" as const } : field
+    ).map(applyBeneficiaryFieldRules).map(applyPersonaObjetoFieldRules),
+  })))))
   if (templateId !== XII_NOTARIOS_A_TEMPLATE_ID) return sectionsWithBeneficiaryRules
 
   return sectionsWithBeneficiaryRules.map((section) => {

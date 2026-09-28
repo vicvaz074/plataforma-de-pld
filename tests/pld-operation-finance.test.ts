@@ -45,3 +45,13 @@ test("notarial notice compares all applicable valuations; unknown transfer amoun
   assert.equal(evaluarOperacionVulnerable({ ...base, montoBaseAvisoCentavos: 93_848_000 }).status, "aviso")
   assert.equal(evaluarOperacionVulnerable({ ...base, actividadKey: "fraccion-x-traslado", montoNoDeterminado: true }).status, "aviso")
 })
+
+test("servidores públicos: criterio FES 16,000 UMA, no umbral notarial 8,000; base mayor y centavo límite", () => {
+  const base = { actividadKey: "fraccion-xii-servidores-inmuebles", clienteKey: "cliente-fes", fechaOperacion: "2026-09-28", montoMxn: 100 }
+  const result = evaluarOperacionVulnerable(base)
+  assert.equal(result.avisoUmbralMxn, result.uma.diario * 16000)
+  const threshold = Math.round(result.avisoUmbralMxn * 100)
+  assert.equal(evaluarOperacionVulnerable({ ...base, montoBaseAvisoCentavos: threshold - 1 }).status, "identificacion")
+  assert.equal(evaluarOperacionVulnerable({ ...base, montoBaseAvisoCentavos: threshold }).status, "aviso")
+  assert.equal(evaluarOperacionVulnerable({ ...base, montoMxn: result.uma.diario * 8000 }).status, "identificacion")
+})

@@ -583,12 +583,14 @@ function inferDataType(validation: CellValidation, label: string): SatXlsmField[
   if (validation.type === "date" || validation.type === "time") return "fecha"
 
   const normalized = normalizeLabelText(label)
+  // "Fecha de pago" is a date even when SAT validates its text length.
+  // The word pago must never turn it into a monetary amount.
+  if (/^fecha\b|\bfecha de\b/.test(normalized)) return "fecha"
   if (validation.type === "decimal") return MONEY_LABEL.test(normalized) ? "moneda" : "numero"
   if (validation.type === "whole") return "numero"
 
   // textLength: el SAT captura como texto incluso montos con formato.
   if (MONEY_LABEL.test(normalized) && !COUNT_LABEL.test(normalized)) return "moneda"
-  if (/^fecha\b|\bfecha de\b/.test(normalized)) return "fecha"
   return "texto"
 }
 

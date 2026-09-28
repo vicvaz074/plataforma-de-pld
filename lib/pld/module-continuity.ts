@@ -83,7 +83,10 @@ export function restoreAuditWorkflow(raw: RecordValue, defaults: {
     return [id, { ...fallback, rating: ["cumple", "cumple-mayor", "cumple-parcial", "no-cumple", "no-aplica", ""].includes(saved.rating) ? saved.rating : "", findings: typeof saved.findings === "string" ? saved.findings : "", recommendations: typeof saved.recommendations === "string" ? saved.recommendations : "" }]
   }))
   // Version 1 computed these flags from unrelated records; they were not confirmations.
-  const finalChecklist = Object.fromEntries(Object.entries(defaults.finalChecklist || {}).map(([id, fallback]) => [id, raw.schemaVersion >= 2 && typeof raw.finalChecklist?.[id] === "boolean" ? raw.finalChecklist[id] : fallback]))
+  const historicalChecklist = raw.schemaVersion >= 2
+    ? Object.fromEntries(Object.entries(record(raw.finalChecklist)).filter(([, value]) => typeof value === "boolean"))
+    : {}
+  const finalChecklist = { ...historicalChecklist, ...Object.fromEntries(Object.entries(defaults.finalChecklist || {}).map(([id, fallback]) => [id, raw.schemaVersion >= 2 && typeof raw.finalChecklist?.[id] === "boolean" ? raw.finalChecklist[id] : fallback])) }
   return { responses, scopeAnswers, reviewAnswers, finalChecklist, scopeExclusions: typeof raw.scopeExclusions === "string" ? raw.scopeExclusions : "" }
 }
 

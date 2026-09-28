@@ -131,7 +131,7 @@ export function evaluarOperacionVulnerable(input: EvaluarOperacionInput): Operac
   if (!Number.isSafeInteger(montoCentavos) || montoCentavos < 0) throw new RangeError("El monto debe ser un entero seguro de centavos no negativo.")
   const identificacionCentavos = coerceLegacyMoneyToCents(identificacionUmbralMxn)
   const avisoCentavos = coerceLegacyMoneyToCents(avisoUmbralMxn)
-  const baseAvisoCentavos = actividad.key === "fraccion-xii-notarios-a" && Number.isSafeInteger(input.montoBaseAvisoCentavos)
+  const baseAvisoCentavos = ["fraccion-xii-notarios-a", "fraccion-xii-servidores-inmuebles"].includes(actividad.key) && Number.isSafeInteger(input.montoBaseAvisoCentavos)
     ? Math.max(montoCentavos, input.montoBaseAvisoCentavos!)
     : montoCentavos
   const acumulacionRule = getAcumulacionRuleForActividad(input.actividadKey)

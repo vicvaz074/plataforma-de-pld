@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { addBusinessDays, differenceInBusinessDays, differenceInCalendarDays, format, formatDistanceToNow } from "date-fns"
+import { differenceInBusinessDays, differenceInCalendarDays, format, formatDistanceToNow, parseISO } from "date-fns"
+import { AUDIT_2026_CHECKLIST, AUDIT_2026_SECTIONS, RCG_2026_SOURCE } from "@/lib/pld/regulatory-calendar"
 import { es } from "date-fns/locale"
 import {
   Card,
@@ -197,7 +198,7 @@ const reportHeaderFields = [
   "Actividad Vulnerable / Entidad auditada",
   "RFC del sujeto obligado",
   "Periodo de revisión y fecha de emisión",
-  "Auditor responsable y certificado CNBV",
+  "Auditor responsable; certificación UIF cuando corresponda al auditor externo",
   "Persona moral o firma de auditoría",
   "Tipo de auditoría (interna/externa)",
 ]
@@ -245,7 +246,7 @@ const auditMethodologySections = [
     title: "5 y 6. Asuntos clave y hallazgos",
     summary: "Documenta riesgos relevantes y acciones correctivas trazables.",
     checkpoints: [
-      "Registro de asuntos clave conforme a Lineamientos CNBV",
+      "Registro de hallazgos conforme a RCG artículos 47 a 49",
       "Ficha por hallazgo (ID, evidencia, acción, responsable y plazo)",
       "Seguimiento a hallazgos del informe anterior",
       "Validación de posibles supuestos penales (139 Quáter / 400 Bis CPF)",
@@ -254,13 +255,13 @@ const auditMethodologySections = [
   {
     id: "emision",
     linkedTab: "lineamientos",
-    title: "7 y 8. Emisión, checklist final y firmas",
-    summary: "Verifica requisitos formales antes del envío a SAT/CNBV.",
+    title: "Emisión, checklist final y entrega",
+    summary: "Verifica requisitos y entrega al órgano o persona auditada; disponible al SAT previo requerimiento.",
     checkpoints: [
       "Conclusión del auditor, limitaciones y fechas de conocimiento",
       "Lista formal: estructura, soporte documental, carta bajo protesta",
-      "Validación de certificado CNBV vigente",
-      "Firma de auditor y OC/representante y remisión por SIAVAP/SITI",
+      "Auditor externo: certificación UIF y requisitos del artículo 45; auditor interno: artículo 44",
+      "Emisión en los primeros tres meses siguientes al cierre; conservación mínima de cinco años",
     ],
   },
 ]
@@ -272,22 +273,7 @@ const CROSS_MODULE_KEYS = {
   operaciones: "actividades_vulnerables_operaciones",
 } as const
 
-const FINAL_CHECKLIST_LABELS = [
-  { id: "idioma", label: "Informe redactado en español" },
-  { id: "tipografia", label: "Tipografía mínima de 10 puntos" },
-  { id: "seccion-a", label: "Incluye Sección A: Resultados de la revisión" },
-  { id: "seccion-b", label: "Incluye Sección B: Cumplimiento regulatorio" },
-  { id: "seccion-c", label: "Incluye Sección C: Asuntos clave (o N/A)" },
-  { id: "seccion-d", label: "Incluye Sección D: Hallazgos y recomendaciones" },
-  { id: "seguimiento", label: "Seguimiento a hallazgos del informe anterior" },
-  { id: "acciones", label: "Cada hallazgo contiene acción, responsable y plazo" },
-  { id: "evidencia", label: "Manifestaciones sustentadas con evidencia documental" },
-  { id: "certificado", label: "Auditor con certificado CNBV vigente" },
-  { id: "pdf", label: "Informe final en PDF con accesibilidad" },
-  { id: "remision", label: "Escrito de remisión firmado por responsable" },
-  { id: "carta", label: "Carta bajo protesta del auditor adjunta" },
-  { id: "envio", label: "Envío por SITI PLD/FT o SIAVAP" },
-]
+const FINAL_CHECKLIST_LABELS = AUDIT_2026_CHECKLIST
 
 const SCOPE_ITEMS: ScopeItem[] = [
   { id: "alcance-1", label: "Identificación de clientes — obligación de recabar datos (Art. 18 LFPIORPI)" },
@@ -587,6 +573,7 @@ export default function AuditoriaVerificacionPage() {
     id: "",
     authority: "SAT",
     receivedAt: "",
+    dueDate: "",
     respondedAt: "",
     documents: "",
     responsible: "",
@@ -1021,21 +1008,21 @@ export default function AuditoriaVerificacionPage() {
   }
 
   const handleAddRequest = () => {
-    if (!newRequest.id || !newRequest.receivedAt || !newRequest.responsible) {
+    if (!newRequest.id || !newRequest.receivedAt || !newRequest.dueDate || !newRequest.responsible || newRequest.dueDate < newRequest.receivedAt) {
       toast({
         title: "Campos incompletos",
-        description: "Incluye folio, fecha de recepción y responsable para registrar la observación.",
+        description: "Incluye folio, recepción, vencimiento indicado en el oficio y responsable. El vencimiento no puede ser anterior a la recepción.",
         variant: "destructive",
       })
       return
     }
 
-    const receivedAt = new Date(newRequest.receivedAt)
+    const receivedAt = parseISO(newRequest.receivedAt)
     const request: AuthorityRequest = {
       id: newRequest.id,
       authority: newRequest.authority as "SAT" | "UIF",
       receivedAt,
-      dueDate: addBusinessDays(receivedAt, 10),
+      dueDate: parseISO(newRequest.dueDate),
       respondedAt: newRequest.respondedAt ? new Date(newRequest.respondedAt) : undefined,
       status: newRequest.respondedAt ? "Cerrado" : "Pendiente",
       responsible: newRequest.responsible,
@@ -1045,7 +1032,7 @@ export default function AuditoriaVerificacionPage() {
     }
 
     setAuthorityRequests((prev) => sortByRecentDate([...prev, request], (item) => item.receivedAt))
-    setNewRequest({ id: "", authority: "SAT", receivedAt: "", respondedAt: "", documents: "", responsible: "" })
+    setNewRequest({ id: "", authority: "SAT", receivedAt: "", dueDate: "", respondedAt: "", documents: "", responsible: "" })
     toast({
       title: "Observación registrada",
       description: "Se agregaron los plazos de respuesta y documentación asociada.",
@@ -1431,7 +1418,7 @@ export default function AuditoriaVerificacionPage() {
         <ShieldAlert className="h-4 w-4" />
         <AlertTitle>Obligaciones clave</AlertTitle>
         <AlertDescription>
-          Lineamientos internos actualizados dentro de los 90 días (art. 37 RCG) y atención a requerimientos de SAT/UIF en plazos máximos de 10 días hábiles (art. 9 RCG). Configura recordatorios y conserva la evidencia en este módulo.
+          Preparación conforme al Acuerdo 115/2026: primer periodo anual de auditoría, del 1 de enero al 31 de diciembre de 2028. No sustituye las obligaciones actuales de verificación. Captura el vencimiento de cada requerimiento conforme al oficio recibido; no se presume un plazo universal.
         </AlertDescription>
       </Alert>
 
@@ -1491,7 +1478,7 @@ export default function AuditoriaVerificacionPage() {
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as AuditTab)} className="space-y-6">
         <TabsList className="flex flex-wrap justify-start gap-2">
-          <TabsTrigger value="metodologia">Informe PLD/FT (CNBV)</TabsTrigger>
+          <TabsTrigger value="metodologia">Dictamen PLD — Actividades Vulnerables</TabsTrigger>
           <TabsTrigger value="lineamientos">Lineamientos internos</TabsTrigger>
           <TabsTrigger value="auditorias">Auditorías internas</TabsTrigger>
           <TabsTrigger value="observaciones">Observaciones SAT/UIF</TabsTrigger>
@@ -1503,11 +1490,12 @@ export default function AuditoriaVerificacionPage() {
             <CardHeader>
               <CardTitle>Metodología práctica del informe de auditoría PLD/FT</CardTitle>
               <CardDescription>
-                Guía visual y minimalista para estructurar tu informe conforme a LFPIORPI, su Reglamento y
-                Lineamientos CNBV (DOF 18/10/2021).
+                Preparación del dictamen conforme a RCG artículos 42 a 51. Riesgo bajo/medio: auditoría interna independiente o externa; riesgo alto: externa independiente. Primer periodo anual: 2028.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <p className="text-sm">Estructura mínima del artículo 47: {AUDIT_2026_SECTIONS.join("; ")}.</p>
+              <a href={RCG_2026_SOURCE} target="_blank" rel="noreferrer" className="text-sm underline">Fuente: Acuerdo 115/2026, consulta 28/09/2026</a>
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-md border border-border/60 bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Madurez de la metodología</p>
@@ -1650,7 +1638,7 @@ export default function AuditoriaVerificacionPage() {
                   </CardContent>
                   <CardFooter className="flex items-center gap-2 text-xs text-muted-foreground">
                     <AlertTriangle className="h-3.5 w-3.5" />
-                    Verifica manualmente cada requisito antes de envío por SIAVAP/SITI.
+                    Verifica los requisitos aplicables antes de entregar el dictamen. Las confirmaciones históricas de requisitos distintos no se transfieren automáticamente.
                   </CardFooter>
                 </Card>
               </div>
@@ -1997,7 +1985,7 @@ export default function AuditoriaVerificacionPage() {
           <Card className="border-primary/30">
             <CardHeader>
               <CardTitle>Observaciones y requerimientos SAT/UIF</CardTitle>
-              <CardDescription>Control de vencimientos de 10 días hábiles y documentación de respuestas.</CardDescription>
+              <CardDescription>Vencimiento conforme al oficio y documentación de respuestas. Los registros históricos conservan su fecha; revisa su fundamento.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-4 md:grid-cols-3">
@@ -2021,8 +2009,15 @@ export default function AuditoriaVerificacionPage() {
                 <Input
                   type="date"
                   value={newRequest.receivedAt}
+                  aria-label="Fecha de recepción del oficio"
                   onChange={(event) => setNewRequest((prev) => ({ ...prev, receivedAt: event.target.value }))}
                 />
+                <label className="space-y-1 text-sm">
+                  Vencimiento indicado en el oficio
+                  <Input type="date" aria-label="Vencimiento indicado en el oficio" value={newRequest.dueDate}
+                    min={newRequest.receivedAt}
+                    onChange={(event) => setNewRequest((prev) => ({ ...prev, dueDate: event.target.value }))} />
+                </label>
                 <Input
                   placeholder="Documentos (separa con comas)"
                   value={newRequest.documents}
@@ -2279,7 +2274,7 @@ export default function AuditoriaVerificacionPage() {
                 <FileWarning className="h-4 w-4" />
                 <AlertTitle>Respuesta vencida</AlertTitle>
                 <AlertDescription>
-                  {request.id} excedió el plazo de 10 días hábiles. Prioriza la integración y carga de evidencia para cierre.
+                  {request.id} excedió el vencimiento registrado. Verifica el oficio y prioriza la integración y carga de evidencia para cierre.
                 </AlertDescription>
               </Alert>
             ))}
