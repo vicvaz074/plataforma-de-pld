@@ -1187,7 +1187,7 @@ export default function AvisosInformesPage() {
     return layout
   }
 
-  const handleDownloadSatWorkbook = async (satPackage: SatOutputPackageResumen) => {
+  const handleDownloadSatWorkbook = async (satPackage: SatOutputPackageResumen, compatible = true) => {
     try {
       const template = resolveSatTemplateForActividad(
         satPackage.actividadKey,
@@ -1232,14 +1232,18 @@ export default function AvisosInformesPage() {
         return
       }
 
-      downloadReport(
-        satPackage.satWorkbookFileName || filled.fileName,
-        filled.workbook,
-        "application/vnd.ms-excel.sheet.macroEnabled.12",
-      )
+      const fileName = satPackage.satWorkbookFileName || filled.fileName
+      if (compatible) {
+        const { buildCompatibleSatWorkbook, compatibleWorkbookFileName, COMPATIBLE_WORKBOOK_MIME } = await import("@/lib/pld/sat-compatible-workbook")
+        downloadReport(compatibleWorkbookFileName(fileName), buildCompatibleSatWorkbook(filled.workbook), COMPATIBLE_WORKBOOK_MIME)
+      } else {
+        downloadReport(fileName, filled.workbook, "application/vnd.ms-excel.sheet.macroEnabled.12")
+      }
       toast({
-        title: "Excel SAT rellenado",
-        description: "Se descargó la plantilla oficial conservando macros, hojas y listas del archivo SAT.",
+        title: compatible ? "Excel compatible descargado" : "Original SAT rellenado",
+        description: compatible
+          ? "Copia .xlsx sin macros, botones ni ActiveX. Navega con las pestañas; genera el XML desde la plataforma. No sustituye la plantilla oficial SAT."
+          : "Plantilla oficial con macros y ActiveX; esos controles no funcionan en Excel para Mac o web.",
       })
     } catch (error) {
       toast({
@@ -1428,20 +1432,22 @@ export default function AvisosInformesPage() {
                           disabled={!action.enabled}
                           onClick={() => {
                             if (action.id === "official-template") window.open(satPackageSeleccionado.officialTemplateUrl, "_blank")
-                            if (action.id === "filled-workbook") handleDownloadSatWorkbook(satPackageSeleccionado)
+                            if (action.id === "filled-workbook") handleDownloadSatWorkbook(satPackageSeleccionado, false)
+                            if (action.id === "compatible-workbook") handleDownloadSatWorkbook(satPackageSeleccionado, true)
                             if (action.id === "xml") handleDownloadSatXml(satPackageSeleccionado)
                             if (action.id === "capture-sheet") handleDownloadSatFicha(satPackageSeleccionado)
                             if (action.id === "missing-fields") setSelectedTab("reportes")
                           }}
                         >
                           {action.id === "official-template" && <FileUp className="h-4 w-4" />}
-                          {action.id === "filled-workbook" && <FileText className="h-4 w-4" />}
+                          {(action.id === "filled-workbook" || action.id === "compatible-workbook") && <FileText className="h-4 w-4" />}
                           {action.id === "xml" && <Download className="h-4 w-4" />}
                           {action.id === "capture-sheet" && <ClipboardList className="h-4 w-4" />}
                           {action.id === "missing-fields" && <AlertCircle className="h-4 w-4" />}
                           {action.label}
                         </Button>
                       ))}
+                      <p className="text-xs text-slate-500">Para Mac o Excel web usa la copia compatible sin ActiveX. Conserva hojas, datos y listas; no incluye botones ni macros. El XML se genera en esta plataforma, no dentro de esa copia.</p>
                     </div>
                   ) : (
                     <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-slate-700">

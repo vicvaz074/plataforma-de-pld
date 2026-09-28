@@ -1,5 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { buildSatQueueItems } from "../lib/pld/sat-queue"
+import { readFileSync } from "node:fs"
+import { normalizeSatXlsmLayout, satFieldValuesToWorkbookCells } from "../lib/pld/sat-xlsm"
+import { isSatXlsmFieldRequired } from "../lib/pld/ui-workflow"
+import { validateGeneratedSatXml } from "../lib/pld/sat-xml-validation"
 
 import {
   DEMO_STORAGE_KEYS,
@@ -32,15 +37,41 @@ test("PLD demo dataset keeps cross-module RFC and operations coherent", () => {
   const evaluaciones = dataset.ebr_evaluaciones as Record<string, any>
 
   assert.equal(registro.sujetosRegistrados[0].identificacion.rfc, "ISN2103158Q7")
-  assert.equal(expedientes.length >= 3, true)
-  assert.equal(operaciones.length >= 5, true)
+  assert.equal(expedientes.length, 2)
+  assert.equal(operaciones.length, 3)
 
   const rfcsExpediente = new Set(expedientes.map((expediente) => expediente.rfc))
   assert.equal(rfcsExpediente.has("DLV190624M32"), true)
   assert.equal(operaciones.every((operacion) => rfcsExpediente.has(operacion.rfc)), true)
   assert.equal(Object.keys(evaluaciones).every((rfc) => rfcsExpediente.has(rfc)), true)
   assert.equal(operaciones.some((operacion) => operacion.umbralStatus === "aviso"), true)
-  assert.equal(operaciones.some((operacion) => operacion.pepScreening?.status === "coincidencia-cargo"), true)
+  assert.equal(evaluaciones.ROGM780915K20.pepScreening.status, "coincidencia-cargo")
+  assert.equal(operaciones.every((operacion) => !operacion.avisoPresentado), true)
+})
+
+test("demo guiada: tres estados, un paquete vinculado, XML con beneficiario y ninguna celda obligatoria ausente", () => {
+  const dataset = buildPldDemoDataset()
+  const operations = dataset.actividades_vulnerables_operaciones as any[]
+  const packages = dataset["pld-sat-output-packages"] as any[]
+  assert.deepEqual(operations.map((op) => op.montoCentavos), [4_000_000, 20_000_000, 40_000_000])
+  assert.deepEqual(operations.map((op) => op.umbralStatus), ["sin-obligacion", "identificacion", "aviso"])
+  assert.equal(packages.length, 1)
+  assert.equal(packages[0].sourceOperationId, operations[2].id)
+  assert.equal(packages[0].validation.status, "listo")
+  assert.deepEqual(validateGeneratedSatXml(packages[0].xml).errors, [])
+  assert.match(packages[0].xml, /ADRIANA/)
+  assert.match(packages[0].xml, /<monto_operacion>400000\.00<\/monto_operacion>/)
+  assert.match(packages[0].xml, /<valor_referencia>10000000\.00<\/valor_referencia>/)
+  assert.equal(buildSatQueueItems({ operations, packages }).length, 3)
+  const layout = normalizeSatXlsmLayout(JSON.parse(readFileSync("public/data/sat-xlsm-layouts/sat-fraccion-xv-arrendamiento.json", "utf8")))
+  for (const op of operations) {
+    const missing = layout.sections.flatMap((s) => s.fields).filter((f) => isSatXlsmFieldRequired(f, op.satFieldValues) && !op.satFieldValues[f.id])
+    assert.deepEqual(missing.map((f) => f.id), [])
+    const cells = satFieldValuesToWorkbookCells(op.satFieldValues, layout)
+    for (const [cell, value] of Object.entries(op.satCellValues)) assert.equal(String(cells[cell]).toUpperCase(), value, cell)
+    assert.equal(op.sujetoObligado.id, (dataset["registro-sat-data"] as any).sujetosRegistrados[0].id)
+    assert.equal((dataset.kyc_expedientes_detalle as any[]).some((e) => e.expedienteId === op.expedienteReferenciado), true)
+  }
 })
 
 test("PLD demo installer writes and clears only demo-owned keys", () => {

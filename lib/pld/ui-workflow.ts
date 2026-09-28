@@ -44,7 +44,7 @@ export interface BuildOperationalStepDiagnosticsInput {
 }
 
 export interface SatPackageActionView {
-  id: "official-template" | "filled-workbook" | "xml" | "capture-sheet" | "missing-fields"
+  id: "official-template" | "filled-workbook" | "compatible-workbook" | "xml" | "capture-sheet" | "missing-fields"
   label: string
   enabled: boolean
   emphasis: "primary" | "secondary" | "quiet"
@@ -695,10 +695,17 @@ export function buildSatPackageActionView(satPackage: SatOutputPackage): SatPack
       reason: satPackage.officialTemplateUrl ? undefined : "Sin URL oficial registrada.",
     },
     {
-      id: "filled-workbook",
-      label: "Excel SAT rellenado",
+      id: "compatible-workbook",
+      label: "Excel compatible (.xlsx, sin ActiveX)",
       enabled: workbookReady,
       emphasis: workbookReady ? "primary" : "secondary",
+      reason: workbookReady ? undefined : "Completa los datos del Excel antes de descargar.",
+    },
+    {
+      id: "filled-workbook",
+      label: "Original SAT rellenado (.xlsm, con macros)",
+      enabled: workbookReady,
+      emphasis: "quiet",
       reason: !hasWorkbookValues
         ? "Este paquete no tiene valores XLSM capturados."
         : !workbookReady

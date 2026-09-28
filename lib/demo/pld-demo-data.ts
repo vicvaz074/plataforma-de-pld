@@ -1,11 +1,8 @@
-import { evaluarOperacionVulnerable } from "@/lib/pld/operations"
 import { matchPepCargo } from "@/lib/pld/pep"
 import { buildDefaultPldTenants } from "@/lib/pld/tenants"
-import { buildPldOperationalCase } from "@/lib/pld/operational-flow"
-import { generateSatOutputPackage } from "@/lib/pld/sat-outputs"
 import { buildSatFormatSnapshot } from "@/lib/pld/sat-formatos"
-import { buildSatTemplateDemoScenarios } from "@/lib/pld/sat-demo-scenarios"
-import type { PepScreeningResult, UmbralStatus } from "@/lib/pld/types"
+import { buildPresentationCases, PRESENTATION_ACTIVITY, PRESENTATION_CLIENT_ID, PRESENTATION_CUTOFF, PRESENTATION_TEMPLATE } from "./pld-presentation-cases"
+import { buildExpedienteFromActo } from "../pld/integration-records"
 
 export const DEMO_SEED_METADATA_KEY = "pld-demo-seed-metadata"
 export const DEMO_BACKUP_KEY = "pld-demo-preinstall-backup-v1"
@@ -48,41 +45,31 @@ interface DemoStorage {
   removeItem(key: string): void
 }
 
-interface DemoOperationSeed {
-  id: string
-  actividadKey: string
-  actividadNombre: string
-  tipoCliente: string
-  detalleTipoCliente?: string
-  cliente: string
-  rfc: string
-  mismoGrupo: boolean
-  fechaOperacion: string
-  monto: number
-  tipoOperacion: string
-  evidencia: string
-  expedienteReferenciado: string
-  pepCargo?: string
-  pepDependencia?: string
-  pepScreening?: PepScreeningResult
-  inmueble?: Record<string, unknown>
-  liquidacion?: Record<string, unknown>
-  beneficiario?: Record<string, unknown>
-  contraparte?: Record<string, unknown>
-  instrumento?: Record<string, unknown>
-}
 
 const DEMO_SUBJECT = {
   id: "so-demo-isn",
   nombre: "Inmobiliaria Sierra Norte, S.A. de C.V.",
   rfc: "ISN2103158Q7",
-  actividadKey: "fraccion-v-inmuebles",
-  actividad: "Fracción V · Desarrollo e intermediación inmobiliaria",
+  actividadKey: PRESENTATION_ACTIVITY,
+  actividad: "Fracción XV · Uso o goce de inmuebles (DEMO FICTICIA)",
   correoCumplimiento: "cumplimiento@sierranorte.demo",
   oficial: "Sofía Martínez Ortega",
 }
 
-const PDF_DATA_URL = "data:application/pdf;base64,JVBERi0xLjQKJURlbW8K"
+// A real, readable PDF instead of the former truncated %PDF placeholder.
+function demoPdfDataUrl() {
+  const stream = "BT /F1 18 Tf 50 760 Td (DEMO FICTICIA - SIN VALIDEZ OFICIAL) Tj 0 -35 Td /F1 11 Tf (Evidencia simulada para mostrar el flujo de la plataforma PLD.) Tj 0 -20 Td (No es un contrato, identificacion, acuse ni consulta real ante SAT.) Tj ET"
+  const objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>", `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`]
+  let pdf = "%PDF-1.4\n"
+  const offsets = [0]
+  objects.forEach((body, index) => { offsets.push(pdf.length); pdf += `${index + 1} 0 obj\n${body}\nendobj\n` })
+  const xref = pdf.length
+  pdf += `xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("")}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return "data:application/pdf;base64," + btoa(pdf)
+}
+const PDF_DATA_URL = demoPdfDataUrl()
 
 function dateOnly(date: Date) {
   return date.toISOString().slice(0, 10)
@@ -93,10 +80,6 @@ function isoAt(referenceDate: Date, monthOffset: number, day: number, hour = 10)
   date.setMonth(referenceDate.getMonth() + monthOffset, day)
   date.setHours(hour, 0, 0, 0)
   return date.toISOString()
-}
-
-function mxn(value: number) {
-  return Math.round(value * 100) / 100
 }
 
 function demoDocument(id: string, name: string, uploadDate: string, size = 184_320) {
@@ -529,505 +512,6 @@ function buildExpedientes(referenceDate: Date) {
   }
 
   return [personaMoral, personaFisica, comercioExterior]
-}
-
-function mapStatusToAlert(status: UmbralStatus, fechaLimite?: string) {
-  if (status === "aviso") {
-    return `Aviso ordinario a presentar a mas tardar el dia 17 del mes inmediato siguiente (${fechaLimite ?? "fecha por calcular"}).`
-  }
-  if (status === "identificacion") {
-    return "Operacion sujeta a identificacion y acumulacion SAT en ventana de seis meses."
-  }
-  return null
-}
-
-function buildOperations(referenceDate: Date) {
-  const pepScreening = matchPepCargo({
-    nombre: "María Fernanda Rojas Gómez",
-    cargo: "DIRECTOR GENERAL DEL INSTITUTO MEXICANO DEL TRANSPORTE",
-    dependencia: "SECRETARÍA DE COMUNICACIONES Y TRANSPORTES",
-    relacion: "cliente",
-  })
-
-  const seeds: DemoOperationSeed[] = [
-    {
-      id: "op-demo-001",
-      actividadKey: "fraccion-v-inmuebles",
-      actividadNombre: "Fracción V – Construcción, desarrollo e intermediación inmobiliaria",
-      tipoCliente: "pm_mexicana",
-      detalleTipoCliente: "Desarrolladora residencial",
-      cliente: "Desarrollos Lago Verde, S.A.P.I. de C.V.",
-      rfc: "DLV190624M32",
-      mismoGrupo: false,
-      fechaOperacion: dateOnly(new Date("2026-02-12T12:00:00-06:00")),
-      monto: 650_000,
-      tipoOperacion: "Promesa de compraventa · Anticipo de lote",
-      evidencia: "Contrato preliminar, CFDI de anticipo y ficha SPEI.",
-      expedienteReferenciado: "DLV190624M32",
-      inmueble: { tipo: "Lote residencial", folioReal: "NL-SPGG-2026-004821", ubicacion: "Allende, Nuevo León" },
-      liquidacion: { formaPago: "Transferencia SPEI", bancoOrigen: "BBVA México", cuentaOrdenante: "****8201" },
-      beneficiario: { nombre: "Adriana Luna Paredes", porcentaje: "62", identificado: true },
-    },
-    {
-      id: "op-demo-002",
-      actividadKey: "fraccion-v-inmuebles",
-      actividadNombre: "Fracción V – Construcción, desarrollo e intermediación inmobiliaria",
-      tipoCliente: "pm_mexicana",
-      detalleTipoCliente: "Desarrolladora residencial",
-      cliente: "Desarrollos Lago Verde, S.A.P.I. de C.V.",
-      rfc: "DLV190624M32",
-      mismoGrupo: false,
-      fechaOperacion: dateOnly(new Date("2026-03-21T12:00:00-06:00")),
-      monto: 1_250_000,
-      tipoOperacion: "Segundo pago de compraventa",
-      evidencia: "Convenio modificatorio, estado de cuenta y recibo oficial.",
-      expedienteReferenciado: "DLV190624M32",
-      inmueble: { tipo: "Lote residencial", folioReal: "NL-SPGG-2026-004821", ubicacion: "Allende, Nuevo León" },
-      liquidacion: { formaPago: "Transferencia SPEI", bancoOrigen: "Santander", cuentaOrdenante: "****3319" },
-      beneficiario: { nombre: "Adriana Luna Paredes", porcentaje: "62", identificado: true },
-    },
-    {
-      id: "op-demo-003",
-      actividadKey: "fraccion-v-bis-desarrollo",
-      actividadNombre: "Fracción V Bis – Recepción de recursos para desarrollo inmobiliario",
-      tipoCliente: "pm_mexicana",
-      detalleTipoCliente: "Aportante a desarrollo inmobiliario",
-      cliente: "Desarrollos Lago Verde, S.A.P.I. de C.V.",
-      rfc: "DLV190624M32",
-      mismoGrupo: false,
-      fechaOperacion: dateOnly(new Date("2026-04-18T12:00:00-06:00")),
-      monto: 3_800_000,
-      tipoOperacion: "Aportación para desarrollo de etapa II",
-      evidencia: "Contrato de inversión, dispersión bancaria y minuta de comité.",
-      expedienteReferenciado: "DLV190624M32",
-      liquidacion: { formaPago: "Transferencia SPEI", bancoOrigen: "Banorte", cuentaOrdenante: "****9921" },
-      beneficiario: { nombre: "Adriana Luna Paredes", porcentaje: "62", identificado: true },
-    },
-    {
-      id: "op-demo-004",
-      actividadKey: "fraccion-v-inmuebles",
-      actividadNombre: "Fracción V – Construcción, desarrollo e intermediación inmobiliaria",
-      tipoCliente: "pf_residente",
-      detalleTipoCliente: "Persona física con cargo público declarado",
-      cliente: "María Fernanda Rojas Gómez",
-      rfc: "ROGM780915K20",
-      mismoGrupo: false,
-      fechaOperacion: dateOnly(new Date("2026-04-30T12:00:00-06:00")),
-      monto: 2_450_000,
-      tipoOperacion: "Anticipo para adquisición de casa habitación",
-      evidencia: "Contrato de adhesión, declaración PEP y comprobante SPEI.",
-      expedienteReferenciado: "ROGM780915K20",
-      pepCargo: "DIRECTOR GENERAL DEL INSTITUTO MEXICANO DEL TRANSPORTE",
-      pepDependencia: "SECRETARÍA DE COMUNICACIONES Y TRANSPORTES",
-      pepScreening: { ...pepScreening, checkedAt: referenceDate.toISOString() },
-      inmueble: { tipo: "Casa habitación", folioReal: "CDMX-BJ-2026-002114", ubicacion: "Benito Juárez, Ciudad de México" },
-      liquidacion: { formaPago: "Transferencia SPEI", bancoOrigen: "Citibanamex", cuentaOrdenante: "****4107" },
-    },
-    {
-      id: "op-demo-005",
-      actividadKey: "fraccion-xiv-aduanal-d",
-      actividadNombre: "Fracción XIV – Servicios de comercio exterior: joyas y metales",
-      tipoCliente: "pm_mexicana",
-      detalleTipoCliente: "Importadora especializada",
-      cliente: "Importadora Mérida Especializada, S.A. de C.V.",
-      rfc: "IME220118B91",
-      mismoGrupo: false,
-      fechaOperacion: dateOnly(new Date("2026-05-05T12:00:00-06:00")),
-      monto: 118_500,
-      tipoOperacion: "Despacho aduanal de relojería",
-      evidencia: "Pedimento, factura comercial y manifestación de valor.",
-      expedienteReferenciado: "IME220118B91",
-      contraparte: { paisOrigen: "CH", proveedor: "Helvetia Time AG", incoterm: "DAP" },
-      liquidacion: { formaPago: "Transferencia internacional", bancoOrigen: "UBS Switzerland", cuentaOrdenante: "****1188" },
-    },
-    {
-      id: "op-demo-006",
-      actividadKey: "fraccion-vi-metales",
-      actividadNombre: "Fracción VI – Metales, piedras preciosas, joyas o relojes",
-      tipoCliente: "pm_mexicana",
-      detalleTipoCliente: "Compra puntual de relojería para exhibición",
-      cliente: "Importadora Mérida Especializada, S.A. de C.V.",
-      rfc: "IME220118B91",
-      mismoGrupo: false,
-      fechaOperacion: dateOnly(new Date("2026-05-07T12:00:00-06:00")),
-      monto: 120_000,
-      tipoOperacion: "Compra de relojería de lujo",
-      evidencia: "Factura, orden de compra y pago referenciado.",
-      expedienteReferenciado: "IME220118B91",
-      liquidacion: { formaPago: "Transferencia SPEI", bancoOrigen: "HSBC México", cuentaOrdenante: "****5130" },
-    },
-  ]
-
-  const historical: Array<{ id: string; actividadKey: string; clienteKey: string; fechaOperacion: string; montoMxn: number }> = []
-
-  return seeds.map((seed) => {
-    const result = evaluarOperacionVulnerable({
-      actividadKey: seed.actividadKey,
-      clienteKey: seed.rfc,
-      fechaOperacion: seed.fechaOperacion,
-      montoMxn: seed.monto,
-      operacionesHistoricas: historical,
-    })
-    historical.push({
-      id: seed.id,
-      actividadKey: seed.actividadKey,
-      clienteKey: seed.rfc,
-      fechaOperacion: seed.fechaOperacion,
-      montoMxn: seed.monto,
-    })
-    const periodo = seed.fechaOperacion.slice(0, 7)
-    return {
-      schemaVersion: 2,
-      id: seed.id,
-      actividadKey: seed.actividadKey,
-      actividadNombre: seed.actividadNombre,
-      tipoCliente: seed.tipoCliente,
-      detalleTipoCliente: seed.detalleTipoCliente,
-      cliente: seed.cliente,
-      rfc: seed.rfc,
-      mismoGrupo: seed.mismoGrupo,
-      periodo,
-      mes: Number(seed.fechaOperacion.slice(5, 7)),
-      anio: Number(seed.fechaOperacion.slice(0, 4)),
-      monto: seed.monto,
-      moneda: "MXN",
-      monedaDescripcion: "Peso mexicano (MXN)",
-      fechaOperacion: seed.fechaOperacion,
-      tipoOperacion: seed.tipoOperacion,
-      evidencia: seed.evidencia,
-      umaDiaria: result.uma.diario,
-      identificacionUmbralPesos: mxn(result.identificacionUmbralMxn),
-      avisoUmbralPesos: mxn(result.avisoUmbralMxn),
-      umbralStatus: result.status,
-      acumuladoCliente: mxn(result.acumulacion.montoAcumuladoMxn),
-      alerta: mapStatusToAlert(result.status, result.fechaLimiteAviso),
-      avisoPresentado: seed.id === "op-demo-002" || seed.id === "op-demo-005",
-      alertaResuelta: seed.id === "op-demo-002" || seed.id === "op-demo-005" || result.status !== "aviso",
-      documentosSoporte: [
-        {
-          id: `${seed.id}-doc-contrato`,
-          requisito: "Soporte contractual o equivalente",
-          notas: seed.evidencia,
-          archivoNombre: `${seed.id}-soporte.pdf`,
-          fechaRegistro: referenceDate.toISOString(),
-        },
-      ],
-      requisitosChecklist: {
-        "Formulario de identificacion del cliente o usuario.": true,
-        "Identificacion oficial o documentos constitutivos, segun tipo de cliente.": true,
-        "Constancia fiscal/RFC o dato equivalente cuando aplique.": true,
-        "Soporte del acto u operacion y forma de pago.": true,
-        "Declaracion de beneficiario controlador cuando corresponda.": seed.rfc !== "ROGM780915K20",
-      },
-      kycIntegrado: true,
-      referenciaAviso:
-        result.status === "aviso" ? `AV-DEMO-${seed.fechaOperacion.slice(0, 7).replace("-", "")}-${seed.id.slice(-3)}` : undefined,
-      claveSujetoObligado: "AV-2026-ISN",
-      claveActividadVulnerable: seed.actividadKey,
-      expedienteReferenciado: seed.expedienteReferenciado,
-      personaExpedienteId: `cliente-${seed.rfc}`,
-      personaAviso: {
-        tipo: seed.tipoCliente === "pf_residente" ? "persona_fisica" : "persona_moral",
-        denominacion: seed.cliente,
-        id: `cliente-${seed.rfc}`,
-        requisito: "Cliente/usuario",
-        notas: "Snapshot demo generado desde expediente KYC.",
-        fechaRegistro: referenceDate.toISOString(),
-      },
-      inmueble: seed.inmueble ?? null,
-      liquidacion: seed.liquidacion ?? null,
-      beneficiario: seed.beneficiario ?? null,
-      contraparte: seed.contraparte ?? null,
-      instrumento: seed.instrumento ?? null,
-      figuraCliente: seed.actividadKey.includes("inmuebles") ? "comprador" : undefined,
-      figuraSujetoObligado: seed.actividadKey.includes("inmuebles") ? "intermediario" : undefined,
-      pepCargo: seed.pepCargo,
-      pepDependencia: seed.pepDependencia,
-      pepScreening: seed.pepScreening ? { ...seed.pepScreening, checkedAt: referenceDate.toISOString() } : undefined,
-      demoSeed: true,
-    }
-  })
-}
-
-function buildSatOutputPackages(referenceDate: Date) {
-  const tenant = {
-    ...buildDefaultPldTenants("tenant-demo-isn").tenants[0],
-    id: "tenant-demo-isn",
-    rfc: DEMO_SUBJECT.rfc,
-    razonSocial: DEMO_SUBJECT.nombre,
-    representanteCumplimiento: {
-      ...buildDefaultPldTenants("tenant-demo-isn").tenants[0].representanteCumplimiento,
-      nombre: DEMO_SUBJECT.oficial,
-      email: DEMO_SUBJECT.correoCumplimiento,
-    },
-  }
-  const completedEvidence = {
-    "pm-acta-constitutiva": true,
-    "pm-rfc-constancia": true,
-    "pm-domicilio": true,
-    "pm-poderes-representante": true,
-    "pm-identificacion-representante": true,
-    "pm-beneficiario-controlador": true,
-    "pf-identificacion-oficial": true,
-    "pf-domicilio": true,
-    "pf-actividad": true,
-    "pf-beneficiario-controlador": true,
-    "operacion-soporte": true,
-    "operacion-forma-pago": true,
-  }
-  const baseDate = dateOnly(referenceDate)
-  const inmueblesSatFieldValues = buildInmueblesSatFieldValues()
-  const avisoNormal = buildPldOperationalCase({
-    tenant,
-    periodo: "202605",
-    actividadKey: "fraccion-v-inmuebles",
-    clienteId: "cliente-DLV190624M32",
-    clienteNombre: "Desarrollos Lago Verde, S.A.P.I. de C.V.",
-    clienteRfc: "DLV190624M32",
-    tipoCliente: "pm_mexicana",
-    fechaOperacion: "2026-05-05",
-    montoMxn: 1_850_000,
-    formaPago: "Transferencia SPEI",
-    completedEvidence,
-    satTemplateId: "sat-fraccion-v-inmuebles",
-    satTemplateFile: "Inmuebles_v4_5.xlsm",
-    satTemplateVariant: "sat-fraccion-v-inmuebles",
-    satFieldValues: inmueblesSatFieldValues,
-    satMissingRequiredFields: [],
-    satWorkbookStatus: "listo",
-    actor: DEMO_SUBJECT.oficial,
-  })
-  const f4594SatFieldValues = buildF4594SatFieldValues()
-  const f4594Tenant = {
-    ...tenant,
-    id: "tenant-demo-f4594",
-    rfc: "FSC220908AC2",
-    razonSocial: "F4594 Sujeto Obligado Demo",
-  }
-  const avisoF4594 = buildPldOperationalCase({
-    tenant: f4594Tenant,
-    periodo: "202505",
-    actividadKey: "fraccion-xv-uso-goce",
-    clienteId: "cliente-LME161125GY9",
-    clienteNombre: "LOGISALL MEXICO S DE RL DE CV",
-    clienteRfc: "LME161125GY9",
-    tipoCliente: "pm_mexicana",
-    fechaOperacion: "2025-05-26",
-    montoMxn: 148_092.99,
-    formaPago: "1,Contado",
-    completedEvidence,
-    satTemplateId: "sat-fraccion-xv-arrendamiento",
-    satTemplateFile: "Arrendamiento_v4_5.xlsm",
-    satTemplateVariant: "sat-fraccion-xv-arrendamiento",
-    satFieldValues: f4594SatFieldValues,
-    satMissingRequiredFields: [],
-    satWorkbookStatus: "listo",
-    workbookValidationStatus: "golden_fixture",
-    goldenFixtureId: "f4594-arrendamiento-av202505-mac-xmlfix",
-    satDemoScenarioId: "sat-demo-sat-fraccion-xv-arrendamiento",
-    actor: DEMO_SUBJECT.oficial,
-  })
-  const informeCeros = {
-    ...buildPldOperationalCase({
-      tenant,
-      periodo: "202606",
-      actividadKey: "fraccion-v-inmuebles",
-      clienteId: "periodo-sin-operaciones",
-      clienteNombre: "Periodo sin operaciones objeto de aviso",
-      clienteRfc: DEMO_SUBJECT.rfc,
-      tipoCliente: "pm_mexicana",
-      fechaOperacion: baseDate,
-      montoMxn: 0,
-      formaPago: "No aplica",
-      completedEvidence,
-      actor: DEMO_SUBJECT.oficial,
-    }),
-    satOutputStatus: {
-      kind: "informe_ceros" as const,
-      label: "Informe en ceros",
-      descripcion: "Periodo demo sin actos u operaciones objeto de aviso.",
-      canClose: true,
-      warnings: [],
-    },
-  }
-  const informe27Bis = buildPldOperationalCase({
-    tenant,
-    periodo: "202605",
-    actividadKey: "fraccion-xv-uso-goce",
-    clienteId: "cliente-DLV190624M32-27bis",
-    clienteNombre: "Desarrollos Lago Verde, S.A.P.I. de C.V.",
-    clienteRfc: "DLV190624M32",
-    tipoCliente: "pm_mexicana",
-    fechaOperacion: "2026-05-10",
-    montoMxn: 420_000,
-    formaPago: "Intercompañía documentada",
-    supuesto27Bis: true,
-    completedEvidence,
-    actor: DEMO_SUBJECT.oficial,
-  })
-  const aviso24h = buildPldOperationalCase({
-    tenant,
-    periodo: "202605",
-    actividadKey: "fraccion-vi-metales",
-    clienteId: "cliente-ROGM780915K20-24h",
-    clienteNombre: "María Fernanda Rojas Gómez",
-    clienteRfc: "ROGM780915K20",
-    tipoCliente: "pf_residente",
-    fechaOperacion: "2026-05-07",
-    montoMxn: 120_000,
-    formaPago: "Transferencia SPEI",
-    sospecha24h: true,
-    alertaCodigo: "2901",
-    alertaDescripcion: "Cliente PEP con operación incongruente frente al perfil declarado.",
-    suspicionNarrative:
-      "La cliente declaró cargo público y solicitó acelerar la operación sin entregar soporte completo de origen de recursos.",
-    completedEvidence,
-    actor: DEMO_SUBJECT.oficial,
-  })
-
-  const satScenarioCases = buildSatTemplateDemoScenarios()
-    .filter((scenario) => scenario.templateId !== "sat-fraccion-xv-arrendamiento")
-    .map((scenario) =>
-      buildPldOperationalCase({
-        tenant: {
-          ...tenant,
-          id: `tenant-${scenario.id}`,
-          rfc: scenario.tenantRfc,
-          razonSocial: scenario.tenantName,
-        },
-        periodo: scenario.periodo,
-        actividadKey: scenario.actividadKey,
-        clienteId: `cliente-${scenario.clienteRfc}-${scenario.templateId}`,
-        clienteNombre: scenario.clienteNombre,
-        clienteRfc: scenario.clienteRfc,
-        tipoCliente: "pm_mexicana",
-        fechaOperacion: scenario.fechaOperacion,
-        montoMxn: scenario.montoMxn,
-        formaPago: scenario.formaPago,
-        completedEvidence: scenario.completedEvidence,
-        satTemplateId: scenario.templateId,
-        satTemplateFile: scenario.template.officialXlsmName,
-        satTemplateVariant: scenario.templateId,
-        satFieldValues: scenario.satFieldValues,
-        satCellValues: scenario.satCellValues,
-        satMissingRequiredFields: [],
-        satWorkbookStatus: "listo",
-        workbookValidationStatus: scenario.workbookValidationStatus,
-        goldenFixtureId: scenario.goldenFixtureId,
-        satDemoScenarioId: scenario.id,
-        actor: DEMO_SUBJECT.oficial,
-      }),
-    )
-
-  return [avisoNormal, avisoF4594, informeCeros, informe27Bis, aviso24h, ...satScenarioCases].map((operation, index) => ({
-    ...generateSatOutputPackage({ ...operation, id: `demo-case-${index + 1}` }),
-    id: `satpkg-demo-${index + 1}`,
-    createdAt: referenceDate.toISOString(),
-  }))
-}
-
-function buildInmueblesSatFieldValues() {
-  return {
-    "persona_aviso.sujeto_obligado_rfc": DEMO_SUBJECT.rfc,
-    "persona_aviso.periodo": "202605",
-    "persona_aviso.referencia": "AV-DEMO-202605-001",
-    "persona_aviso.prioridad": "1,NORMAL",
-    "persona_aviso.tipo_alerta": "100,Sin alerta.",
-    "persona_aviso.pm.razon_social": "Desarrollos Lago Verde, S.A.P.I. de C.V.",
-    "persona_aviso.pm.fecha_constitucion": "24/06/2019",
-    "persona_aviso.pm.rfc": "DLV190624M32",
-    "persona_aviso.pm.pais_nacionalidad": "MEXICO,MX",
-    "persona_aviso.pm.giro_mercantil": "NO APLICA||1000000",
-    "persona_aviso.representante.nombre": "Ricardo",
-    "persona_aviso.representante.apellido_paterno": "Valdés",
-    "persona_aviso.representante.apellido_materno": "Novelo",
-    "persona_aviso.representante.fecha_nacimiento": "02/07/1976",
-    "persona_aviso.representante.rfc": "VANR760702QZ4",
-    "persona_aviso.representante.curp": "VANR760702HNLLVC09",
-    "persona_aviso.domicilio_nacional.estado": "Nuevo León",
-    "persona_aviso.domicilio_nacional.municipio": "San Pedro Garza García",
-    "persona_aviso.domicilio_nacional.ciudad": "San Pedro Garza García",
-    "persona_aviso.domicilio_nacional.colonia": "Valle del Campestre",
-    "persona_aviso.domicilio_nacional.calle": "Avenida Roble",
-    "persona_aviso.domicilio_nacional.numero_exterior": "300",
-    "persona_aviso.domicilio_nacional.codigo_postal": "66260",
-    "persona_aviso.contacto.pais_telefono": "MEXICO,MX",
-    "persona_aviso.contacto.telefono": "8183552200",
-    "persona_aviso.contacto.correo": "cumplimiento@dlv.demo",
-    "beneficiario.pf.nombre": "Adriana",
-    "beneficiario.pf.apellido_paterno": "Luna",
-    "beneficiario.pf.apellido_materno": "Paredes",
-    "beneficiario.pf.fecha_nacimiento": "12/09/1976",
-    "beneficiario.pf.rfc": "LUPA760912QA1",
-    "beneficiario.pf.curp": "LUPA760912MNLNRD04",
-    "beneficiario.pf.pais_nacionalidad": "MEXICO,MX",
-    "acto.fecha_operacion": "05/05/2026",
-    "acto.figura_cliente": "2,Comprador",
-    "acto.figura_sujeto_obligado": "3,Intermediario",
-    "inmueble.tipo_bien": "12,Terreno urbano habitacional",
-    "inmueble.valor_pactado": "1850000",
-    "inmueble.codigo_postal": "66260",
-    "inmueble.calle": "Avenida Roble",
-    "inmueble.numero_exterior": "300",
-    "inmueble.colonia": "Valle del Campestre",
-    "inmueble.terreno_m2": "240",
-    "inmueble.inmueble_m2": "185",
-    "inmueble.folio_real": "FR-2026-000184",
-    "instrumento.fecha": "05/05/2026",
-    "instrumento.numero": "INS-DEMO-2026-184",
-    "instrumento.notario": "28",
-    "instrumento.entidad": "19,NUEVO LEÓN",
-    "instrumento.valor_avaluo": "1850000",
-    "instrumento.fecha_contrato": "05/05/2026",
-    "pago.fecha": "05/05/2026",
-    "pago.forma_pago": "1,Contado",
-    "pago.instrumento_monetario": "8,Transferencia Interbancaria",
-    "pago.moneda": "1,Peso mexicano",
-    "pago.monto": "1850000",
-  }
-}
-
-function buildF4594SatFieldValues() {
-  return {
-    "persona_aviso.sujeto_obligado_rfc": "FSC220908AC2",
-    "persona_aviso.periodo": "202505",
-    "persona_aviso.referencia": "AV202505",
-    "persona_aviso.prioridad": "1,NORMAL",
-    "persona_aviso.tipo_alerta": "100,Sin alerta.",
-    "persona_aviso.pm.razon_social": "LOGISALL MEXICO S DE RL DE CV",
-    "persona_aviso.pm.fecha_constitucion": "25/11/2016",
-    "persona_aviso.pm.rfc": "LME161125GY9",
-    "persona_aviso.pm.pais_nacionalidad": "MEXICO,MX",
-    "persona_aviso.pm.giro_mercantil": "INDUSTRIA - PLASTICO Y DEL HULE||3260005",
-    "persona_aviso.representante.nombre": "LEE",
-    "persona_aviso.representante.apellido_paterno": "CHUNWOO",
-    "persona_aviso.representante.apellido_materno": "N",
-    "persona_aviso.representante.fecha_nacimiento": "23/09/1977",
-    "persona_aviso.representante.curp": "LEXC770923HNEXXH07",
-    "persona_aviso.domicilio_nacional.codigo_postal": "66650",
-    "persona_aviso.domicilio_nacional.colonia": "PESQUERIA",
-    "persona_aviso.domicilio_nacional.calle": "ARMONIA",
-    "persona_aviso.domicilio_nacional.numero_exterior": "104",
-    "persona_aviso.contacto.pais_telefono": "MEXICO,MX",
-    "persona_aviso.contacto.telefono": "66926318336",
-    "persona_aviso.contacto.correo": "SANTANA@LOGISALL.COM",
-    "acto.fecha_operacion": "26/05/2025",
-    "acto.tipo_operacion": "1501,Arrendamiento de inmuebles",
-    "inmueble.tipo_bien": "11,Nave Industrial",
-    "inmueble.valor_referencia": "58569267",
-    "inmueble.codigo_postal": "66679",
-    "inmueble.colonia": "LA ARENA",
-    "inmueble.calle": "CARRETERA PESQUERIA-LOS RAMONES",
-    "inmueble.numero_exterior": "KM 11",
-    "inmueble.folio_real": "06019003",
-    "inmueble.fecha_inicio": "01/05/2025",
-    "inmueble.fecha_termino": "31/05/2025",
-    "pago.fecha": "26/05/2025",
-    "pago.forma_pago": "1,Contado",
-    "pago.instrumento_monetario": "8,Transferencia Interbancaria",
-    "pago.moneda": "2,Dólar estadounidense",
-    "pago.monto": "148092.99",
-  }
 }
 
 function buildEbrEvaluations(referenceDate: Date) {
@@ -1699,19 +1183,20 @@ function buildProgress() {
   ]
 }
 
-export function buildPldDemoDataset(referenceDate = new Date()): PldDemoDataset {
+export function buildPldDemoDataset(referenceDate = new Date(PRESENTATION_CUTOFF)): PldDemoDataset {
   const registroSat = buildRegistroSat(referenceDate)
-  const expedientes = buildExpedientes(referenceDate)
-  const operaciones = buildOperations(referenceDate)
-  const ebr = buildEbrEvaluations(referenceDate)
+  const previousExpedientes = buildExpedientes(referenceDate).slice(0, 2)
+  const allEbr = buildEbrEvaluations(referenceDate)
+  const ebr = { DLV190624M32: allEbr.DLV190624M32, ROGM780915K20: allEbr.ROGM780915K20 }
   const beneficiario = buildBeneficiario(referenceDate)
   const training = buildTraining(referenceDate)
   const auditoria = buildAuditoria(referenceDate)
   const evidencias = buildEvidencias(referenceDate)
   const gobernanza = buildGobernanza(referenceDate)
-  const tenantState = buildDefaultPldTenants("tenant-demo-isn")
+  const tenantState = buildDefaultPldTenants(DEMO_SUBJECT.id)
   tenantState.tenants[0] = {
     ...tenantState.tenants[0],
+    id: DEMO_SUBJECT.id,
     rfc: DEMO_SUBJECT.rfc,
     razonSocial: DEMO_SUBJECT.nombre,
     nombreComercial: "Sierra Norte Demo PLD",
@@ -1721,11 +1206,37 @@ export function buildPldDemoDataset(referenceDate = new Date()): PldDemoDataset 
       email: DEMO_SUBJECT.correoCumplimiento,
     },
   }
-  const satOutputPackages = buildSatOutputPackages(referenceDate)
+  tenantState.tenants = [tenantState.tenants[0]]
+  tenantState.activeTenantId = DEMO_SUBJECT.id
+  const { operations: operaciones, packages: satOutputPackages } = buildPresentationCases(tenantState.tenants[0], referenceDate)
+  const latest = operaciones[operaciones.length - 1]
+  const expedientes = previousExpedientes.map((base, index) => {
+    const expedienteId = index === 0 ? PRESENTATION_CLIENT_ID : "eui-demo-revision-pep"
+    const persona = { ...base.personas[0], giro: index === 0 ? "1000000" : base.personas[0].giro }
+    const beneficiary = "beneficiario1" in base.expedienteEui ? base.expedienteEui.beneficiario1 : undefined
+    return buildExpedienteFromActo({ ...base, expedienteId, activityKey: PRESENTATION_ACTIVITY,
+      activityLabel: DEMO_SUBJECT.actividad, satTemplateVariant: PRESENTATION_TEMPLATE,
+      sujetoObligadoId: DEMO_SUBJECT.id, sujetoObligadoRfc: DEMO_SUBJECT.rfc, demoSeed: true,
+      expedienteEui: { ...base.expedienteEui, activityKey: PRESENTATION_ACTIVITY, satTemplateVariant: PRESENTATION_TEMPLATE } }, {
+      expedienteId, identifiers: { rfc: base.rfc }, persona,
+      beneficiariosControladores: beneficiary ? [{ ...beneficiary, nombre: beneficiary.nombres }] : [],
+      operationContext: index === 0 ? { tipoActoOperacion: "Arrendamiento de inmuebles", fechaActoOperacion: latest.fechaOperacion,
+        valorReferencia: "10000000.00", montoOperacion: String(latest.monto), inmueble: latest.inmueble } : { tipoActoOperacion: "Caso ficticio de revisión manual PEP, sin operación registrada" },
+      updatedAt: referenceDate.toISOString(),
+    })
+  })
+  const primaryPerson = expedientes[0].personas[0]
+  for (const operation of operaciones) {
+    operation.personaAviso = { ...primaryPerson }
+    operation.expedienteIdentifiers = expedientes[0].identifiers
+    operation.expedienteEui = { ...expedientes[0].expedienteEui, inmueble: operation.inmueble,
+      fechaActoOperacion: operation.fechaOperacion, montoOperacion: String(operation.monto) }
+    operation.beneficiariosControladores = expedientes[0].beneficiariosControladores
+  }
   const satFormatSnapshot = buildSatFormatSnapshot(referenceDate.toISOString())
   const metadata = {
-    schemaVersion: 1,
-    name: "Demo PLD Actividades Vulnerables 2026",
+    schemaVersion: 2,
+    name: "Demo guiada Sierra Norte · tres arrendamientos ficticios",
     seededAt: referenceDate.toISOString(),
     subjectName: DEMO_SUBJECT.nombre,
     subjectRfc: DEMO_SUBJECT.rfc,
@@ -1746,6 +1257,9 @@ export function buildPldDemoDataset(referenceDate = new Date()): PldDemoDataset 
     "pld-active-tenant-id": tenantState.activeTenantId,
     kyc_expedientes_detalle: expedientes,
     actividades_vulnerables_clientes: expedientes.map((expediente) => ({
+      id: expediente.expedienteId,
+      expedienteId: expediente.expedienteId,
+      identifiers: expediente.identifiers,
       rfc: expediente.rfc,
       nombre: expediente.nombre,
       tipoCliente: expediente.tipoCliente,
@@ -1770,13 +1284,13 @@ export function buildPldDemoDataset(referenceDate = new Date()): PldDemoDataset 
     "gobernanza-control-data": gobernanza,
     "monitoreo-operaciones-data": {
       alertas: operaciones
-        .filter((operacion) => operacion.umbralStatus === "aviso" || operacion.pepScreening?.requiresHumanReview)
+        .filter((operacion) => operacion.umbralStatus === "aviso")
         .map((operacion) => ({
           id: `mon-${operacion.id}`,
           rfc: operacion.rfc,
           cliente: operacion.cliente,
-          tipo: operacion.pepScreening?.requiresHumanReview ? "PEP" : "Aviso",
-          nivel: operacion.pepScreening?.requiresHumanReview ? "Alto" : "Medio",
+          tipo: "Aviso",
+          nivel: "Medio",
           fecha: operacion.fechaOperacion,
           estado: operacion.alertaResuelta ? "Atendida" : "Pendiente",
         })),
@@ -1800,7 +1314,7 @@ export function buildPldDemoDataset(referenceDate = new Date()): PldDemoDataset 
   }
 }
 
-export function installPldDemoData(storage: DemoStorage, referenceDate = new Date()) {
+export function installPldDemoData(storage: DemoStorage, referenceDate = new Date(PRESENTATION_CUTOFF)) {
   const dataset = buildPldDemoDataset(referenceDate)
   const previous = Object.fromEntries(DEMO_STORAGE_KEYS.map((key) => [key, storage.getItem(key)]))
   // Save before touching any data. A quota failure must leave the old data intact.

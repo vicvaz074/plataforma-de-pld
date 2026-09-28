@@ -31,7 +31,7 @@ export function PldDemoDataControls({ onDataChange }: PldDemoDataControlsProps =
   const handleInstall = () => {
     if (!window.confirm("Se reemplazará la captura local por datos ficticios de demostración. Se conservará un respaldo local para restaurar los datos anteriores. ¿Continuar?")) return
     try {
-    const result = installPldDemoData(window.localStorage, new Date("2026-05-08T12:00:00-06:00"))
+    const result = installPldDemoData(window.localStorage)
     refreshStatus()
     window.dispatchEvent(new CustomEvent("pld-demo-data-changed"))
     onDataChange?.()
@@ -80,9 +80,11 @@ export function PldDemoDataControls({ onDataChange }: PldDemoDataControlsProps =
               )}
             </div>
             <p className="max-w-3xl text-sm text-slate-600">
-              Carga un caso ficticio coherente con registro SAT, KYC, actos, EBR/PEP, avisos, auditoría,
-              capacitación, evidencias y gobernanza para presentar la plataforma sin capturar desde cero.
+              Sierra Norte (sujeto obligado) y Lago Verde (cliente): tres arrendamientos ficticios de
+              $40,000, $200,000 y $400,000 MXN para mostrar registro interno, identificación y aviso.
+              Incluye un expediente separado para revisión PEP. Sin avisos presentados ni paquetes técnicos mezclados.
             </p>
+            <p className="max-w-3xl text-xs text-slate-500">Corte fijo: 28/09/2026. Cargar la demo reemplaza los datos locales de los módulos; conserva un respaldo restaurable. No acredita cumplimiento ni realiza consultas externas.</p>
             {status && (
               <p className="text-xs text-slate-500">
                 {status.subjectName} · {status.counts.expedientes} expedientes · {status.counts.operaciones} operaciones ·{" "}
