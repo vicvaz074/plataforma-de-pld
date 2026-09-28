@@ -123,16 +123,21 @@ export function satCountryCode(raw: unknown): string {
 export function satDate(raw: unknown): string {
   const text = normalize(raw)
   if (!text) return ""
-  if (/^\d{8}$/.test(text)) return text
+  const validDate = (digits: string) => {
+    const iso = digits.slice(0, 4) + "-" + digits.slice(4, 6) + "-" + digits.slice(6, 8)
+    const date = new Date(iso + "T00:00:00.000Z")
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === iso ? digits : ""
+  }
+  if (/^\d{8}$/.test(text)) return validDate(text)
   if (/^\d{5}(?:\.\d+)?$/.test(text)) return dateFromExcelSerial(Number(text))
 
   const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (iso) return `${iso[1]}${iso[2]}${iso[3]}`
+  if (iso) return validDate(`${iso[1]}${iso[2]}${iso[3]}`)
 
   const dmy = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (dmy) return `${dmy[3]}${dmy[2].padStart(2, "0")}${dmy[1].padStart(2, "0")}`
+  if (dmy) return validDate(`${dmy[3]}${dmy[2].padStart(2, "0")}${dmy[1].padStart(2, "0")}`)
 
-  return text.replace(/\D/g, "").slice(0, 8)
+  return ""
 }
 
 export function satMoney(raw: unknown): string {

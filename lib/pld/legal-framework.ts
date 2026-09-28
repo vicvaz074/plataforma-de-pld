@@ -1,4 +1,7 @@
-export const LEGAL_SOURCE_REVIEWED_AT = "2026-05-14"
+import { RCG_2026_SOURCE, RCG_2026_REVIEWED_AT } from "./regulatory-calendar"
+// Historical documents retain their actual review date; only newly consulted
+// sources below use the September date.
+export const LEGAL_SOURCE_REVIEWED_AT = RCG_2026_REVIEWED_AT
 
 export type NormativeSector =
   | "Actividades Vulnerables"
@@ -83,7 +86,7 @@ export interface LegalFrameworkFilters {
   status?: NormativeStatus | "todos"
 }
 
-const reviewedAt = LEGAL_SOURCE_REVIEWED_AT
+const reviewedAt = "2026-05-14"
 
 export const LEGAL_SECTORS: NormativeSector[] = [
   "Actividades Vulnerables",
@@ -179,11 +182,12 @@ export const normativeDocuments: NormativeDocument[] = [
     authority: "SAT/SPPLD",
     sector: "Actividades Vulnerables",
     hierarchy: "Reglas",
-    status: "pendiente_rcg",
-    reviewedAt,
-    url: "https://wwwnp.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Normateca/Nacional/LFPIORPI/RCG.pdf",
-    summary: "Reglas operativas para alta, expedientes, anexos documentales, acumulacion, avisos, informes, 27 Bis y resguardo.",
-    operationalImpact: "Fuente primaria para checklists documentales, acumulacion de seis meses, informes en ceros, 27 Bis y conservacion.",
+    status: "reformado",
+    lastReform: "2026-08-07",
+    reviewedAt: RCG_2026_REVIEWED_AT,
+    url: RCG_2026_SOURCE,
+    summary: "Acuerdo 115/2026: reforma publicada, con entrada general el 30/11/2026 y transitorios diferenciados.",
+    operationalImpact: "Preparar identificación, EBR, beneficiario controlador, capacitación, automatización y auditoría respetando sus fechas; los nuevos avisos dependen de la resolución de formatos.",
     tags: ["RCG", "anexos", "acumulacion", "27 Bis", "informe en ceros"],
     relatedModules: ["KYC/EUI", "Actos y Operaciones", "Avisos e Informes", "Evidencias"],
   },
@@ -727,10 +731,10 @@ export const normativeObligations: NormativeObligation[] = [
     module: "EBR",
     moduleHref: "/ebr",
     obligation: "Aplicar enfoque basado en riesgos y documentar factores, mitigantes y riesgo residual.",
-    foundation: "LFPIORPI art. 20; ENR 2023; guia CNBV EBR como referencia metodologica",
-    sourceDocumentIds: ["enr-2023-uif", "guia-cnbv-ebr", "manual-lineamientos-identificacion"],
+    foundation: "LFPIORPI art. 18; RCG Cap. II Quáter y III Bis; transitorios segundo y cuarto del Acuerdo 115/2026",
+    sourceDocumentIds: ["enr-2023-uif", "rcg-lfpiorpi", "manual-lineamientos-identificacion"],
     status: "parcial",
-    impact: "Soporta perfiles, riesgo inherente, controles mitigantes, PEP y plan de accion.",
+    impact: "Separar EBR institucional y riesgo individual del cliente; preparación para 01/03/2027. La puntuación del cliente no sustituye la metodología institucional.",
     tags: ["EBR", "riesgo", "mitigantes", "ENR 2023"],
   },
   {
@@ -771,10 +775,10 @@ export const normativeObligations: NormativeObligation[] = [
     module: "Capacitacion",
     moduleHref: "/capacitacion-control",
     obligation: "Capacitar al personal y documentar programa, asistencia, evaluaciones y constancias.",
-    foundation: "LFPIORPI art. 20; reforma 2025 y reglas aplicables",
-    sourceDocumentIds: ["lfpiorpi-vigente", "dof-reforma-lfpiorpi-2025"],
+    foundation: "LFPIORPI art. 18; RCG arts. 39 Bis a 39 Bis 2; transitorios sexto y séptimo",
+    sourceDocumentIds: ["lfpiorpi-vigente", "rcg-lfpiorpi"],
     status: "parcial",
-    impact: "Debe vincular sesiones, evidencia, roles criticos y actualizaciones normativas.",
+    impact: "Primer periodo anual 2027; selección de nuevas contrataciones desde 01/03/2027. Vincular asistencia, evaluaciones y constancias.",
     tags: ["capacitacion", "constancias", "personal"],
   },
   {
@@ -782,10 +786,10 @@ export const normativeObligations: NormativeObligation[] = [
     module: "Auditoria",
     moduleHref: "/auditoria-verificacion",
     obligation: "Acreditar cumplimiento ante visitas de verificacion, requerimientos y revisiones internas o externas.",
-    foundation: "LFPIORPI arts. 34 a 37; Reglamento LFPIORPI reformado; consultas SAT de verificacion",
-    sourceDocumentIds: ["reglamento-lfpiorpi-2026", "sppld-preguntas", "sat-normateca-av"],
-    status: "vigente",
-    impact: "Ordena matriz de cumplimiento, hallazgos, acciones correctivas, evidencias y acuses.",
+    foundation: "LFPIORPI arts. 18 y 34 a 37; RCG arts. 42 a 51; transitorio octavo",
+    sourceDocumentIds: ["reglamento-lfpiorpi-2026", "rcg-lfpiorpi", "sat-normateca-av"],
+    status: "parcial",
+    impact: "Primer periodo de auditoría 2028. Dictamen de siete secciones, cinco resultados y auditor independiente según riesgo. No imponer canales CNBV a Actividades Vulnerables.",
     tags: ["auditoria", "visitas", "verificacion", "hallazgos"],
   },
   {
@@ -803,6 +807,12 @@ export const normativeObligations: NormativeObligation[] = [
 
 export const normativeUpdates: NormativeUpdate[] = [
   {
+    id: "rcg-2026", date: "2026-08-07", title: "Reforma de Reglas de Carácter General — Acuerdo 115/2026",
+    source: "DOF / SHCP", sourceUrl: RCG_2026_SOURCE, status: "reformado",
+    impact: "Entrada general 30/11/2026; EBR y diligencia 01/03/2027; automatización 01/06/2027; primer periodo de auditoría 2028.",
+    tags: ["RCG", "transitorios", "EBR", "auditoría", "beneficiario controlador"],
+  },
+  {
     id: "reforma-lfpiorpi-2025",
     date: "2025-07-16",
     title: "Reforma LFPIORPI y Codigo Penal Federal",
@@ -818,9 +828,9 @@ export const normativeUpdates: NormativeUpdate[] = [
     title: "Entrada en vigor general de la reforma LFPIORPI 2025",
     source: "Criterios SPPLD",
     sourceUrl: "https://sppld.sat.gob.mx/pld/interiores/criterios.html",
-    impact: "SAT/SPPLD aclara que ciertas obligaciones del articulo 18 fracciones VII a XI dependen de nuevas Reglas de Caracter General.",
-    status: "pendiente_rcg",
-    tags: ["pendiente RCG", "articulo 18", "criterio SAT"],
+    impact: "Antecedente histórico: obligaciones sujetas a desarrollo en RCG. El Acuerdo 115/2026 ya fue publicado; consultar sus transitorios.",
+    status: "criterio_sat",
+    tags: ["antecedente", "articulo 18", "criterio SAT"],
   },
   {
     id: "reglamento-2026",

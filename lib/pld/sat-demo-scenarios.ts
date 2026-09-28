@@ -111,6 +111,13 @@ export function buildSatTemplateDemoScenarioValues(input: {
   // que se recorre hasta que no aparezcan nuevos pendientes.
   for (let pass = 0; pass < MAX_DEMO_FILL_PASSES; pass += 1) {
     let filled = 0
+    for (const group of getSatOperationBranchGroups(layout.templateId, fields)) {
+      if (!isSatOperationBranchGroupActive(group, satFieldValues)) continue
+      if (!group.options.some((option) => satFieldValues[option.id] === "si")) {
+        group.options.forEach((option, index) => { satFieldValues[option.id] = index === 0 ? "si" : "no" })
+        filled += 1
+      }
+    }
     for (const field of withSatParticipantOptions(fields, satFieldValues)) {
       if (!isSatXlsmFieldRequired(field, satFieldValues)) continue
       const cellKey = `${field.sheetName}!${field.cell}`

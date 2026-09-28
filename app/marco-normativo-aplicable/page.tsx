@@ -36,6 +36,7 @@ import {
   type OperationalStatus,
 } from "@/lib/pld/legal-framework"
 import { translations } from "@/lib/translations"
+import { RCG_2026_MILESTONES, RCG_2026_SOURCE } from "@/lib/pld/regulatory-calendar"
 
 const statusLabel: Record<NormativeStatus, string> = {
   vigente: "Vigente",
@@ -165,6 +166,21 @@ export default function MarcoNormativoAplicablePage() {
         </div>
       </section>
 
+      <section className="mt-6 rounded-xl border border-orange-200 p-4">
+        <h2 className="font-semibold">Aplicación gradual de la reforma RCG 2026</h2>
+        <p className="mt-2 text-sm text-slate-600">Publicación no equivale a exigibilidad inmediata ni a implementación completa. No aplicar retroactivamente estas fechas. Las obligaciones actualmente vigentes continúan.</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {RCG_2026_MILESTONES.map((milestone) => (
+            <article key={milestone.id} className="rounded border border-slate-200 p-3 text-sm">
+              <h3 className="font-medium">{milestone.label}</h3>
+              <p className="text-orange-700">{milestone.date || "Dependiente de resolución de formatos"}</p>
+              <p className="mt-1 text-xs text-slate-600">{milestone.detail}</p>
+              <p className="mt-1 text-xs text-slate-500">{milestone.foundation}</p>
+            </article>
+          ))}
+        </div>
+        <a className="mt-3 inline-block text-sm text-orange-700 underline" href={RCG_2026_SOURCE} target="_blank" rel="noreferrer">Consultar Acuerdo 115/2026 y transitorios</a>
+      </section>
       <Tabs defaultValue="biblioteca" className="mt-6">
         <TabsList className="grid h-auto w-full grid-cols-2 bg-slate-100 p-1 lg:w-[520px]">
           <TabsTrigger value="biblioteca" className="gap-2 data-[state=active]:bg-white">

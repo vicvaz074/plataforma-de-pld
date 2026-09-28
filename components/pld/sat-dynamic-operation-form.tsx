@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { getSatOperationBranchGroups, getSatOperationBranchMissingLabels, isSatOperationBranchGroupActive, getSatRepeatRowGroups, getSatRepeatRowControlId } from "@/lib/pld/sat-operation-branches"
+import { getSatOperationBranchGroups, getSatOperationBranchMissingLabels, isSatOperationBranchGroupActive, getSatRepeatRowGroups, getSatRepeatRowControlId, withSatParticipantOptions } from "@/lib/pld/sat-operation-branches"
 import {
   CODIGOS_POSTALES,
   findCodigoPostalInfoInCatalog,
@@ -142,7 +142,7 @@ export function SatDynamicOperationFormView({
 
   const allFields = useMemo<SatXlsmField[]>(() => {
     if (!form) return []
-    const fields = form.sections.flatMap((section) => section.fields)
+    const fields = withSatParticipantOptions(form.sections.flatMap((section) => section.fields), values)
     const visibleFields = form.templateId.includes("fraccion-v-inmuebles")
       ? fields.filter((field) => field.source === "manual-sat-map")
       : fields
@@ -154,7 +154,7 @@ export function SatDynamicOperationFormView({
     return normalizedFields.filter(
       (field) => Boolean(field.sectionKind && allowedKinds.has(field.sectionKind)),
     )
-  }, [form, sectionKindsKey])
+  }, [form, sectionKindsKey, values])
 
   const activeFields = useMemo(
     () => filterActiveSatXlsmFields(allFields, values),
@@ -605,6 +605,8 @@ function SatFieldControl({
       : neighborhoodOptions
   const isCatalogWithoutResolvedList =
     field.dataType === "catalogo" && options.length === 0 && !isPostalCodeField(field) && !isNeighborhoodField(field)
+  const awaitingParticipant = isCatalogWithoutResolvedList &&
+    /^(XII_SOCIEDADES_|SP1105_LISTA_PERSONA_)/.test(field.optionListId || "")
 
   return (
     <div
@@ -641,13 +643,15 @@ function SatFieldControl({
               inputMode={field.dataType === "numero" || field.dataType === "moneda" ? "decimal" : "text"}
               placeholder={field.dataType === "fecha" ? "dd/mm/aaaa" : field.placeholder ?? "Captura valor"}
               className="bg-white"
+              disabled={awaitingParticipant}
               onChange={(event) => onChange(field.id, event.target.value)}
             />
           </div>
           {isCatalogWithoutResolvedList && (
             <p className="text-[11px] leading-relaxed text-amber-700">
-              El XLSM marca esta celda como validada, pero no expone un catálogo seleccionable. Captura el valor y revisa
-              la plantilla oficial antes de enviar.
+              {awaitingParticipant
+                ? "Captura primero la sociedad o persona participante. Después podrás seleccionar su vínculo."
+                : "El XLSM marca esta celda como validada, pero no expone un catálogo seleccionable. Captura el valor y revisa la plantilla oficial antes de enviar."}
             </p>
           )}
         </>

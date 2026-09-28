@@ -1,6 +1,7 @@
 import { optionCode, slug, splitCell } from "./sat-xlsm-grid"
 import { BENEFICIARY_REPEAT_MODE_FIELD_ID, PERSONA_OBJETO_TYPE_FIELD_ID } from "./sat-field-controls"
 import type { SatXlsmField, SatXlsmSection } from "./types"
+import { XII_SP_PROPERTY, XII_SPLIT, XII_PARTY_ROWS, XII_COMPANY_LISTS, withXiiCompanyOptions } from "./sat-xii-rules"
 
 type Conditions = NonNullable<SatXlsmField["activeWhen"]>
 
@@ -52,6 +53,21 @@ function getFixedSatOperationBranchGroups(templateId: string): SatOperationBranc
     options: options.map(([value, optionLabel]) => ({ id: branchId(templateId, value), label: optionLabel })),
     activeWhen: parent ? when(branchId(templateId, parent)) : undefined,
   })
+  if (templateId === XII_SP_PROPERTY) {
+    return Array.from({ length: 10 }, (_, offset) => {
+      const index = offset + 1
+      const activeWhen = index === 1 ? undefined : when(`sat.row.aviso.${XII_PARTY_ROWS}.${index}`)
+      return [
+        { ...group(`interviniente.${index}`, `Persona interviniente · Registro ${index}`, [
+          [`interviniente.${index}.pf`, "Persona física"], [`interviniente.${index}.pm`, "Persona moral"],
+          [`interviniente.${index}.fid`, "Fideicomiso"],
+        ], false), activeWhen },
+        { ...group(`domicilio.${index}`, `Domicilio del interviniente · Registro ${index}`, [
+          [`domicilio.${index}.nacional`, "Nacional"], [`domicilio.${index}.extranjero`, "Extranjero"],
+        ], false), activeWhen },
+      ]
+    }).flat()
+  }
   if (templateId === "sat-fraccion-v-inmuebles") {
     return [group("instrumento", "Documento del acto", [["contrato", "Contrato privado"], ["instrumento-publico", "Instrumento público"]], false)]
   }
@@ -132,6 +148,10 @@ export function getSatOperationBranchMissingLabels(templateId: string, values: R
     return count === 0 || (!group.multiple && count !== 1)
   }).map((group) => group.label)
   const references = withSatParticipantOptions(fields, values).filter((field) => {
+    if (XII_COMPANY_LISTS[field.optionListId || ""] && matches(field.activeWhen, values)) {
+      const value = (values[field.id] ?? values[`${field.sheetName}!${field.cell}`] ?? "").trim()
+      return Boolean(value) && !field.options?.includes(value)
+    }
     if (!PARTICIPANT_LISTS[field.optionListId || ""] || !matches(field.activeWhen, values)) return false
     const value = values[field.id] ?? values[`${field.sheetName}!${field.cell}`] ?? ""
     if (!value.trim()) return false // The normal required-field evaluator handles empty values.
@@ -159,6 +179,14 @@ export function applySatOperationBranchRules(templateId: string, sections: SatXl
     const { col, row } = splitCell(field.cell)
     const conditions: Conditions = []
     const enable = (key: string) => conditions.push(...when(branchId(templateId, key)))
+    if (templateId === XII_SP_PROPERTY && sheet === "aviso" && block === XII_PARTY_ROWS) {
+      const index = field.repeatIndex || 1
+      if (row >= 41 && row <= 50) enable(`interviniente.${index}.pf`)
+      if (row >= 55 && row <= 64) enable(`interviniente.${index}.pm`)
+      if (row >= 68 && row <= 77) enable(`interviniente.${index}.fid`)
+      if (row >= 83 && row <= 92) enable(`domicilio.${index}.nacional`)
+      if (row >= 96 && row <= 105) enable(`domicilio.${index}.extranjero`)
+    }
     if (["sat-fraccion-xii-sp-poder", "sat-fraccion-xii-sp-modif-patrimonial"].includes(templateId) && sheet === "aviso") {
       if (col === "C" && row >= 23 && row <= 25) enable("administrativa")
       if (col === "F" && row >= 23 && row <= 26) enable("jurisdiccional")
@@ -312,7 +340,7 @@ export function withSatParticipantOptions(fields: SatXlsmField[], values: Record
     return (values[field.id] ?? values[key] ?? "").trim()
   }
   const cache = new Map<string, string[]>()
-  return fields.map((field) => {
+  return withXiiCompanyOptions(fields, values, (field) => matches(field.activeWhen, controls)).map((field) => {
     const spec = PARTICIPANT_LISTS[field.optionListId || ""]
     if (!spec) return field
     const listId = field.optionListId!
@@ -384,6 +412,7 @@ function getLiquidationBranches(templateId: string, fields: SatXlsmField[]) {
 function getPartyBranches(templateId: string, fields: SatXlsmField[]) {
   const groups: SatOperationBranchGroup[] = []
   const controls = new Map<string, string>()
+  if (templateId === XII_SP_PROPERTY) return { groups, controls }
   if (!/^sat-fraccion-xii?-/.test(templateId)) return { groups, controls }
   const eligible = fields.filter((field) => templateId.startsWith("sat-fraccion-xii-") || slug(field.sheetName) === "acto-u-operacion")
   const kindOf = (field: SatXlsmField): string | undefined => {
@@ -412,7 +441,8 @@ function getPartyBranches(templateId: string, fields: SatXlsmField[]) {
       const kinds = [...new Set(pair.flatMap((block) => block.fields.map(kindOf)).filter((kind): kind is string => Boolean(kind)))]
       if (!kinds.includes("pf") || kinds.length < 2) continue
       const id = `personas.${slug(sheetName)}.${slug(pair[0].id)}`
-      groups.push({ id: branchId(templateId, id), label: `Personas participantes · ${sheetName} · Bloque ${groups.length + 1}`,
+      const parent = templateId === XII_SPLIT ? pair[0].fields[0].activeWhen?.filter((c) => /\.d(32|64)$/.test(c.fieldId)) : undefined
+      groups.push({ id: branchId(templateId, id), label: `Personas participantes · ${sheetName} · Bloque ${groups.length + 1}`, activeWhen: parent,
         multiple: true, options: kinds.map((kind) => ({ id: branchId(templateId, `${id}.${kind}`), label: kind === "pf" ? "Persona física" : kind === "pm" ? "Persona moral" : "Fideicomiso" })) })
       for (const block of pair) for (const field of block.fields) controls.set(field.id, branchId(templateId, `${id}.${kindOf(field)}`))
     }

@@ -4187,7 +4187,7 @@ export default function ActividadesVulnerablesPage() {
   const contraprestacionParseada = parseMoneyToCents(contraprestacion || "0", {allowZero: true})
   const notarialAmounts = Object.fromEntries(Object.entries(notarialValues).map(([key, value]) => [key, parseMoneyToCents(value || "0", {allowZero: true})]))
   const notarialAmountsValid = Object.values(notarialAmounts).every((value) => value.ok)
-  const montoBaseAvisoCentavos = actividadKey === "fraccion-xii-notarios-a" && notarialAmountsValid ? resolveNotarialNoticeBase({
+  const montoBaseAvisoCentavos = ["fraccion-xii-notarios-a", "fraccion-xii-servidores-inmuebles"].includes(actividadKey) && notarialAmountsValid ? resolveNotarialNoticeBase({
     precioPactadoCentavos: montoOperacionCentavos,
     valorCatastralCentavos: notarialAmounts.valorCatastral.ok ? notarialAmounts.valorCatastral.cents : undefined,
     valorComercialCentavos: notarialAmounts.valorComercial.ok ? notarialAmounts.valorComercial.cents : undefined,
@@ -5327,7 +5327,7 @@ const agregarOperacion = (guardarBorrador = false) => {
   }
 
   const pasoIncompleto = wizardStepDiagnostics.findIndex((step) => !step.canContinue)
-  if (!guardarBorrador && ((actividadKey === "fraccion-xii-notarios-a" && !notarialAmountsValid) || (actividadKey.startsWith("fraccion-xvi-") && !contraprestacionParseada.ok))) {
+  if (!guardarBorrador && ((["fraccion-xii-notarios-a", "fraccion-xii-servidores-inmuebles"].includes(actividadKey) && !notarialAmountsValid) || (actividadKey.startsWith("fraccion-xvi-") && !contraprestacionParseada.ok))) {
     toast({title: "Importes adicionales inválidos", description: "Revisa la contraprestación o los valores notariales. Usa un máximo de dos decimales.", variant: "destructive"})
     return
   }
@@ -5620,7 +5620,7 @@ const agregarOperacion = (guardarBorrador = false) => {
     contraprestacionCentavos: actividadKey.startsWith("fraccion-xvi-") && contraprestacionParseada.ok ? contraprestacionParseada.cents : undefined,
     montoNoDeterminado: actividadKey.startsWith("fraccion-x-") && montoNoDeterminado,
     montoBaseAvisoCentavos,
-    notarialValues: actividadKey === "fraccion-xii-notarios-a" ? notarialValues : undefined,
+    notarialValues: ["fraccion-xii-notarios-a", "fraccion-xii-servidores-inmuebles"].includes(actividadKey) ? notarialValues : undefined,
     revision: (operacionExistente?.revision ?? 0) + 1,
     createdAt: operacionExistente?.createdAt ?? ahora,
     updatedAt: ahora,
@@ -8133,7 +8133,7 @@ const cambiarMesCalendario = (delta: number) => {
                     <p className="text-xs text-muted-foreground">Se evalúa separadamente del importe de la operación; captura cero cuando no se cobró contraprestación.</p>
                   </div>
                 )}
-                {actividadKey === "fraccion-xii-notarios-a" && (
+                {["fraccion-xii-notarios-a", "fraccion-xii-servidores-inmuebles"].includes(actividadKey) && (
                   <div className="grid gap-3 rounded-xl border bg-slate-50 p-4 md:grid-cols-3">
                     {([['valorCatastral', 'Valor catastral (MXN)'], ['valorComercial', 'Valor comercial (MXN)'], ['principalGarantizado', 'Principal garantizado (MXN)']] as const).map(([key, label]) => <div key={key} className="space-y-2"><Label>{label}</Label><Input type="text" inputMode="decimal" value={notarialValues[key]} onChange={(event) => setNotarialValues((current) => ({...current, [key]: event.target.value}))} placeholder="No aplica / 0.00" /></div>)}
                     <p className="text-xs text-muted-foreground md:col-span-3">La base del aviso usa el mayor de los valores aplicables y el precio pactado; estos importes no rellenan superficies ni avalúos del Excel.</p>
