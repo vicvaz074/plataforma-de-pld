@@ -17,6 +17,10 @@ jobs:
           node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Install XML validator
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libxml2-utils
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test:pld

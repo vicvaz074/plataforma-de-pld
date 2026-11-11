@@ -21,7 +21,9 @@ function totp(secret:string){
 
 test("Worker real: cuentas, sesiones, aislamiento por empresa, conflictos y versiones R2", {timeout:180_000}, async () => {
   const build=mkdtempSync(join(tmpdir(),"pld-worker-test-"))
-  execFileSync("pnpm",["exec","wrangler","deploy","-c","wrangler.worker.jsonc","--dry-run","--env=","--outdir",build],{stdio:"pipe",env:{...process.env,WRANGLER_SEND_METRICS:"false"}})
+  // A clean checkout has no frontend build yet. Use tracked source assets;
+  // the real test binding below serves the same official SAT layout fixtures.
+  execFileSync("pnpm",["exec","wrangler","deploy","-c","wrangler.worker.jsonc","--dry-run","--env=","--assets","public","--outdir",build],{stdio:"pipe",env:{...process.env,WRANGLER_SEND_METRICS:"false"}})
   const origin="http://127.0.0.1:8787",token="test-bootstrap-"+"x".repeat(40)
   const mf=new Miniflare({modulesRoot:build,modules:[{type:"ESModule",path:join(build,"index.js")}],compatibilityDate:"2026-07-01",compatibilityFlags:["nodejs_compat"],d1Databases:["DB"],r2Buckets:["EVIDENCE_BUCKET"],queueProducers:{IMPORT_QUEUE:"test-imports"},queueConsumers:{"test-imports":{maxBatchSize:1,maxBatchTimeout:0,maxRetries:3,retryDelay:0}},serviceBindings:{ASSETS:async(request)=>{const path=new URL(request.url).pathname;if(!/^\/data\/sat-xlsm-layouts\/[a-z0-9-]+\.json$/.test(path))return new Response("not found",{status:404});return new Response(readFileSync(join("public",path))) }},bindings:{BETTER_AUTH_URL:origin,BETTER_AUTH_SECRET:"test-only-secret-"+"s".repeat(48),BOOTSTRAP_TOKEN:token,BOOTSTRAP_EMAIL:"supreme@example.test",ENVIRONMENT:"test"}})
   try{

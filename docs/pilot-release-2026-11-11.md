@@ -32,7 +32,7 @@ Actos XV se capturó desde EUI con `$10,000,000.01`, se guardó como borrador y 
 
 Cloudflare preview confirmó login, cookie de sesión, organización/empresa y EUI parcial mediante UI móvil y persistencia remota. Las personas y documentos son exclusivamente ficticios. R2 producción está privado y la base nueva no tiene cuentas; se conserva una exportación de instalación fuera del repositorio.
 
-**Producción todavía no se ha reemplazado.** CI detectó dos requisitos ausentes en checkout limpio: la prueba Worker busca `out/` antes del build y Ubuntu no trae `xmllint`. Está solicitado confirmar el ajuste: usar assets fuente en la prueba e instalar `libxml2-utils` en CI, sin omitir comprobaciones. El despliegue y la activación del titular quedan retenidos hasta ejecutar exitosamente esa validación y comprobar el mismo commit en preview.
+**Producción todavía no se ha reemplazado al registrar este cambio.** CI detectó dos requisitos ausentes en checkout limpio: la prueba Worker buscaba `out/` antes del build y Ubuntu no traía `xmllint`. El titular confirmó el ajuste: la prueba usa los assets fuente y CI instala `libxml2-utils`, sin omitir comprobaciones. El despliegue y la activación del titular quedan retenidos hasta ejecutar exitosamente esa validación y comprobar el mismo commit en preview. La evidencia final de publicación se registra en el PR.
 
 ## Ámbito de apertura
 
