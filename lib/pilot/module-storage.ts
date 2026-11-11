@@ -14,8 +14,16 @@ let lastError: Error | null = null
 let state: SaveState = { status: "saved", pending: 0 }
 const listeners = new Set<() => void>()
 const preferences = new Map<string, string>()
-const uploaded = new Map<string, string>()
-const companyNotices = new Map<string, string[]>()
+let uploaded = new Map<string, string>()
+let companyNotices = new Map<string, string[]>()
+let dataOwnerUserId: string | null = null
+interface PrincipalStorage {
+  company: Company | null; connected: boolean; cache: typeof cache; records: CloudRecord[];
+  pending: typeof pending; running: Promise<void> | null; lastError: Error | null;
+  uploaded: typeof uploaded; companyNotices: typeof companyNotices; state: SaveState
+}
+// Memory-only recovery: a different signed-in user never receives these maps.
+const quarantinedPrincipals = new Map<string, PrincipalStorage>()
 let loadEpoch = 0
 let scopeGeneration = 0
 let authGeneration = 0
@@ -23,7 +31,7 @@ let loading = false
 
 export interface ModuleScope { readonly generation: number; readonly authGeneration: number; readonly companyId: string | null; readonly storage: Storage }
 const staleScope = () => new DOMException("La empresa o el acceso cambió. Vuelve a iniciar la acción en el expediente actual.", "AbortError")
-export function isModuleScopeCurrent(scope: ModuleScope) { return !loading && scope.generation === scopeGeneration && scope.authGeneration === authGeneration && scope.companyId === (company?.id ?? null) }
+export function isModuleScopeCurrent(scope: ModuleScope) { return !loading && dataOwnerUserId === (session?.user.id ?? null) && scope.generation === scopeGeneration && scope.authGeneration === authGeneration && scope.companyId === (company?.id ?? null) }
 export function assertModuleScope(scope: ModuleScope) {
   if (!isModuleScopeCurrent(scope)) throw staleScope()
 }
@@ -55,19 +63,41 @@ export function getCompanyRecordRevision(collection: string, id: string) { retur
 export function isCloudConnected() { return connected }
 export function canWriteModuleStorage(key: string) { return !loading && (!connected ? process.env.NEXT_PUBLIC_PLD_MODE === "demo" : Boolean(COLLECTION_MODULES[key] && sessionCan(session, company, COLLECTION_MODULES[key], "edit"))) }
 export function getSaveState() { return state }
+/** null means a snapshot is in transition: no module may mount/read it yet. */
+export function getModuleStorageGeneration(): number | null { return loading ? null : scopeGeneration }
 export function subscribeSaveState(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } }
 function publish(next: SaveState) { state = { ...next, warnings: company ? companyNotices.get(company.id) : undefined }; listeners.forEach((listener) => listener()) }
 export function dismissStorageNotices() { if (company) companyNotices.delete(company.id); publish({ ...state, warnings: undefined }) }
 export function configurePilotSession(value: PilotSession | null) {
-  if (JSON.stringify(session) !== JSON.stringify(value)) { scopeGeneration++; authGeneration++; loadEpoch++; loading = false }
+  const changed = JSON.stringify(session) !== JSON.stringify(value)
+  if (changed) { scopeGeneration++; authGeneration++; loadEpoch++; loading = false }
+  const nextOwner = value?.user.id ?? null
+  if (nextOwner !== dataOwnerUserId) {
+    if (dataOwnerUserId && (company || cache.size || pending.size || running)) quarantinedPrincipals.set(dataOwnerUserId,{company,connected,cache,records,pending,running,lastError,uploaded,companyNotices,state})
+    const saved = nextOwner ? quarantinedPrincipals.get(nextOwner) : undefined
+    const canRestore = saved && value && (!saved.company || value.companies.some((item) => item.id === saved.company!.id && item.status === "active") || saved.company.id.startsWith("inbox:") && sessionCan(value,saved.company,"expedientes","view"))
+    dataOwnerUserId = nextOwner
+    if (saved && canRestore) {
+      ({company,connected,cache,records,pending,running,lastError,uploaded,companyNotices,state}=saved)
+      quarantinedPrincipals.delete(nextOwner!)
+    } else {
+      company=null;connected=false;cache=new Map();records=[];pending=new Map();running=null;lastError=null;uploaded=new Map();companyNotices=new Map();state={status:"saved",pending:0}
+    }
+  }
   session = value
+  if (changed) publish(state)
 }
 
-export function getPendingModuleChanges() { return { companyId: company?.id, exportedAt: new Date().toISOString(), collections: Object.fromEntries([...pending].map(([key, value]) => [key, value === null ? null : JSON.parse(value)])) } }
+export function getPendingModuleChanges() {
+  if (!session || dataOwnerUserId !== session.user.id) throw staleScope()
+  return { companyId: company?.id, exportedAt: new Date().toISOString(), collections: Object.fromEntries([...pending].map(([key, value]) => [key, value === null ? null : JSON.parse(value)])) }
+}
 export async function loadCompanyStorage(nextCompany: Company, options: { discardUnsaved?: boolean } = {}) {
+  if (!session || dataOwnerUserId !== session.user.id) throw staleScope()
   const epoch = ++loadEpoch
   const auth = authGeneration
   scopeGeneration++; loading = true
+  publish(state)
   try {
   if (options.discardUnsaved && running) throw new Error("Espera a que termine la solicitud actual.")
   if (!options.discardUnsaved) await flushModuleStorage()
@@ -83,11 +113,12 @@ export async function loadCompanyStorage(nextCompany: Company, options: { discar
   }
   if (!cache.has("pld-tenants")) cache.set("pld-tenants", JSON.stringify({ schemaVersion: 1, activeTenantId: nextCompany.id, tenants: [{ id: nextCompany.id, schemaVersion: 1, rfc: nextCompany.rfc, razonSocial: nextCompany.name, nombreComercial: nextCompany.name, representanteCumplimiento: { nombre: "", cargo: "", email: "" }, responsablesInternos: [], actividades: [], manual: {}, ebr: {}, policies: { conservaAnios: 10, noGuardarEfirma: true, requiereCotejo: true } }] }))
   publish({ status: "saved", pending: 0 })
-  } finally { if (epoch === loadEpoch) loading = false }
+  } finally { if (epoch === loadEpoch) { loading = false; publish(state) } }
 }
 export function resetCompanyStorage() {
   if (pending.size || running) throw new Error("Espera a que se guarden los cambios antes de salir.")
-  loadEpoch++; scopeGeneration++; authGeneration++; loading = false; company = null; session = null; connected = false; cache.clear(); records = []; uploaded.clear(); companyNotices.clear(); lastError = null
+  if (dataOwnerUserId) quarantinedPrincipals.delete(dataOwnerUserId)
+  loadEpoch++; scopeGeneration++; authGeneration++; loading = false; company = null; session = null; dataOwnerUserId=null; connected = false; cache.clear(); records = []; uploaded.clear(); companyNotices.clear(); lastError = null
   publish({ status: "saved", pending: 0 })
 }
 
@@ -134,9 +165,8 @@ async function externalize(value: unknown, moduleKey: ModuleKey, scope: DrainSco
   return value
 }
 
-async function drain() {
-  if (!company) return
-  const scope: DrainScope = { company, authGeneration, pending, uploaded }
+async function drain(scope: DrainScope) {
+  assertDrainScope(scope)
   while (pending.size && company) {
     assertDrainScope(scope)
     const batch = [...pending.entries()]
@@ -186,11 +216,19 @@ async function drain() {
   }
 }
 function schedule() {
-  if (running || lastError) return
-  running = Promise.resolve().then(drain).catch((error: unknown) => {
+  if (running || lastError || !company) return
+  const owner=dataOwnerUserId,scope:DrainScope={company,authGeneration,pending,uploaded}
+  const scheduled = Promise.resolve().then(() => drain(scope)).catch((error: unknown) => {
+    if (owner !== dataOwnerUserId || scope.authGeneration !== authGeneration || scope.pending !== pending) return
     lastError = error instanceof Error ? error : new Error("No se guardaron los cambios.")
     publish({ status: "error", pending: pending.size, message: lastError.message })
-  }).finally(() => { running = null; if (pending.size && !lastError) schedule() })
+  }).finally(() => {
+    const quarantined=owner?quarantinedPrincipals.get(owner):undefined
+    if(quarantined?.running===scheduled)quarantined.running=null
+    if(running!==scheduled)return
+    running = null; if (pending.size && !lastError) schedule()
+  })
+  running = scheduled
 }
 export async function flushModuleStorage(scope?: ModuleScope) {
   if (scope) assertModuleScope(scope)

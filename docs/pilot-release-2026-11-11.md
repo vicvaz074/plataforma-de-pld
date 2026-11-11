@@ -16,10 +16,23 @@ Fecha: 11/11/2026. Sitio conservado: `https://plataforma-de-pld.pages.dev`.
 - `pnpm install --frozen-lockfile`: aprobado.
 - `pnpm typecheck` y comprobación adicional sin caché: aprobados.
 - `pnpm lint`: sin errores; permanecen advertencias de dependencias de hooks, documentadas como deuda.
-- `pnpm test:pld`: **362/362**, cero fallos, cancelaciones o saltos.
-- Regresión adicional de callers reales y EBR después de integrar la revisión independiente: **9/9**.
+- `pnpm test:pld`: primera ejecución **362/362**; ejecución final tras QA y aislamiento entre usuarios **368/368**, cero fallos, cancelaciones o saltos.
+- Regresiones adicionales ejecutan los callers/JSX reales con snapshots diferidos, invalidación de sesión y cambio de usuario. Una sesión nueva no puede leer, exportar ni reenviar pendientes del usuario anterior; éstos quedan aislados en memoria para recuperación del titular.
 - `pnpm build` y `pnpm build:worker`: aprobados. El build incluye `_worker.js`, rutas de API y exclusiones para assets del backend.
 - Existe un único ciclo independiente de bypass/regresión del candidato; sus seis hallazgos se corrigieron y añadieron controles negativos y legítimos. Esto no equivale a una auditoría exhaustiva de toda la plataforma ni a aceptación del SAT.
+- Comparación adicional `scripts/check-sat-xml-programs.ts --verify-workbooks`: **40 libros, 1,198 celdas sin diferencias, macros conservadas y 39 XML válidos con XSD y xmllint**. XIV conserva su vía separada.
+
+## QA observada y retención de publicación
+
+En escritorio 1440×1000 se comprobó captura/guardado/recarga en Alta, EUI, capacitación, Gobernanza, Evidencias y PEP. BC superó aprobado → nueva declaración → guardado automático → reaprobación → recarga, conservando sus dos folios. El retest corrigió tanto una aprobación obsoleta reenviada por autosave como un bucle por identidad de estado. Los modales de Gobernanza tienen título/descripción accesibles.
+
+En móvil 390×844 se recorrieron los 12 módulos con verificación de ruta y contenido, sin nuevos errores de consola ni desbordamiento horizontal. El Provider ahora desmonta módulos durante una transición; no intenta leer snapshots invalidados ni monta una empresa bajo la generación de otra.
+
+Actos XV se capturó desde EUI con `$10,000,000.01`, se guardó como borrador y luego completo con el mismo ID y se recuperó en Bandeja SAT. NIF sin RFC se conservó para persona moral extranjera; XI-B mostró/ocultó la descripción únicamente con `99,Otro`. Importación CSV: tres filas, asignación explícita de dos grupos con el mismo RFC sin fusionarlos, guardado como borradores y reimportación con tres duplicados y cero altas disponibles. No se documentó una presentación ficticia ante SAT.
+
+Cloudflare preview confirmó login, cookie de sesión, organización/empresa y EUI parcial mediante UI móvil y persistencia remota. Las personas y documentos son exclusivamente ficticios. R2 producción está privado y la base nueva no tiene cuentas; se conserva una exportación de instalación fuera del repositorio.
+
+**Producción todavía no se ha reemplazado.** CI detectó dos requisitos ausentes en checkout limpio: la prueba Worker busca `out/` antes del build y Ubuntu no trae `xmllint`. Está solicitado confirmar el ajuste: usar assets fuente en la prueba e instalar `libxml2-utils` en CI, sin omitir comprobaciones. El despliegue y la activación del titular quedan retenidos hasta ejecutar exitosamente esa validación y comprobar el mismo commit en preview.
 
 ## Ámbito de apertura
 

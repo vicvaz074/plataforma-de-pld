@@ -351,7 +351,7 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
       declaraciones,
       lastBCUpdate,
       folioCounter,
-      validation,
+      validation: validation?.signature === currentReviewSignature ? validation : null,
     }
     try {
       const scope = captureModuleScope()
@@ -359,6 +359,11 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
       void flushModuleStorage(scope).then(() => {
         if (!isModuleScopeCurrent(scope)) return
         const canonical = readClientProfile(scope.storage.getItem("beneficiario-controlador-data"), clientId)
+        setValidation((previous) => {
+          if (JSON.stringify(previous) !== JSON.stringify(validation)) return previous
+          const next = canonical.validation ?? null
+          return JSON.stringify(previous) === JSON.stringify(next) ? previous : next
+        })
         if (Array.isArray(canonical.declaraciones)) setDeclaraciones((previous) => {
           // Do not replace a declaration added while this request was in flight.
           if (JSON.stringify(previous) !== JSON.stringify(data.declaraciones)) return previous

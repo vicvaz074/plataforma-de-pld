@@ -1363,7 +1363,8 @@ export default function GobernanzaControlPage() {
             <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold">Carga de evidencia</h3>
+                  <DialogPrimitive.Title className="text-lg font-semibold">Carga de evidencia</DialogPrimitive.Title>
+                  <DialogPrimitive.Description className="sr-only">Carga un documento y sus datos de identificación para conservarlo en Gobernanza.</DialogPrimitive.Description>
                   <p className="text-sm text-muted-foreground">
                     Adjunta documentos en formato PDF, JPG o XML. El sistema validará vigencia y hash de integridad.
                   </p>
@@ -1437,7 +1438,8 @@ export default function GobernanzaControlPage() {
               <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[95vh] overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between p-4 border-b">
                   <div>
-                    <h3 className="text-lg font-semibold">Visor de documento</h3>
+                    <DialogPrimitive.Title className="text-lg font-semibold">Visor de documento</DialogPrimitive.Title>
+                    <DialogPrimitive.Description className="sr-only">Vista previa del archivo privado seleccionado.</DialogPrimitive.Description>
                     <p className="text-sm text-muted-foreground">{viewerDoc.fileName}</p>
                   </div>
                   <DialogPrimitive.Close asChild>
@@ -1484,7 +1486,8 @@ export default function GobernanzaControlPage() {
             {signatureDoc && (
               <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Aprobación interna</h3>
+                  <DialogPrimitive.Title className="text-lg font-semibold">Aprobación interna</DialogPrimitive.Title>
+                  <DialogPrimitive.Description className="sr-only">Confirma la revisión interna de esta versión documental.</DialogPrimitive.Description>
                   <DialogPrimitive.Close asChild>
                     <Button variant="ghost" size="icon" onClick={() => setSignatureDoc(null)}>
                       <X className="h-4 w-4" />

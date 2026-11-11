@@ -30,6 +30,46 @@ function pageCallers(path: string, names: string[], dependencies: Record<string,
   return new Function(...Object.keys(dependencies), `${javascript}\nreturn {${names.join(",")}}`)(...Object.values(dependencies))
 }
 const deferred = <T = void>() => { let resolve!: (value: T | PromiseLike<T>) => void; const promise = new Promise<T>((done) => { resolve = done }); return { promise, resolve } }
+
+test("actual BC autosave drops stale approval when a new declaration changes the reviewed content", () => {
+  const path = "app/beneficiario-controlador/page.tsx"
+  const source = ts.createSourceFile(path, readFileSync(path,"utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  let declaration = ""
+  const visit = (node: ts.Node) => {
+    if (ts.isVariableStatement(node)) for (const item of node.declarationList.declarations) {
+      if (ts.isIdentifier(item.name) && item.name.text === "data" && item.initializer && ts.isObjectLiteralExpression(item.initializer) && item.initializer.properties.some(property => property.name?.getText(source) === "folioCounter")) declaration = node.getText(source)
+    }
+    ts.forEachChild(node,visit)
+  }
+  visit(source); assert.ok(declaration)
+  const state = { preguntasState:[],documentos:[],trazabilidad:[],clientType:"pm",propertyChain:[],screeningResults:[],declaraciones:[{id:"old",folio:"BC-1",date:"2026-11-11",user:"Server actor"}],lastBCUpdate:null,folioCounter:2 }
+  const validation = {signature:beneficiaryReviewSignature({...state,preguntas:state.preguntasState}),validatedAt:"2026-11-11T00:00:00.000Z"}
+  const evaluate = (declarations: unknown[]) => {
+    const values = {...state,declaraciones:declarations,validation,currentReviewSignature:beneficiaryReviewSignature({...state,preguntas:state.preguntasState,declaraciones:declarations})}
+    const javascript = ts.transpileModule(declaration,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText
+    return new Function(...Object.keys(values), `${javascript}\nreturn data`)(...Object.values(values))
+  }
+  assert.deepEqual(evaluate(state.declaraciones).validation,validation)
+  assert.equal(evaluate([...state.declaraciones,{id:"new",folio:"BC-2",date:"2026-11-12"}]).validation,null,"a declaration after approval must save as unreviewed, not attempt a forged/stale approval")
+})
+
+test("actual BC canonical approval callback preserves React identity when the saved value did not change", () => {
+  const path = "app/beneficiario-controlador/page.tsx"
+  const source = ts.createSourceFile(path,readFileSync(path,"utf8"),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX)
+  let callback = ""
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && node.expression.getText(source) === "setValidation" && node.arguments[0] && ts.isArrowFunction(node.arguments[0]) && node.arguments[0].getText(source).includes("canonical.validation")) callback = node.arguments[0].getText(source)
+    ts.forEachChild(node,visit)
+  }
+  visit(source); assert.ok(callback)
+  const validation = {signature:"reviewed",validatedAt:"2026-11-11T00:00:00.000Z"}
+  const javascript = ts.transpileModule(`const callback = ${callback}`,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText
+  const reconcile = (canonical: unknown) => new Function("canonical","validation",`${javascript}\nreturn callback`)(canonical,validation)
+  assert.strictEqual(reconcile({validation:{...validation}})(validation),validation,"a parsed equal object must not trigger another autosave render")
+  assert.equal(reconcile({validation:null})(validation),null,"a server invalidation must reach the UI")
+  const newer = {...validation,signature:"new explicit approval"}
+  assert.strictEqual(reconcile({validation:null})(newer),newer,"an older completion must not undo a newer approval")
+})
 const a = { id: "caller-a", organizationId: "org", name: "A", rfc: "AAA010101AAA", status: "active" as const }, b = { ...a, id: "caller-b", name: "B" }
 const session: PilotSession = { user: { id: "qa", name: "QA", email: "qa@example.test", platformRole: "superadmin", status: "active", requiresPasswordChange: false, twoFactorEnabled: false }, organizations: [], companies: [a,b], memberships: [], grants: [], mfaRequired: false }
 const scopeDependencies = { captureModuleScope, assertModuleScope, isModuleScopeCurrent, getModuleStorage, flushModuleStorage }

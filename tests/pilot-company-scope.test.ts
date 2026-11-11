@@ -1,9 +1,67 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { configurePilotSession, captureModuleScope, assertModuleScope, isModuleScopeCurrent, flushModuleStorage, getModuleStorage, loadCompanyStorage, resetCompanyStorage, retryModuleStorage, uploadPilotFile } from "../lib/pilot/module-storage"
+import { configurePilotSession, captureModuleScope, assertModuleScope, isModuleScopeCurrent, flushModuleStorage, getModuleStorage, loadCompanyStorage, resetCompanyStorage, retryModuleStorage, uploadPilotFile, getActiveCompany, getPendingModuleChanges, getSaveState, canWriteModuleStorage, getCompanyRecordRevision } from "../lib/pilot/module-storage"
 import { type CloudRecord, type PilotSession } from "../lib/pilot/contracts"
 import { appendClientProfileDocument, readClientProfile } from "../lib/pld/client-module-profiles"
 import { beneficiaryReviewSignature } from "../lib/pld/beneficiary-review"
+
+test("401 then another principal without companies cannot read the previous user's snapshot", async () => {
+  const original=globalThis.fetch
+  globalThis.fetch=async()=>json({records:[{collection:"pld-training-module",id:"singleton",revision:1,payload:{privateNote:"ONLY USER A"}}]})
+  try{
+    configurePilotSession(session);await loadCompanyStorage(a)
+    assert.match(getModuleStorage().getItem("pld-training-module")!,/ONLY USER A/)
+    configurePilotSession(null)
+    const other={...session,user:{...session.user,id:"user-with-no-companies",name:"Other"},companies:[]}
+    configurePilotSession(other)
+    assert.equal(getModuleStorage().getItem("pld-training-module"),null,"A new scope must not grant access to a different principal's cached data")
+  }finally{globalThis.fetch=original;resetCompanyStorage()}
+})
+
+test("a different principal cannot export/replay quarantined pending changes; same-user reauthentication recovers them",async()=>{
+  const original=globalThis.fetch,started=deferred(),finish=deferred(),requests:string[]=[]
+  let firstBatch=true
+  globalThis.fetch=async(input,init)=>{
+    const path=String(input);requests.push(path)
+    if(path.endsWith("/snapshot"))return json({records:[]})
+    if(path.endsWith("/records/batch")){
+      if(firstBatch){firstBatch=false;started.resolve();await finish.promise;return json({error:"Session A expired"},401)}
+      return json({records:JSON.parse(String(init?.body)).mutations.map((item:any)=>({...item,revision:item.expectedRevision+1}))})
+    }
+    throw new Error(path)
+  }
+  try{
+    configurePilotSession(session);await loadCompanyStorage(a)
+    const origin=captureModuleScope()
+    origin.storage.setItem("pld-training-module",JSON.stringify({privateDraft:"UNSAVED FOR A ONLY"}))
+    const draining=flushModuleStorage()
+    await started.promise
+    configurePilotSession(null)
+    assert.throws(()=>getPendingModuleChanges(),/empresa o el acceso cambió/,"An anonymous session cannot export A's pending draft")
+    const other={...session,user:{...session.user,id:"different-user",name:"B"},companies:[]}
+    configurePilotSession(other)
+    assert.equal(getActiveCompany(),null)
+    assert.equal(getModuleStorage().getItem("pld-training-module"),null)
+    assert.deepEqual(getPendingModuleChanges().collections,{})
+    assert.equal(getCompanyRecordRevision("pld-training-module","singleton"),undefined)
+    assert.equal(canWriteModuleStorage("pld-training-module"),false)
+    assert.throws(()=>getModuleStorage().setItem("pld-training-module","{}"),/consulta/)
+    assert.throws(()=>origin.storage.getItem("pld-training-module"),/empresa o el acceso cambió/)
+    finish.resolve();await draining
+    assert.equal(getSaveState().status,"saved","A's delayed 401 completion cannot poison B's save state")
+    assert.deepEqual(getPendingModuleChanges().collections,{})
+    assert.equal(requests.filter((path)=>path.endsWith("/records/batch")).length,1,"Nothing from A is replayed while B is signed in")
+    configurePilotSession(session)
+    assert.equal(getActiveCompany()?.id,a.id)
+    assert.match(getModuleStorage().getItem("pld-training-module")!,/UNSAVED FOR A ONLY/)
+    assert.equal((getPendingModuleChanges().collections["pld-training-module"] as any).privateDraft,"UNSAVED FOR A ONLY")
+    await flushModuleStorage()
+    assert.equal(getSaveState().status,"saved");assert.deepEqual(getPendingModuleChanges().collections,{})
+    assert.equal(requests.filter((path)=>path.endsWith("/records/batch")).length,2)
+    assert.equal(requests.filter((path)=>path.endsWith("/records/batch")).every((path)=>path.includes(a.id)),true)
+    assert.throws(()=>origin.storage.setItem("pld-training-module","{}"),/empresa o el acceso cambió/,"Returning as A never revives A's old callbacks")
+  }finally{finish.resolve();configurePilotSession(session);await retryModuleStorage().catch(()=>undefined);globalThis.fetch=original;resetCompanyStorage()}
+})
 
 const deferred = <T = void>() => { let resolve!: (value: T | PromiseLike<T>) => void; const promise = new Promise<T>((done) => { resolve = done }); return { promise, resolve } }
 const a = { id: "company-a", organizationId: "org", name: "A", rfc: "AAA010101AAA", status: "active" as const }

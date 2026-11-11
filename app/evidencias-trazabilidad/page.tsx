@@ -134,7 +134,7 @@ const MODULES: EvidenceModule[] = [
       },
       {
         id: "comprobante-domicilio",
-        label: "Comprobante de domicilio &lt; 3 meses",
+        label: "Comprobante de domicilio < 3 meses",
         mandatory: true,
       },
       {

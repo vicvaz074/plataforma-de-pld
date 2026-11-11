@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { pilotApi, PilotApiError } from "@/lib/pilot/api"
 import { PATH_MODULES, sessionCan, type Company, type PilotSession } from "@/lib/pilot/contracts"
-import { configurePilotSession, dismissStorageNotices, flushModuleStorage, getPendingModuleChanges, getSaveState, loadCompanyStorage, resetCompanyStorage, retryModuleStorage, subscribeSaveState } from "@/lib/pilot/module-storage"
+import { configurePilotSession, dismissStorageNotices, flushModuleStorage, getPendingModuleChanges, getSaveState, getModuleStorageGeneration, loadCompanyStorage, resetCompanyStorage, retryModuleStorage, subscribeSaveState } from "@/lib/pilot/module-storage"
 import { ModuleActionGuard } from "./module-action-guard"
 
 interface PilotContextValue { mode: "cloud" | "demo"; session: PilotSession | null; company: Company | null; ready: boolean; refresh: () => Promise<void>; selectCompany: (company: Company) => Promise<void>; logout: () => Promise<void> }
@@ -26,17 +26,19 @@ export function PilotProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [error, setError] = useState("")
   const [switching, setSwitching] = useState(false)
-  const [generation, setGeneration] = useState(0)
+  const [generation, setGeneration] = useState<number | null>(null)
+  const [verifiedPathname, setVerifiedPathname] = useState<string | null>(null)
   const [resolveConflict, setResolveConflict] = useState(false)
   const [backedUp, setBackedUp] = useState(false)
   const refreshEpoch = useRef(0)
   const switchEpoch = useRef(0)
   const saveState = useSyncExternalStore(subscribeSaveState, getSaveState, () => savedServerState)
+  const storageGeneration = useSyncExternalStore(subscribeSaveState, getModuleStorageGeneration, () => null)
   const selectCompany = useCallback(async (next: Company) => {
     const epoch = ++switchEpoch.current
     setSwitching(true); setError("")
-    try { await loadCompanyStorage(next); setCompany(next); sessionStorage.setItem("pld-company-id", next.id); setGeneration((v) => v + 1) }
-    catch (reason) { if (reason instanceof DOMException && reason.name === "AbortError") return; throw reason }
+    try { await loadCompanyStorage(next); if (epoch !== switchEpoch.current) return; setCompany(next); sessionStorage.setItem("pld-company-id", next.id); setGeneration(getModuleStorageGeneration()) }
+    catch (reason) { if (reason instanceof DOMException && reason.name === "AbortError") return; if (epoch === switchEpoch.current) setGeneration(getModuleStorageGeneration()); throw reason }
     finally { if (epoch === switchEpoch.current) setSwitching(false) }
   }, [])
   const refresh = useCallback(async (reloadCompany = false) => {
@@ -46,14 +48,16 @@ export function PilotProvider({ children }: { children: ReactNode }) {
       const result = await pilotApi<PilotSession>("/session")
       if (epoch !== refreshEpoch.current) return
       configurePilotSession(result); setSession(result); setError("")
-      if (result.user.requiresPasswordChange) { setReady(true); if (pathname !== "/profile" && pathname !== "/login") router.replace("/profile"); return }
-      if (result.mfaRequired) { setReady(true); if (pathname !== "/profile" && pathname !== "/login") router.replace("/profile"); return }
+      if (result.user.requiresPasswordChange) { setReady(true); setVerifiedPathname(pathname); setGeneration(getModuleStorageGeneration()); if (pathname !== "/profile" && pathname !== "/login") router.replace("/profile"); return }
+      if (result.mfaRequired) { setReady(true); setVerifiedPathname(pathname); setGeneration(getModuleStorageGeneration()); if (pathname !== "/profile" && pathname !== "/login") router.replace("/profile"); return }
       const requestedId = company?.id || sessionStorage.getItem("pld-company-id")
       const inboxOrg = result.organizations.find((org) => requestedId === `inbox:${org.id}:${result.user.id}`)
       const current: Company | undefined = inboxOrg ? { id: requestedId!, organizationId: inboxOrg.id, name: `Expedientes sin asignar · ${inboxOrg.name}`, rfc: "", status: "active" } : result.companies.find((item) => item.id === requestedId) || result.companies.find((item) => item.status === "active")
       if (current && (!company || company.id !== current.id || reloadCompany)) await selectCompany(current)
-      else if (current) setCompany(current)
+      else if (current) { setCompany(current); setGeneration(getModuleStorageGeneration()) }
+      if (epoch !== refreshEpoch.current) return
       if (!current) setCompany(null)
+      setVerifiedPathname(pathname)
       setReady(true)
     } catch (reason) {
       if (epoch !== refreshEpoch.current) return
@@ -70,7 +74,7 @@ export function PilotProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (mode !== "cloud" || !hasSession) return
     // Revalidate revocation without replacing an in-progress form.
-    const timer = window.setInterval(() => { void pilotApi<PilotSession>("/session").then((result) => { configurePilotSession(result); setSession(result) }).catch((reason) => { if (reason instanceof PilotApiError && [401, 403].includes(reason.status)) { configurePilotSession(null); setSession(null); router.replace("/login") } }) }, 30_000)
+    const timer = window.setInterval(() => { void pilotApi<PilotSession>("/session").then((result) => { configurePilotSession(result); setSession(result); setGeneration(getModuleStorageGeneration()) }).catch((reason) => { if (reason instanceof PilotApiError && [401, 403].includes(reason.status)) { configurePilotSession(null); setSession(null); router.replace("/login") } }) }, 30_000)
     return () => window.clearInterval(timer)
   }, [mode, hasSession, router])
   useEffect(() => {
@@ -91,10 +95,14 @@ export function PilotProvider({ children }: { children: ReactNode }) {
   const isPublic = pathname === "/login" || pathname === "/setup"
   const credentialsPending = mode === "cloud" && session && (session.user.requiresPasswordChange || session.mfaRequired) && pathname !== "/profile" && !isPublic
   const needsCompany = mode === "cloud" && !company && Boolean(moduleKey)
+  // A route must be verified before its effects mount. The external generation
+  // also gates synchronous store notifications before React applies switching.
+  const moduleTransition = mode === "cloud" && !isPublic && (switching || verifiedPathname !== pathname || Boolean(company) && (storageGeneration === null || storageGeneration !== generation))
   const content = !ready && !isPublic ? <div role="status" className="flex min-h-[50vh] items-center justify-center gap-3"><Loader2 className="h-5 w-5 animate-spin" />Conectando…</div>
     : !isPublic && error ? <div role="alert" className="mx-auto max-w-xl rounded-2xl border border-red-200 bg-white p-6"><AlertCircle className="mb-3 text-red-600" /><h1 className="text-xl font-semibold">No se pudo abrir la plataforma</h1><p className="my-3 text-sm">{error}</p><Button onClick={() => void refresh()}>Reintentar</Button></div>
     : !isPublic && mode === "cloud" && !session ? <p className="p-8">Verificando acceso…</p>
     : credentialsPending ? <div className="p-8"><p>Actualiza tu acceso para continuar.</p><Button className="mt-3" onClick={() => router.replace("/profile")}>Abrir mi cuenta</Button></div>
+    : moduleTransition ? <div role="status" aria-live="polite" className="flex min-h-[50vh] items-center justify-center gap-3"><Loader2 className="h-5 w-5 animate-spin" />Abriendo empresa…</div>
     : blocked ? <div className="p-8"><h1 className="text-xl font-semibold">Acceso no asignado</h1><p className="mt-2 text-sm text-muted-foreground">Solicita acceso a este módulo al administrador de tu empresa.</p></div>
     : needsCompany ? <div className="mx-auto max-w-lg space-y-4 p-8"><Building2 className="h-8 w-8 text-orange-500" /><h1 className="text-xl font-semibold">Selecciona una empresa</h1><p className="text-sm text-muted-foreground">El administrador puede crear empresas y asignarte acceso desde el panel.</p><Button onClick={() => router.push("/dashboard")}>Ir al panel</Button></div>
     : <div key={mode === "cloud" ? `${company?.id || "account"}:${generation}` : "demo"}><ModuleActionGuard moduleKey={moduleKey} mode={mode} session={session} company={company}>{children}</ModuleActionGuard></div>
@@ -106,7 +114,7 @@ export function PilotProvider({ children }: { children: ReactNode }) {
     {content}
     {switching && <div role="status" aria-live="polite" className="fixed inset-0 z-[90] flex items-center justify-center bg-background/80 backdrop-blur-sm"><span className="flex items-center gap-3 rounded-2xl border bg-background p-5 shadow-sm"><Loader2 className="h-5 w-5 animate-spin" />Abriendo empresa…</span></div>}
     {mode === "cloud" && session && Boolean(saveState.warnings?.length) && <aside role="alert" className="fixed bottom-4 left-4 right-4 z-[80] mx-auto max-w-3xl rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 shadow-lg"><p className="font-semibold">Guardado con revisión pendiente</p>{saveState.warnings?.map((message) => <p key={message} className="mt-2">{message}</p>)}<div className="mt-3 flex gap-2"><Button size="sm" variant="outline" onClick={() => router.push("/actividades-vulnerables")}>Ver operaciones</Button><Button size="sm" variant="ghost" onClick={dismissStorageNotices}>Entendido</Button></div></aside>}
-    <Dialog open={resolveConflict} onOpenChange={setResolveConflict}><DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>Conservar o recargar cambios</DialogTitle><DialogDescription>Otra sesión puede haber modificado estos registros. No se sobrescribirá su versión. Puedes conservar tu trabajo aquí o descargarlo y abrir la versión actual del servidor.</DialogDescription></DialogHeader><p className="text-sm">Empresa: {company?.name} · {saveState.pending} colecciones pendientes.</p><Button variant="outline" onClick={() => { const blob = new Blob([JSON.stringify(getPendingModuleChanges(), null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "pld-cambios-pendientes.json"; link.click(); URL.revokeObjectURL(url); setBackedUp(true) }}>Descargar mis cambios pendientes</Button><p className="text-xs text-muted-foreground">El respaldo contiene datos de la empresa. Guárdalo en un lugar privado.</p><Button disabled={!backedUp || switching} onClick={async () => { if (!company) return; setSwitching(true); try { await loadCompanyStorage(company, { discardUnsaved: true }); setGeneration((value) => value + 1); setResolveConflict(false); setError("") } catch (reason) { setError(reason instanceof Error ? reason.message : "No se pudo recargar.") } finally { setSwitching(false) } }}>Abrir versión del servidor</Button><Button variant="ghost" onClick={() => setResolveConflict(false)}>Conservar mi trabajo sin recargar</Button></DialogContent></Dialog>
+    <Dialog open={resolveConflict} onOpenChange={setResolveConflict}><DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>Conservar o recargar cambios</DialogTitle><DialogDescription>Otra sesión puede haber modificado estos registros. No se sobrescribirá su versión. Puedes conservar tu trabajo aquí o descargarlo y abrir la versión actual del servidor.</DialogDescription></DialogHeader><p className="text-sm">Empresa: {company?.name} · {saveState.pending} colecciones pendientes.</p><Button variant="outline" onClick={() => { const blob = new Blob([JSON.stringify(getPendingModuleChanges(), null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = "pld-cambios-pendientes.json"; link.click(); URL.revokeObjectURL(url); setBackedUp(true) }}>Descargar mis cambios pendientes</Button><p className="text-xs text-muted-foreground">El respaldo contiene datos de la empresa. Guárdalo en un lugar privado.</p><Button disabled={!backedUp || switching} onClick={async () => { if (!company) return; setSwitching(true); try { await loadCompanyStorage(company, { discardUnsaved: true }); setGeneration(getModuleStorageGeneration()); setResolveConflict(false); setError("") } catch (reason) { setError(reason instanceof Error ? reason.message : "No se pudo recargar.") } finally { setSwitching(false) } }}>Abrir versión del servidor</Button><Button variant="ghost" onClick={() => setResolveConflict(false)}>Conservar mi trabajo sin recargar</Button></DialogContent></Dialog>
   </PilotContext.Provider>
 }
 
