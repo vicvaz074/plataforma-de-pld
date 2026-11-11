@@ -26,6 +26,8 @@ import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
 import { useLanguage } from "@/lib/LanguageContext"
 import { PLD_DASHBOARD_MODULES } from "@/lib/pld/navigation"
 import styles from "./home.module.css"
+import { usePilot } from "@/components/pilot/pilot-provider"
+import { PATH_MODULES, sessionCan } from "@/lib/pilot/contracts"
 
 const moduleIcons: Record<string, LucideIcon> = {
   FileCheck,
@@ -44,6 +46,7 @@ const moduleIcons: Record<string, LucideIcon> = {
 
 export default function Home() {
   const { language } = useLanguage()
+  const { mode, company, session } = usePilot()
   const [showWelcome, setShowWelcome] = useState(false)
 
   useEffect(() => {
@@ -96,7 +99,7 @@ export default function Home() {
       </h1>
 
       <div className={styles.grid}>
-        {PLD_DASHBOARD_MODULES.map((module) => {
+        {PLD_DASHBOARD_MODULES.filter((module) => mode === "demo" || !PATH_MODULES[module.href] || sessionCan(session, company, PATH_MODULES[module.href], "view")).map((module) => {
           const Icon = moduleIcons[module.iconName] ?? FileText
           const isAlicia = module.key === "alicia"
           return (
@@ -129,10 +132,10 @@ export default function Home() {
         })}
       </div>
 
-      <details className={styles.demoTools}>
+      {mode === "demo" && <details className={styles.demoTools}>
         <summary>Herramientas de datos demo</summary>
         <div className="mt-4"><PldDemoDataControls /></div>
-      </details>
+      </details>}
     </div>
   )
 }

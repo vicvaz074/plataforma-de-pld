@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { jsPDF } from "jspdf";
 import {
@@ -48,7 +49,7 @@ import { translations } from "@/lib/translations";
 import {
   BANK_OPTIONS, CASH_EXPOSURE_OPTIONS, INCOME_SOURCES, INSTITUTION_AGE_OPTIONS,
   NATIONALITY_OPTIONS, NGO_OPTIONS, PEP_OPTIONS, SUSPICIOUS_BEHAVIORS,
-  calculateRisk, initialAnswers, normalizeEbrAnswers,
+  calculateRisk, emptyEbrAnswers as initialAnswers, normalizeEbrAnswers,
   type CashExposure, type EvaluationAnswers, type IncomeSourceId, type ScoredResult,
 } from "@/lib/pld/ebr-questionnaire";
 import { loadStoredPldOperations, type StoredPldOperationV3 } from "@/lib/pld/stored-operations";
@@ -65,6 +66,14 @@ import {
 } from "@/lib/pld/integration-records";
 import { useToast } from "@/components/ui/use-toast";
 import { SearchableSelect } from "@/components/pld/searchable-select";
+import { RiskReviewPlan } from "@/components/pld/risk-review-plan";
+import { RiskEvidencePicker } from "@/components/pld/risk-evidence-picker";
+import { EBR_METHODOLOGY, EMPTY_TRANSACTIONAL_PROFILE, EMPTY_EBR_REVIEW_PLAN, EMPTY_INSTITUTIONAL_FACTORS, INSTITUTIONAL_LABELS, evaluateInstitutionalRisk, consolidateEbrResults, evaluateTransactionalProfile,getEbrReviewPlanMissing, reviseEbrControl, transitionEbrAssessment,transitionInstitutionalAssessment,
+  type EbrAssessmentHistory, type EbrControlReview, type EbrSourceSnapshot, type EbrWorkflowStatus, type EbrReviewPlan, type TransactionalProfile, type InstitutionalFactor } from "@/lib/pld/ebr-assessment";
+import { parseMoneyToCents, centsToDecimalString } from "@/lib/pld/money";
+import { getModuleStorage, flushModuleStorage, getPilotSession, getActiveCompany, canWriteModuleStorage } from "@/lib/pilot/module-storage";
+import { sessionCan } from "@/lib/pilot/contracts";
+const RiskResults = dynamic(() => import("@/components/pld/risk-results").then((module) => module.RiskResults), { ssr: false });
 
 type ExpedienteDetalle = IntegrationClient;
 type OperacionCliente = StoredPldOperationV3;
@@ -85,6 +94,17 @@ interface StoredEvaluation {
   pepScreening?: PepScreeningResult;
   notes: string;
   updatedAt: string;
+  revision?: number;
+  workflow?: { status: EbrWorkflowStatus; methodologyVersion: string; approvedBy?: string; approvedAt?: string };
+  history?: EbrAssessmentHistory[];
+  transactionalProfile?: TransactionalProfile;
+  controls?: EbrControlReview[];
+  sources?: EbrSourceSnapshot[];
+  methodologyAccepted?: boolean;
+  pepWhoisSnapshot?: PepSearchResponse;
+  institutionalFactors?: InstitutionalFactor[];
+  reviewPlan?:EbrReviewPlan;
+  archivedAt?:string;
 }
 
 
@@ -266,6 +286,7 @@ export default function EbrPage() {
   const [pepWhoisHistory, setPepWhoisHistory] = useState<PepSearchResponse[]>([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState("");
   const loadedEvaluationRef = useRef("");
+  const loadedInstitutionRef = useRef("");
 
   const [clientAnswers, setClientAnswers] =
     useState<EvaluationAnswers>(initialAnswers);
@@ -278,13 +299,28 @@ export default function EbrPage() {
   const [pepCargo, setPepCargo] = useState("");
   const [pepDependencia, setPepDependencia] = useState("");
   const [notes, setNotes] = useState("");
+  const [transactionalProfile, setTransactionalProfile] = useState<TransactionalProfile>(EMPTY_TRANSACTIONAL_PROFILE);
+  const [reviewPlan,setReviewPlan]=useState<EbrReviewPlan>(EMPTY_EBR_REVIEW_PLAN);
+  const [methodologyAccepted, setMethodologyAccepted] = useState(false);
+  const [sources, setSources] = useState<EbrSourceSnapshot[]>([]);
+  const [sourceNote, setSourceNote] = useState("");
+  const [controls, setControls] = useState<EbrControlReview[]>([]);
+  const [institutionalFactors,setInstitutionalFactors]=useState<InstitutionalFactor[]>(EMPTY_INSTITUTIONAL_FACTORS);
+  const [institutionalStored,setInstitutionalStored]=useState<Partial<ReturnType<typeof transitionInstitutionalAssessment>>>({});
+  const [institutionalReviewPlan,setInstitutionalReviewPlan]=useState<EbrReviewPlan>(EMPTY_EBR_REVIEW_PLAN);
+  const [institutionalSources,setInstitutionalSources]=useState<EbrSourceSnapshot[]>([]);
+  const [institutionalSourceNote,setInstitutionalSourceNote]=useState("");
+  const [institutionalMethodologyAccepted,setInstitutionalMethodologyAccepted]=useState(false);
+  const [storageValid,setStorageValid]=useState(true);
+  const institutionalRisk=useMemo(()=>evaluateInstitutionalRisk(institutionalFactors,controls),[institutionalFactors,controls]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const load = () => {
+    setStorageValid(true);
     try {
       setExpedientes(
-        readExpedienteRecords(window.localStorage).map(getIntegrationClient).filter((item): item is IntegrationClient => Boolean(item)),
+        readExpedienteRecords(getModuleStorage()).map(getIntegrationClient).filter((item): item is IntegrationClient => Boolean(item)),
       );
     } catch (_error) {
       setExpedientes([]);
@@ -292,7 +328,7 @@ export default function EbrPage() {
 
     try {
       setOperaciones(
-        loadStoredPldOperations(window.localStorage, { persistMigration: false }).operations
+        loadStoredPldOperations(getModuleStorage(), { persistMigration: false }).operations
           .filter((item) => item.lifecycle.status === "active" && item.captureStatus !== "draft"),
       );
     } catch (_error) {
@@ -300,15 +336,20 @@ export default function EbrPage() {
     }
 
     try {
-      const raw = window.localStorage.getItem(EBR_STORAGE_KEY);
+      const raw = getModuleStorage().getItem(EBR_STORAGE_KEY);
       const evaluations = normalizeEbrEvaluations(raw ? JSON.parse(raw) : {});
       setEvaluacionesGuardadas(Object.fromEntries(evaluations.sort((a, b) => a.updatedAt.localeCompare(b.updatedAt)).map((item) => [item.clientId, item as StoredEvaluation])));
     } catch (_error) {
       setEvaluacionesGuardadas({});
+      setStorageValid(false);
     }
+    try{
+      const raw=getModuleStorage().getItem("ebr-institutional-assessment");
+      if(raw&&raw!==loadedInstitutionRef.current){const saved=JSON.parse(raw);if(!saved||typeof saved!=="object"||Array.isArray(saved))throw new Error("Formato institucional inválido");loadedInstitutionRef.current=raw;setInstitutionalStored(saved);setInstitutionalFactors(saved.institutionalFactors??EMPTY_INSTITUTIONAL_FACTORS);setControls(saved.controls??[]);setInstitutionalReviewPlan(saved.reviewPlan??EMPTY_EBR_REVIEW_PLAN);setInstitutionalSources(saved.sources??[]);setInstitutionalMethodologyAccepted(saved.methodologyAccepted===true);}
+    }catch{setStorageValid(false);}
 
     try {
-      const raw = window.localStorage.getItem(PEP_SEARCH_HISTORY_STORAGE_KEY);
+      const raw = getModuleStorage().getItem(PEP_SEARCH_HISTORY_STORAGE_KEY);
       const parsed = raw ? (JSON.parse(raw) as PepSearchResponse[]) : [];
       setPepWhoisHistory(Array.isArray(parsed) ? parsed : []);
     } catch (_error) {
@@ -329,7 +370,10 @@ export default function EbrPage() {
 
   const clientesDisponibles = useMemo(() => buildIntegrationClients(expedientes, operaciones), [expedientes, operaciones]);
   const clienteActual = useMemo(() => clientesDisponibles.find((item) => item.id === clienteSeleccionado) ?? null, [clientesDisponibles, clienteSeleccionado]);
-  const savedEvaluation = useMemo(() => findClientEbrEvaluation(Object.values(evaluacionesGuardadas), clienteActual) as StoredEvaluation | null, [evaluacionesGuardadas, clienteActual]);
+  const identifierAmbiguous=Boolean(clienteActual?.identifier&&clientesDisponibles.filter((item)=>item.identifier===clienteActual.identifier).length>1);
+  const savedEvaluation = useMemo(() => findClientEbrEvaluation(Object.values(evaluacionesGuardadas), clienteActual,{allowLegacyIdentifierMatch:Boolean(clienteActual?.identifier&&!identifierAmbiguous)}) as StoredEvaluation | null, [evaluacionesGuardadas, clienteActual,identifierAmbiguous]);
+  const changedSinceSaved=Boolean(savedEvaluation&&JSON.stringify({clientAnswers,subjectAnswers,hasBeneficiaryController,beneficiaryAnswers,transactionalProfile,reviewPlan,controls,institutionalFactors,sources,notes,methodologyAccepted})!==JSON.stringify({clientAnswers:savedEvaluation.clientAnswers,subjectAnswers:savedEvaluation.subjectAnswers,hasBeneficiaryController:savedEvaluation.hasBeneficiaryController,beneficiaryAnswers:savedEvaluation.beneficiaryAnswers,transactionalProfile:savedEvaluation.transactionalProfile,reviewPlan:savedEvaluation.reviewPlan??EMPTY_EBR_REVIEW_PLAN,controls:savedEvaluation.controls,institutionalFactors:savedEvaluation.institutionalFactors,sources:savedEvaluation.sources,notes:savedEvaluation.notes,methodologyAccepted:savedEvaluation.methodologyAccepted}));
+  const historicalReviewPending=savedEvaluation?.workflow?.status==="approved"&&(!reviewPlan.nextReviewAt||!institutionalReviewPlan.nextReviewAt||reviewPlan.nextReviewAt<=new Date().toISOString().slice(0,10)||institutionalReviewPlan.nextReviewAt<=new Date().toISOString().slice(0,10));
 
   useEffect(() => {
     if (clientesDisponibles.some((item) => item.id === clienteSeleccionado)) return;
@@ -350,6 +394,7 @@ export default function EbrPage() {
       setPepCargo("");
       setPepDependencia("");
       setNotes("");
+      setTransactionalProfile(EMPTY_TRANSACTIONAL_PROFILE); setReviewPlan(EMPTY_EBR_REVIEW_PLAN); setMethodologyAccepted(false); setSources([]);
       return;
     }
 
@@ -360,6 +405,10 @@ export default function EbrPage() {
     setPepCargo(stored.pepCargo ?? "");
     setPepDependencia(stored.pepDependencia ?? "");
     setNotes(stored.notes);
+    setTransactionalProfile(stored.transactionalProfile ?? EMPTY_TRANSACTIONAL_PROFILE);
+    setReviewPlan(stored.reviewPlan??EMPTY_EBR_REVIEW_PLAN);
+    setMethodologyAccepted(stored.methodologyAccepted === true);
+    setSources(stored.sources ?? []);
   }, [clienteSeleccionado, savedEvaluation]);
 
   const expedienteActual = useMemo(
@@ -402,28 +451,21 @@ export default function EbrPage() {
     const expedienteNombre = normalizeName(expedienteActual?.nombre);
     if (!expedienteNombre) return null;
     return (
-      pepWhoisHistory.find((item) => normalizeName(item.query.nombre) === expedienteNombre) ??
+      pepWhoisHistory.find((item) => (item as PepSearchResponse & { expedienteId?: string }).expedienteId === clienteSeleccionado) ??
       null
     );
-  }, [expedienteActual?.nombre, pepWhoisHistory]);
+  }, [expedienteActual?.nombre, pepWhoisHistory, clienteSeleccionado]);
 
   const finalLevel = useMemo(() => {
-    if (pepWhoisActual?.status === "coincidencia_alta" || pepWhoisActual?.status === "requiere_revision") return "Reforzado";
-    if (pepWhoisActual?.status === "posible_coincidencia") return "Alto";
-    if (pepScreening?.status === "coincidencia-cargo") return "Reforzado";
-    if (pepScreening?.status === "posible-pep") return "Alto";
-    const levels = [
-      clientResult.level,
-      subjectResult.level,
-      beneficiaryResult?.level,
-    ].filter(Boolean) as ScoredResult["level"][];
-    if (levels.includes("Reforzado")) return "Reforzado";
-    if (levels.includes("Alto")) return "Alto";
-    if (levels.includes("Medio")) return "Medio";
-    return "Bajo";
-  }, [clientResult.level, subjectResult.level, beneficiaryResult?.level, pepScreening?.status, pepWhoisActual?.status]);
+    const today=new Date().toISOString();
+    if (!clienteActual || !evaluateTransactionalProfile(transactionalProfile,[]).complete || !institutionalRisk.complete || !methodologyAccepted || !institutionalMethodologyAccepted || !sources.length || !institutionalSources.length || getEbrReviewPlanMissing(reviewPlan,today).length || getEbrReviewPlanMissing(institutionalReviewPlan,today).length) return "Pendiente";
+    return consolidateEbrResults([clientResult, subjectResult, beneficiaryResult], pepWhoisActual?.status || pepScreening?.status);
+  }, [clienteActual, clientResult, subjectResult, beneficiaryResult, pepScreening?.status, pepWhoisActual?.status,transactionalProfile,institutionalRisk.complete,methodologyAccepted,institutionalMethodologyAccepted,sources.length,institutionalSources.length,reviewPlan,institutionalReviewPlan]);
+  const isCurrentApproved=savedEvaluation?.workflow?.status==="approved"&&!changedSinceSaved&&finalLevel!=="Pendiente";
+  const displayedStatus=changedSinceSaved?"cambios sin aprobar":historicalReviewPending||savedEvaluation?.workflow?.status==="approved"&&finalLevel==="Pendiente"?"aprobación histórica; revisión actual pendiente":({draft:"borrador",review:"en revisión",approved:"aprobada"}[savedEvaluation?.workflow?.status as EbrWorkflowStatus]||"borrador");
 
   const riskBadgeStyles = {
+    Pendiente: "bg-slate-100 text-slate-700",
     Bajo: "bg-emerald-100 text-emerald-700",
     Medio: "bg-amber-100 text-amber-700",
     Alto: "bg-orange-100 text-orange-700",
@@ -440,12 +482,22 @@ export default function EbrPage() {
     else onChange([...current, value]);
   };
 
-  const saveEvaluation = () => {
+  const saveEvaluation = async (status: EbrWorkflowStatus = "draft") => {
     if (!clienteActual || typeof window === "undefined") return;
+    if (!storageValid) {toast({title:"Datos por recuperar",description:"No se sobrescribió la evaluación ilegible. Revisa el respaldo o recarga desde el servidor.",variant:"destructive"});return;}
+    if (!canWriteModuleStorage(EBR_STORAGE_KEY)) {toast({title:"Acceso de consulta",description:"Tu perfil no permite modificar evaluaciones.",variant:"destructive"});return;}
+    try {
+    const session = getPilotSession();
+    const actor = session?.user.name || getModuleStorage().getItem("userName") || "Usuario local";
+    const company = getActiveCompany();
+    const canApprove = sessionCan(session, company, "ebr", "approve");
+    const workflow = transitionEbrAssessment({ status, actor, at: new Date().toISOString(), canApprove, clientAnswers, subjectAnswers,
+      beneficiaryAnswers: hasBeneficiaryController ? beneficiaryAnswers : undefined, transactionalProfile, controls, methodologyAccepted,
+      sources, institutionalFactors, reviewPlan, previous: savedEvaluation ?? undefined, pepStatus: pepWhoisActual?.status || pepScreening?.status });
     const updated: StoredEvaluation = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       rfc: clienteActual.rfc,
-      riskSummary: { level: finalLevel, score: clientResult.total, percent: clientResult.percent },
+      ...workflow,
       clientAnswers,
       subjectAnswers,
       hasBeneficiaryController,
@@ -455,21 +507,41 @@ export default function EbrPage() {
       pepScreening: pepScreening ?? undefined,
       notes,
       updatedAt: new Date().toISOString(),
+      transactionalProfile, reviewPlan, controls, sources, methodologyAccepted, institutionalFactors,
+      pepWhoisSnapshot: pepWhoisActual ?? undefined,
     };
-    try {
-      const next = saveClientEbrEvaluation(window.localStorage, clienteActual, updated);
+      const institutionRecord={id:company?.id||"institution",...transitionInstitutionalAssessment({status,canApprove,actor,at:updated.updatedAt,institutionalFactors,controls,sources:institutionalSources,methodologyAccepted:institutionalMethodologyAccepted,reviewPlan:institutionalReviewPlan,previous:institutionalStored})};
+      const next = saveClientEbrEvaluation(getModuleStorage(), clienteActual, updated);
+      getModuleStorage().setItem("ebr-institutional-assessment",JSON.stringify(institutionRecord));
+      await flushModuleStorage();
+      setInstitutionalStored(institutionRecord);
       setEvaluacionesGuardadas(next as Record<string, StoredEvaluation>);
-      toast({ title: "Evaluación guardada", description: "El resultado está disponible en Avisos e informes." });
+      toast({ title: status === "approved" ? "Evaluación aprobada" : status === "review" ? "Enviada a revisión" : "Borrador guardado", description: "Se conserva la versión y sus fuentes." });
     } catch (error) {
       toast({ title: "No se pudo guardar", description: error instanceof Error ? error.message : "Revisa el almacenamiento local.", variant: "destructive" });
     }
   };
 
-  const deleteEvaluation = () => {
+  const saveInstitutionalEvaluation=async(status:EbrWorkflowStatus)=>{
+    if(!storageValid||!canWriteModuleStorage("ebr-institutional-assessment"))return;
+    try{
+      const session=getPilotSession(),company=getActiveCompany();
+      const record={id:company?.id||"institution",...transitionInstitutionalAssessment({status,actor:session?.user.id||"Usuario local",at:new Date().toISOString(),canApprove:sessionCan(session,company,"ebr","approve"),institutionalFactors,controls,sources:institutionalSources,methodologyAccepted:institutionalMethodologyAccepted,reviewPlan:institutionalReviewPlan,previous:institutionalStored})};
+      getModuleStorage().setItem("ebr-institutional-assessment",JSON.stringify(record));
+      await flushModuleStorage();setInstitutionalStored(record);
+      toast({title:status==="approved"?"EBR institucional aprobada":"Borrador institucional guardado",description:"Se conservó por empresa, independientemente de sus clientes."});
+    }catch(error){toast({title:"No se pudo guardar",description:error instanceof Error?error.message:"Revisa la evaluación institucional.",variant:"destructive"});}
+  };
+
+  const deleteEvaluation = async () => {
     if (!clienteActual || typeof window === "undefined") return;
+    if (!sessionCan(getPilotSession(),getActiveCompany(),"ebr","archive")) return;
     try {
-      const next = saveClientEbrEvaluation(window.localStorage, clienteActual, null);
+      if(!savedEvaluation)return;
+      const next = saveClientEbrEvaluation(getModuleStorage(), clienteActual, {...savedEvaluation,archivedAt:new Date().toISOString(),archivedBy:getPilotSession()?.user.id,riskSummary:undefined});
+      await flushModuleStorage();
       setEvaluacionesGuardadas(next as Record<string, StoredEvaluation>);
+      toast({title:"Evaluación archivada",description:"El historial permanece disponible en el registro."});
     } catch (error) {
       toast({ title: "No se pudo eliminar", description: error instanceof Error ? error.message : "Revisa el almacenamiento local.", variant: "destructive" });
       return;
@@ -520,7 +592,8 @@ export default function EbrPage() {
 
     y = 90;
     doc.setTextColor(31, 41, 55);
-    addLine(`Resumen ejecutivo: Riesgo final ${finalLevel}.`);
+    addLine(`Resumen ejecutivo: ${isCurrentApproved?"Riesgo aprobado":"Resultado preliminar"} ${finalLevel}.`);
+    addLine(`Estado: ${displayedStatus}. Metodología: ${EBR_METHODOLOGY.id}. No representa una probabilidad de lavado.`);
     addLine(
       `Cliente: ${clientResult.level} (${clientResult.percent}%). Regla: ${clientResult.reason}.`,
     );
@@ -560,6 +633,24 @@ export default function EbrPage() {
 
     addLine("\nObservaciones", 12);
     addLine(notes || "Sin observaciones");
+    addLine("\nGráfica de factores del cliente (misma escala de la pantalla)", 12);
+    if (clientResult.complete) for (const factor of clientResult.details) {
+      addLine(`${factor.question}: ${factor.score}/${factor.maximum}`, 9);
+      if (y > pageHeight - 60) { doc.addPage(); y = 54; }
+      doc.setFillColor(217, 119, 6); doc.rect(margin, y, contentWidth * factor.score / factor.maximum, 7, "F"); y += 23;
+    }
+    addLine("\nFuentes y evidencia", 12);
+    addLine(`Riesgo institucional inherente: ${institutionalRisk.inherentScore??"Pendiente"}/3 (${institutionalRisk.inherentLevel}). Residual: ${institutionalRisk.residualScore??"Pendiente"}/3 (${institutionalRisk.residualLevel}).`);
+    for(const item of [{label:"Inherente",percent:institutionalRisk.inherentPercent},{label:"Residual",percent:institutionalRisk.residualPercent}]){if(item.percent===null)continue;addLine(`${item.label}: ${item.percent}% del máximo`,9);if(y>pageHeight-60){doc.addPage();y=54;}doc.setFillColor(15,118,110);doc.rect(margin,y,contentWidth*item.percent/100,7,"F");y+=23;}
+    institutionalFactors.forEach((factor)=>addLine(`${INSTITUTIONAL_LABELS[factor.key]}: ${factor.score??"Pendiente"}/3. ${factor.rationale}. Evidencia: ${factor.evidenceId||"Pendiente"}`,9));
+    sources.forEach((source) => addLine(`${source.consultedAt}: ${source.label} ${source.result || ""}`, 9));
+    addLine("\nPlan de revisión del cliente",12);
+    addLine(`Próxima revisión definida por la empresa: ${reviewPlan.nextReviewAt||"Pendiente"}.`,9);
+    reviewPlan.actions.forEach((action)=>addLine(`${action.title}. Responsable: ${action.ownerId||"Pendiente"}. Fecha: ${action.dueAt||"Pendiente"}. ${action.status==="completed"?"Cerrada":"Abierta"}. Evidencia: ${action.evidenceId||"Sin referencia"}.`,9));
+    addLine("\nPlan de revisión institucional",12);
+    addLine(`Próxima revisión definida por la empresa: ${institutionalReviewPlan.nextReviewAt||"Pendiente"}.`,9);
+    institutionalReviewPlan.actions.forEach((action)=>addLine(`${action.title}. Responsable: ${action.ownerId||"Pendiente"}. Fecha: ${action.dueAt||"Pendiente"}. ${action.status==="completed"?"Cerrada":"Abierta"}. Evidencia: ${action.evidenceId||"Sin referencia"}.`,9));
+    institutionalSources.forEach((source)=>addLine(`Fuente institucional ${source.consultedAt}: ${source.label}`,9));
     doc.save(`ebr-${clienteSeleccionado || "cliente"}.pdf`);
   };
 
@@ -586,55 +677,28 @@ export default function EbrPage() {
               Ver expediente
             </Link>
           </Button>
-          <Button onClick={saveEvaluation}>
+          <Button onClick={() => saveEvaluation("draft")} disabled={!clienteActual || !canWriteModuleStorage(EBR_STORAGE_KEY)}>
             <ClipboardCheck className="mr-2 h-4 w-4" />
-            {savedEvaluation ? "Actualizar evaluación" : "Guardar evaluación"}
+            Guardar borrador
           </Button>
+          <Button variant="outline" onClick={() => saveEvaluation("review")} disabled={!clienteActual || finalLevel === "Pendiente" || !canWriteModuleStorage(EBR_STORAGE_KEY)}>Enviar a revisión</Button>
+          <Button onClick={() => saveEvaluation("approved")} disabled={!clienteActual || !canWriteModuleStorage(EBR_STORAGE_KEY) || !sessionCan(getPilotSession(), getActiveCompany(), "ebr", "approve")}>Aprobar</Button>
           <Button
             variant="destructive"
             onClick={deleteEvaluation}
-            disabled={!savedEvaluation}
+            disabled={!savedEvaluation || !sessionCan(getPilotSession(),getActiveCompany(),"ebr","archive")}
           >
-            Borrar evaluación
+            Archivar evaluación
           </Button>
         </div>
       </div>
 
-      <Card className="border-blue-100 bg-blue-50/40">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-blue-900">
-            <CircleHelp className="h-5 w-5" />
-            Metodología y reglas automáticas
-          </CardTitle>
-          <CardDescription className="text-blue-800">
-            Si hay 1 respuesta de 4 puntos =&gt; Alto. Si hay 2 o más respuestas
-            de 4 puntos =&gt; Reforzado.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-sm text-blue-900 space-y-1">
-          <p>1) Contesta cuestionario de Cliente.</p>
-          <p>2) Contesta cuestionario de Sujeto Obligado.</p>
-          <p>
-            3) Si existe Beneficiario Controlador, activa su sección y completa
-            preguntas 1,2,5,6,7,8.
-          </p>
-          <p>
-            4) El reporte integra los tres perfiles con conclusión consolidada.
-          </p>
-          <a
-            href="https://www.gob.mx/cms/uploads/attachment/file/1035629/Listas_de_reg_menes_fiscales_preferentes.pdf"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-block pt-1 underline"
-          >
-            Referencia SAT: regímenes fiscales preferentes
-          </a>
-        </CardContent>
-      </Card>
+      <details className="rounded-xl border bg-slate-50 p-4 text-sm"><summary className="cursor-pointer font-medium">Metodología y fuentes</summary><div className="mt-3 space-y-2"><p>{EBR_METHODOLOGY.note}</p><a className="underline" href={EBR_METHODOLOGY.source} target="_blank" rel="noreferrer">Acuerdo 115/2026 · consulta {EBR_METHODOLOGY.reviewedAt}</a><p>La clasificación se mantiene pendiente hasta completar las respuestas. La aprobación conserva sus datos y fuentes; modificar respuestas crea otra revisión.</p></div></details>
 
       <Card>
         <CardHeader>
           <CardTitle>Conexión con expediente y operaciones</CardTitle>
+          {identifierAmbiguous&&<p role="status" className="mt-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Varios clientes comparten este identificador. Las evaluaciones y operaciones se vinculan únicamente por su ID estable; un registro histórico sin vínculo requiere asignación manual y no se reutilizará automáticamente.</p>}
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
@@ -675,11 +739,11 @@ export default function EbrPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardDescription>Riesgo final consolidado</CardDescription>
+            <CardDescription>{isCurrentApproved?"Riesgo aprobado del cliente":"Resultado preliminar · sin aprobación"}</CardDescription>
             <CardTitle className="flex items-center gap-2 text-2xl">
               {finalLevel}
               <Badge className={riskBadgeStyles[finalLevel]}>
-                {Math.max(clientResult.percent, subjectResult.percent)}%
+                {finalLevel === "Pendiente" ? 0 : Math.max(clientResult.percent, subjectResult.percent, beneficiaryResult?.percent || 0)}%
               </Badge>
             </CardTitle>
           </CardHeader>
@@ -691,7 +755,7 @@ export default function EbrPage() {
           <CardHeader className="pb-3">
             <CardDescription>Cliente</CardDescription>
             <CardTitle className="text-2xl">
-              {clientResult.total}/{clientResult.max}
+              {clientResult.complete ? `${clientResult.total}/${clientResult.max}` : "Sin evaluar"}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -702,7 +766,7 @@ export default function EbrPage() {
           <CardHeader className="pb-3">
             <CardDescription>Sujeto obligado</CardDescription>
             <CardTitle className="text-2xl">
-              {subjectResult.total}/{subjectResult.max}
+              {subjectResult.complete ? `${subjectResult.total}/${subjectResult.max}` : "Sin evaluar"}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -725,6 +789,56 @@ export default function EbrPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle>Perfil transaccional y revisión</CardTitle><CardDescription>Lo esperado y lo observado se conservan en cada revisión.</CardDescription></CardHeader>
+        <CardContent className="space-y-5">
+          {!storageValid&&<p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">Hay datos EBR ilegibles. Se bloquearon los guardados para conservar el registro original.</p>}
+          <details className="rounded-xl border p-4" open>
+            <summary className="cursor-pointer text-sm font-medium">Evaluación institucional de la empresa</summary>
+            <p className="mt-2 text-xs text-muted-foreground">Pesos de la metodología interna: clientes 30%, productos 30%, canales 20%, geografía 20%. Documenta el juicio y vincula una versión recuperable de evidencia de esta empresa.</p>
+            <div className="mt-3 space-y-3">{institutionalFactors.map((factor,index)=><div key={factor.key} className="grid gap-2 rounded-lg border p-3 md:grid-cols-3">
+              <div><Label>{INSTITUTIONAL_LABELS[factor.key]}</Label><Select value={factor.score===null?"unknown":String(factor.score)} onValueChange={(value)=>setInstitutionalFactors((prev)=>prev.map((item,i)=>i===index?{...item,score:value==="unknown"?null:Number(value) as 1|2|3}:item))}><SelectTrigger aria-label={`Riesgo ${INSTITUTIONAL_LABELS[factor.key]}`}><SelectValue/></SelectTrigger><SelectContent><SelectItem value="unknown">Sin evaluar</SelectItem><SelectItem value="1">Bajo · 1</SelectItem><SelectItem value="2">Medio · 2</SelectItem><SelectItem value="3">Alto · 3</SelectItem></SelectContent></Select></div>
+              <Input aria-label={`Fundamento ${INSTITUTIONAL_LABELS[factor.key]}`} placeholder="Juicio y factores observados" value={factor.rationale} onChange={(event)=>setInstitutionalFactors((prev)=>prev.map((item,i)=>i===index?{...item,rationale:event.target.value}:item))}/>
+              <RiskEvidencePicker label={`Evidencia ${INSTITUTIONAL_LABELS[factor.key]}`} value={factor.evidence} legacyReference={factor.evidenceId} onChange={(evidence)=>setInstitutionalFactors((old)=>old.map((item,i)=>i===index?{...item,evidence,evidenceId:evidence.fileVersionId}:item))}/>
+            </div>)}</div>
+            <p className="mt-3 text-sm">Inherente: {institutionalRisk.inherentLevel} · Residual: {institutionalRisk.residualLevel}</p>
+          </details>
+          <RiskReviewPlan value={institutionalReviewPlan} onChange={setInstitutionalReviewPlan} scope="institucional"/>
+          <div className="space-y-2"><Label htmlFor="ebr-institutional-source">Fuente institucional o manual adoptado</Label><div className="flex gap-2"><Input id="ebr-institutional-source" value={institutionalSourceNote} onChange={(event)=>setInstitutionalSourceNote(event.target.value)} placeholder="Documento, versión y revisión"/><Button variant="outline" type="button" disabled={!institutionalSourceNote.trim()} onClick={()=>{setInstitutionalSources((old)=>[...old,{id:crypto.randomUUID(),label:institutionalSourceNote.trim(),consultedAt:new Date().toISOString()}]);setInstitutionalSourceNote("");}}>Añadir fuente institucional</Button></div><ul className="text-xs text-muted-foreground">{institutionalSources.map((source)=><li key={source.id}>{source.label} · {formatDate(source.consultedAt)}</li>)}</ul></div>
+          <label className="flex items-start gap-2 text-sm"><Checkbox checked={institutionalMethodologyAccepted} onCheckedChange={(value)=>setInstitutionalMethodologyAccepted(value===true)}/><span>La empresa adoptó esta metodología institucional y documentó su versión en el manual.</span></label>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" disabled={!canWriteModuleStorage("ebr-institutional-assessment")} onClick={()=>saveInstitutionalEvaluation("draft")}>Guardar borrador institucional</Button>
+            <Button variant="outline" disabled={!canWriteModuleStorage("ebr-institutional-assessment")||!sessionCan(getPilotSession(),getActiveCompany(),"ebr","approve")} onClick={()=>saveInstitutionalEvaluation("approved")}>Aprobar institucional</Button>
+            <span className="text-xs text-muted-foreground">Revisión institucional {institutionalStored.revision||0} · {institutionalStored.workflow?.status==="approved"?"aprobada (modificar requiere nueva revisión)":institutionalStored.workflow?.status==="review"?"en revisión":"borrador"}</span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-2"><Label htmlFor="ebr-expected-amount">Monto mensual esperado (MXN)</Label><Input id="ebr-expected-amount" inputMode="decimal" placeholder="0.00" value={transactionalProfile.expectedMonthlyAmountCents === null ? "" : centsToDecimalString(transactionalProfile.expectedMonthlyAmountCents)} onChange={(event) => { const parsed = parseMoneyToCents(event.target.value, {allowZero:true}); setTransactionalProfile((prev) => ({...prev, expectedMonthlyAmountCents:parsed.ok ? parsed.cents : null})); }}/></div>
+            <div className="space-y-2"><Label htmlFor="ebr-expected-count">Operaciones al mes</Label><Input id="ebr-expected-count" inputMode="numeric" value={transactionalProfile.expectedMonthlyCount ?? ""} onChange={(event) => setTransactionalProfile((prev) => ({...prev, expectedMonthlyCount:/^\d+$/.test(event.target.value) ? Number(event.target.value) : null}))}/></div>
+            {([{key:"originOfFunds",label:"Origen de recursos"},{key:"destinationOfFunds",label:"Destino de recursos"},{key:"channels",label:"Canales"},{key:"instrument",label:"Instrumentos monetarios"}] as const).map((item) => <div className="space-y-2" key={item.key}><Label htmlFor={`ebr-${item.key}`}>{item.label}</Label><Input id={`ebr-${item.key}`} value={transactionalProfile[item.key]} onChange={(event) => setTransactionalProfile((prev) => ({...prev,[item.key]:event.target.value}))}/></div>)}
+          </div>
+          {evaluateTransactionalProfile(transactionalProfile, operacionesCliente).alerts.length > 0 && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Hay {evaluateTransactionalProfile(transactionalProfile, operacionesCliente).alerts.length} periodo(s) por encima del perfil declarado. Documenta su análisis; esta señal no sustituye el cálculo del aviso.</p>}
+          <details className="rounded-xl border p-4">
+            <summary className="cursor-pointer text-sm font-medium">Controles y evidencia</summary>
+            <div className="mt-3 space-y-3">
+              {controls.map((control, index) => <div key={control.id} className="grid gap-2 rounded-lg border p-3 md:grid-cols-3">
+                <Input aria-label="Nombre del control" value={control.label} onChange={(event) => setControls((prev) => prev.map((item,i) => i === index ? reviseEbrControl(item,{label:event.target.value}) : item))}/>
+                <Select value={control.effectiveness} onValueChange={(effectiveness: EbrControlReview["effectiveness"]) => setControls((prev) => prev.map((item,i) => i === index ? {...item,effectiveness,reviewedBy:getPilotSession()?.user.id || "Usuario local",reviewedAt:new Date().toISOString()} : item))}>
+                  <SelectTrigger aria-label="Efectividad"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="unknown">Sin revisar</SelectItem><SelectItem value="absent">No implementado</SelectItem><SelectItem value="partial">Parcial</SelectItem><SelectItem value="effective">Efectivo</SelectItem></SelectContent>
+                </Select>
+                <RiskEvidencePicker label={`Evidencia control ${index+1}`} value={control.evidence} legacyReference={control.evidenceId} onChange={(evidence)=>setControls((old)=>old.map((item,i)=>i===index?reviseEbrControl(item,{evidenceId:evidence.fileVersionId,evidence}):item))}/>
+              </div>)}
+              <Button variant="outline" type="button" onClick={() => setControls((prev) => [...prev,{id:crypto.randomUUID(),label:"",effectiveness:"unknown",evidenceId:"",reviewedBy:"",reviewedAt:""}])}>Añadir control</Button>
+              <p className="text-xs text-muted-foreground">La reducción mostrada es una propuesta de esta metodología interna y sólo procede con controles sustentados y revisados. Editar un control o su evidencia reinicia la revisión.</p>
+            </div>
+          </details>
+          <RiskReviewPlan value={reviewPlan} onChange={setReviewPlan} scope="cliente"/>
+          <div className="space-y-2"><Label htmlFor="ebr-source">Fuente o evidencia consultada</Label><div className="flex gap-2"><Input id="ebr-source" value={sourceNote} onChange={(event) => setSourceNote(event.target.value)} placeholder="Documento, versión de fuente y conclusión"/><Button variant="outline" type="button" disabled={!sourceNote.trim()} onClick={() => {setSources((prev) => [...prev,{id:crypto.randomUUID(),label:sourceNote.trim(),consultedAt:new Date().toISOString()}]);setSourceNote("");}}>Añadir</Button></div><ul className="space-y-1 text-xs text-muted-foreground">{sources.map((source) => <li key={source.id}>{source.label} · {formatDate(source.consultedAt)}</li>)}</ul></div>
+          <label className="flex items-start gap-2 text-sm"><Checkbox checked={methodologyAccepted} onCheckedChange={(value) => setMethodologyAccepted(value === true)}/><span>La empresa adoptó y documentó esta versión de metodología en su manual. Registrar la referencia en Fuentes.</span></label>
+          <p className="text-xs text-muted-foreground">Estado: {displayedStatus} · Versión {savedEvaluation?.revision || 0}</p>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="cuestionarios" className="space-y-4">
         <TabsList>
@@ -889,6 +1003,8 @@ export default function EbrPage() {
         </TabsContent>
 
         <TabsContent value="reporte" className="space-y-6">
+          <RiskResults client={clientResult} subject={subjectResult} beneficiary={beneficiaryResult} history={savedEvaluation?.history ?? []} institution={institutionalRisk}
+            distribution={["Bajo","Medio","Alto","Reforzado"].map((level) => ({level,count:Object.values(evaluacionesGuardadas).filter((item) => !item.archivedAt && item.workflow?.status === "approved" && item.riskSummary?.level === level).length}))}/>
           <Card>
             <CardHeader>
               <CardTitle>Resumen del perfil consolidado</CardTitle>
@@ -994,17 +1110,6 @@ function QuestionnaireForm({
     onChange: (next: string[]) => void,
   ) => void;
 }) {
-  useEffect(() => {
-    const countryName =
-      PAISES.find((pais) => pais.code === answers.nationalityCountryCode)?.label ??
-      "";
-    const automaticRisk = getNationalityRiskByCountry(countryName);
-
-    if (answers.nationalityRisk !== automaticRisk) {
-      setAnswers((prev) => ({ ...prev, nationalityRisk: automaticRisk }));
-    }
-  }, [answers.nationalityCountryCode, answers.nationalityRisk, setAnswers]);
-
   return (
     <div className="grid gap-5">
       <div className="grid gap-4 md:grid-cols-2">
@@ -1012,8 +1117,7 @@ function QuestionnaireForm({
           label={`1) Nivel de riesgo de nacionalidad (${titlePrefix})`}
           value={answers.nationalityRisk}
           options={NATIONALITY_OPTIONS}
-          onChange={() => undefined}
-          disabled
+          onChange={(value) => setAnswers((prev)=>({...prev,nationalityRisk:value,geographyReviewed:false}))}
         />
         <div className="space-y-2">
           <Label>País de nacionalidad ({titlePrefix})</Label>
@@ -1023,15 +1127,15 @@ function QuestionnaireForm({
               setAnswers((prev) => ({
                 ...prev,
                 nationalityCountryCode: value,
+                nationalityRisk:getNationalityRiskByCountry(PAISES.find((country)=>country.code===value)?.label),geographyReviewed:false,
               }))
             }
             placeholder="Busca y selecciona país"
           />
           <p className="text-xs text-muted-foreground">
-            El nivel de riesgo se asigna automáticamente según el país
-            seleccionado. Si el país no pertenece a una lista especial, se
-            clasifica como "Todos los demás países".
+            Sugerencia del catálogo histórico. Coteja la jurisdicción con las fuentes vigentes y documenta la consulta antes de confirmar.
           </p>
+          <label className="flex items-start gap-2 text-xs"><Checkbox checked={answers.geographyReviewed===true} onCheckedChange={(value)=>setAnswers((prev)=>({...prev,geographyReviewed:value===true}))}/><span>Verifiqué las fuentes geográficas y registré su fecha y referencia.</span></label>
         </div>
       </div>
 
@@ -1055,6 +1159,7 @@ function QuestionnaireForm({
           <div className="space-y-2">
             <Label>4) Acciones observadas ({titlePrefix})</Label>
             <div className="grid gap-2 rounded-md border p-3">
+              <label className="mb-2 flex items-center gap-2 text-sm"><Checkbox checked={answers.behaviorReviewed === true} onCheckedChange={(checked) => setAnswers((prev) => ({...prev,behaviorReviewed:checked === true}))}/><span>Revisé las señales de comportamiento, incluso si no hay coincidencias.</span></label>
               {SUSPICIOUS_BEHAVIORS.map((behavior) => (
                 <label
                   key={behavior.value}

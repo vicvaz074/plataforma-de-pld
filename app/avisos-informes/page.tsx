@@ -1,8 +1,9 @@
 "use client"
+import { getModuleStorage } from "@/lib/pilot/module-storage"
 
 import type { ChangeEvent } from "react"
 import Link from "next/link"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Alert,
   AlertDescription,
@@ -36,6 +37,10 @@ import { InfoHint } from "@/components/pld/info-hint"
 import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
 import { SearchableSelect } from "@/components/pld/searchable-select"
 import { revalidateStoredSatPackage } from "@/lib/pld/sat-stored-validation"
+import { readFileAsDataUrl } from "@/lib/storage/read-file"
+import { flushModuleStorage } from "@/lib/pilot/module-storage"
+import { formatOperationFinancialSummary } from "@/lib/pld/operation-finance"
+import { SUBMISSIONS_STORAGE_KEY, readStoredSubmissions, mergeSubmission, confirmSubmission, createSubmissionDraft, selectSubmissionForOperation, type StoredSubmission, type SubmissionAttachment } from "@/lib/pld/submissions"
 import {
   loadStoredPldOperations,
   type StoredPldOperationV3,
@@ -384,32 +389,7 @@ const initialNoticeForm: NoticeFormState = {
   digitalSeal: "",
 }
 
-const initialTraceability: TraceabilityEntry[] = [
-  {
-    id: "t1",
-    action: "Aviso relevante presentado",
-    user: "María Fernández",
-    timestamp: new Date("2024-03-15T11:25:00"),
-    details: "Aviso AR-2024-0315 enviado al SAT y acuse recibido.",
-    noticeId: "AR-2024-0315",
-  },
-  {
-    id: "t2",
-    action: "Dictamen de operación inusual",
-    user: "Oficial de Cumplimiento",
-    timestamp: new Date("2024-04-02T09:10:00"),
-    details: "Dictamen emitido para OI-2024-0402 previo a envío del aviso.",
-    noticeId: "OI-2024-0402",
-  },
-  {
-    id: "t3",
-    action: "Carga de evidencia interna",
-    user: "Carlos López",
-    timestamp: new Date("2024-04-18T14:42:00"),
-    details: "Acta de investigación por operación interna preocupante IP-2024-0418.",
-    noticeId: "IP-2024-0418",
-  },
-]
+const initialTraceability: TraceabilityEntry[] = []
 
 const REGISTRO_STORAGE_KEY = "registro-sat-data"
 const EXPEDIENTE_STORAGE_KEY = "kyc_expedientes_detalle"
@@ -466,10 +446,46 @@ export default function AvisosInformesPage() {
   const [selectedSubjectId, setSelectedSubjectId] = useState("__all__")
   const [integrationSubjects, setIntegrationSubjects] = useState<IntegrationSubject[]>([])
   const [selectedOperacionId, setSelectedOperacionId] = useState<string>("")
+  const operationLinkApplied = useRef(false)
   const [selectedSatPackageId, setSelectedSatPackageId] = useState<string>("")
   const [overrideDialogOpen, setOverrideDialogOpen] = useState(false)
   const [overrideKind, setOverrideKind] = useState<SatOutputKind>("aviso_normal")
   const [overrideReason, setOverrideReason] = useState("")
+  const [submissionRecords, setSubmissionRecords] = useState<StoredSubmission[]>([])
+  const [attachments, setAttachments] = useState<SubmissionAttachment[]>([])
+  const [submissionStorageReady, setSubmissionStorageReady] = useState(false)
+  const [submissionSaving, setSubmissionSaving] = useState(false)
+  const [sourceOperationRevision, setSourceOperationRevision] = useState(0)
+  const [activeSubmissionId,setActiveSubmissionId]=useState("")
+  const selectedOperation=operaciones.find((operation)=>operation.id===selectedOperacionId)
+  const activeSubmission=submissionRecords.find((item)=>item.id===activeSubmissionId)
+  const workflowReadOnly=Boolean(activeSubmission && (activeSubmission.status==="presented" || selectedOperation && activeSubmission.sourceOperationRevision!==selectedOperation.revision))
+  const needsNewWorkflow=Boolean(selectedOperation && activeSubmission && (activeSubmission.sourceOperationRevision!==selectedOperation.revision || selectedOperation.submission.status==="correction-pending"))
+  const noticeVersions=submissionRecords.filter((item)=>item.operationId===selectedOperacionId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))
+  const applyStoredSubmission=useCallback((saved:StoredSubmission|undefined,operationRevision:number)=>{
+    setActiveSubmissionId(saved?.id || "")
+    setNoticeForm(saved ? {...initialNoticeForm,...saved.form} : {...initialNoticeForm})
+    setChecklistState({...Object.fromEntries(checklistQuestions.map((question)=>[question.id,{answer:null,notes:""}])),...saved?.checklist})
+    setEvidenceState(saved?.evidence || {});setAttachments(saved?.attachments || [])
+    setTraceabilityEntries((saved?.trace || []).map((entry)=>({...entry,timestamp:new Date(entry.timestamp)})))
+    setSourceOperationRevision(saved?.sourceOperationRevision || operationRevision)
+    if(saved && ["relevante","inusual","interna"].includes(saved.operationType))setSelectedOperationType(saved.operationType as OperationType)
+  },[])
+
+  useEffect(() => {
+    try {
+      setSubmissionRecords(readStoredSubmissions(getModuleStorage().getItem(SUBMISSIONS_STORAGE_KEY)))
+      setSubmissionStorageReady(true)
+    } catch (error) {
+      toast({ title: "Avisos sin cargar", description: error instanceof Error ? error.message : "Revisa el respaldo.", variant: "destructive" })
+    }
+  }, [toast])
+
+  useEffect(() => {
+    if (!submissionStorageReady) return
+    const saved=selectedOperation ? selectSubmissionForOperation(submissionRecords,selectedOperation) : submissionRecords.find((item)=>item.id===`draft-${selectedOperationType}`)
+    applyStoredSubmission(saved,selectedOperation?.revision || 0)
+  }, [selectedOperacionId, selectedOperacionId ? "" : selectedOperationType, submissionStorageReady,selectedOperation?.revision,applyStoredSubmission])
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 60000)
@@ -478,9 +494,9 @@ export default function AvisosInformesPage() {
 
   const loadIntegrationData = useCallback(() => {
     if (typeof window === "undefined") return
-    setIntegrationSubjects(readPldSubjects(window.localStorage))
+    setIntegrationSubjects(readPldSubjects(getModuleStorage()))
 
-    const registroRaw = window.localStorage.getItem(REGISTRO_STORAGE_KEY)
+    const registroRaw = getModuleStorage().getItem(REGISTRO_STORAGE_KEY)
     if (registroRaw) {
       try {
         const parsed = JSON.parse(registroRaw) as Record<string, unknown>
@@ -522,7 +538,7 @@ export default function AvisosInformesPage() {
       setSujetosRegistro([])
     }
 
-    const expedientesRaw = window.localStorage.getItem(EXPEDIENTE_STORAGE_KEY)
+    const expedientesRaw = getModuleStorage().getItem(EXPEDIENTE_STORAGE_KEY)
     if (expedientesRaw) {
       try {
         const parsed = JSON.parse(expedientesRaw)
@@ -540,7 +556,7 @@ export default function AvisosInformesPage() {
       setExpedientesEui([])
     }
 
-    const operationsResult = loadStoredPldOperations(window.localStorage, {
+    const operationsResult = loadStoredPldOperations(getModuleStorage(), {
       key: OPERACIONES_STORAGE_KEY,
       persistMigration: true,
     })
@@ -549,7 +565,7 @@ export default function AvisosInformesPage() {
     }
     setOperaciones(operationsResult.operations)
 
-    const ebrRaw = window.localStorage.getItem(EBR_STORAGE_KEY)
+    const ebrRaw = getModuleStorage().getItem(EBR_STORAGE_KEY)
     if (ebrRaw) {
       try {
         const parsed = JSON.parse(ebrRaw)
@@ -563,7 +579,7 @@ export default function AvisosInformesPage() {
       setEvaluacionesEbr([])
     }
 
-    const satPackagesRaw = window.localStorage.getItem(SAT_OUTPUT_PACKAGES_KEY)
+    const satPackagesRaw = getModuleStorage().getItem(SAT_OUTPUT_PACKAGES_KEY)
     if (satPackagesRaw) {
       try {
         const parsed = JSON.parse(satPackagesRaw)
@@ -846,6 +862,18 @@ export default function AvisosInformesPage() {
     }
   }, [operacionesFiltradas, selectedOperacionId])
 
+  useEffect(() => {
+    if (operationLinkApplied.current || !operaciones.length) return
+    const linkedId = new URLSearchParams(window.location.search).get("operation")
+    if (!linkedId) { operationLinkApplied.current = true; return }
+    if (!operaciones.some((operation) => operation.id === linkedId)) return
+    operationLinkApplied.current = true
+    setSelectedSubjectId("__all__"); setSelectedClientId("__all__")
+    setSelectedOperacionId(linkedId); setSelectedTab("aviso")
+    const packet = satOutputPackages.find((item) => item.sourceOperationId === linkedId)
+    if (packet) setSelectedSatPackageId(packet.id)
+  }, [operaciones, satOutputPackages])
+
   const evaluacionSeleccionada = useMemo(() => {
     return findClientEbrEvaluation(evaluacionesEbr, clienteSeleccionado) as EvaluacionEbrResumen | null
   }, [evaluacionesEbr, clienteSeleccionado])
@@ -995,32 +1023,126 @@ export default function AvisosInformesPage() {
   }
 
   const handleNoticeFormChange = (field: keyof NoticeFormState, value: string) => {
+    if(workflowReadOnly)return
     setNoticeForm((prev) => ({
       ...prev,
       [field]: value,
     }))
   }
 
-  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>, type: string) => {
+  const saveSubmission = async (nextAttachments = attachments, present = false, action = "Avance guardado") => {
+    if (!submissionStorageReady) throw new Error("El almacenamiento de avisos no se pudo recuperar; no se sobrescribirá.")
+    if(workflowReadOnly)throw new Error("Este aviso es histórico o ya fue presentado. Prepara una nueva corrección sin reutilizar su acuse.")
+    if(activeSubmission && activeSubmission.operationId!==selectedOperacionId)throw new Error("Espera a que se abra el aviso de la operación seleccionada.")
+    const actor = getModuleStorage().getItem("userEmail") || getModuleStorage().getItem("userName") || "Usuario en sesión"
+    const at = new Date().toISOString()
+    const operation = operaciones.find((item) => item.id === selectedOperacionId)
+    const base=activeSubmission || (operation ? createSubmissionDraft({operation,operationType:selectedOperationType,actor,at}) : undefined)
+    const id=base?.id || `draft-${selectedOperationType}`
+    const previous=submissionRecords.find((item)=>item.id===id)
+    const nextTrace = [{ id: crypto.randomUUID(), action: present ? "Presentación documentada con acuse" : action,
+      user: actor, timestamp: at, details: `Folio: ${noticeForm.folio || "pendiente"}.`, noticeId: id },
+      ...(traceabilityEntries.length ? traceabilityEntries.map((entry) => ({ ...entry, timestamp: entry.timestamp.toISOString() })) : base?.trace || [])]
+    let submission: StoredSubmission = { ...base,schemaVersion:base?.schemaVersion || 1, id, revision: previous?.revision || 0, operationId: selectedOperacionId,
+      sourceOperationRevision: sourceOperationRevision || operation?.revision || 0, operationType: selectedOperationType,
+      form: { ...noticeForm }, checklist: checklistState, evidence: evidenceState, attachments: nextAttachments,
+      trace: nextTrace, status: previous?.status || "draft", createdAt: previous?.createdAt || at, updatedAt: at }
+    const originalOperations = getModuleStorage().getItem(OPERACIONES_STORAGE_KEY)
+    const originalSubmissions = getModuleStorage().getItem(SUBMISSIONS_STORAGE_KEY)
+    try {
+      const current = readStoredSubmissions(originalSubmissions)
+      if (present) {
+        const records = loadStoredPldOperations(getModuleStorage(), { persistMigration: false })
+        if (records.parseError || records.discardedCount || records.duplicateIds.length) throw new Error("Revisa los registros inconsistentes antes de confirmar presentación.")
+        const packet = satOutputPackages.find((item) => item.sourceOperationId === selectedOperacionId)
+        if (!packet || packet.validation.status !== "listo") throw new Error("La salida SAT debe estar validada localmente antes de registrar el acuse.")
+        const currentOperation=records.operations.find((item)=>item.id===selectedOperacionId)
+        if (packet.sourceOperationRevision!==currentOperation?.revision) throw new Error("La salida SAT corresponde a una revisión anterior de la operación. Prepara y revisa nuevamente su salida antes de vincular el acuse.")
+        const confirmed = confirmSubmission({ submission, operations: records.operations, actor, at, packageId: packet.id,priorSubmissions:current })
+        submission = confirmed.submission
+        getModuleStorage().setItem(OPERACIONES_STORAGE_KEY, JSON.stringify(confirmed.operations))
+      }
+      const next = mergeSubmission(current, submission, previous?.revision || 0)
+      getModuleStorage().setItem(SUBMISSIONS_STORAGE_KEY, JSON.stringify(next))
+      await flushModuleStorage()
+      setSubmissionRecords(next)
+      setActiveSubmissionId(id)
+      setAttachments(nextAttachments)
+      setTraceabilityEntries(nextTrace.map((entry) => ({ ...entry, timestamp: new Date(entry.timestamp) })))
+      setSourceOperationRevision(submission.sourceOperationRevision)
+      if (present) loadIntegrationData()
+      window.dispatchEvent(new CustomEvent(PLD_INTEGRATION_EVENT, { detail: { key: SUBMISSIONS_STORAGE_KEY } }))
+    } catch (error) {
+      try {
+        if (originalSubmissions === null) getModuleStorage().removeItem(SUBMISSIONS_STORAGE_KEY); else getModuleStorage().setItem(SUBMISSIONS_STORAGE_KEY, originalSubmissions)
+        if (present && originalOperations !== null) getModuleStorage().setItem(OPERACIONES_STORAGE_KEY, originalOperations)
+      } catch { /* preserve current in-memory capture for recovery */ }
+      throw error
+    }
+  }
+
+  const prepareCurrentSubmission=async()=>{
+    if(!selectedOperation || !submissionStorageReady)return
+    setSubmissionSaving(true)
+    try{
+      const records=loadStoredPldOperations(getModuleStorage(),{persistMigration:false})
+      const operation=records.operations.find((item)=>item.id===selectedOperation.id)
+      if(!operation || records.parseError || records.discardedCount || records.duplicateIds.length)throw new Error("Revisa la operación actual antes de preparar una corrección.")
+      const current=readStoredSubmissions(getModuleStorage().getItem(SUBMISSIONS_STORAGE_KEY))
+      const currentDraft=current.find((item)=>item.operationId===operation.id && item.status==="draft" && item.sourceOperationRevision===operation.revision && (item.preparedOperationRevision??item.sourceOperationRevision)===operation.revision)
+      if(currentDraft){applyStoredSubmission(currentDraft,operation.revision);return}
+      const previous=current.filter((item)=>item.operationId===operation.id && item.status==="presented").sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0] || (activeSubmission?.operationId===operation.id ? activeSubmission : undefined)
+      if(operation.submission.wasEverPresented && previous?.status!=="presented")throw new Error("Falta recuperar el aviso presentado anterior y su acuse; no se fabricará un vínculo histórico.")
+      const draft=createSubmissionDraft({operation,previous,operationType:selectedOperationType,actor:getModuleStorage().getItem("userEmail") || "Usuario en sesión",at:new Date().toISOString()})
+      const next=mergeSubmission(current,draft,0)
+      getModuleStorage().setItem(SUBMISSIONS_STORAGE_KEY,JSON.stringify(next))
+      await flushModuleStorage()
+      setSubmissionRecords(next);applyStoredSubmission(next.find((item)=>item.id===draft.id),operation.revision)
+      toast({title:previous?.status==="presented" ? "Borrador de corrección preparado" : "Nueva revisión preparada",description:"El aviso anterior se conserva. Folio, sello, fechas y archivos están vacíos; adjunta un acuse nuevo para confirmar."})
+    }catch(error){toast({title:"No se preparó la corrección",description:error instanceof Error ? error.message : "Conserva los datos y reintenta.",variant:"destructive"})}
+    finally{setSubmissionSaving(false)}
+  }
+
+  const handleSaveSubmission = async (present = false) => {
+    setSubmissionSaving(true)
+    try {
+      await saveSubmission(attachments, present)
+      toast({ title: present ? "Presentación documentada" : "Avance guardado", description: present ? "Acuse y folio vinculados a la operación; el registro es manual y no envía nada al SAT." : "Fechas, archivos y checklist quedaron guardados." })
+    } catch (error) {
+      toast({ title: "No se guardó el aviso", description: error instanceof Error ? error.message : "Reintenta guardar.", variant: "destructive" })
+    } finally { setSubmissionSaving(false) }
+  }
+
+  const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>, type: string) => {
+    if(workflowReadOnly)return
     const file = event.target.files?.[0]
     if (!file) return
+    if (file.size > 20 * 1024 * 1024 || !/\.(pdf|png|jpe?g|webp|xml|xlsx|xlsm)$/i.test(file.name)) {
+      toast({ title: "Archivo no admitido", description: "Usa PDF, imagen, XML o Excel de hasta 20 MB.", variant: "destructive" }); return
+    }
+    setSubmissionSaving(true)
+    try {
+      const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer())
+      const hash=Array.from(new Uint8Array(digest)).map((byte)=>byte.toString(16).padStart(2,"0")).join("")
+      if(type==="Acuse SAT" && (activeSubmission?.correctionOf || activeSubmission?.supersedesDraftId)){
+        const previousReceipts=submissionRecords.filter((item)=>item.operationId===selectedOperacionId && item.id!==activeSubmissionId && (item.status==="presented" || item.id===activeSubmission.supersedesDraftId)).flatMap((item)=>item.attachments.filter((attachment)=>attachment.type==="Acuse SAT"))
+        if(previousReceipts.some((attachment)=>attachment.sha256===hash))throw new Error("Este acuse ya pertenece a una revisión anterior. La corrección necesita un acuse nuevo; no se reutilizó ni se cargó el archivo histórico.")
+      }
+      const attachment: SubmissionAttachment = { id: crypto.randomUUID(), type, name: file.name, size: file.size,
+        mimeType: file.type || "application/octet-stream", dataUrl: await readFileAsDataUrl(file),
+        sha256: hash, uploadedAt: new Date().toISOString() }
+      await saveSubmission([...attachments, attachment], false, "Archivo de " + type + " guardado")
+      toast({ title: "Documento guardado", description: file.name + " se conservó con hash y vínculo al aviso." })
+    } catch (error) { toast({ title: "No se guardó el documento", description: error instanceof Error ? error.message : "Conserva el archivo y reintenta.", variant: "destructive" }) }
+    finally { setSubmissionSaving(false) }
+  }
 
-    setTraceabilityEntries((prev) => [
-      {
-        id: `trace-${Date.now()}`,
-        action: `Carga de ${type.toLowerCase()}`,
-        user: "Usuario actual",
-        timestamp: new Date(),
-        details: `${file.name} asociado a ${operationTypeLabels[selectedOperationType]}.`,
-        noticeId: operationTypeLabels[selectedOperationType],
-      },
-      ...prev,
-    ])
-
-    toast({
-      title: "Documento cargado",
-      description: `${file.name} se registró correctamente en la bitácora de evidencias.`,
-    })
+  const removeDraftAttachment=async(file:SubmissionAttachment)=>{
+    if(workflowReadOnly || !window.confirm(`¿Retirar ${file.name} de este borrador? El archivo y las versiones históricas no se eliminarán.`))return
+    setSubmissionSaving(true)
+    try{await saveSubmission(attachments.filter((item)=>item.id!==file.id),false,`Archivo retirado del borrador: ${file.name}`);toast({title:"Referencia retirada",description:"El archivo permanece conservado; solo se retiró de este borrador."})}
+    catch(error){toast({title:"No se guardó el cambio",description:error instanceof Error ? error.message : "Reintenta sin cerrar la página.",variant:"destructive"})}
+    finally{setSubmissionSaving(false)}
   }
 
   const downloadReport = (fileName: string, content: BlobPart, mimeType = "text/csv") => {
@@ -1080,7 +1202,7 @@ export default function AvisosInformesPage() {
           op.cliente,
           op.actividadNombre,
           op.tipoOperacion,
-          formatCurrency(op.monto),
+          formatOperationFinancialSummary(op),
           op.fechaOperacion,
           op.umbralStatus ?? "",
           op.alerta ?? "",
@@ -1157,7 +1279,7 @@ export default function AvisosInformesPage() {
         : item,
     )
     setSatOutputPackages(updatedPackages)
-    window.localStorage.setItem(SAT_OUTPUT_PACKAGES_KEY, JSON.stringify(updatedPackages))
+    getModuleStorage().setItem(SAT_OUTPUT_PACKAGES_KEY, JSON.stringify(updatedPackages))
     setOverrideDialogOpen(false)
     setOverrideReason("")
     setSelectedSatPackageId(satQueueItemSeleccionado?.id || "")
@@ -1290,6 +1412,7 @@ export default function AvisosInformesPage() {
   }
 
   const resetNoticeForm = () => {
+    if(workflowReadOnly)return
     setNoticeForm(initialNoticeForm)
     setEvidenceState({})
     toast({
@@ -1553,7 +1676,7 @@ export default function AvisosInformesPage() {
               )}
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
+                <div className="space-y-2" data-pld-context="browse">
                   <Label htmlFor="sujeto-integracion">Sujeto obligado</Label>
                   <SearchableSelect
                     id="sujeto-integracion"
@@ -1564,7 +1687,7 @@ export default function AvisosInformesPage() {
                     searchPlaceholder="Buscar sujeto obligado"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2" data-pld-context="browse">
                   <Label htmlFor="cliente-rfc">Selecciona un cliente</Label>
                   <SearchableSelect
                     id="cliente-rfc"
@@ -1730,13 +1853,13 @@ export default function AvisosInformesPage() {
                     <div className="space-y-2">
                       <Label htmlFor="operacion-select">Selecciona operación</Label>
                       <Select value={selectedOperacionId} onValueChange={setSelectedOperacionId}>
-                        <SelectTrigger id="operacion-select">
+                        <SelectTrigger id="operacion-select" data-pld-context="browse">
                           <SelectValue placeholder="Selecciona operación" />
                         </SelectTrigger>
                         <SelectContent>
                           {operacionesFiltradas.map((operacion) => (
                             <SelectItem key={operacion.id} value={operacion.id}>
-                              {operacion.tipoOperacion} · {formatCurrency(operacion.monto)}
+                              {operacion.tipoOperacion} · {formatOperationFinancialSummary(operacion)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1754,7 +1877,7 @@ export default function AvisosInformesPage() {
                           </div>
                           <p className="text-xs text-muted-foreground">{operacion.actividadNombre}</p>
                           <div className="mt-2 flex items-center justify-between text-xs">
-                            <span>{formatCurrency(operacion.monto)}</span>
+                            <span>{formatOperationFinancialSummary(operacion)}</span>
                             <span>{operacion.fechaOperacion}</span>
                           </div>
                           {operacion.alerta && (
@@ -1847,13 +1970,13 @@ export default function AvisosInformesPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button className="w-full justify-start gap-2" onClick={handleDownloadConsolidated}>
+                <Button data-pld-action="download" className="w-full justify-start gap-2" onClick={handleDownloadConsolidated}>
                   <Download className="h-4 w-4" /> Reporte consolidado por cliente
                 </Button>
-                <Button variant="secondary" className="w-full justify-start gap-2" onClick={handleDownloadOperacionesAviso}>
+                <Button data-pld-action="download" variant="secondary" className="w-full justify-start gap-2" onClick={handleDownloadOperacionesAviso}>
                   <Download className="h-4 w-4" /> Operaciones con obligación de aviso
                 </Button>
-                <Button variant="outline" className="w-full justify-start gap-2" onClick={handleDownloadBitacora}>
+                <Button data-pld-action="download" variant="outline" className="w-full justify-start gap-2" onClick={handleDownloadBitacora}>
                   <Download className="h-4 w-4" /> Bitácora completa de avisos
                 </Button>
               </CardContent>
@@ -1901,6 +2024,8 @@ export default function AvisosInformesPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {selectedOperation && <div className="space-y-3 rounded-xl border p-4"><p className="text-sm font-medium">{selectedOperation.cliente} · Operación revisión {selectedOperation.revision}</p><p className="text-xs text-muted-foreground">{activeSubmission ? `Aviso ${activeSubmission.id} · captura ${activeSubmission.preparedOperationRevision ?? activeSubmission.sourceOperationRevision} · ${activeSubmission.status==="presented" ? "presentado, solo lectura" : "borrador"}` : "Nuevo borrador para la revisión actual"}</p>{noticeVersions.length>0 && <Select value={activeSubmissionId || "__new__"} onValueChange={(id)=>applyStoredSubmission(submissionRecords.find((item)=>item.id===id),selectedOperation.revision)}><SelectTrigger className="h-auto min-h-10 text-left [&>span]:whitespace-normal [&>span]:break-words" data-pld-context="browse" aria-label="Consultar versión del aviso"><SelectValue placeholder="Historial de avisos"/></SelectTrigger><SelectContent>{noticeVersions.map((item)=><SelectItem key={item.id} value={item.id}>Captura {item.preparedOperationRevision ?? item.sourceOperationRevision} · {item.status==="presented" ? "Presentado" : "Borrador"} · {item.form.folio || "sin folio"}</SelectItem>)}</SelectContent></Select>}{workflowReadOnly && <p role="status" className="text-sm text-amber-800">El aviso y sus archivos se conservan sin cambios. {needsNewWorkflow ? "La operación cambió: prepara un borrador nuevo y documenta un acuse nuevo." : "Para corregirlo, primero edita la operación en Actos; su presentación histórica no se sobrescribe."}</p>}{needsNewWorkflow && <Button data-pld-action="edit" disabled={submissionSaving} onClick={()=>void prepareCurrentSubmission()}>Preparar corrección</Button>}</div>}
+              <fieldset disabled={workflowReadOnly} className="space-y-6">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="tipo-operacion">Tipo de operación</Label>
@@ -2090,6 +2215,7 @@ export default function AvisosInformesPage() {
                 <UploadField label="Comprobantes bancarios" onChange={(event) => handleFileUpload(event, "Comprobante bancario")} />
                 <UploadField label="Reporte de screening" onChange={(event) => handleFileUpload(event, "Reporte de screening")} />
               </div>
+              {attachments.length > 0 && <div className="flex flex-wrap gap-2">{attachments.map((file) => <div key={file.id} className="flex gap-1"><Button asChild variant="outline" size="sm"><a href={file.dataUrl} download={file.name}>{file.type}: {file.name}</a></Button>{!workflowReadOnly && <Button data-pld-action="edit" variant="ghost" size="sm" disabled={submissionSaving} onClick={()=>void removeDraftAttachment(file)}>Retirar</Button>}</div>)}</div>}
 
               <Alert className={folioAndSealValid ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}>
                 {folioAndSealValid ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <AlertTriangle className="h-4 w-4" />}
@@ -2110,29 +2236,15 @@ export default function AvisosInformesPage() {
                   <Button variant="outline" onClick={resetNoticeForm}>
                     Reiniciar formulario
                   </Button>
-                  <Button
-                    onClick={() => {
-                      toast({
-                        title: "Aviso guardado",
-                        description: "Se registró el avance del aviso y se actualizó la trazabilidad.",
-                      })
-                      setTraceabilityEntries((prev) => [
-                        {
-                          id: `save-${Date.now()}`,
-                          action: `Actualización de ${operationTypeLabels[selectedOperationType].toLowerCase()}`,
-                          user: "Usuario actual",
-                          timestamp: new Date(),
-                          details: `Se guardaron fechas y validaciones del aviso con folio ${noticeForm.folio || "pendiente"}.`,
-                          noticeId: operationTypeLabels[selectedOperationType],
-                        },
-                        ...prev,
-                      ])
-                    }}
-                  >
-                    Guardar avance
+                  <Button disabled={workflowReadOnly || submissionSaving || !submissionStorageReady} onClick={() => handleSaveSubmission(false)}>
+                    {submissionSaving ? "Guardando…" : "Guardar avance"}
+                  </Button>
+                  <Button data-pld-action="approve" variant="outline" disabled={workflowReadOnly || submissionSaving || !selectedOperacionId || !folioAndSealValid} onClick={() => handleSaveSubmission(true)}>
+                    Confirmar presentación con acuse
                   </Button>
                 </div>
               </div>
+              </fieldset>
             </CardContent>
           </Card>
 
@@ -2144,6 +2256,7 @@ export default function AvisosInformesPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              <fieldset disabled={workflowReadOnly} className="space-y-6">
               {checklistQuestions.map((question) => {
                 const state = checklistState[question.id]
                 return (
@@ -2184,6 +2297,7 @@ export default function AvisosInformesPage() {
                   </div>
                 )
               })}
+              </fieldset>
             </CardContent>
           </Card>
         </TabsContent>

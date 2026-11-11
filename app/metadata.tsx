@@ -1,7 +1,6 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "DavaraGobernance",
-  description: "Plataforma de gestión de cumplimiento de protección de datos",
-  generator: "v0.dev",
+  title: "Davara Governance · PLD",
+  description: "Plataforma de prevención de lavado de dinero y actividades vulnerables en México.",
 }

@@ -1,4 +1,5 @@
 export type AuditPriority = "alta" | "media" | "baja"
+import { getModuleStorage } from "@/lib/pilot/module-storage"
 export type AuditStatus = "pendiente" | "en-progreso" | "completada" | "vencida"
 
 export interface AuditReminder {
@@ -22,7 +23,7 @@ type StoredAuditReminder = Omit<AuditReminder, "dueDate" | "createdAt"> & {
 const STORAGE_KEY = "audit-reminders"
 
 function canUseStorage() {
-  return typeof window !== "undefined" && typeof localStorage !== "undefined"
+  return typeof window !== "undefined" && typeof getModuleStorage() !== "undefined"
 }
 
 function reviveReminder(reminder: StoredAuditReminder): AuditReminder {
@@ -43,13 +44,13 @@ function serializeReminder(reminder: AuditReminder): StoredAuditReminder {
 
 function saveAuditReminders(reminders: AuditReminder[]) {
   if (!canUseStorage()) return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(reminders.map(serializeReminder)))
+  getModuleStorage().setItem(STORAGE_KEY, JSON.stringify(reminders.map(serializeReminder)))
 }
 
 export function getAuditReminders(): AuditReminder[] {
   if (!canUseStorage()) return []
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = getModuleStorage().getItem(STORAGE_KEY)
     const parsed = raw ? JSON.parse(raw) : []
     return Array.isArray(parsed) ? parsed.map(reviveReminder) : []
   } catch {

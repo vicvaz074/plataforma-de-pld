@@ -2470,6 +2470,10 @@ function inferPrefillValueForExtractedField(field: SatXlsmField, prefill: Record
     if (headerValue !== undefined) return headerValue
 
     const scope = resolvePersonaObjetoScope(field)
+    // Optional header RFCs (e.g. Entidad Colegiada C9/E9) have no client
+    // identity scope. Never populate them from the customer by label/row.
+    // Known subject headers are handled explicitly above/canonical lookup.
+    if (!scope && label.includes("rfc")) return undefined
     if (scope === "fideicomiso") return inferFideicomisoFieldPrefill(label, prefill)
     if (scope === "domicilio_nacional" || scope === "domicilio_internacional") {
       return inferDomicilioFieldPrefill(label, col, prefill)
@@ -2484,7 +2488,7 @@ function inferPrefillValueForExtractedField(field: SatXlsmField, prefill: Record
     if (row >= 46 && row <= 58) return inferPersonFieldPrefill(label, col, prefill, "representante")
     if (row >= 59 && row <= 85) return inferDomicilioFieldPrefill(label, col, prefill)
     if (row >= 86) return inferContactoFieldPrefill(label, col, prefill)
-    return inferPersonFieldPrefill(label, col, prefill, "cliente")
+    return undefined
   }
 
   if (sheet.includes("beneficiario")) {
@@ -2573,7 +2577,7 @@ type PersonaObjetoScope =
  * el prellenado en el resto. El rótulo del bloque —y el del grupo de columnas
  * cuando el Anexo separa persona moral de fideicomiso— sí es estable.
  */
-function resolvePersonaObjetoScope(field: SatXlsmField): PersonaObjetoScope | undefined {
+export function resolvePersonaObjetoScope(field: SatXlsmField): PersonaObjetoScope | undefined {
   const group = slug(field.conditionalGroup ?? "")
   if (group.includes("fideicomiso") || group.includes("fiduciari")) return "fideicomiso"
 

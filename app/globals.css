@@ -1,16 +1,37 @@
-@import url("https://fonts.cdnfonts.com/css/futura-std-4");
-@import url("https://cdn.jsdelivr.net/npm/remixicon@3.2.0/fonts/remixicon.css");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* Configuración base de tipografía */
 body {
-  font-family: "Futura Std", sans-serif;
+  /* Local fallbacks keep the pilot usable offline and avoid a blocking CDN. */
+  font-family: "Futura Std", Futura, "Century Gothic", system-ui, sans-serif;
   font-weight: 400;
   overflow-x: hidden;
 }
+
+/* Legacy domain forms use explicit light surfaces. Keep those surfaces and
+   status labels legible when the account selects the dark appearance. */
+.dark :is(.bg-white, .bg-white\/95, .bg-white\/90, .bg-white\/75, .bg-white\/70, .bg-slate-50, .bg-slate-50\/60, .bg-slate-50\/70, .bg-gray-50) {
+  background-color: hsl(var(--card));
+}
+.dark :is(.bg-slate-100, .bg-gray-100, .bg-orange-50, .bg-amber-50, .bg-red-50, .bg-rose-50, .bg-green-50, .bg-emerald-50, .bg-blue-50) {
+  background-color: hsl(var(--muted));
+}
+.dark :is(.bg-amber-100, .bg-amber-100\/30, .bg-amber-50\/30, .bg-amber-50\/40, .bg-amber-50\/70, .bg-orange-100, .bg-orange-50\/40, .bg-orange-50\/70, .bg-emerald-100, .bg-emerald-100\/60, .bg-emerald-50\/40, .bg-emerald-50\/50, .bg-emerald-50\/60, .bg-red-100, .bg-rose-100, .bg-rose-50\/60) {
+  background-color: hsl(var(--muted));
+}
+.dark :is(.hover\:bg-white:hover, .hover\:bg-slate-50:hover, .hover\:bg-slate-100:hover, .hover\:bg-orange-50:hover, .hover\:bg-orange-100:hover) { background-color: hsl(var(--muted)); }
+.dark :is(.text-black, .text-slate-950, .text-slate-900, .text-slate-800, .text-slate-700, .text-gray-950, .text-gray-900, .text-gray-800, .text-gray-700) {
+  color: hsl(var(--foreground));
+}
+.dark :is(.text-slate-600, .text-slate-500, .text-gray-600, .text-gray-500) {
+  color: hsl(var(--muted-foreground));
+}
+.dark :is(.text-amber-900, .text-amber-800, .text-amber-700, .text-orange-900, .text-orange-800, .text-orange-700) { color: #fcd34d; }
+.dark :is(.text-red-900, .text-red-800, .text-red-700, .text-rose-900, .text-rose-800, .text-rose-700) { color: #fda4af; }
+.dark :is(.text-green-900, .text-green-800, .text-green-700, .text-emerald-900, .text-emerald-800, .text-emerald-700) { color: #86efac; }
+.dark :is(.text-blue-900, .text-blue-800, .text-blue-700) { color: #93c5fd; }
 
 @layer base {
   :root {

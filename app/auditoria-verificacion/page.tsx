@@ -1,7 +1,9 @@
 "use client"
+import { getModuleStorage } from "@/lib/pilot/module-storage"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { differenceInBusinessDays, differenceInCalendarDays, format, formatDistanceToNow, parseISO } from "date-fns"
+import { differenceInBusinessDays, differenceInCalendarDays, format, formatDistanceToNow } from "date-fns"
+import { parsePldCalendarDate, stringifyPldCalendarFields } from "@/lib/pld/calendar-date"
 import { AUDIT_2026_CHECKLIST, AUDIT_2026_SECTIONS, RCG_2026_SOURCE } from "@/lib/pld/regulatory-calendar"
 import { es } from "date-fns/locale"
 import {
@@ -354,10 +356,8 @@ type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS]
 
 const storeWithDates = <T,>(key: StorageKey, value: T) => {
   if (typeof window === "undefined") return
-  const payload = JSON.stringify(value, (_storageKey, storageValue) =>
-    storageValue instanceof Date ? storageValue.toISOString() : storageValue
-  )
-  window.localStorage.setItem(key, payload)
+  const payload = stringifyPldCalendarFields(value,["date","followUpDue","receivedAt","dueDate","respondedAt","deadline"])
+  getModuleStorage().setItem(key, payload)
   notifyPldIntegrationChange(key)
 }
 
@@ -369,7 +369,7 @@ const parseStoredLineamientos = (raw: unknown): LineamientoVersion[] => {
         date?: string
       }
       if (!version || !date || !approvedBy) return []
-      const parsedDate = new Date(date)
+      const parsedDate = parsePldCalendarDate(date)
       if (Number.isNaN(parsedDate.getTime())) return []
       return [{ version, date: parsedDate, approvedBy, notes }]
     })
@@ -391,10 +391,10 @@ const parseStoredAudits = (raw: unknown): InternalAuditRecord[] => {
         return []
       }
 
-      const parsedDate = new Date(date)
+      const parsedDate = parsePldCalendarDate(date)
       if (Number.isNaN(parsedDate.getTime())) return []
 
-      const parsedFollowUp = followUpDue ? new Date(followUpDue) : undefined
+      const parsedFollowUp = followUpDue ? parsePldCalendarDate(followUpDue) : undefined
       if (parsedFollowUp && Number.isNaN(parsedFollowUp.getTime())) return []
 
       const normalizedScope = scope
@@ -435,11 +435,11 @@ const parseStoredRequests = (raw: unknown): AuthorityRequest[] => {
       if (!["SAT", "UIF"].includes(authority)) return []
       if (!["Pendiente", "En progreso", "Cerrado"].includes(status)) return []
 
-      const parsedReceived = new Date(receivedAt)
-      const parsedDue = new Date(dueDate)
+      const parsedReceived = parsePldCalendarDate(receivedAt)
+      const parsedDue = parsePldCalendarDate(dueDate)
       if (Number.isNaN(parsedReceived.getTime()) || Number.isNaN(parsedDue.getTime())) return []
 
-      const parsedResponded = respondedAt ? new Date(respondedAt) : undefined
+      const parsedResponded = respondedAt ? parsePldCalendarDate(respondedAt) : undefined
       if (parsedResponded && Number.isNaN(parsedResponded.getTime())) return []
 
       const normalizedDocuments = Array.isArray(documents)
@@ -472,7 +472,7 @@ const parseStoredActionPlans = (raw: unknown): ActionPlan[] => {
 
       if (!id || !source || !action || !responsible || !deadline) return null
 
-      const parsedDeadline = new Date(deadline)
+      const parsedDeadline = parsePldCalendarDate(deadline)
       if (Number.isNaN(parsedDeadline.getTime())) return null
 
       const normalizedStatus = status && ["En seguimiento", "Cerrado", "Pendiente"].includes(status)
@@ -533,7 +533,7 @@ export default function AuditoriaVerificacionPage() {
   }, [toast])
   useEffect(() => {
     try {
-      const restored = restoreAuditWorkflow(parseStoredObject(localStorage.getItem(STORAGE_KEYS.workflow)), { responses, scopeAnswers, reviewAnswers, finalChecklist })
+      const restored = restoreAuditWorkflow(parseStoredObject(getModuleStorage().getItem(STORAGE_KEYS.workflow)), { responses, scopeAnswers, reviewAnswers, finalChecklist })
       setResponses(restored.responses as Record<string, ControlResponse>)
       setScopeAnswers(restored.scopeAnswers as Record<string, ScopeSelection>)
       setReviewAnswers(restored.reviewAnswers as typeof reviewAnswers)
@@ -585,8 +585,8 @@ export default function AuditoriaVerificacionPage() {
   const loadCrossModuleContext = useCallback(() => {
     if (typeof window === "undefined") return
 
-    const operaciones = readActiveModuleOperations(window.localStorage)
-    const subjects = readPldSubjects(window.localStorage)
+    const operaciones = readActiveModuleOperations(getModuleStorage())
+    const subjects = readPldSubjects(getModuleStorage())
 
     const periodos = operaciones
       .map((operacion) => (typeof operacion.periodo === "string" ? operacion.periodo : ""))
@@ -603,7 +603,7 @@ export default function AuditoriaVerificacionPage() {
     }, 0) / 100
 
     const ultimaOperacion = operaciones
-      .map((operacion) => (typeof operacion.fechaOperacion === "string" ? new Date(operacion.fechaOperacion) : null))
+      .map((operacion) => (typeof operacion.fechaOperacion === "string" ? parsePldCalendarDate(operacion.fechaOperacion) : null))
       .filter((date): date is Date => Boolean(date && !Number.isNaN(date.getTime())))
       .sort((a, b) => b.getTime() - a.getTime())[0] ?? null
 
@@ -639,7 +639,7 @@ export default function AuditoriaVerificacionPage() {
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEYS.lineamientos)
+      const stored = getModuleStorage().getItem(STORAGE_KEYS.lineamientos)
       if (stored) {
         const parsed = parseStoredLineamientos(parseStoredArray(stored))
         if (parsed.length) {
@@ -661,7 +661,7 @@ export default function AuditoriaVerificacionPage() {
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEYS.auditorias)
+      const stored = getModuleStorage().getItem(STORAGE_KEYS.auditorias)
       if (stored) {
         const parsed = parseStoredAudits(parseStoredArray(stored))
         if (parsed.length) {
@@ -683,7 +683,7 @@ export default function AuditoriaVerificacionPage() {
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEYS.observaciones)
+      const stored = getModuleStorage().getItem(STORAGE_KEYS.observaciones)
       if (stored) {
         const parsed = parseStoredRequests(parseStoredArray(stored))
         if (parsed.length) {
@@ -705,7 +705,7 @@ export default function AuditoriaVerificacionPage() {
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEYS.planes)
+      const stored = getModuleStorage().getItem(STORAGE_KEYS.planes)
       if (stored) {
         const parsed = parseStoredActionPlans(parseStoredArray(stored))
         if (parsed.length) {
@@ -969,7 +969,7 @@ export default function AuditoriaVerificacionPage() {
 
     const version: LineamientoVersion = {
       version: newVersion.version,
-      date: new Date(newVersion.date),
+      date: parsePldCalendarDate(newVersion.date),
       approvedBy: newVersion.approvedBy,
       notes: newVersion.notes || undefined,
     }
@@ -994,12 +994,12 @@ export default function AuditoriaVerificacionPage() {
 
     const record: InternalAuditRecord = {
       id: newAudit.id,
-      date: new Date(newAudit.date),
+      date: parsePldCalendarDate(newAudit.date),
       scope: newAudit.scope.split(",").map((item) => item.trim()).filter(Boolean),
       findings: newAudit.findings,
       responsible: newAudit.responsible,
       status: "En seguimiento",
-      followUpDue: newAudit.followUpDue ? new Date(newAudit.followUpDue) : undefined,
+      followUpDue: newAudit.followUpDue ? parsePldCalendarDate(newAudit.followUpDue) : undefined,
     }
 
     setAuditLog((prev) => sortByRecentDate([...prev, record], (item) => item.date))
@@ -1017,13 +1017,13 @@ export default function AuditoriaVerificacionPage() {
       return
     }
 
-    const receivedAt = parseISO(newRequest.receivedAt)
+    const receivedAt = parsePldCalendarDate(newRequest.receivedAt)
     const request: AuthorityRequest = {
       id: newRequest.id,
       authority: newRequest.authority as "SAT" | "UIF",
       receivedAt,
-      dueDate: parseISO(newRequest.dueDate),
-      respondedAt: newRequest.respondedAt ? new Date(newRequest.respondedAt) : undefined,
+      dueDate: parsePldCalendarDate(newRequest.dueDate),
+      respondedAt: newRequest.respondedAt ? parsePldCalendarDate(newRequest.respondedAt) : undefined,
       status: newRequest.respondedAt ? "Cerrado" : "Pendiente",
       responsible: newRequest.responsible,
       documents: newRequest.documents
@@ -1068,7 +1068,7 @@ export default function AuditoriaVerificacionPage() {
       source: newActionPlan.source,
       action: newActionPlan.action,
       responsible: newActionPlan.responsible,
-      deadline: new Date(newActionPlan.deadline),
+      deadline: parsePldCalendarDate(newActionPlan.deadline),
       status: "Pendiente",
       progress: 0,
     }

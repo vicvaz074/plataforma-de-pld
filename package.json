@@ -1,11 +1,16 @@
 {
-  "name": "my-v0-project",
+  "name": "davara-pld-mexico",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "prebuild": "rm -rf .next",
+    "prebuild": "node scripts/prepare-pdf-worker.mjs",
     "build": "next build",
     "dev": "next dev",
+    "predev": "node scripts/prepare-pdf-worker.mjs",
+    "typecheck": "tsc --noEmit && tsc -p workers/tsconfig.json",
+    "dev:pilot": "wrangler dev --ip 127.0.0.1 --port 8787",
+    "db:migrate:local": "wrangler d1 migrations apply davara-pld-pilot --local",
+    "build:worker": "wrangler deploy --dry-run --outdir .wrangler/dist",
     "lint": "next lint",
     "sync:pep:cargos": "tsx scripts/sync-pep-cargos.mjs",
     "sync:pep:extract-pdf": "tsx scripts/extract-pep-cargos-pdf.mjs",
@@ -19,7 +24,7 @@
     "sync:sat:formatos": "tsx scripts/sync-sat-formatos.mjs",
     "sync:sat:postal": "node scripts/sync-sat-postal-catalog.mjs",
     "validate:pep:data": "tsx scripts/validate-pep-data.mjs",
-    "test:pld": "tsx --test tests/*.test.ts",
+    "test:pld": "tsx --test --test-concurrency=2 tests/*.test.ts",
     "start": "next start",
     "sync:sat:layouts": "tsx scripts/rebuild-sat-xlsm-layouts.mjs"
   },
@@ -56,6 +61,7 @@
     "@vercel/analytics": "1.3.1",
     "autoprefixer": "^10.4.20",
     "bcryptjs": "latest",
+    "better-auth": "1.7.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
@@ -67,6 +73,8 @@
     "geist": "^1.3.1",
     "input-otp": "1.4.1",
     "jspdf": "latest",
+    "kysely": "0.28.17",
+    "kysely-d1": "0.4.0",
     "lucide-react": "^0.454.0",
     "next": "14.2.35",
     "next-themes": "latest",
@@ -85,14 +93,17 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20261110.1",
     "@types/node": "^22",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "8.57.1",
     "eslint-config-next": "14.2.35",
+    "miniflare": "4.20260730.0",
     "postcss": "^8.5",
     "tailwindcss": "^3.4.17",
     "tsx": "4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "4.160.1"
   }
 }

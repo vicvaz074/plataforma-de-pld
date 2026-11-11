@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { clearPldDemoData, getPldDemoSeedStatus, installPldDemoData } from "@/lib/demo/pld-demo-data"
+import { usePilot } from "@/components/pilot/pilot-provider"
 
 type DemoStatus = ReturnType<typeof getPldDemoSeedStatus>
 
@@ -16,6 +17,7 @@ interface PldDemoDataControlsProps {
 }
 
 export function PldDemoDataControls({ onDataChange }: PldDemoDataControlsProps = {}) {
+  const { mode } = usePilot()
   const { toast } = useToast()
   const [status, setStatus] = useState<DemoStatus>(null)
 
@@ -60,6 +62,7 @@ export function PldDemoDataControls({ onDataChange }: PldDemoDataControlsProps =
     }
   }
 
+  if (mode !== "demo") return null
   return (
     <Card className="mb-6 border-slate-200 bg-slate-50/70 shadow-sm">
       <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">

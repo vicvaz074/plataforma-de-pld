@@ -2,7 +2,7 @@ import { resolveSatFormatoForActividad } from "./sat-formatos"
 import { centsToDecimalString, parseMoneyToCents } from "./money"
 import { resolveSatTemplateForActividad } from "./sat-template-catalog"
 import { renderSatWorkbookXml } from "./sat-xml-program"
-import { validateGeneratedSatXml } from "./sat-xml-validation"
+import { normalizeGeneratedSatXmlText, validateGeneratedSatXml } from "./sat-xml-validation"
 import type {
   PldOperationalCase,
   SatOutputKind,
@@ -50,15 +50,16 @@ export function buildSatXmlResult(input: SatXmlInput): { xml: string; errors: st
   if (!isReport && operationalCase.satCellValues && Object.keys(operationalCase.satCellValues).length) {
     const rendered = renderSatWorkbookXml(template.templateId, operationalCase.satCellValues)
     if (rendered.errors.length) return rendered
-    const checked = validateGeneratedSatXml(rendered.xml)
-    return { xml: rendered.xml, errors: checked.errors, schemaFile: checked.schemaFile }
+    const xml = normalizeGeneratedSatXmlText(rendered.xml)
+    const checked = validateGeneratedSatXml(xml)
+    return { xml, errors: checked.errors, schemaFile: checked.schemaFile }
   }
   // Preserve the established XV semantic-field adapter for legacy records.
   // Other activities must provide explicit cells; no incomplete generic XML.
   if (!isReport && formato.id !== "sat-fraccion-xv-arrendamiento") return { xml: "", errors: ["Completa y vuelve a guardar la captura SAT para generar las celdas de su plantilla. No se genera XML genérico."] }
   const aviso = isReport ? "" : buildArrendamientoAviso(values, operationalCase)
 
-  const xml = [
+  const xml = normalizeGeneratedSatXmlText([
     `<?xml version="1.0" encoding="UTF-8"?>`,
     "",
     `<archivo xsi:schemaLocation="${escapeXml(layout.schemaLocation)}" xmlns="${escapeXml(
@@ -76,7 +77,7 @@ export function buildSatXmlResult(input: SatXmlInput): { xml: string; errors: st
     "</archivo>",
   ]
     .filter((line) => line !== "")
-    .join("\n")
+    .join("\n"))
   const checked = validateGeneratedSatXml(xml)
   return { xml, errors: checked.errors, schemaFile: checked.schemaFile }
 }

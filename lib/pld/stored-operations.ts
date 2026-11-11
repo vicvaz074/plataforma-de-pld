@@ -6,7 +6,7 @@ import {
   parseMoneyToCents,
 } from "./money"
 import type { AvisoSalidaTipo, UmbralStatus } from "./types"
-import { isMxnCurrency, sanitizeOperationFinance, type PldOperationFinance, type PldOperationLegalContext } from "./operation-finance"
+import { areOperationCurrenciesEquivalent, isMxnCurrency, sanitizeOperationFinance, type PldOperationFinance, type PldOperationLegalContext } from "./operation-finance"
 
 export const PLD_OPERATIONS_STORAGE_KEY = "actividades_vulnerables_operaciones"
 export const STORED_PLD_OPERATION_SCHEMA_VERSION = 3 as const
@@ -72,9 +72,14 @@ export interface PldOperationHistoryEntry {
  * conservan para no romper consumidores existentes.
  */
 export interface StoredPldOperationV3 extends Record<string, unknown>, PldOperationLegalContext {
+  satFieldValues?: Record<string, string>
+  satCellValues?: Record<string, string>
+  importSource?: Record<string, unknown>
   captureStatus?: "draft" | "complete"
   finance?: PldOperationFinance
   financeReviewRequired?: boolean
+  dateReviewRequired?: boolean
+  clientIdentityReviewRequired?: boolean
   captureDraft?: { amountText: string; currency: string; exchangeRate?: string; exchangeRateDate?: string; exchangeRateSource?: string }
   schemaVersion: typeof STORED_PLD_OPERATION_SCHEMA_VERSION
   id: string
@@ -300,7 +305,7 @@ function normalizeNow(value?: string) {
   return toIso(value, fallback)
 }
 
-function normalizeOperationDate(value: unknown, now: string) {
+function normalizeOperationDate(value: unknown) {
   if (typeof value === "string") {
     const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
     if (match) {
@@ -311,7 +316,7 @@ function normalizeOperationDate(value: unknown, now: string) {
       }
     }
   }
-  return now.slice(0, 10)
+  return ""
 }
 
 export function periodFromOperationDate(fechaOperacion: string) {
@@ -533,7 +538,8 @@ export function sanitizeStoredPldOperation(
   if (!id) return null
 
   const now = normalizeNow(options.now)
-  const fechaOperacion = normalizeOperationDate(value.fechaOperacion, now)
+  const fechaOperacion = normalizeOperationDate(value.fechaOperacion)
+  const dateReviewRequired = !fechaOperacion
   const periodFromDate = periodFromOperationDate(fechaOperacion)
   const periodo = normalizeOperationPeriod(value.periodo) || periodFromDate
   const anio = Number(periodo.slice(0, 4)) || Number(fechaOperacion.slice(0, 4))
@@ -558,7 +564,7 @@ export function sanitizeStoredPldOperation(
     ? (value.umbralStatus as UmbralStatus)
     : "sin-obligacion"
   const revision = positiveInteger(value.revision, 1)
-  const operationFallbackAt = `${fechaOperacion}T00:00:00.000Z`
+  const operationFallbackAt = fechaOperacion ? `${fechaOperacion}T00:00:00.000Z` : now
   const createdAt = toIso(
     value.createdAt ?? value.creadoEn ?? value.fechaCreacion ?? value.fechaRegistro,
     operationFallbackAt,
@@ -569,6 +575,7 @@ export function sanitizeStoredPldOperation(
   )
   const lifecycle = sanitizeLifecycle(value, updatedAt)
   const submission = sanitizeSubmission(value, lifecycle, umbralStatus, updatedAt)
+  const clientIdentityReviewRequired=!hasStoredPldClientLink(value)
   const history = sanitizeHistory(value, id, revision, createdAt, updatedAt)
   const sujetoObligado = sanitizeSubject(value, options.sujetoObligado)
   const monto = centsToMoney(montoCentavos)
@@ -576,12 +583,14 @@ export function sanitizeStoredPldOperation(
   const finance = sanitizeOperationFinance(value.finance)
   const currency = asString(value.moneda, "MXN").trim().toUpperCase() || "MXN"
   const financeReviewRequired = (!isMxnCurrency(currency) && !finance) ||
-    Boolean(value.finance && !finance) || Boolean(finance && finance.mxnAmountCents !== montoCentavos)
+    Boolean(value.finance && !finance) || Boolean(finance && (finance.mxnAmountCents !== montoCentavos || !areOperationCurrenciesEquivalent(currency, finance.currency)))
 
   return {
     ...value,
     schemaVersion: STORED_PLD_OPERATION_SCHEMA_VERSION,
-    captureStatus: financeReviewRequired || value.captureStatus === "draft" ? "draft" : value.captureStatus === "complete" ? "complete" : undefined,
+    captureStatus: financeReviewRequired || dateReviewRequired || (clientIdentityReviewRequired&&!submission.wasEverPresented) || value.captureStatus === "draft" ? "draft" : value.captureStatus === "complete" ? "complete" : undefined,
+    clientIdentityReviewRequired,
+    dateReviewRequired,
     finance,
     financeReviewRequired,
     captureDraft: sanitizeCaptureDraft(value.captureDraft) || (financeReviewRequired ? { amountText: String(value.monto ?? monto), currency } : undefined),
@@ -772,7 +781,9 @@ export function loadStoredPldOperations(
   }
 
   const result = migrateStoredPldOperations(serialized, options)
-  if (result.migrated && !result.parseError && (options.persistMigration ?? true)) {
+  // Visiting a screen is not consent to discard invalid/duplicate records.
+  // Keep the original bytes available for the assisted migration/quarantine.
+  if (result.migrated && !result.parseError && result.discardedCount === 0 && result.duplicateIds.length === 0 && !result.operations.some(operation=>operation.clientIdentityReviewRequired) && (options.persistMigration ?? true)) {
     storage.setItem(key, JSON.stringify(result.operations))
   }
   return result
@@ -1401,6 +1412,8 @@ export function recalculateStoredPldOperationsChronologically(
   const recordHistory = options.recordHistory ?? true
 
   return ordered.map((operation) => {
+    if(!hasStoredPldClientLink(operation))return {...operation,clientIdentityReviewRequired:true,
+      captureStatus:operation.submission.wasEverPresented?operation.captureStatus:"draft" as const}
     if (operation.lifecycle.status === "cancelled" || operation.captureStatus === "draft") return operation
     const key = [
       storedPldSubjectIdentity(operation.sujetoObligado),
@@ -1497,21 +1510,21 @@ export function recalculateStoredPldOperationsChronologically(
 }
 
 export function activeStoredPldOperations(operations: StoredPldOperationV3[]) {
-  return operations.filter((operation) => operation.lifecycle.status === "active" && operation.captureStatus !== "draft")
+  return operations.filter((operation) => operation.lifecycle.status === "active" && operation.captureStatus !== "draft" && !operation.clientIdentityReviewRequired)
+}
+
+export function hasStoredPldClientLink(operation:Record<string,unknown>){
+  return Boolean(optionalString(operation.expedienteId)||optionalString(operation.expedienteReferenciado)||optionalString(operation.clienteId))
 }
 
 /** An absent RFC must never group otherwise unrelated CURP/NIF-only clients. */
-export function storedPldClientIdentity(operation: StoredPldOperationV3) {
+export function storedPldClientIdentity(operation: { id: string; rfc: string; expedienteId?: unknown; expedienteReferenciado?: unknown; clienteId?: unknown; identifiers?: unknown; expedienteIdentifiers?: unknown; curp?: unknown; nif?: unknown }) {
   const expedienteId = optionalString(operation.expedienteId) || optionalString(operation.expedienteReferenciado)
   if (expedienteId) return `expediente:${expedienteId}`
   const clienteId = optionalString(operation.clienteId)
   if (clienteId) return `cliente:${clienteId}`
-  if (operation.rfc) return `rfc:${operation.rfc.toUpperCase()}`
-  const identifiers = isRecord(operation.identifiers) ? operation.identifiers : {}
-  for (const key of ["curp", "nif"] as const) {
-    const identifier = optionalString(identifiers[key]) || optionalString(operation[key])
-    if (identifier) return `${key}:${identifier.toUpperCase()}`
-  }
+  // Legacy unlinked snapshots stay isolated until an explicit client/EUI link
+  // is chosen. Equal RFC/CURP/NIF values are not evidence of a shared identity.
   return `sin-vinculo:${operation.id}`
 }
 

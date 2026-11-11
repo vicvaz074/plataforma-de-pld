@@ -1,4 +1,5 @@
 "use client"
+import { getModuleStorage, canWriteModuleStorage, flushModuleStorage } from "@/lib/pilot/module-storage"
 
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react"
 import { Badge } from "@/components/ui/badge"
@@ -15,6 +16,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { ActividadVulnerableCombobox } from "@/components/pld/actividad-vulnerable-combobox"
 import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
+import { PldImportDialog } from "@/components/pld/import-dialog"
+import { usePilot } from "@/components/pilot/pilot-provider"
+import { cloudRegistrationIssue, prefillCompanyRegistration } from "@/lib/pilot/company-registration"
 import { actividadesVulnerables } from "@/lib/data/actividades"
 import { findCodigoPostalInfo, registerCodigoPostalInfo, type CodigoPostalInfo } from "@/lib/data/codigos-postales"
 import { PAISES, findPaisByNombre } from "@/lib/data/paises"
@@ -936,6 +940,8 @@ async function fetchCodigoPostalInfo(codigo: string): Promise<CodigoPostalInfo |
 
 export default function RegistroSATPage() {
   const { toast } = useToast()
+  const {mode,company}=usePilot()
+  const connectedCompany=mode==="cloud" ? company : null
   const [activeTab, setActiveTab] = useState("nuevo")
   const [tipoSujeto, setTipoSujeto] = useState<SubjectType>("none")
   const [identificacion, setIdentificacion] = useState<IdentificacionSujeto>(() => createDefaultIdentificacion())
@@ -960,6 +966,8 @@ export default function RegistroSATPage() {
     createDefaultDatosChecklistState(),
   )
   const [registroStorageReady, setRegistroStorageReady] = useState(false)
+  const [registroLoadError,setRegistroLoadError]=useState("")
+  const [registroSaving,setRegistroSaving]=useState(false)
 
   const resultadoChecklist = useMemo(
     () =>
@@ -999,14 +1007,17 @@ export default function RegistroSATPage() {
   }, [actividades, catalogoActividades])
 
   const cargarRegistroSatData = useCallback(() => {
-    const savedData = localStorage.getItem("registro-sat-data")
+    setRegistroStorageReady(false)
+    setRegistroLoadError("")
+    const savedData = getModuleStorage().getItem("registro-sat-data")
     if (!savedData) {
+      if (connectedCompany) {const issue=cloudRegistrationIssue({},connectedCompany);if(issue){setRegistroLoadError(issue);return}}
       setDocumentos([])
       setDatosChecklistState(createDefaultDatosChecklistState())
       setSujetosRegistrados([])
       setSujetoSeleccionadoId(null)
       setTipoSujeto("none")
-      setIdentificacion(createDefaultIdentificacion())
+      setIdentificacion(connectedCompany ? prefillCompanyRegistration(createDefaultIdentificacion(),connectedCompany) : createDefaultIdentificacion())
       setContactos(Array.from({ length: 3 }, () => createDefaultContacto()))
       setActividades([createDefaultActividad()])
       setRepresentante(createDefaultRepresentante())
@@ -1019,6 +1030,10 @@ export default function RegistroSATPage() {
 
     try {
       const data = JSON.parse(savedData)
+      if (connectedCompany) {
+        const issue=cloudRegistrationIssue(data,connectedCompany)
+        if (issue) throw new Error(issue)
+      }
 
       const documentosGuardados = Array.isArray(data.documentos)
         ? data.documentos.map((doc: Partial<DocumentUpload>) => ({
@@ -1309,7 +1324,7 @@ export default function RegistroSATPage() {
       setSujetosRegistrados(sujetosNormalizados)
       setSujetoSeleccionadoId(sujetosNormalizados[0]?.id ?? null)
       setTipoSujeto((data.tipoSujeto as SubjectType) ?? "none")
-      setIdentificacion(identificacionCargada)
+      setIdentificacion(connectedCompany ? prefillCompanyRegistration(identificacionCargada,connectedCompany) : identificacionCargada)
       setContactos(contactosNormalizados)
       setActividades(actividadesNormalizadas)
       setRepresentante(representanteCargado)
@@ -1317,44 +1332,30 @@ export default function RegistroSATPage() {
       setRegistroStorageReady(true)
     } catch (error) {
       console.error("Error al cargar datos de registro SAT", error)
-      setRegistroStorageReady(true)
+      setRegistroLoadError(error instanceof Error ? error.message : "No se pudo recuperar el registro de Alta. Los datos originales se conservaron.")
     }
-  }, [])
+  }, [connectedCompany?.id,connectedCompany?.rfc])
 
   useEffect(() => {
     cargarRegistroSatData()
   }, [cargarRegistroSatData])
 
-  useEffect(() => {
-    if (!registroStorageReady) return
+  const construirRegistroPersistido=(overrides:Record<string,unknown>={})=>{
+    const stored=getModuleStorage().getItem("registro-sat-data")
+    const previous=stored ? JSON.parse(stored) : {}
+    if (!previous || typeof previous!=="object" || Array.isArray(previous)) throw new Error("El registro original necesita recuperación antes de guardar.")
+    return {...previous,schemaVersion:2,documentos,datosChecklist:Object.fromEntries([
+      ...Object.entries(datosChecklistState).map(([id,value])=>[id,{completed:false,notes:value.notes}]),
+      ...resultadoChecklist.items.map((item)=>[item.id,{completed:item.status==="complete",notes:datosChecklistState[item.id]?.notes || ""}]),
+    ]),sujetosRegistrados,tipoSujeto,identificacion:connectedCompany ? prefillCompanyRegistration(identificacion,connectedCompany) : identificacion,
+      contactos,actividades,representante,documentosRegistro:separarDocumentosRegistro(documentosRegistro),...overrides}
+  }
 
-    const datosChecklist = Object.fromEntries([
-      ...Object.entries(datosChecklistState).map(([id, value]) => [
-        id,
-        { completed: false, notes: value.notes },
-      ]),
-      ...resultadoChecklist.items.map((item) => [
-        item.id,
-        {
-          completed: item.status === "complete",
-          notes: datosChecklistState[item.id]?.notes ?? "",
-        },
-      ]),
-    ])
-    const data = {
-      schemaVersion: 2,
-      documentos,
-      datosChecklist,
-      sujetosRegistrados,
-      tipoSujeto,
-      identificacion,
-      contactos,
-      actividades,
-      representante,
-      documentosRegistro: separarDocumentosRegistro(documentosRegistro),
-    }
+  useEffect(() => {
+    if (!registroStorageReady || !canWriteModuleStorage("registro-sat-data")) return
     try {
-      localStorage.setItem("registro-sat-data", JSON.stringify(data))
+      getModuleStorage().setItem("registro-sat-data", JSON.stringify(construirRegistroPersistido()))
+      void flushModuleStorage().catch((error)=>toast({title:"Cambios pendientes de guardar",description:error instanceof Error ? error.message : "No se confirmó el guardado. Mantén esta página abierta.",variant:"destructive"}))
     } catch (error) {
       console.error("No se pudo guardar el registro SAT en este navegador", error)
     }
@@ -1373,6 +1374,8 @@ export default function RegistroSATPage() {
   ])
 
   const crearDocumentoDesdeArchivo = async (file: File, tipo: string): Promise<DocumentUpload> => {
+    if (!registroStorageReady || !canWriteModuleStorage("registro-sat-data")) throw new Error("No tienes permiso de carga en este registro.")
+    if (file.size>20*1024*1024 || !/\.(pdf|png|jpe?g|xml|xlsx?|xlsm|docx?|txt)$/i.test(file.name)) throw new Error("Selecciona un documento o imagen de hasta 20 MB.")
     const dataUrl = await readFileAsDataUrl(file)
     return {
       id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
@@ -1395,7 +1398,7 @@ export default function RegistroSATPage() {
     const pdfjs = "default" in pdfjsModule ? pdfjsModule.default : pdfjsModule
     if (!pdfjs.GlobalWorkerOptions.workerSrc) {
       pdfjs.GlobalWorkerOptions.workerSrc =
-        "https://unpkg.com/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs"
+        "/pdf.worker.min.mjs"
     }
     const buffer = await file.arrayBuffer()
     const pdf = await pdfjs.getDocument({ data: buffer }).promise
@@ -1437,7 +1440,7 @@ export default function RegistroSATPage() {
 
   const limpiarFormulario = () => {
     setTipoSujeto("none")
-    setIdentificacion(createDefaultIdentificacion())
+    setIdentificacion(connectedCompany ? prefillCompanyRegistration(createDefaultIdentificacion(),connectedCompany) : createDefaultIdentificacion())
     setContactos(Array.from({ length: 3 }, () => createDefaultContacto()))
     setActividades([createDefaultActividad()])
     setRepresentante(createDefaultRepresentante())
@@ -1453,6 +1456,7 @@ export default function RegistroSATPage() {
     )
 
   const cargarEjemploSujeto = (ejemplo: EjemploSujetoObligado) => {
+    if (mode!=="demo") return
     setTipoSujeto(ejemplo.tipo)
     setIdentificacion({ ...createDefaultIdentificacion(), ...ejemplo.identificacion })
     setContactos(completarContactos(ejemplo.contactos))
@@ -1483,10 +1487,12 @@ export default function RegistroSATPage() {
     cargarEjemploSujeto(ejemplo)
   }
 
-  const registrarSujeto = (
+  const registrarSujeto = async (
     docs: Record<RegistroDocumentKey, DocumentUpload | null>,
     opciones?: { permitirIncompleto?: boolean },
   ) => {
+    if (!registroStorageReady || registroLoadError || !canWriteModuleStorage("registro-sat-data")) throw new Error("No se puede guardar el Alta hasta recuperar los datos y contar con permiso de edición.")
+    if (connectedCompany && identificacion.rfc.trim().toUpperCase()!==connectedCompany.rfc.trim().toUpperCase()) throw new Error("El RFC debe corresponder a la empresa activa.")
     if (tipoSujeto === "none" || !nombreSujeto.trim() || !resumenActividades.trim()) return false
 
     const documentosSeparados = separarDocumentosRegistro(docs)
@@ -1512,9 +1518,12 @@ export default function RegistroSATPage() {
         .map(([id, value]) => [id, value.notes]),
     )
 
-    const sujetoExistente = sujetosRegistrados.find((item) => item.id === sujetoEnEdicionId)
+    const current=construirRegistroPersistido()
+    if (connectedCompany) {const issue=cloudRegistrationIssue(current,connectedCompany);if(issue)throw new Error(issue)}
+    const latestSubjects=Array.isArray(current.sujetosRegistrados) ? current.sujetosRegistrados as SujetoRegistrado[] : []
+    const sujetoExistente = latestSubjects.find((item) => item.id === sujetoEnEdicionId) || (connectedCompany ? latestSubjects[0] : undefined)
     const nuevoSujeto: SujetoRegistrado = {
-      id: sujetoExistente?.id ?? (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString()),
+      id: sujetoExistente?.id ?? connectedCompany?.id ?? (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString()),
       nombre: nombreSujeto.trim(),
       tipo: tipoSujeto,
       actividad: resumenActividades.trim(),
@@ -1526,13 +1535,14 @@ export default function RegistroSATPage() {
       datosCompletos: evaluacion.dataComplete,
       documentosCompletos: evaluacion.documentsComplete,
       registroCompleto,
-      identificacion,
+      identificacion:connectedCompany ? prefillCompanyRegistration(identificacion,connectedCompany) : identificacion,
       contactos,
       actividades,
       representante: tipoSujeto === "moral" || tipoSujeto === "fideicomiso" ? representante : null,
     }
 
-    setSujetosRegistrados((prev) => {
+    const nextSubjects=(()=>{
+      const prev=latestSubjects
       const existenteIndex = sujetoExistente
         ? prev.findIndex((item) => item.id === sujetoExistente.id)
         : prev.findIndex((item) => item.nombre === nuevoSujeto.nombre && item.tipo === tipoSujeto)
@@ -1542,10 +1552,15 @@ export default function RegistroSATPage() {
         return copia
       }
       return [nuevoSujeto, ...prev]
-    })
+    })()
+    const nextData=construirRegistroPersistido({sujetosRegistrados:connectedCompany ? [nuevoSujeto] : nextSubjects,documentosRegistro:documentosSeparados})
+    if (connectedCompany) {const issue=cloudRegistrationIssue(nextData,connectedCompany);if(issue)throw new Error(issue)}
+    getModuleStorage().setItem("registro-sat-data",JSON.stringify(nextData))
+    await flushModuleStorage()
+    setSujetosRegistrados(connectedCompany ? [nuevoSujeto] : nextSubjects)
     setSujetoSeleccionadoId(nuevoSujeto.id)
-    setDocumentosRegistro({ detalle: null, acuse: null, aceptacion: null })
-    setSujetoEnEdicionId(null)
+    if (!connectedCompany) setDocumentosRegistro({ detalle: null, acuse: null, aceptacion: null })
+    setSujetoEnEdicionId(connectedCompany ? nuevoSujeto.id : null)
 
     toast({
       title: sujetoExistente
@@ -1559,10 +1574,10 @@ export default function RegistroSATPage() {
           ? "Los datos y documentos aplicables quedaron completos."
           : "Los documentos obligatorios están pendientes. El checklist se seguirá actualizando automáticamente.",
     })
-    return registroCompleto
+    return true
   }
 
-  const registrarSujetoManual = () => {
+  const registrarSujetoManual = async () => {
     if (!camposObligatoriosCapturados) {
       toast({
         title: "Faltan datos clave",
@@ -1572,10 +1587,14 @@ export default function RegistroSATPage() {
       return
     }
 
-    registrarSujeto(documentosRegistro, { permitirIncompleto: true })
-    setActiveTab("registrados")
-
-    limpiarFormulario()
+    setRegistroSaving(true)
+    try {
+      const saved=await registrarSujeto(documentosRegistro, { permitirIncompleto: true })
+      if (!saved) return
+      setActiveTab("registrados")
+      if (!connectedCompany) limpiarFormulario()
+    } catch (error) {toast({title:"No se guardó el registro",description:error instanceof Error ? error.message : "Conserva la captura y reintenta.",variant:"destructive"})}
+    finally {setRegistroSaving(false)}
   }
 
   const manejarCargaDocumentoRegistro = async (
@@ -1628,8 +1647,13 @@ export default function RegistroSATPage() {
       }
 
       const documento = await crearDocumentoDesdeArchivo(file, tipoDoc)
+      const current=construirRegistroPersistido()
+      const nextDocuments=[documento,...(Array.isArray(current.documentos) ? current.documentos : [])]
+      const nextRegistroDocuments={...separarDocumentosRegistro<DocumentUpload>(current.documentosRegistro),[tipoDoc]:documento}
+      getModuleStorage().setItem("registro-sat-data",JSON.stringify(construirRegistroPersistido({documentos:nextDocuments,documentosRegistro:nextRegistroDocuments})))
+      await flushModuleStorage()
       setDocumentos((prev) => [documento, ...prev])
-      setDocumentosRegistro((prev) => ({ ...prev, [tipoDoc]: documento }))
+      setDocumentosRegistro(nextRegistroDocuments)
 
       toast({
         title: `Documento ${tipoDoc === "detalle" ? "detalle" : tipoDoc} cargado`,
@@ -1679,6 +1703,7 @@ export default function RegistroSATPage() {
   }
 
   const iniciarNuevoRegistro = () => {
+    if (connectedCompany) {if(sujetoSeleccionado)iniciarEdicionSujeto();else setActiveTab("nuevo");return}
     limpiarFormulario()
     setActiveTab("nuevo")
   }
@@ -1689,6 +1714,7 @@ export default function RegistroSATPage() {
   }
 
   const eliminarSujetoSeleccionado = () => {
+    if (connectedCompany) {toast({title:"Identidad de la empresa",description:"El Alta pertenece a esta empresa. Para suspender o archivar la razón social utiliza Administración.",variant:"destructive"});return}
     if (!sujetoSeleccionado) return
 
     const confirmar = window.confirm(
@@ -1724,6 +1750,9 @@ export default function RegistroSATPage() {
 
     try {
       const documento = await crearDocumentoDesdeArchivo(file, tipo)
+      const current=construirRegistroPersistido()
+      getModuleStorage().setItem("registro-sat-data",JSON.stringify(construirRegistroPersistido({documentos:[documento,...(Array.isArray(current.documentos) ? current.documentos : [])]})))
+      await flushModuleStorage()
       setDocumentos((prev) => [documento, ...prev])
       toast({
         title: "Documento cargado",
@@ -1749,19 +1778,19 @@ export default function RegistroSATPage() {
 
       const cacheKey = `${SEPOMEX_STORAGE_PREFIX}${limpio}`
       let info: CodigoPostalInfo | undefined
-      const cacheRaw = window.localStorage.getItem(cacheKey)
+      const cacheRaw = getModuleStorage().getItem(cacheKey)
       if (cacheRaw) {
         try {
           info = JSON.parse(cacheRaw) as CodigoPostalInfo
         } catch {
-          window.localStorage.removeItem(cacheKey)
+          getModuleStorage().removeItem(cacheKey)
         }
       }
 
       if (!info) {
         info = await fetchCodigoPostalInfo(limpio)
         if (info) {
-          window.localStorage.setItem(cacheKey, JSON.stringify(info))
+          getModuleStorage().setItem(cacheKey, JSON.stringify(info))
         }
       }
 
@@ -1855,7 +1884,7 @@ export default function RegistroSATPage() {
         setIdentificacion((prev) => ({
           ...prev,
           nombre: prev.nombre.trim() ? prev.nombre : datos.identificacion?.nombre ?? "",
-          rfc: prev.rfc.trim() ? prev.rfc : datos.identificacion?.rfc ?? "",
+          rfc: connectedCompany ? connectedCompany.rfc : prev.rfc.trim() ? prev.rfc : datos.identificacion?.rfc ?? "",
           fecha: prev.fecha.trim() ? prev.fecha : datos.identificacion?.fecha ?? "",
           paisNacionalidad: prev.paisNacionalidad.trim()
             ? prev.paisNacionalidad
@@ -1981,6 +2010,7 @@ export default function RegistroSATPage() {
       setTipoSujeto,
       setRepresentante,
       tipoSujeto,
+      connectedCompany,
     ],
   )
 
@@ -1999,6 +2029,7 @@ export default function RegistroSATPage() {
   }
 
   const actualizarIdentificacionCampo = (campo: keyof IdentificacionSujeto, valor: string) => {
+    if (connectedCompany && campo==="rfc") return
     setIdentificacion((prev) => ({ ...prev, [campo]: valor }))
   }
 
@@ -2065,11 +2096,13 @@ export default function RegistroSATPage() {
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline" className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Sesión guardada en este navegador
+              {mode==="cloud" ? "Datos de la empresa activa" : "Demo guardada en este navegador"}
             </Badge>
             <Badge variant="secondary">Registro ágil y responsivo</Badge>
           </div>
         </div>
+
+        {registroLoadError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900"><p className="font-semibold">Alta pendiente de recuperación</p><p className="mt-1">{registroLoadError}</p><p className="mt-2">El registro original no se modificó. Revisa su empresa y respaldo antes de continuar.</p></div>}
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="sm:col-span-2 xl:col-span-1">
@@ -2114,6 +2147,7 @@ export default function RegistroSATPage() {
       </div>
 
       <PldDemoDataControls onDataChange={cargarRegistroSatData} />
+      <PldImportDialog destination="registro" onComplete={() => window.location.reload()} />
 
       {sujetoSeleccionado && (
         <Card className="border-emerald-200 bg-emerald-50/60">
@@ -2172,8 +2206,8 @@ export default function RegistroSATPage() {
                     Selecciona un registro para ver la información cargada y confirmar si el expediente está completo.
                   </CardDescription>
                 </div>
-                <Button size="sm" onClick={iniciarNuevoRegistro}>
-                  Registrar nuevo sujeto obligado
+                <Button size="sm" onClick={iniciarNuevoRegistro} disabled={!registroStorageReady || registroSaving}>
+                  {connectedCompany && sujetosRegistrados.length ? "Actualizar Alta de la empresa" : "Registrar sujeto obligado"}
                 </Button>
               </div>
               {sujetosRegistrados.length === 0 && (
@@ -2248,9 +2282,9 @@ export default function RegistroSATPage() {
                         <Button variant="outline" size="sm" onClick={iniciarEdicionSujeto}>
                           Editar
                         </Button>
-                        <Button variant="destructive" size="sm" onClick={eliminarSujetoSeleccionado}>
+                        {mode==="demo" && <Button variant="destructive" size="sm" onClick={eliminarSujetoSeleccionado}>
                           Eliminar
-                        </Button>
+                        </Button>}
                       </div>
                     </div>
 
@@ -2349,7 +2383,7 @@ export default function RegistroSATPage() {
                   contacto y actividades vulnerables requeridas.
                 </div>
               </div>
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              {mode==="demo" && <><div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
                 <div className="space-y-2">
                   <Label htmlFor="ejemplo-sujeto">Cargar ejemplo de sujeto obligado</Label>
                   <Select value={ejemploSeleccionado} onValueChange={setEjemploSeleccionado}>
@@ -2371,7 +2405,7 @@ export default function RegistroSATPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 El ejemplo reemplaza los datos actuales del formulario y es útil para pruebas rápidas.
-              </p>
+              </p></>}
               {tipoSujeto === "none" && (
                 <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
                   Selecciona un tipo de sujeto obligado para habilitar el resto del formulario.
@@ -2401,9 +2435,11 @@ export default function RegistroSATPage() {
                     <Input
                       id="rfc-sujeto"
                       value={identificacion.rfc}
+                      readOnly={Boolean(connectedCompany)}
                       onChange={(event) => actualizarIdentificacionCampo("rfc", event.target.value.toUpperCase())}
                       placeholder="RFC con homoclave"
                     />
+                    {connectedCompany && <p className="text-xs text-muted-foreground">RFC de {connectedCompany.name}. Las razones sociales se gestionan desde Administración.</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="nombre-sujeto">{obtenerEtiquetaNombre(tipoSujeto)}</Label>
@@ -2994,8 +3030,8 @@ export default function RegistroSATPage() {
                 </CardDescription>
               </div>
               <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
-                <Button className="w-full md:w-auto" onClick={registrarSujetoManual} disabled={!camposObligatoriosCapturados}>
-                  {enEdicion ? "Actualizar sujeto obligado" : "Registrar sujeto obligado"}
+                <Button className="w-full md:w-auto" onClick={()=>void registrarSujetoManual()} disabled={!camposObligatoriosCapturados || !registroStorageReady || registroSaving}>
+                  {registroSaving ? "Guardando…" : enEdicion ? "Actualizar sujeto obligado" : "Registrar sujeto obligado"}
                 </Button>
                 {enEdicion && (
                   <Button variant="ghost" className="w-full md:w-auto" onClick={cancelarEdicion}>
@@ -3003,7 +3039,7 @@ export default function RegistroSATPage() {
                   </Button>
                 )}
                 <p className="text-xs text-muted-foreground text-left md:text-right">
-                  Se confirmará el registro y el formulario quedará listo para el siguiente sujeto.
+                  {connectedCompany ? "El Alta queda vinculada únicamente a la empresa activa. Se confirma después del guardado." : "Se confirmará el registro y el formulario quedará listo para el siguiente sujeto."}
                 </p>
               </div>
             </CardHeader>

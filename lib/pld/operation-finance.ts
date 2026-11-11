@@ -1,4 +1,4 @@
-import { centsToDecimalString, parseMoneyToCents } from "./money"
+import { centsToDecimalString, formatMoneyFromCents, parseMoneyToCents } from "./money"
 
 /** Capture currency is independent from the MXN amount used for UMA thresholds. */
 export interface PldOperationFinance {
@@ -23,6 +23,24 @@ export interface PldOperationLegalContext {
 export function isMxnCurrency(currency: string) {
   const code = currency.split(",")[0].trim().toUpperCase()
   return ["MXN", "1", "001", "PESO MEXICANO", "PESOS MEXICANOS"].includes(code)
+}
+
+/** Only exact codes or the existing MXN aliases are equivalent; never guess
+ * a foreign currency from a free-form description or an unknown SAT code. */
+export function areOperationCurrenciesEquivalent(left: string, right: string) {
+  if (isMxnCurrency(left) || isMxnCurrency(right)) return isMxnCurrency(left) && isMxnCurrency(right)
+  return left.split(",")[0].trim().toUpperCase() === right.split(",")[0].trim().toUpperCase()
+}
+
+export function formatOperationFinancialSummary(operation: { montoCentavos: number; moneda?: string; finance?: PldOperationFinance; financeReviewRequired?: boolean }) {
+  const currency = operation.moneda || "MXN"
+  const finance = operation.finance
+  if (operation.financeReviewRequired || (finance && !areOperationCurrenciesEquivalent(currency, finance.currency))) return "Importe y conversión pendientes de revisión"
+  const mxn = `${formatMoneyFromCents(operation.montoCentavos, { currency: "MXN" })} MXN`
+  if (isMxnCurrency(currency)) return mxn
+  const original = finance && parseMoneyToCents(finance.originalAmount, { allowZero: true })
+  if (!finance || !original || !original.ok) return "Importe original y equivalente MXN pendientes"
+  return `${formatMoneyFromCents(original.cents, { currency: finance.currency, currencyDisplay: "code" })} · equivalente ${mxn}`
 }
 
 /** LFPIORPI art. 17 XII A a): use the highest applicable value, not just the price. */

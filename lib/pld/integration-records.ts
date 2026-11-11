@@ -42,6 +42,7 @@ export function readExpedienteRecords(storage: Pick<IntegrationStorage, "getItem
 export interface IntegrationClient {
   id: string
   expedienteId?: string
+  clientId?: string
   nombre: string
   rfc: string
   identifiers: ExpedienteIdentifiers
@@ -66,12 +67,14 @@ export function getIntegrationClient(value: unknown): IntegrationClient | null {
   })
   const identifier = getPrimaryExpedienteIdentifier(identifiers)
   const expedienteId = text(raw.expedienteId || raw.expedienteReferenciado || eui.expedienteId)
+  const clientId = text(raw.clienteId || raw.clientId)
   const nombre = text(raw.nombre || raw.cliente || cliente.denominacion || cliente.nombre) ||
     [cliente.nombres, cliente.apellidoPaterno, cliente.apellidoMaterno].filter(Boolean).join(" ")
-  if (!expedienteId && !identifier && !nombre) return null
+  if (!expedienteId && !clientId && !identifier && !nombre) return null
   return {
-    id: expedienteId || createLegacyExpedienteId(identifier, nombre),
+    id: expedienteId || clientId || createLegacyExpedienteId(identifier, nombre),
     expedienteId: expedienteId || undefined,
+    clientId: clientId || undefined,
     nombre: nombre || identifier,
     rfc: identifiers.rfc,
     identifiers,
@@ -86,7 +89,7 @@ export function getIntegrationClient(value: unknown): IntegrationClient | null {
 export function matchesIntegrationClient(value: unknown, client: IntegrationClient): boolean {
   const candidate = getIntegrationClient(value)
   if (!candidate) return false
-  if (candidate.expedienteId && client.expedienteId) return candidate.expedienteId === client.expedienteId
+  if (candidate.expedienteId || client.expedienteId || candidate.clientId || client.clientId) return candidate.id === client.id
   return Boolean(candidate.identifier && candidate.identifier === client.identifier)
 }
 
@@ -362,10 +365,12 @@ export function normalizeEbrEvaluations(raw: unknown): IntegrationRecord[] {
   })
 }
 
-export function findClientEbrEvaluation(evaluations: IntegrationRecord[], client: IntegrationClient | null) {
+export function findClientEbrEvaluation(evaluations: IntegrationRecord[], client: IntegrationClient | null, options: { allowLegacyIdentifierMatch?: boolean } = {}) {
   if (!client) return null
-  const exact = evaluations.filter((item) => item.expedienteId === client.id || item.clientId === client.id)
-  const matching = exact.length ? exact : evaluations.filter((item) => !item.expedienteId && Boolean(client.identifier && (item.rfc === client.identifier || item.clientId === client.identifier)))
+  const active = evaluations.filter((item) => !item.archivedAt)
+  const exact = active.filter((item) => item.expedienteId === client.id || item.clientId === client.id)
+  const allowLegacy = options.allowLegacyIdentifierMatch === true || (!client.expedienteId && !client.clientId)
+  const matching = exact.length ? exact : allowLegacy ? active.filter((item) => !item.expedienteId && (!item.clientId || item.clientId === item.rfc || item.clientId === client.identifier) && Boolean(client.identifier && (item.rfc === client.identifier || item.clientId === client.identifier))) : []
   return matching.sort((a, b) => text(b.updatedAt).localeCompare(text(a.updatedAt)))[0] ?? null
 }
 

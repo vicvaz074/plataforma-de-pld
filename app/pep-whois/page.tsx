@@ -1,4 +1,5 @@
 "use client"
+import { getModuleStorage, canWriteModuleStorage } from "@/lib/pilot/module-storage"
 
 import { useEffect, useMemo, useState } from "react"
 import { AlertTriangle, Database, FileCheck2, History, Search, ShieldAlert, Trash2 } from "lucide-react"
@@ -11,6 +12,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { SearchableSelect } from "@/components/pld/searchable-select"
+import { getIntegrationClient, type IntegrationClient } from "@/lib/pld/integration-records"
+import { flushModuleStorage } from "@/lib/pilot/module-storage"
 import pepCargosData from "@/public/data/pep-cargos-mx.json"
 import pepOpenSanctionsData from "@/public/data/pep-open-sanctions-mx.json"
 import pepPersonasData from "@/public/data/pep-personas-mx.json"
@@ -40,6 +44,8 @@ import type {
 } from "@/lib/pld/types"
 
 type Decision = PepInternalRecord["decision"]
+type ScopedPepRecord = PepInternalRecord & { expedienteId?: string; personId?: string }
+type ScopedPepSearch = PepSearchResponse & { expedienteId?: string; personId?: string }
 
 const cargosSnapshot = pepCargosData as unknown as { sourceUrl: string; syncedAt: string; count: number; cargos: PepCargo[] }
 const openSanctionsSnapshot = pepOpenSanctionsData as unknown as {
@@ -144,8 +150,11 @@ const EMPTY_QUERY: PepSearchQuery = {
 export default function PepWhoIsPage() {
   const [query, setQuery] = useState<PepSearchQuery>(EMPTY_QUERY)
   const [response, setResponse] = useState<PepSearchResponse | null>(null)
-  const [internalRecords, setInternalRecords] = useState<PepInternalRecord[]>([])
-  const [history, setHistory] = useState<PepSearchResponse[]>([])
+  const [internalRecords, setInternalRecords] = useState<ScopedPepRecord[]>([])
+  const [history, setHistory] = useState<ScopedPepSearch[]>([])
+  const [clients, setClients] = useState<IntegrationClient[]>([])
+  const [selectedClientId, setSelectedClientId] = useState("")
+  const [storageError, setStorageError] = useState("")
   const [selectedResultId, setSelectedResultId] = useState("")
   const [decision, setDecision] = useState<Decision>("requiere_revision")
   const [decisionEvidence, setDecisionEvidence] = useState("")
@@ -158,8 +167,13 @@ export default function PepWhoIsPage() {
   const [manualRelatedPep, setManualRelatedPep] = useState("")
 
   useEffect(() => {
-    setInternalRecords(readInternalRecords())
-    setHistory(readSearchHistory())
+    try {
+      setInternalRecords(readInternalRecords())
+      setHistory(readSearchHistory())
+      const expedientes = JSON.parse(getModuleStorage().getItem("kyc_expedientes_detalle") || "[]")
+      if (!Array.isArray(expedientes)) throw new Error("La colección de expedientes no es legible.")
+      setClients(expedientes.map(getIntegrationClient).filter((client): client is IntegrationClient => Boolean(client)))
+    } catch (error) { setStorageError(error instanceof Error ? error.message : "No se pudieron recuperar los datos.") }
   }, [])
 
   const selectedResult = useMemo(() => {
@@ -174,13 +188,14 @@ export default function PepWhoIsPage() {
     setQuery((prev) => ({ ...prev, [key]: value }))
   }
 
-  function runSearch() {
+  async function runSearch() {
+    if (storageError) return
     const next = searchPep(
       normalizeQuery(query),
       {
         personRecords: personasSnapshot.personas,
         cargos: cargosSnapshot.cargos,
-        internalRecords,
+        internalRecords: internalRecords.filter((record) => record.expedienteId === selectedClientId && Boolean(selectedClientId)),
         snapshots: [
           {
             sourceId: "pep-personas-mx",
@@ -205,18 +220,20 @@ export default function PepWhoIsPage() {
     )
     setResponse(next)
     setSelectedResultId(next.results[0]?.entity.id ?? "")
-    const nextHistory = [next, ...history].slice(0, 20)
-    setHistory(nextHistory)
-    persistSearchHistory(nextHistory)
+    if (!canWriteModuleStorage(PEP_SEARCH_HISTORY_STORAGE_KEY)) return
+    const nextHistory = [{ ...next, expedienteId: selectedClientId || undefined }, ...history]
+    try { persistSearchHistory(nextHistory); await flushModuleStorage(); setHistory(nextHistory) }
+    catch (error) { setStorageError(error instanceof Error ? error.message : "No se guardó la consulta.") }
   }
 
-  function saveDecision() {
+  async function saveDecision() {
     const subjectName = selectedResult?.entity.name || query.nombre?.trim()
-    if (!subjectName || !evidenceReady) return
+    if (!subjectName || !evidenceReady || storageError || !selectedClientId) return
 
-    const record: PepInternalRecord = {
+    const record: ScopedPepRecord = {
       id: makeId("pep-review"),
       schemaVersion: 1,
+      expedienteId: selectedClientId,
       subjectName,
       normalizedSubjectName: normalizeName(subjectName),
       decision,
@@ -229,18 +246,19 @@ export default function PepWhoIsPage() {
       nextReviewAt: nextReviewAt || undefined,
     }
 
-    persistInternalRecords([record, ...internalRecords])
-    setInternalRecords((prev) => [record, ...prev])
+    try { persistInternalRecords([record, ...internalRecords]); await flushModuleStorage(); setInternalRecords((prev) => [record, ...prev]) }
+    catch (error) { setStorageError(error instanceof Error ? error.message : "No se guardó la decisión."); return }
     setDecisionEvidence("")
     setRelatedPepName("")
     setNextReviewAt("")
   }
 
-  function saveManualRecord() {
-    if (!manualReady) return
-    const record: PepInternalRecord = {
+  async function saveManualRecord() {
+    if (!manualReady || storageError || !selectedClientId) return
+    const record: ScopedPepRecord = {
       id: makeId("pep-internal"),
       schemaVersion: 1,
+      expedienteId: selectedClientId,
       subjectName: manualName.trim(),
       normalizedSubjectName: normalizeName(manualName),
       decision: manualDecision,
@@ -251,29 +269,32 @@ export default function PepWhoIsPage() {
       decidedAt: new Date().toISOString(),
       nextReviewAt: undefined,
     }
-    persistInternalRecords([record, ...internalRecords])
-    setInternalRecords((prev) => [record, ...prev])
+    try { persistInternalRecords([record, ...internalRecords]); await flushModuleStorage(); setInternalRecords((prev) => [record, ...prev]) }
+    catch (error) { setStorageError(error instanceof Error ? error.message : "No se guardó la decisión."); return }
     setManualName("")
     setManualEvidence("")
     setManualRelatedPep("")
   }
 
-  function deleteRecord(id: string) {
+  async function deleteRecord(id: string) {
+    if (!window.confirm("¿Retirar esta decisión de los resultados activos? La bitácora de cambios se conservará en el servidor.")) return
     const next = internalRecords.filter((record) => record.id !== id)
-    persistInternalRecords(next)
-    setInternalRecords(next)
+    try { persistInternalRecords(next); await flushModuleStorage(); setInternalRecords(next) }
+    catch (error) { setStorageError(error instanceof Error ? error.message : "No se pudo retirar la decisión.") }
   }
 
-  function deleteHistoryItem(item: PepSearchResponse) {
+  async function deleteHistoryItem(item: PepSearchResponse) {
+    if (!window.confirm("¿Retirar esta consulta del historial activo?")) return
     const next = removePepSearchHistoryItem(history, getPepSearchHistoryItemKey(item))
-    persistSearchHistory(next)
-    setHistory(next)
+    try { persistSearchHistory(next); await flushModuleStorage(); setHistory(next) }
+    catch (error) { setStorageError(error instanceof Error ? error.message : "No se pudo retirar la consulta.") }
   }
 
-  function clearHistory() {
+  async function clearHistory() {
+    if (!window.confirm("¿Retirar todas las consultas del historial activo de esta empresa?")) return
     const next = removePepSearchHistoryItem(history, PEP_SEARCH_HISTORY_CLEAR_ALL)
-    persistSearchHistory(next)
-    setHistory(next)
+    try { persistSearchHistory(next); await flushModuleStorage(); setHistory(next) }
+    catch (error) { setStorageError(error instanceof Error ? error.message : "No se pudo actualizar el historial.") }
   }
 
   return (
@@ -298,6 +319,8 @@ export default function PepWhoIsPage() {
         </div>
       </section>
 
+      <div className="space-y-2 rounded-xl border p-4" data-pld-context="browse"><Label>Vincular consulta al expediente</Label><SearchableSelect value={selectedClientId} onChange={(value) => { setSelectedClientId(value); setResponse(null); setSelectedResultId(""); const client = clients.find((item) => item.id === value); if (client) setQuery((previous) => ({ ...previous, nombre: client.nombre })) }} options={clients.map((client) => ({ value: client.id, label: `${client.nombre} · ${client.identifier}` }))} placeholder="Consulta libre o selecciona expediente" /><p className="text-xs text-muted-foreground">Las decisiones que se reutilizan en EBR requieren expediente. Una consulta libre se conserva sin asignación automática por nombre.</p>{storageError && <p role="alert" className="text-sm text-destructive">{storageError} No se sobrescribirá el registro original.</p>}</div>
+
       <Tabs defaultValue="buscar" className="space-y-5">
         <TabsList className="grid h-auto w-full grid-cols-3 lg:w-[560px]">
           <TabsTrigger value="buscar" className="gap-2">
@@ -313,7 +336,7 @@ export default function PepWhoIsPage() {
 
         <TabsContent value="buscar" className="space-y-5">
           <DataHealthPanel />
-          <Card>
+          <Card data-pld-context="browse">
             <CardHeader>
               <CardTitle className="text-xl">Buscar persona</CardTitle>
               <CardDescription>La búsqueda ignora acentos y compara nombre, alias, apellidos poco comunes y decisiones internas.</CardDescription>
@@ -469,7 +492,7 @@ export default function PepWhoIsPage() {
                   <Label>Evidencia / criterio</Label>
                   <Textarea value={decisionEvidence} onChange={(event) => setDecisionEvidence(event.target.value)} placeholder="Fuente, documento o criterio de descarte/confirmación" />
                 </div>
-                <Button className="w-full max-w-none bg-[#F7941D] text-white hover:bg-[#D97808]" disabled={(!selectedResult && !query.nombre?.trim()) || !evidenceReady} onClick={saveDecision}>
+                <Button className="w-full max-w-none bg-[#F7941D] text-white hover:bg-[#D97808]" disabled={(!selectedResult && !query.nombre?.trim()) || !evidenceReady || !selectedClientId || Boolean(storageError)} onClick={saveDecision}>
                   Guardar decisión
                 </Button>
               </CardContent>
@@ -530,7 +553,7 @@ export default function PepWhoIsPage() {
                 <Label>Evidencia</Label>
                 <Textarea value={manualEvidence} onChange={(event) => setManualEvidence(event.target.value)} />
               </div>
-              <Button className="w-full max-w-none bg-[#F7941D] text-white hover:bg-[#D97808]" disabled={!manualReady} onClick={saveManualRecord}>
+              <Button className="w-full max-w-none bg-[#F7941D] text-white hover:bg-[#D97808]" disabled={!manualReady || !selectedClientId || Boolean(storageError)} onClick={saveManualRecord}>
                 Guardar en base interna
               </Button>
             </CardContent>
@@ -821,36 +844,32 @@ function normalizeQuery(query: PepSearchQuery): PepSearchQuery {
   }
 }
 
-function readInternalRecords(): PepInternalRecord[] {
+function readInternalRecords(): ScopedPepRecord[] {
   if (typeof window === "undefined") return []
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(PEP_INTERNAL_STORAGE_KEY) || "[]")
-    return Array.isArray(parsed) ? parsed.filter(isPepInternalRecord) : []
-  } catch {
-    return []
-  }
+  const parsed = JSON.parse(getModuleStorage().getItem(PEP_INTERNAL_STORAGE_KEY) || "[]")
+  if (!Array.isArray(parsed) || parsed.some((item) => !isPepInternalRecord(item))) throw new Error("Las decisiones PEP guardadas no son legibles.")
+  return parsed
 }
 
 function persistInternalRecords(records: PepInternalRecord[]) {
-  window.localStorage.setItem(PEP_INTERNAL_STORAGE_KEY, JSON.stringify(records))
+  readInternalRecords()
+  getModuleStorage().setItem(PEP_INTERNAL_STORAGE_KEY, JSON.stringify(records))
 }
 
-function readSearchHistory(): PepSearchResponse[] {
+function readSearchHistory(): ScopedPepSearch[] {
   if (typeof window === "undefined") return []
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(PEP_SEARCH_HISTORY_STORAGE_KEY) || "[]")
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
+  const parsed = JSON.parse(getModuleStorage().getItem(PEP_SEARCH_HISTORY_STORAGE_KEY) || "[]")
+  if (!Array.isArray(parsed) || parsed.some((item) => !item || typeof item !== "object" || !item.query || !Array.isArray(item.results))) throw new Error("El historial PEP guardado no es legible.")
+  return parsed
 }
 
 function persistSearchHistory(history: PepSearchResponse[]) {
+  readSearchHistory()
   if (history.length === 0) {
-    window.localStorage.removeItem(PEP_SEARCH_HISTORY_STORAGE_KEY)
+    getModuleStorage().removeItem(PEP_SEARCH_HISTORY_STORAGE_KEY)
     return
   }
-  window.localStorage.setItem(PEP_SEARCH_HISTORY_STORAGE_KEY, JSON.stringify(history))
+  getModuleStorage().setItem(PEP_SEARCH_HISTORY_STORAGE_KEY, JSON.stringify(history))
 }
 
 function isPepInternalRecord(value: unknown): value is PepInternalRecord {
@@ -860,7 +879,7 @@ function isPepInternalRecord(value: unknown): value is PepInternalRecord {
 
 function getCurrentUser(): string {
   if (typeof window === "undefined") return "usuario-local"
-  return window.localStorage.getItem("userEmail") || window.localStorage.getItem("userName") || "usuario-local"
+  return getModuleStorage().getItem("userEmail") || getModuleStorage().getItem("userName") || "usuario-local"
 }
 
 function makeId(prefix: string): string {

@@ -25,6 +25,7 @@ export interface SatQueueOperationSource {
   createdAt?: string
   updatedAt?: string
   captureStatus?: "draft" | "complete"
+  clientIdentityReviewRequired?:boolean
   lifecycle?: {
     status?: "active" | "cancelled"
   }
@@ -68,8 +69,8 @@ export function buildSatQueueItems(input: BuildSatQueueItemsInput): SatQueueItem
       id: `satqueue-operation-${operation.id}`,
       source: "operation" as const,
       kind,
-      label: operation.captureStatus === "draft" ? "Borrador de captura" : queueLabel(kind, outputKind, satPackage),
-      description: operation.captureStatus === "draft" ? "Captura incompleta guardada; no genera XML ni participa en acumulación." : queueDescription(kind, satPackage, lifecycleStatus),
+      label: operation.clientIdentityReviewRequired ? "Identidad por revisar" : operation.captureStatus === "draft" ? "Borrador de captura" : queueLabel(kind, outputKind, satPackage),
+      description: operation.clientIdentityReviewRequired ? "Se conserva la clasificación histórica. Vincula explícitamente el cliente o expediente antes de recalcular o preparar otra salida SAT." : operation.captureStatus === "draft" ? "Captura incompleta guardada; no genera XML ni participa en acumulación." : queueDescription(kind, satPackage, lifecycleStatus),
       sourceOperationId: operation.id,
       sourceOperationRevision: operation.revision,
       operationStatus: operation.umbralStatus,
@@ -109,7 +110,7 @@ export function buildSatQueueItems(input: BuildSatQueueItemsInput): SatQueueItem
         kind: "sat_output",
         label: satOutputKindLabel(satPackage.outputKind),
         description: isHistoricalLinkedPackage
-          ? "Paquete SAT histórico conservado porque la operación cambió a una clasificación sin salida SAT."
+          ? currentOperation?.clientIdentityReviewRequired ? "Paquete previo conservado sin cambios. La identidad de la operación requiere revisión; este histórico no habilita una nueva presentación." : "Paquete SAT histórico conservado porque la operación cambió a una clasificación sin salida SAT."
           : satPackage.sourceOperationId
             ? "Paquete SAT histórico cuyo registro de origen ya no está disponible."
             : "Paquete SAT legacy o demo conservado sin vínculo a una operación.",
@@ -178,12 +179,14 @@ export function removeLinkedSatPackage(
 }
 
 function classifyOperationQueueKind(operation: SatQueueOperationSource): SatQueueItemKind {
+  if(operation.clientIdentityReviewRequired)return "internal_record"
   if (resolveOperationOutputKind(operation)) return "sat_output"
   if (operation.umbralStatus === "identificacion") return "identification_only"
   return "internal_record"
 }
 
 function resolveOperationOutputKind(operation: SatQueueOperationSource): SatOutputKind | null {
+  if(operation.clientIdentityReviewRequired)return null
   if (operation.captureStatus === "draft") return null
   if (
     operation.avisoSalidaTipo === "aviso_normal" ||

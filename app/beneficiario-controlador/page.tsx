@@ -1,4 +1,5 @@
 "use client"
+import { getModuleStorage, canWriteModuleStorage } from "@/lib/pilot/module-storage"
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -53,6 +54,11 @@ import {
 import { motion } from "framer-motion"
 import { parseStoredObject, reviewSignature } from "@/lib/pld/module-continuity"
 import { notifyPldIntegrationChange } from "@/lib/pld/integration-records"
+import { getIntegrationClient, type IntegrationClient } from "@/lib/pld/integration-records"
+import { readClientProfile, mergeClientProfile } from "@/lib/pld/client-module-profiles"
+import { SearchableSelect } from "@/components/pld/searchable-select"
+import { readFileAsDataUrl } from "@/lib/storage/read-file"
+import { flushModuleStorage } from "@/lib/pilot/module-storage"
 
 // Tipos de datos para el módulo
 interface ChecklistItem {
@@ -73,6 +79,8 @@ interface DocumentUpload {
   expiryDate?: Date
   status: "vigente" | "por-vencer" | "vencido"
   url?: string
+  sha256?: string
+  archived?: boolean
   category: string
 }
 
@@ -122,7 +130,8 @@ const preguntasGenerales: ChecklistItem[] = [
   },
   {
     id: "bc-2",
-    question: "¿Se identificó persona física con participación ≥ 50% del capital social?",
+    // LFPIORPI art. 3 III b) ii), reforma DOF 16-07-2025; consulta 11-11-2026.
+    question: "¿Se identificó a quien ejerce el voto respecto de más del 25% del capital social, directa o indirectamente?",
     answer: null,
     required: true,
     requiredDocuments: ["Acta de socios / libro de registro de acciones actualizado."],
@@ -202,6 +211,22 @@ const evidenciasConservacion = [
   "Registro de usuario interno que validó cada evidencia.",
 ]
 export default function BeneficiarioControladorPage() {
+  const [clients, setClients] = useState<IntegrationClient[]>([])
+  const [selectedClient, setSelectedClient] = useState("")
+  const [loadError, setLoadError] = useState("")
+  useEffect(() => {
+    try {
+      const values = JSON.parse(getModuleStorage().getItem("kyc_expedientes_detalle") || "[]")
+      if (!Array.isArray(values)) throw new Error("La colección de expedientes no es válida.")
+      const items = values.map(getIntegrationClient).filter((client): client is IntegrationClient => Boolean(client))
+      setClients(items)
+      if (items.length === 1) setSelectedClient(items[0].id)
+    } catch (error) { setLoadError(error instanceof Error ? error.message : "No se pudieron recuperar los expedientes.") }
+  }, [])
+  return <div className="space-y-4"><Card><CardContent className="space-y-2 pt-5" data-pld-context="browse"><Label>Expediente del cliente</Label><SearchableSelect value={selectedClient} onChange={setSelectedClient} options={clients.map((client) => ({ value: client.id, label: `${client.nombre} · ${client.identifier}` }))} placeholder="Selecciona expediente" />{loadError && <p role="alert" className="text-sm text-destructive">{loadError}</p>}{!selectedClient && <p className="text-sm text-muted-foreground">Selecciona el cliente para revisar su declaración. Los registros históricos sin vínculo se conservan para asignación.</p>}</CardContent></Card>{selectedClient && <BeneficiarioClientProfile key={selectedClient} clientId={selectedClient} />}</div>
+}
+
+function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
   const { toast } = useToast()
   const [preguntasState, setPreguntasState] = useState<ChecklistItem[]>(preguntasGenerales)
   const [documentos, setDocumentos] = useState<DocumentUpload[]>([])
@@ -224,17 +249,17 @@ export default function BeneficiarioControladorPage() {
   const [validation, setValidation] = useState<{ validatedAt: string; signature: string } | null>(null)
   const currentReviewSignature = reviewSignature({
     preguntas: preguntasState.map(({ id, answer, notes }) => ({ id, answer, notes })),
-    documentos: documentos.map(({ id, category, uploadDate, expiryDate, status }) => ({ id, category, uploadDate, expiryDate, status })),
+    documentos: documentos.map(({ id, category, uploadDate, expiryDate, status, sha256, url, archived }) => ({ id, category, uploadDate, expiryDate, status, fileIdentity: sha256 || url, archived })),
     clientType, propertyChain, screeningResults, lastBCUpdate,
   })
   const isValidated = Boolean(validation && validation.signature === currentReviewSignature)
 
-  // Cargar datos del localStorage
+  // Cargar datos del getModuleStorage()
   useEffect(() => {
-    const savedData = localStorage.getItem("beneficiario-controlador-data")
+    const savedData = getModuleStorage().getItem("beneficiario-controlador-data")
     if (savedData) {
       try {
-        const data = parseStoredObject(savedData)
+        const data = readClientProfile(savedData, clientId)
         if (Array.isArray(data.preguntas)) {
           setPreguntasState(
             preguntasGenerales.map((pregunta) => {
@@ -312,9 +337,9 @@ export default function BeneficiarioControladorPage() {
     setProgreso(nuevoProgreso)
   }, [preguntasState])
 
-  // Guardar datos en localStorage
+  // Guardar datos en getModuleStorage()
   useEffect(() => {
-    if (!storageReady) return
+    if (!storageReady || !canWriteModuleStorage("beneficiario-controlador-data")) return
     const data = {
       preguntas: preguntasState,
       documentos,
@@ -328,8 +353,10 @@ export default function BeneficiarioControladorPage() {
       validation,
     }
     try {
-      localStorage.setItem("beneficiario-controlador-data", JSON.stringify({ ...parseStoredObject(localStorage.getItem("beneficiario-controlador-data")), ...data }))
-      notifyPldIntegrationChange("beneficiario-controlador-data")
+      getModuleStorage().setItem("beneficiario-controlador-data", JSON.stringify(mergeClientProfile(getModuleStorage().getItem("beneficiario-controlador-data"), clientId, data)))
+      void flushModuleStorage().then(() => notifyPldIntegrationChange("beneficiario-controlador-data")).catch(() => {
+        toast({ title: "Cambios pendientes de guardar", description: "No se confirmó el guardado del beneficiario. Mantén esta página abierta y vuelve a intentarlo.", variant: "destructive" })
+      })
     } catch {
       toast({ title: "No se pudo guardar el expediente", description: "Los cambios no se han conservado. Revisa el almacenamiento local antes de salir.", variant: "destructive" })
     }
@@ -358,7 +385,7 @@ export default function BeneficiarioControladorPage() {
     const nuevaEntrada: TraceabilityEntry = {
       id: Date.now().toString(),
       action: "Respuesta actualizada",
-      user: "Usuario actual",
+      user: getModuleStorage().getItem("userEmail") || "Usuario en sesión",
       timestamp: new Date(),
       details: `Pregunta: ${preguntasState.find((p) => p.id === id)?.question.substring(0, 50)}... - Respuesta: ${answer}`,
       section: "Preguntas Generales",
@@ -366,40 +393,40 @@ export default function BeneficiarioControladorPage() {
     setTrazabilidad((prev) => [nuevaEntrada, ...prev])
 
     toast({
-      title: "Respuesta guardada",
-      description: "La respuesta ha sido registrada correctamente.",
+      title: "Respuesta actualizada",
+      description: "El estado de guardado muestra si el cambio ya quedó conservado.",
     })
   }
 
-  // Simular carga de documento
-  const cargarDocumento = (tipo: string, category: string, expiryDays = 365) => {
-    const nuevoDocumento: DocumentUpload = {
-      id: Date.now().toString(),
-      name: `Documento_${tipo}_${Date.now()}.pdf`,
-      type: tipo,
-      uploadDate: new Date(),
-      expiryDate: expiryDays ? new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000) : undefined,
-      status: "vigente",
-      category,
+  const cargarDocumento = (tipo: string, category: string, _expiryDays = 0) => {
+    const input = document.createElement("input")
+    input.type = "file"; input.accept = ".pdf,.png,.jpg,.jpeg,.xml"
+    input.onchange = async () => {
+      const file = input.files?.[0]
+      if (!file || !storageReady) return
+      if (file.size > 20 * 1024 * 1024 || !/\.(pdf|png|jpe?g|xml)$/i.test(file.name)) {
+        toast({ title: "Archivo no admitido", description: "Usa PDF, imagen o XML de hasta 20 MB.", variant: "destructive" }); return
+      }
+      try {
+        const url = await readFileAsDataUrl(file)
+        const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))).map((value) => value.toString(16).padStart(2, "0")).join("")
+        const now = new Date()
+        const actor = getModuleStorage().getItem("userEmail") || getModuleStorage().getItem("userName") || "Usuario en sesión"
+        const uploaded: DocumentUpload = { id: crypto.randomUUID(), name: file.name, type: tipo,
+          uploadDate: now, status: "vigente", category, url, sha256: hash,
+          expiryDate: undefined }
+        const nextDocuments = [...documentos, uploaded]
+        const nextTrace = [{ id: crypto.randomUUID(), action: "Documento cargado", user: actor,
+          timestamp: now, details: file.name, section: "Carga documental" }, ...trazabilidad]
+        const data = { preguntas: preguntasState, documentos: nextDocuments, trazabilidad: nextTrace, clientType,
+          propertyChain, screeningResults, declaraciones, lastBCUpdate, folioCounter, validation: null }
+        getModuleStorage().setItem("beneficiario-controlador-data", JSON.stringify(mergeClientProfile(getModuleStorage().getItem("beneficiario-controlador-data"), clientId, data)))
+        await flushModuleStorage()
+        setDocumentos(nextDocuments); setTrazabilidad(nextTrace); setValidation(null)
+        toast({ title: "Documento guardado", description: "El archivo y su hash quedaron vinculados al expediente." })
+      } catch (error) { toast({title:"No se guardó el archivo",description:error instanceof Error ? error.message : "Conserva el documento y reintenta.",variant:"destructive"}) }
     }
-
-    setDocumentos((prev) => [...prev, nuevoDocumento])
-
-    // Agregar entrada de trazabilidad
-    const nuevaEntrada: TraceabilityEntry = {
-      id: Date.now().toString(),
-      action: "Documento cargado",
-      user: "Usuario actual",
-      timestamp: new Date(),
-      details: `Documento: ${nuevoDocumento.name} - Tipo: ${tipo}`,
-      section: "Carga Documental",
-    }
-    setTrazabilidad((prev) => [nuevaEntrada, ...prev])
-
-    toast({
-      title: "Documento cargado",
-      description: `El documento ${nuevoDocumento.name} ha sido cargado exitosamente.`,
-    })
+    input.click()
   }
 
   const solicitarEliminacionDocumento = (doc: DocumentUpload) => {
@@ -418,21 +445,21 @@ export default function BeneficiarioControladorPage() {
     }
 
     const documento = documentoAEliminar
-    setDocumentos((prev) => prev.filter((item) => item.id !== documento.id))
+    setDocumentos((prev) => prev.map((item) => item.id === documento.id ? { ...item, archived: true } : item))
 
     const nuevaEntrada: TraceabilityEntry = {
       id: Date.now().toString(),
-      action: "Documento eliminado",
-      user: "Usuario actual",
+      action: "Documento archivado",
+      user: getModuleStorage().getItem("userEmail") || "Usuario en sesión",
       timestamp: new Date(),
-      details: `Documento eliminado: ${documento.name}`,
+      details: `Documento archivado, archivo e historial conservados: ${documento.name}`,
       section: "Carga Documental",
     }
     setTrazabilidad((prev) => [nuevaEntrada, ...prev])
 
     toast({
-      title: "Documento eliminado",
-      description: `El documento ${documento.name} fue eliminado correctamente.`,
+      title: "Documento archivado",
+      description: `El documento ${documento.name} y su historial se conservan. Revisa el estado de guardado.`,
     })
 
     cerrarDialogoEliminacion()
@@ -466,7 +493,7 @@ export default function BeneficiarioControladorPage() {
   }
 
   const isBeneficiarioControladorObligatorio = clientType === "moral" || clientType === "fideicomiso"
-  const hasDeclaracionDocumento = documentos.some((doc) => doc.category === "declaracion")
+  const hasDeclaracionDocumento = documentos.some((doc) => doc.category === "declaracion" && !doc.archived && Boolean(doc.url))
   const daysSinceUpdate = lastBCUpdate ? Math.floor((Date.now() - lastBCUpdate.getTime()) / (1000 * 60 * 60 * 24)) : null
   const needsAnnualReminder = !lastBCUpdate || (daysSinceUpdate !== null && daysSinceUpdate > 365)
   const declaracionPendiente = isBeneficiarioControladorObligatorio && !hasDeclaracionDocumento
@@ -483,7 +510,7 @@ export default function BeneficiarioControladorPage() {
       id: Date.now().toString(),
       folio: generarFolio(),
       date: new Date(),
-      user: "Usuario actual",
+      user: getModuleStorage().getItem("userEmail") || "Usuario en sesión",
       notes: declarationNotes || undefined,
     }
 
@@ -495,7 +522,7 @@ export default function BeneficiarioControladorPage() {
       {
         id: Date.now().toString(),
         action: "Declaración registrada",
-        user: "Usuario actual",
+        user: getModuleStorage().getItem("userEmail") || "Usuario en sesión",
         timestamp: new Date(),
         details: `Se registró la declaración folio ${nuevaDeclaracion.folio}`,
         section: "Declaraciones",
@@ -523,7 +550,7 @@ export default function BeneficiarioControladorPage() {
       {
         id: Date.now().toString(),
         action: "Cadena de propiedad actualizada",
-        user: "Usuario actual",
+        user: getModuleStorage().getItem("userEmail") || "Usuario en sesión",
         timestamp: new Date(),
         details: `Se agregó el nivel ${nuevoNivel} a la cadena de propiedad`,
         section: "Cadena de Propiedad",
@@ -548,7 +575,7 @@ export default function BeneficiarioControladorPage() {
         {
           id: Date.now().toString(),
           action: "Cadena de propiedad actualizada",
-          user: "Usuario actual",
+          user: getModuleStorage().getItem("userEmail") || "Usuario en sesión",
           timestamp: new Date(),
           details: `Se eliminó el nivel ${entry.level} (${entry.entityName || "Sin nombre"}) de la cadena de propiedad`,
           section: "Cadena de Propiedad",
@@ -586,7 +613,7 @@ export default function BeneficiarioControladorPage() {
       {
         id: Date.now().toString(),
         action: "Verificación manual registrada",
-        user: "Usuario actual",
+        user: getModuleStorage().getItem("userEmail") || "Usuario en sesión",
         timestamp: new Date(),
         details: `Resultado ${status === "sin-coincidencias" ? "sin coincidencias" : "coincidencia potencial"} para ${nuevoResultado.bcName}`,
         section: "Screening",
@@ -600,7 +627,7 @@ export default function BeneficiarioControladorPage() {
     })
   }
 
-  const cerrarExpediente = () => {
+  const cerrarExpediente = async () => {
     if (!storageReady || !clientType || preguntasState.some((question) => question.required && question.answer === null)) {
       toast({ title: "Revisión incompleta", description: "Selecciona el tipo de cliente y responde los controles obligatorios antes de validar.", variant: "destructive" })
       return
@@ -614,23 +641,25 @@ export default function BeneficiarioControladorPage() {
       return
     }
 
-    setValidation({ validatedAt: new Date().toISOString(), signature: currentReviewSignature })
-    setTrazabilidad((prev) => [
+    const nextValidation = { validatedAt: new Date().toISOString(), signature: currentReviewSignature }
+    const nextTrace: TraceabilityEntry[] = [
       {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         action: "Expediente validado",
-        user: "Usuario actual",
+        user: getModuleStorage().getItem("userEmail") || "Usuario en sesión",
         timestamp: new Date(),
         details: "Revisión interna registrada por el usuario; no sustituye una validación de autoridad.",
         section: "Control de Expediente",
       },
-      ...prev,
-    ])
-
-    toast({
-      title: "Expediente validado",
-      description: "Se guardó la revisión interna. Los cambios posteriores requerirán una nueva confirmación.",
-    })
+      ...trazabilidad,
+    ]
+    try {
+      const data = { preguntas:preguntasState,documentos,trazabilidad:nextTrace,clientType,propertyChain,screeningResults,declaraciones,lastBCUpdate,folioCounter,validation:nextValidation }
+      getModuleStorage().setItem("beneficiario-controlador-data",JSON.stringify(mergeClientProfile(getModuleStorage().getItem("beneficiario-controlador-data"),clientId,data)))
+      await flushModuleStorage()
+      setValidation(nextValidation); setTrazabilidad(nextTrace)
+      toast({title:"Expediente validado",description:"Se conservó la revisión interna. Los cambios posteriores requerirán una nueva confirmación."})
+    } catch (error) { toast({title:"No se confirmó la revisión",description:error instanceof Error ? error.message : "Mantén la página abierta y reintenta.",variant:"destructive"}) }
   }
 
   const registrarActualizacionBC = () => {
@@ -640,7 +669,7 @@ export default function BeneficiarioControladorPage() {
       {
         id: Date.now().toString(),
         action: "Actualización anual registrada",
-        user: "Usuario actual",
+        user: getModuleStorage().getItem("userEmail") || "Usuario en sesión",
         timestamp: fecha,
         details: "Se actualizó la información del beneficiario controlador conforme al art. 21 RCG.",
         section: "Actualización",
@@ -660,7 +689,7 @@ export default function BeneficiarioControladorPage() {
       {
         id: Date.now().toString(),
         action: "Tipo de cliente actualizado",
-        user: "Usuario actual",
+        user: getModuleStorage().getItem("userEmail") || "Usuario en sesión",
         timestamp: new Date(),
         details: `Se seleccionó cliente ${value === "fisica" ? "persona física" : value === "moral" ? "persona moral" : "fideicomiso"}.`,
         section: "Clasificación de Cliente",
@@ -783,7 +812,7 @@ export default function BeneficiarioControladorPage() {
                   <Button size="sm" variant="outline" onClick={registrarActualizacionBC}>
                     <Clock className="h-4 w-4 mr-2" /> Registrar actualización
                   </Button>
-                  <Button size="sm" onClick={cerrarExpediente} disabled={isValidated || !storageReady}>
+                  <Button size="sm" data-pld-action="approve" onClick={cerrarExpediente} disabled={isValidated || !storageReady}>
                     <Lock className="h-4 w-4 mr-2" /> {isValidated ? "Revisión interna confirmada" : "Validar expediente"}
                   </Button>
                 </div>
@@ -1103,7 +1132,7 @@ export default function BeneficiarioControladorPage() {
                       <div className="flex items-center space-x-3">
                         <FileText className="h-5 w-5 text-muted-foreground" />
                         <div>
-                          <div className="font-medium">{doc.name}</div>
+                          <div className="font-medium">{doc.name} {doc.archived && <Badge variant="outline">Archivado</Badge>}</div>
                           <div className="text-sm text-muted-foreground">
                             Subido: {doc.uploadDate.toLocaleDateString()}
                             {doc.expiryDate && ` • Vence: ${doc.expiryDate.toLocaleDateString()}`}
@@ -1129,18 +1158,14 @@ export default function BeneficiarioControladorPage() {
                               ? "Por vencer"
                               : "Vencido"}
                         </Badge>
-                        <Button size="sm" variant="ghost">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost">
-                          <Download className="h-4 w-4" />
-                        </Button>
+                        {doc.url ? <><Button size="sm" variant="ghost" asChild><a href={doc.url} target="_blank" rel="noreferrer" aria-label={`Ver ${doc.name}`}><Eye className="h-4 w-4" /></a></Button><Button size="sm" variant="ghost" asChild><a href={doc.url} download={doc.name} aria-label={`Descargar ${doc.name}`}><Download className="h-4 w-4" /></a></Button></> : <Badge variant="outline">Archivo pendiente</Badge>}
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => solicitarEliminacionDocumento(doc)}
+                          disabled={doc.archived}
                           className="text-destructive hover:text-destructive focus-visible:ring-destructive"
-                          aria-label={`Eliminar ${doc.name}`}
+                          aria-label={`Archivar ${doc.name}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -1465,10 +1490,9 @@ export default function BeneficiarioControladorPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar documento</AlertDialogTitle>
+            <AlertDialogTitle>Archivar documento</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Deseas eliminar el documento "{documentoAEliminar?.name}"? Esta acción no se puede deshacer y se registrará en la
-              bitácora.
+              ¿Deseas archivar el documento "{documentoAEliminar?.name}"? El archivo y su historial se conservan; dejará de contar como documento activo.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1477,7 +1501,7 @@ export default function BeneficiarioControladorPage() {
               onClick={confirmarEliminacionDocumento}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive"
             >
-              Eliminar
+              Archivar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

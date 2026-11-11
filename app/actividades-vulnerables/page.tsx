@@ -1,4 +1,5 @@
 "use client"
+import { getModuleStorage, canWriteModuleStorage } from "@/lib/pilot/module-storage"
 
 import Link from "next/link"
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -20,6 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import { Alert,AlertTitle,AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -39,6 +41,8 @@ import {
 } from "@/components/pld/actos-workspace-ui"
 import { ActividadVulnerableCombobox } from "@/components/pld/actividad-vulnerable-combobox"
 import { InfoHint } from "@/components/pld/info-hint"
+import { PldImportDialog } from "@/components/pld/import-dialog"
+import { flushModuleStorage } from "@/lib/pilot/module-storage"
 import { SatDynamicOperationFormView } from "@/components/pld/sat-dynamic-operation-form"
 import { SearchableSelect } from "@/components/pld/searchable-select"
 import {
@@ -81,17 +85,20 @@ import {
   createStoredPldOperation,
   deleteOrCancelStoredPldOperation,
   editStoredPldOperation,
-  markStoredPldOperationPresented,
   recalculateStoredPldOperationsChronologically,
   sanitizeStoredPldOperation,
   storedPldSubjectIdentity,
+  storedPldClientIdentity,
   type StoredPldOperationV3,
 } from "@/lib/pld/stored-operations"
 import { SAT_INSTRUMENTO_MONETARIO_OPTIONS } from "@/lib/pld/sat-instrumentos-monetarios"
-import { resolveOperationFinance, resolveNotarialNoticeBase, type OperationFinance } from "@/lib/pld/operation-finance"
+import { resolveOperationClientIdentity } from "@/lib/pld/operation-client-identity"
+import { mergeOperationClientsById, operationClientFromSnapshot, readSavedOperationClient, type SavedOperationClient } from "@/lib/pld/operation-clients"
+import { IMPORT_CLIENT_LINK_MISSING, type ImportClientDecision } from "@/lib/pld/import-client-resolution"
+import { formatOperationFinancialSummary, resolveOperationFinance, resolveNotarialNoticeBase, type OperationFinance } from "@/lib/pld/operation-finance"
 import { applySatPersonEdit, applySatBeneficiaryEdit } from "@/lib/pld/sat-person-edit"
 import { getSatPrimaryAmountFieldIds, getSatOperationBranchMissingLabels } from "@/lib/pld/sat-operation-branches"
-import { buildExpedienteFromActo, saveExpedienteRecord, readPldSubjects, integrationSubjectToTenant, notifyPldIntegrationChange } from "@/lib/pld/integration-records"
+import { buildExpedienteFromActo, saveExpedienteRecord, readPldSubjects, integrationSubjectToTenant, notifyPldIntegrationChange, PLD_INTEGRATION_EVENT } from "@/lib/pld/integration-records"
 import { UMA_MONTHS, findUmaByMonthYear } from "@/lib/data/uma"
 import { CLIENTE_TIPOS, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
 import { CIUDADES_MEXICO, findCodigoPostalInfo } from "@/lib/data/codigos-postales"
@@ -842,6 +849,14 @@ interface ExpedienteDetalle {
 interface OperacionCliente {
   schemaVersion?: number
   id: string
+  clienteId?:string
+  expedienteId?:string
+  importSource?:Record<string,unknown>
+  importRaw?:Record<string,unknown>
+  importMissing?:string[]
+  importClientResolution?:ImportClientDecision
+  importClientResolutionPending?:boolean
+  clientIdentityReviewRequired?:boolean
   montoCentavos?: number
   finance?: OperationFinance
   financeReviewRequired?: boolean
@@ -897,6 +912,7 @@ interface OperacionCliente {
   detalleTipoCliente?: string
   cliente: string
   rfc: string
+  identifiers?: ExpedienteIdentifiers
   mismoGrupo: boolean
   periodo: string
   mes: number
@@ -963,13 +979,7 @@ interface OperacionCliente {
   falsoPositivoRazon?: string
 }
 
-interface ClienteGuardado {
-  rfc: string
-  nombre: string
-  tipoCliente: string
-  mismoGrupo: boolean
-  detalleTipoCliente?: string
-}
+type ClienteGuardado = SavedOperationClient
 
 interface DocumentoSoporte {
   id: string
@@ -1065,7 +1075,7 @@ function formatTipoClienteLabel(value: string, detalle?: string) {
 function formatDateDisplay(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
-    return value
+    return value || "Fecha pendiente"
   }
   return date.toLocaleDateString("es-MX", {
     day: "2-digit",
@@ -1248,11 +1258,10 @@ function formatUmbralTexto(uma: number, pesos: number) {
 }
 
 function formatMontoOperacion(operacion: OperacionCliente) {
-  const currencyCode = operacion.moneda && operacion.moneda.length === 3 ? operacion.moneda : "MXN"
   const cents = Number.isSafeInteger(operacion.montoCentavos)
     ? operacion.montoCentavos ?? 0
     : coerceLegacyMoneyToCents(operacion.monto)
-  return `${formatMoneyFromCents(cents, { currency: currencyCode })} (${operacion.monedaDescripcion})`
+  return formatOperationFinancialSummary({ ...operacion, montoCentavos: cents })
 }
 
 function isOperacionCancelada(operacion: OperacionCliente) {
@@ -1355,6 +1364,14 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
   return {
     schemaVersion: 3,
     id,
+    clienteId: typeof raw.clienteId === "string" ? raw.clienteId : undefined,
+    expedienteId: typeof raw.expedienteId === "string" ? raw.expedienteId : undefined,
+    importSource:raw.importSource,
+    importRaw:raw.importRaw,
+    importMissing:raw.importMissing,
+    importClientResolution:raw.importClientResolution,
+    importClientResolutionPending:raw.importClientResolutionPending,
+    clientIdentityReviewRequired:raw.clientIdentityReviewRequired,
     montoCentavos,
     finance: raw.finance,
     financeReviewRequired: raw.financeReviewRequired,
@@ -1400,11 +1417,12 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
         ? raw.detalleTipoCliente.trim()
         : undefined,
     cliente: typeof raw.cliente === "string" ? raw.cliente : "Cliente sin nombre",
-    rfc: typeof raw.rfc === "string" ? raw.rfc : "RFC",
+    rfc: typeof raw.rfc === "string" ? raw.rfc : "",
+    identifiers: normalizeExpedienteIdentifiers(raw.identifiers || raw.expedienteIdentifiers),
     mismoGrupo: Boolean(raw.mismoGrupo),
     periodo: typeof raw.periodo === "string" ? raw.periodo : "",
-    mes: Number(raw.mes) || currentMonth,
-    anio: Number(raw.anio) || currentYear,
+    mes: Number.isInteger(raw.mes) ? raw.mes : 0,
+    anio: Number.isInteger(raw.anio) ? raw.anio : 0,
     monto,
     moneda,
     monedaDescripcion,
@@ -1497,30 +1515,9 @@ function sanitizeOperacion(raw: any): OperacionCliente | null {
   }
 }
 
-function sanitizeClienteGuardado(raw: any): ClienteGuardado | null {
-  if (!raw || typeof raw !== "object") return null
-
-  const rfc = typeof raw.rfc === "string" ? raw.rfc : ""
-  const nombre = typeof raw.nombre === "string" ? raw.nombre : ""
-  if (!rfc || !nombre) {
-    return null
-  }
-
-  const tipo =
-    typeof raw.tipoCliente === "string"
-      ? normalizarTipoCliente(raw.tipoCliente)
-      : CLIENTE_TIPOS[0]?.value ?? "pf_residente"
-
-  const detalle =
-    typeof raw.detalleTipoCliente === "string" ? raw.detalleTipoCliente.trim() : ""
-
-  return {
-    rfc,
-    nombre,
-    tipoCliente: tipo,
-    mismoGrupo: Boolean(raw.mismoGrupo),
-    detalleTipoCliente: detalle || undefined,
-  }
+function sanitizeClienteGuardado(raw: unknown,position:number): ClienteGuardado | null {
+  const client=readSavedOperationClient(raw,position)
+  return client?{...client,tipoCliente:normalizarTipoCliente(client.tipoCliente)}:null
 }
 
 function sanitizeExpedientePersona(raw: any): ExpedientePersona | null {
@@ -2198,7 +2195,7 @@ function toDate(value: string | Date) {
 
   const [year, month, day] = value.split("-").map(Number)
   if (!year || !month || !day) {
-    return new Date()
+    return new Date(Number.NaN)
   }
 
   return new Date(year, month - 1, day)
@@ -2206,6 +2203,7 @@ function toDate(value: string | Date) {
 
 function normalizeDateKey(value: string | Date) {
   const date = toDate(value)
+  if (Number.isNaN(date.getTime())) return ""
   const year = date.getFullYear()
   const month = (date.getMonth() + 1).toString().padStart(2, "0")
   const day = date.getDate().toString().padStart(2, "0")
@@ -2229,10 +2227,15 @@ export default function ActividadesVulnerablesPage() {
   const [anioSeleccionado, setAnioSeleccionado] = useState<number>(currentYear)
   const [mesSeleccionado, setMesSeleccionado] = useState<number>(currentMonth)
   const [montoOperacion, setMontoOperacion] = useState<string>("")
+  const [resumenOperacion, setResumenOperacion] = useState<OperacionCliente | null>(null)
+  const loadedOperationLink = useRef("")
   const [tipoCliente, setTipoCliente] = useState<string>(CLIENTE_TIPOS[0]?.value ?? "")
   const [detalleTipoCliente, setDetalleTipoCliente] = useState<string>("")
   const [clienteNombre, setClienteNombre] = useState<string>("")
   const [rfc, setRfc] = useState<string>("")
+  const [manualClientId,setManualClientId]=useState(()=>crypto.randomUUID())
+  const [manualClientIsNew,setManualClientIsNew]=useState(true)
+  const [manualIdentifiers,setManualIdentifiers]=useState<ExpedienteIdentifiers>(()=>normalizeExpedienteIdentifiers({}))
   const [mismoGrupo, setMismoGrupo] = useState<string>("no")
   const [sospecha24h, setSospecha24h] = useState(false)
   const [tipoOperacion, setTipoOperacion] = useState<string>("")
@@ -2296,6 +2299,7 @@ export default function ActividadesVulnerablesPage() {
   const [operacionesStorageValido, setOperacionesStorageValido] = useState(true)
   const [clientesGuardados, setClientesGuardados] = useState<ClienteGuardado[]>([])
   const [clientesGuardadosListo, setClientesGuardadosListo] = useState(false)
+  const [clientesStorageValido,setClientesStorageValido]=useState(true)
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string | null>(null)
   const [infoGrupoOpen, setInfoGrupoOpen] = useState(false)
   const [infoTipoClienteOpen, setInfoTipoClienteOpen] = useState(false)
@@ -2609,8 +2613,8 @@ export default function ActividadesVulnerablesPage() {
     if (typeof window === "undefined") return
 
     try {
-      const stored = window.localStorage.getItem(PLD_TENANTS_STORAGE_KEY)
-      const activeTenantRaw = window.localStorage.getItem(PLD_ACTIVE_TENANT_STORAGE_KEY)
+      const stored = getModuleStorage().getItem(PLD_TENANTS_STORAGE_KEY)
+      const activeTenantRaw = getModuleStorage().getItem(PLD_ACTIVE_TENANT_STORAGE_KEY)
       let activeTenantId = activeTenantRaw
       if (activeTenantRaw) {
         try {
@@ -2623,7 +2627,7 @@ export default function ActividadesVulnerablesPage() {
         }
       }
       const parsed = stored ? JSON.parse(stored) as { tenants?: unknown[]; activeTenantId?: unknown } : {}
-      const tenants = readPldSubjects(window.localStorage).map(integrationSubjectToTenant)
+      const tenants = readPldSubjects(getModuleStorage()).map(integrationSubjectToTenant)
       if (tenants.length === 0) return
 
       const resolvedActiveTenant =
@@ -2666,7 +2670,7 @@ export default function ActividadesVulnerablesPage() {
     if (typeof window === "undefined") return
 
     try {
-      const stored = window.localStorage.getItem(OPERACIONES_STORAGE_KEY)
+      const stored = getModuleStorage().getItem(OPERACIONES_STORAGE_KEY)
       if (stored) {
         const parsed = JSON.parse(stored) as unknown
         if (Array.isArray(parsed)) {
@@ -2688,25 +2692,38 @@ export default function ActividadesVulnerablesPage() {
   }, [])
 
   useEffect(() => {
-    const refresh = (event: StorageEvent) => {
-      if (event.key !== OPERACIONES_STORAGE_KEY) return
+    const refresh = (event: Event) => {
+      const key = "key" in event ? event.key : (event as CustomEvent<{ key?: string }>).detail?.key
+      if (key !== OPERACIONES_STORAGE_KEY) return
       try {
-        const parsed = JSON.parse(window.localStorage.getItem(OPERACIONES_STORAGE_KEY) || "[]")
+        const parsed = JSON.parse(getModuleStorage().getItem(OPERACIONES_STORAGE_KEY) || "[]")
         if (!Array.isArray(parsed)) throw new Error("Formato de operaciones inválido")
-        setOperaciones(parsed.map(sanitizeOperacion).filter((item): item is OperacionCliente => Boolean(item)))
-        setOperacionesStorageValido(true)
+        const sanitized = parsed.map(sanitizeOperacion)
+        setOperaciones(sanitized.filter((item): item is OperacionCliente => Boolean(item)))
+        setOperacionesStorageValido(sanitized.every(Boolean))
       } catch { setOperacionesStorageValido(false) }
     }
     window.addEventListener("storage", refresh)
-    return () => window.removeEventListener("storage", refresh)
+    window.addEventListener(PLD_INTEGRATION_EVENT, refresh)
+    return () => { window.removeEventListener("storage", refresh); window.removeEventListener(PLD_INTEGRATION_EVENT, refresh) }
   }, [])
+
+  useEffect(() => {
+    if (!operacionesCargadas || !operacionesStorageValido || typeof window === "undefined") return
+
+    const requestedId = new URLSearchParams(window.location.search).get("operation")
+    if (requestedId && loadedOperationLink.current !== requestedId) {
+      const requested = operaciones.find((operation) => operation.id === requestedId)
+      if (requested) { loadedOperationLink.current = requestedId; setResumenOperacion(requested); setTabActiva("seguimiento") }
+    }
+  }, [operacionesCargadas, operacionesStorageValido, operaciones])
 
   useEffect(() => {
     if (!operacionesCargadas || !operacionesStorageValido || typeof window === "undefined") return
 
     let existingPackages: SatOutputPackage[] = []
     try {
-      const stored = window.localStorage.getItem(SAT_OUTPUT_PACKAGES_STORAGE_KEY)
+      const stored = getModuleStorage().getItem(SAT_OUTPUT_PACKAGES_STORAGE_KEY)
       const parsed = stored ? JSON.parse(stored) : []
       existingPackages = Array.isArray(parsed)
         ? parsed.filter((item): item is SatOutputPackage => Boolean(item && typeof item === "object"))
@@ -2718,6 +2735,7 @@ export default function ActividadesVulnerablesPage() {
     let nextPackages = [...existingPackages]
 
     for (const operacion of operaciones) {
+      if(operacion.clientIdentityReviewRequired)continue // Preserve old classification/packages until explicit identity resolution.
       const outputKind = toSatOutputKind(operacion.avisoSalidaTipo, "aviso_normal")
       const isReportable =
         operacion.avisoSalidaTipo === "aviso_normal" ||
@@ -2755,7 +2773,7 @@ export default function ActividadesVulnerablesPage() {
         tenant,
         periodo: operacion.periodo,
         actividadKey: operacion.actividadKey,
-        clienteId: operacion.rfc,
+        clienteId: storedPldClientIdentity(operacion),
         clienteNombre: operacion.cliente,
         clienteRfc: operacion.rfc,
         tipoCliente: operacion.tipoCliente,
@@ -2805,8 +2823,8 @@ export default function ActividadesVulnerablesPage() {
 
     const currentSerialized = JSON.stringify(existingPackages)
     const nextSerialized = JSON.stringify(nextPackages)
-    if (currentSerialized !== nextSerialized) {
-      window.localStorage.setItem(SAT_OUTPUT_PACKAGES_STORAGE_KEY, nextSerialized)
+    if (currentSerialized !== nextSerialized && canWriteModuleStorage(SAT_OUTPUT_PACKAGES_STORAGE_KEY)) {
+      getModuleStorage().setItem(SAT_OUTPUT_PACKAGES_STORAGE_KEY, nextSerialized)
       notifyPldIntegrationChange(SAT_OUTPUT_PACKAGES_STORAGE_KEY)
     }
   }, [activeTenant, operaciones, operacionesCargadas, operacionesStorageValido, tenantState.tenants])
@@ -2815,7 +2833,7 @@ export default function ActividadesVulnerablesPage() {
     if (typeof window === "undefined") return
 
     try {
-      const stored = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
+      const stored = getModuleStorage().getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
       if (stored) {
         const parsed = JSON.parse(stored) as unknown
         if (Array.isArray(parsed)) {
@@ -2852,12 +2870,12 @@ export default function ActividadesVulnerablesPage() {
       return
     }
 
-    if (clienteCalendario && operaciones.some((operacion) => operacion.rfc === clienteCalendario)) {
+    if (clienteCalendario && operaciones.some((operacion) => storedPldClientIdentity(operacion) === clienteCalendario)) {
       return
     }
 
     const ultimaOperacion = operaciones[operaciones.length - 1]
-    setClienteCalendario(ultimaOperacion.rfc)
+    setClienteCalendario(storedPldClientIdentity(ultimaOperacion))
     setMesCalendario(ultimaOperacion.mes)
     setAnioCalendario(ultimaOperacion.anio)
     setDiaSeleccionado(normalizeDateKey(ultimaOperacion.fechaOperacion))
@@ -2868,7 +2886,7 @@ export default function ActividadesVulnerablesPage() {
       return
     }
 
-    const operacionesCliente = operaciones.filter((operacion) => operacion.rfc === clienteCalendario)
+    const operacionesCliente = operaciones.filter((operacion) => storedPldClientIdentity(operacion) === clienteCalendario)
     if (operacionesCliente.length === 0) {
       setDiaSeleccionado(null)
       return
@@ -2884,64 +2902,41 @@ export default function ActividadesVulnerablesPage() {
     if (typeof window === "undefined") return
 
     try {
-      const stored = window.localStorage.getItem(CLIENTES_STORAGE_KEY)
+      const stored = getModuleStorage().getItem(CLIENTES_STORAGE_KEY)
       if (stored) {
         const parsed = JSON.parse(stored) as unknown
         if (Array.isArray(parsed)) {
-          const sane = parsed
-            .map((item) => sanitizeClienteGuardado(item))
-            .filter((item): item is ClienteGuardado => Boolean(item))
-          setClientesGuardados(ordenarClientesGuardados(sane))
-        }
+          const sane = parsed.map((item,index) => sanitizeClienteGuardado(item,index))
+          if(sane.some(item=>!item))throw new Error("El índice contiene clientes ilegibles; se conserva sin sobrescribir.")
+          const clients=sane as ClienteGuardado[]
+          if(new Set(clients.map(client=>client.id)).size!==clients.length)throw new Error("Hay IDs de cliente duplicados; se conserva el índice para revisión.")
+          setClientesGuardados(ordenarClientesGuardados(clients))
+        }else throw new Error("El índice de clientes no es una lista legible.")
       }
-    } catch (_error) {
-      // ignorar errores de parseo de almacenamiento local
+    } catch (error) {
+      setClientesStorageValido(false)
+      toast({title:"Índice de clientes sin modificar",description:error instanceof Error?error.message:"Revisa los datos antes de reemplazarlos.",variant:"destructive"})
     } finally {
       setClientesGuardadosListo(true)
     }
   }, [])
 
   useEffect(() => {
-    if (!clientesGuardadosListo) return
+    if (!clientesGuardadosListo || !clientesStorageValido) return
     if (typeof window === "undefined") return
 
-    window.localStorage.setItem(CLIENTES_STORAGE_KEY, JSON.stringify(clientesGuardados))
-  }, [clientesGuardados, clientesGuardadosListo])
+    if (canWriteModuleStorage(CLIENTES_STORAGE_KEY)) getModuleStorage().setItem(CLIENTES_STORAGE_KEY, JSON.stringify(clientesGuardados))
+  }, [clientesGuardados, clientesGuardadosListo,clientesStorageValido])
 
   useEffect(() => {
     if (operaciones.length === 0) return
 
     setClientesGuardados((prev) => {
-      const mapa = new Map(prev.map((cliente) => [cliente.rfc, cliente]))
-      let actualizado = false
-
-      operaciones.forEach((operacion) => {
-        if (!operacion.rfc.trim()) return
-        const datos: ClienteGuardado = {
-          rfc: operacion.rfc,
-          nombre: operacion.cliente,
-          tipoCliente: operacion.tipoCliente,
-          mismoGrupo: operacion.mismoGrupo,
-          detalleTipoCliente: operacion.detalleTipoCliente,
-        }
-        const existente = mapa.get(operacion.rfc)
-        if (
-          !existente ||
-          existente.nombre !== datos.nombre ||
-          existente.tipoCliente !== datos.tipoCliente ||
-          existente.mismoGrupo !== datos.mismoGrupo ||
-          (existente.detalleTipoCliente ?? "") !== (datos.detalleTipoCliente ?? "")
-        ) {
-          mapa.set(operacion.rfc, datos)
-          actualizado = true
-        }
-      })
-
-      if (!actualizado) {
-        return prev
-      }
-
-      return ordenarClientesGuardados(Array.from(mapa.values()))
+      const known=new Set(prev.map(client=>client.id))
+      const incoming=[...operaciones].sort((a,b)=>(a.updatedAt||"").localeCompare(b.updatedAt||"")).map(operationClientFromSnapshot)
+        .filter((client):client is ClienteGuardado=>Boolean(client&&!known.has(client.id)))
+      const next=mergeOperationClientsById(prev,incoming)
+      return JSON.stringify(next)===JSON.stringify(prev)?prev:next
     })
   }, [operaciones])
 
@@ -3081,10 +3076,10 @@ export default function ActividadesVulnerablesPage() {
     () =>
       operaciones
         .filter((operacion) => operacion.actividadKey === actividadKey)
-        .filter((operacion) => !rfc.trim() || operacion.rfc === rfc.trim().toUpperCase())
+        .filter((operacion) => storedPldClientIdentity(operacion) === (expedienteSeleccionado?`expediente:${expedienteSeleccionado}`:`cliente:${manualClientId}`))
         .sort((a, b) => toDate(b.fechaOperacion).getTime() - toDate(a.fechaOperacion).getTime())
         .slice(0, 3),
-    [actividadKey, operaciones, rfc],
+    [actividadKey, operaciones, expedienteSeleccionado,manualClientId],
   )
 
   const satFormatoActual = useMemo(() => {
@@ -3700,7 +3695,7 @@ export default function ActividadesVulnerablesPage() {
     const actualizadoEn = new Date().toISOString()
     let rawRecords: any[] = []
     try {
-      const rawStored = window.localStorage.getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
+      const rawStored = getModuleStorage().getItem(EXPEDIENTE_DETALLE_STORAGE_KEY)
       const storedRecords = rawStored ? JSON.parse(rawStored) : []
       rawRecords = Array.isArray(storedRecords) ? storedRecords : []
     } catch (_error) {
@@ -3725,7 +3720,7 @@ export default function ActividadesVulnerablesPage() {
       updatedAt: actualizadoEn,
     })
     try {
-      saveExpedienteRecord(window.localStorage, updatedRaw, {expectedUpdatedAt: expedienteActual.actualizadoEn})
+      saveExpedienteRecord(getModuleStorage(), updatedRaw, {expectedUpdatedAt: expedienteActual.actualizadoEn})
     } catch (error) {
       toast({
         title: "No se pudo sincronizar",
@@ -4088,7 +4083,7 @@ export default function ActividadesVulnerablesPage() {
     if (!termino) return clientesGuardados
     return clientesGuardados.filter((cliente) => {
       const texto = normalizarBusqueda(
-        `${cliente.nombre} ${cliente.rfc} ${cliente.detalleTipoCliente ?? ""}`,
+        `${cliente.nombre} ${cliente.rfc} ${cliente.identifiers.nif} ${cliente.identifiers.curp} ${cliente.id} ${cliente.detalleTipoCliente ?? ""}`,
       )
       return texto.includes(termino)
     })
@@ -4138,14 +4133,14 @@ export default function ActividadesVulnerablesPage() {
     }
   }, [actividadSeleccionada, umbralPesos])
 
+  const clientIdentityActual = resolveOperationClientIdentity({ expedienteId: expedienteSeleccionado,clientId:manualClientId, tipoCliente, rfcText: rfc, identifiers: expedienteActual?.identifiers || manualIdentifiers, persona: personaAvisoActual })
+
   const operacionesRelacionadas = useMemo(() => {
     if (!actividadSeleccionada) return []
     return operaciones.filter(
       (operacion) =>
         operacion.actividadKey === actividadSeleccionada.key &&
-        (expedienteSeleccionado && operacion.expedienteReferenciado
-          ? operacion.expedienteReferenciado === expedienteSeleccionado
-          : operacion.rfc.toUpperCase() === rfc.trim().toUpperCase()) &&
+        storedPldClientIdentity(operacion) === clientIdentityActual.key &&
         getSujetoObligadoIdentityKey(operacion.sujetoObligado) ===
           getSujetoObligadoIdentityKey(sujetoObligadoSnapshotActual) &&
         operacion.id !== operacionEditandoId &&
@@ -4160,6 +4155,7 @@ export default function ActividadesVulnerablesPage() {
     rfc,
     sujetoObligadoSnapshotActual,
     expedienteSeleccionado,
+    clientIdentityActual.key,
   ])
 
   const pepScreeningCliente = useMemo(() => {
@@ -4226,7 +4222,7 @@ export default function ActividadesVulnerablesPage() {
     if (!financeActual.ok || (monto <= 0 && !montoNoDeterminado)) return null
     const resultado = evaluarOperacionVulnerable({
       actividadKey: actividadSeleccionada.key,
-      clienteKey: rfc.trim().toUpperCase(),
+      clienteKey: clientIdentityActual.key,
       fechaOperacion,
       montoMxn: monto,
       montoCentavos: montoOperacionCentavos,
@@ -4237,7 +4233,7 @@ export default function ActividadesVulnerablesPage() {
       operacionesHistoricas: operacionesRelacionadas.map((operacion) => ({
         id: operacion.id,
         actividadKey: operacion.actividadKey,
-        clienteKey: operacion.rfc.toUpperCase(),
+        clienteKey: storedPldClientIdentity(operacion),
         fechaOperacion: operacion.fechaOperacion,
         montoMxn: centsToMoney(
           operacion.montoCentavos ?? coerceLegacyMoneyToCents(operacion.monto),
@@ -4275,6 +4271,7 @@ export default function ActividadesVulnerablesPage() {
     montoOperacionNumero,
     montoOperacionParseado.ok,
     operacionesRelacionadas,
+    clientIdentityActual.key,
     anioSeleccionado,
     mesSeleccionado,
     fechaOperacion,
@@ -4448,7 +4445,7 @@ export default function ActividadesVulnerablesPage() {
   )
 
   const operationalCasePreview = useMemo(() => {
-    if (!tenantOperacionalActual || !actividadSeleccionada || !clienteNombre.trim() || !rfc.trim() || !evaluacionActual) {
+    if (!tenantOperacionalActual || !actividadSeleccionada || !clienteNombre.trim() || !clientIdentityActual.key || clientIdentityActual.error || !evaluacionActual) {
       return null
     }
 
@@ -4456,9 +4453,9 @@ export default function ActividadesVulnerablesPage() {
       tenant: tenantOperacionalActual,
       periodo: buildPeriodo(anioSeleccionado, mesSeleccionado),
       actividadKey: actividadSeleccionada.key,
-      clienteId: rfc.trim().toUpperCase(),
+      clienteId: clientIdentityActual.key,
       clienteNombre: clienteNombre.trim(),
-      clienteRfc: rfc.trim().toUpperCase(),
+      clienteRfc: clientIdentityActual.identifiers.rfc || undefined,
       tipoCliente,
       fechaOperacion,
       montoMxn: montoOperacionNumero,
@@ -4492,6 +4489,9 @@ export default function ActividadesVulnerablesPage() {
     alertaDescripcion,
     anioSeleccionado,
     clienteNombre,
+    clientIdentityActual.key,
+    clientIdentityActual.error,
+    clientIdentityActual.identifiers.rfc,
     draftEvidenceChecklist,
     draftEvidenceJustifications,
     evidencia,
@@ -4750,11 +4750,12 @@ export default function ActividadesVulnerablesPage() {
   )
 
   const clientesRegistrados = useMemo(() => {
-    const mapa = new Map<string, { rfc: string; nombre: string }>()
+    const mapa = new Map<string, { id:string; rfc: string; nombre: string }>()
     operacionesActivas.forEach((operacion) => {
-      if (!operacion.rfc.trim()) return
-      if (!mapa.has(operacion.rfc)) {
-        mapa.set(operacion.rfc, { rfc: operacion.rfc, nombre: operacion.cliente })
+      const id=storedPldClientIdentity(operacion)
+      if (!mapa.has(id)) {
+        const ids=operacion.identifiers || operacion.expedienteIdentifiers
+        mapa.set(id, { id,rfc: operacion.rfc||ids?.curp||ids?.nif||"Identificador pendiente", nombre: operacion.cliente })
       }
     })
     return Array.from(mapa.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
@@ -4763,7 +4764,7 @@ export default function ActividadesVulnerablesPage() {
   const operacionesClienteSeleccionado = useMemo(() => {
     if (!clienteCalendario) return []
     return operacionesActivas
-      .filter((operacion) => operacion.rfc === clienteCalendario)
+      .filter((operacion) => storedPldClientIdentity(operacion) === clienteCalendario && Boolean(operacion.fechaOperacion) && Number.isFinite(Date.parse(operacion.fechaOperacion)))
       .sort((a, b) => toDate(a.fechaOperacion).getTime() - toDate(b.fechaOperacion).getTime())
   }, [clienteCalendario, operacionesActivas])
 
@@ -5050,7 +5051,18 @@ const continuarCapturaDesdeContexto = () => {
 }
 
 const limpiarClienteSeleccionado = () => {
+  preservedExpedienteSnapshotRef.current="manual"
+  setManualClientId(crypto.randomUUID())
+  setManualClientIsNew(true)
+  setManualIdentifiers(normalizeExpedienteIdentifiers({}))
   setClienteSeleccionado(null)
+  setExpedienteSeleccionado(null)
+  setClienteOperacionSeleccionado("")
+  setPersonaAvisoActual(null)
+  setPersonaExpedienteSeleccionada("")
+  setDatosEuiConfirmados(false)
+  setBeneficiarioForm({...BENEFICIARIO_FORM_DEFAULT})
+  setSatFieldValues({})
   setClienteNombre("")
   setRfc("")
   setDetalleTipoCliente("")
@@ -5114,9 +5126,9 @@ const DEMO_EVIDENCIA_DESCRIPCION =
   "Contrato marco de arrendamiento 2025 firmado con Corporativo Norte S.A."
 
 const registrarClienteGuardado = (cliente: ClienteGuardado) => {
-  if (!cliente.rfc.trim()) return
+  if (!cliente.id || !cliente.nombre.trim()) return
   setClientesGuardados((prev) => {
-    const existente = prev.find((item) => item.rfc === cliente.rfc)
+    const existente = prev.find((item) => item.id === cliente.id)
     if (existente) {
       if (
         existente.nombre === cliente.nombre &&
@@ -5127,7 +5139,7 @@ const registrarClienteGuardado = (cliente: ClienteGuardado) => {
         return prev
       }
       return ordenarClientesGuardados(
-        prev.map((item) => (item.rfc === cliente.rfc ? { ...item, ...cliente } : item)),
+        prev.map((item) => (item.id === cliente.id ? { ...item, ...cliente } : item)),
       )
     }
 
@@ -5136,6 +5148,7 @@ const registrarClienteGuardado = (cliente: ClienteGuardado) => {
 }
 
 const cargarDemoFraccionXV = () => {
+  if (process.env.NEXT_PUBLIC_PLD_MODE !== "demo") return
   const demo = demoFraccionXV
 
   if (
@@ -5246,12 +5259,12 @@ const actualizarOperaciones = (
   modifier: (operacionesActuales: OperacionCliente[]) => OperacionCliente[],
 ) => {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(OPERACIONES_STORAGE_KEY) || "[]")
+    const parsed = JSON.parse(getModuleStorage().getItem(OPERACIONES_STORAGE_KEY) || "[]")
     if (!Array.isArray(parsed)) throw new Error("El registro de operaciones no tiene un formato válido.")
     const latest = parsed.map(sanitizeOperacion)
     if (latest.some((operation) => !operation)) throw new Error("Hay registros que no se pueden interpretar. No se sobrescribió el almacenamiento.")
     const next = recalcularOperaciones(modifier(latest as OperacionCliente[]), true)
-    window.localStorage.setItem(OPERACIONES_STORAGE_KEY, JSON.stringify(next))
+    getModuleStorage().setItem(OPERACIONES_STORAGE_KEY, JSON.stringify(next))
     setOperacionesStorageValido(true)
     setOperaciones(next)
     notifyPldIntegrationChange(OPERACIONES_STORAGE_KEY)
@@ -5268,22 +5281,33 @@ const manejarSeleccionClienteGuardado = (valor: string) => {
     return
   }
 
-  const guardado = clientesGuardados.find((cliente) => cliente.rfc === valor)
+  const guardado = clientesGuardados.find((cliente) => cliente.id === valor)
   if (!guardado) {
     limpiarClienteSeleccionado()
     return
   }
 
-  setClienteSeleccionado(guardado.rfc)
+  setClienteSeleccionado(guardado.id)
+  preservedExpedienteSnapshotRef.current="manual"
+  setManualClientId(guardado.id)
+  setManualClientIsNew(false)
+  setManualIdentifiers(guardado.identifiers)
+  setExpedienteSeleccionado(null)
+  setClienteOperacionSeleccionado("")
+  setPersonaAvisoActual(null)
+  setPersonaExpedienteSeleccionada("")
+  setDatosEuiConfirmados(false)
+  setBeneficiarioForm({...BENEFICIARIO_FORM_DEFAULT})
+  setSatFieldValues({})
   setClienteNombre(guardado.nombre)
-  setRfc(guardado.rfc)
+  setRfc(guardado.identifiers.rfc||guardado.identifiers.nif||guardado.identifiers.curp)
   setTipoCliente(guardado.tipoCliente)
   setDetalleTipoCliente(guardado.detalleTipoCliente ?? "")
   setMismoGrupo(guardado.mismoGrupo ? "si" : "no")
   setSospecha24h(false)
 }
 
-const agregarOperacion = (guardarBorrador = false) => {
+const agregarOperacion = async (guardarBorrador = false) => {
   const operacionExistente = operacionEditandoId
     ? operaciones.find((operacion) => operacion.id === operacionEditandoId) ?? null
     : null
@@ -5297,12 +5321,12 @@ const agregarOperacion = (guardarBorrador = false) => {
     return
   }
 
-  if (!clienteNombre || (!guardarBorrador && (!rfc || !tipoOperacion || (!sospecha24h && !montoOperacion && !montoNoDeterminado)))) {
+  if (!clienteNombre || (!guardarBorrador && (clientIdentityActual.error || !tipoOperacion || (!sospecha24h && !montoOperacion && !montoNoDeterminado)))) {
     toast({
       title: "Faltan datos",
       description: sospecha24h
-        ? "Completa la información del cliente, RFC y narrativa de la alerta."
-        : "Completa la información del cliente, RFC, tipo de operación y monto.",
+        ? "Completa la información del cliente, identificador aplicable y narrativa de la alerta."
+        : clientIdentityActual.error || "Completa la información del cliente, identificador aplicable, tipo de operación y monto.",
       variant: "destructive",
     })
     return
@@ -5607,10 +5631,19 @@ const agregarOperacion = (guardarBorrador = false) => {
   const ahora = new Date().toISOString()
   const operacionId = operacionExistente?.id ?? crypto.randomUUID()
   const fuePresentada = Boolean(operacionExistente?.submission?.wasEverPresented || operacionExistente?.avisoPresentado)
+  const clientResolution:ImportClientDecision=expedienteSeleccionado?{kind:"expediente",id:expedienteSeleccionado}
+    :manualClientIsNew?{kind:"provisional",id:manualClientId,client:{id:manualClientId,nombre:clienteNombre.trim(),rfc:clientIdentityActual.identifiers.rfc,identifiers:clientIdentityActual.identifiers,tipoCliente}}
+    :{kind:"client",id:manualClientId}
   let nuevaOperacion: OperacionCliente = {
     ...(operacionExistente ?? {}),
     schemaVersion: 3,
     id: operacionId,
+    clienteId:expedienteSeleccionado?undefined:manualClientId,
+    expedienteId:expedienteSeleccionado||undefined,
+    importClientResolution:clientResolution,
+    importClientResolutionPending:false,
+    clientIdentityReviewRequired:false,
+    importMissing:guardarBorrador?operacionExistente?.importMissing?.filter(issue=>issue!==IMPORT_CLIENT_LINK_MISSING):[],
     montoCentavos: financeActual.ok ? financeActual.montoCentavos : 0,
     finance: financeActual.ok ? financeActual.finance : undefined,
     financeReviewRequired: !financeActual.ok,
@@ -5658,7 +5691,8 @@ const agregarOperacion = (guardarBorrador = false) => {
     tipoCliente,
     detalleTipoCliente: detalleClienteNormalizado,
     cliente: clienteNombre.trim(),
-    rfc: rfc.trim().toUpperCase(),
+    rfc: clientIdentityActual.identifiers.rfc,
+    identifiers: clientIdentityActual.identifiers,
     mismoGrupo: mismoGrupo === "si",
     periodo,
     mes: mesSeleccionado,
@@ -5706,7 +5740,7 @@ const agregarOperacion = (guardarBorrador = false) => {
     claveSujetoObligado: claveSujetoObligado.trim() || undefined,
     claveActividadVulnerable: claveActividad.trim() || undefined,
     expedienteReferenciado: expedienteSeleccionado ?? undefined,
-    expedienteIdentifiers: expedienteActual?.identifiers,
+    expedienteIdentifiers: clientIdentityActual.identifiers,
     expedienteEui: expedienteActual?.expedienteEui,
     personaExpedienteId: personaExpedienteSeleccionada || undefined,
     personaAviso: personaAvisoSnapshot ?? null,
@@ -5783,7 +5817,14 @@ const agregarOperacion = (guardarBorrador = false) => {
     return [...prev, nuevaOperacion]
   })
   if (!guardada) return
-  registrarClienteGuardado({
+  try { await flushModuleStorage() } catch (error) {
+    toast({ title: "Operación sin guardar", description: error instanceof Error ? error.message : "Reintenta antes de salir.", variant: "destructive" })
+    return
+  }
+  setResumenOperacion(nuevaOperacion)
+  if(nuevaOperacion.clienteId)registrarClienteGuardado({
+    id:nuevaOperacion.clienteId,
+    identifiers:clientIdentityActual.identifiers,
     rfc: nuevaOperacion.rfc,
     nombre: nuevaOperacion.cliente,
     tipoCliente: nuevaOperacion.tipoCliente,
@@ -5812,61 +5853,24 @@ const agregarOperacion = (guardarBorrador = false) => {
   setPasoActual(0)
   limpiarFormulario()
   setTabActiva("seguimiento")
-  setClienteCalendario(nuevaOperacion.rfc)
+  setClienteCalendario(storedPldClientIdentity(nuevaOperacion))
   setAnioCalendario(nuevaOperacion.anio)
   setMesCalendario(nuevaOperacion.mes)
   setDiaSeleccionado(normalizeDateKey(nuevaOperacion.fechaOperacion))
   demoCargaRef.current = false
 }
 
-const marcarAvisoPresentado = (id: string) => {
+const marcarAvisoPresentado = async (id: string) => {
   const operacion = operaciones.find((item) => item.id === id)
   if (!operacion) return
-  if (operacion.captureStatus === "draft" || !operacion.referenciaAviso?.trim()) {
-    toast({title: "Presentación pendiente de evidencia", description: "Completa la captura y registra una referencia o folio verificable. Esta acción es un registro manual, no un envío al SAT.", variant: "destructive"})
+  if (operacion.captureStatus === "draft") {
+    toast({title: "Captura pendiente", description: "Completa la operación antes de documentar su presentación con un acuse.", variant: "destructive"})
     return
   }
-
-  const evidenciaEvaluada = evaluarEvidenciaOperacion(operacion)
-  if (!evidenciaEvaluada.canClose) {
-    toast({
-      title: "Evidencia crítica pendiente",
-      description: `No se puede cerrar el aviso: faltan ${evidenciaEvaluada.missingCritical.length} requisito(s) críticos o una justificación documental.`,
-      variant: "destructive",
-    })
-    return
-  }
-
-  const presentadoEn = new Date().toISOString()
-  const stored = sanitizeStoredPldOperation(operacion)
-  if (!stored) return
-  const result = markStoredPldOperationPresented(stored, {
-    at: presentadoEn,
-    actor: operacion.sujetoObligado?.nombre,
-    reference: operacion.referenciaAviso,
-    packageId: `satpkg-${operacion.id}`,
-  })
-  if (!result.ok) {
-    toast({ title: "No fue posible presentar", description: result.message, variant: "destructive" })
-    return
-  }
-  const actualizada = sanitizeOperacion({
-    ...result.operation,
-    alerta: "Aviso marcado como presentado. Reiniciar acumulación a partir de esta fecha.",
-    alertaResuelta: true,
-  })
-  if (!actualizada) return
-
-  if (!actualizarOperaciones((prev) => {
-    const latest = prev.find((item) => item.id === id)
-    if (!latest || latest.revision !== operacion.revision || latest.updatedAt !== operacion.updatedAt) throw new Error("El registro cambió; recarga antes de registrar la presentación.")
-    return prev.map((item) => item.id === id ? actualizada : item)
-  })) return
-
-  toast({
-    title: "Aviso actualizado",
-    description: "Se registró manualmente la presentación declarada. Conserva el acuse de la autoridad.",
-  })
+  try {
+    await flushModuleStorage()
+    window.location.assign(`/avisos-informes?operation=${encodeURIComponent(id)}`)
+  } catch (error) { toast({title:"Cambios sin guardar",description:error instanceof Error ? error.message : "Guarda la operación antes de abrir Avisos.",variant:"destructive"}) }
 }
 
 const abrirEdicionOperacion = (operacion: OperacionCliente) => {
@@ -5928,10 +5932,10 @@ const confirmarEliminarOCancelarOperacion = () => {
   } else {
     if (typeof window !== "undefined") {
       try {
-        const stored = window.localStorage.getItem(SAT_OUTPUT_PACKAGES_STORAGE_KEY)
+        const stored = getModuleStorage().getItem(SAT_OUTPUT_PACKAGES_STORAGE_KEY)
         const packages = stored ? JSON.parse(stored) : []
         if (Array.isArray(packages)) {
-          window.localStorage.setItem(
+          getModuleStorage().setItem(
             SAT_OUTPUT_PACKAGES_STORAGE_KEY,
             JSON.stringify(removeLinkedSatPackage(packages, operacionParaEliminar.id)),
           )
@@ -6196,7 +6200,7 @@ const exportarXml = (operacion: OperacionCliente) => {
     tenant,
     periodo: operacion.periodo,
     actividadKey: operacion.actividadKey,
-    clienteId: operacion.rfc,
+    clienteId: storedPldClientIdentity(operacion),
     clienteNombre: operacion.cliente,
     clienteRfc: operacion.rfc,
     tipoCliente: operacion.tipoCliente,
@@ -6270,7 +6274,13 @@ const reutilizarDatosCliente = (operacion: OperacionCliente, modo: "reusar" | "e
   setTipoCliente(operacion.tipoCliente)
   setDetalleTipoCliente(operacion.detalleTipoCliente ?? "")
   setClienteNombre(operacion.cliente)
-  setRfc(operacion.rfc)
+  const manualId=operacion.clienteId||crypto.randomUUID()
+  const identifiers=normalizeExpedienteIdentifiers(operacion.identifiers||operacion.expedienteIdentifiers||{rfc:operacion.rfc})
+  setManualClientId(manualId)
+  setManualClientIsNew(!operacion.clienteId)
+  setClienteSeleccionado(operacion.clienteId||null)
+  setManualIdentifiers(identifiers)
+  setRfc(identifiers.rfc||identifiers.nif||identifiers.curp)
   setPepCargoCliente(modo === "editar" ? operacion.pepCargo ?? "" : "")
   setPepDependenciaCliente(modo === "editar" ? operacion.pepDependencia ?? "" : "")
   setPepRelacionCliente("cliente")
@@ -6696,6 +6706,18 @@ const cambiarMesCalendario = (delta: number) => {
 
   return (
     <div className="space-y-6 overflow-hidden">
+      <Dialog open={Boolean(resumenOperacion)} onOpenChange={(open) => { if (!open) setResumenOperacion(null) }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl"><DialogHeader><DialogTitle>Resumen de operación</DialogTitle><DialogDescription>{resumenOperacion?.cliente}</DialogDescription></DialogHeader>
+          {resumenOperacion && <div className="space-y-4"><dl className="grid grid-cols-2 gap-3 text-sm">{[
+            ["Sujeto obligado", resumenOperacion.sujetoObligado?.nombre || "Pendiente"], ["Actividad", resumenOperacion.actividadNombre],
+            ["Fecha", resumenOperacion.fechaOperacion], ["Monto", formatMontoOperacion(resumenOperacion)], ["Periodo", resumenOperacion.periodo],
+            ["UMA diaria", formatCurrency(resumenOperacion.umaDiaria)], ["Acumulación", formatCurrency(resumenOperacion.acumuladoCliente)],
+            ["Umbral de aviso", formatCurrency(resumenOperacion.avisoUmbralPesos)],
+          ].map(([label,value]) => <div key={label} className="rounded-xl bg-slate-50 p-3"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 break-words font-medium">{value}</dd></div>)}</dl>
+          <div className="rounded-xl border p-4"><p className="font-medium">{resumenOperacion.captureStatus === "draft" ? "Borrador pendiente" : getStatusLabel(resumenOperacion.umbralStatus)}</p><p className="mt-1 text-sm text-muted-foreground">{resumenOperacion.umbralStatus === "aviso" ? "Revisa la preparación del paquete y los faltantes en Bandeja SAT." : "Este registro no genera una salida SAT ordinaria."}</p><p className="mt-2 text-xs">{resumenOperacion.submission?.status === "correction-pending" ? "Corrección pendiente · acuse anterior conservado" : resumenOperacion.submission?.status === "presented" ? "Presentación documentada de esta revisión" : "Sin presentación documentada de esta revisión"} · {resumenOperacion.satMissingRequiredFields?.length || 0} campo(s) SAT pendiente(s)</p></div>
+          <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { abrirEdicionOperacion(resumenOperacion); setResumenOperacion(null) }}>Revisar o corregir</Button>{resumenOperacion.umbralStatus === "aviso" && <Button onClick={() => window.location.assign("/avisos-informes")}>Preparar salida SAT</Button>}</div></div>}
+        </DialogContent>
+      </Dialog>
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0 space-y-2">
@@ -6709,6 +6731,7 @@ const cambiarMesCalendario = (delta: number) => {
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
+            <PldImportDialog destination="operations" activityKey={actividadKey} onComplete={() => window.location.reload()} />
             <Button
               onClick={() => {
                 setTabActiva("captura")
@@ -6746,6 +6769,7 @@ const cambiarMesCalendario = (delta: number) => {
         </div>
       </section>
 
+      {operaciones.some(operation=>operation.clientIdentityReviewRequired)&&<Alert className="border-amber-300 bg-amber-50"><AlertCircle className="h-4 w-4"/><AlertTitle>Identidad histórica pendiente de revisión</AlertTitle><AlertDescription>Hay operaciones antiguas sin vínculo estable de cliente o expediente. Se conservan sus importes, umbrales, clasificación y presentaciones históricas; no se recalculan ni se fusionan por RFC. Abre Editar y elige explícitamente el cliente o expediente antes de completar una nueva revisión.</AlertDescription></Alert>}
       <Tabs value={tabActiva} onValueChange={(value) => setTabActiva(value as typeof tabActiva)} className="space-y-6">
         <TabsList className="!grid !h-auto w-full grid-cols-1 gap-2 rounded-xl border bg-white p-1 sm:grid-cols-2 xl:grid-cols-4">
           <TabsTrigger value="resumen" className="w-full !whitespace-normal text-center text-sm leading-tight">Resumen ejecutivo</TabsTrigger>
@@ -6936,6 +6960,7 @@ const cambiarMesCalendario = (delta: number) => {
                             {getOperacionLifecycleLabel(operacion)}
                           </span>
                           <span className="font-semibold text-slate-700">{formatMontoOperacion(operacion)}</span>
+                          <Button size="sm" variant="outline" onClick={() => setResumenOperacion(operacion)}>Ver detalle</Button>
                           {!isOperacionCancelada(operacion) ? (
                             <>
                               <Button size="sm" variant="ghost" onClick={() => abrirEdicionOperacion(operacion)}>
@@ -7031,9 +7056,9 @@ const cambiarMesCalendario = (delta: number) => {
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  <Button type="button" size="sm" variant="outline" onClick={cargarDemoFraccionXV}>
+                  {process.env.NEXT_PUBLIC_PLD_MODE === "demo" && <Button type="button" size="sm" variant="outline" onClick={cargarDemoFraccionXV}>
                     Cargar demo
-                  </Button>
+                  </Button>}
                   <Button type="button" size="sm" variant="ghost" onClick={limpiarFormulario}>
                     Limpiar
                   </Button>
@@ -7917,8 +7942,8 @@ const cambiarMesCalendario = (delta: number) => {
                           </div>
                           {clientesGuardadosFiltrados.length > 0 ? (
                             clientesGuardadosFiltrados.map((cliente) => (
-                              <SelectItem key={cliente.rfc} value={cliente.rfc}>
-                                {cliente.nombre} ({cliente.rfc}
+                              <SelectItem key={cliente.id} value={cliente.id}>
+                                {cliente.nombre} ({cliente.rfc||cliente.identifiers.nif||cliente.identifiers.curp||"Identificador pendiente"} · {cliente.id.slice(-8)}
                                 {cliente.detalleTipoCliente ? ` – ${cliente.detalleTipoCliente}` : ""})
                               </SelectItem>
                             ))
@@ -7932,23 +7957,14 @@ const cambiarMesCalendario = (delta: number) => {
                       </Select>
                     )}
                     <Input
-                      list="clientes-guardados"
                       placeholder="Ejemplo: Grupo Alfa S.A. de C.V."
                       value={clienteNombre}
                       onChange={(event) => {
-                        if (clienteSeleccionado) {
-                          setClienteSeleccionado(null)
-                        }
                         setClienteNombre(event.target.value)
                       }}
                     />
                     {clientesGuardados.length > 0 && (
                       <>
-                        <datalist id="clientes-guardados">
-                          {clientesGuardados.map((cliente) => (
-                            <option key={cliente.rfc} value={cliente.nombre} />
-                          ))}
-                        </datalist>
                         <Button
                           type="button"
                           variant="ghost"
@@ -7969,12 +7985,12 @@ const cambiarMesCalendario = (delta: number) => {
                       placeholder="Identificador del cliente"
                       value={rfc}
                       onChange={(event) => {
-                        if (clienteSeleccionado) {
-                          setClienteSeleccionado(null)
-                        }
+                        setManualIdentifiers(normalizeExpedienteIdentifiers({}))
+                        setPersonaAvisoActual(previous=>previous?{...previous,rfc:undefined,nif:undefined,curp:undefined}:null)
                         setRfc(event.target.value.toUpperCase())
                       }}
                     />
+                    <p className="text-xs text-muted-foreground">{manualClientIsNew?"Cliente nuevo: tendrá un ID propio, aunque comparta identificador con otro registro.":`Cliente seleccionado · ${manualClientId.slice(-8)}. Para una persona distinta, usa “Añadir otro cliente”.`}</p>
                   </div>
                 </div>
 
@@ -9927,8 +9943,8 @@ const cambiarMesCalendario = (delta: number) => {
                             Reusar
                           </Button>
                           {operacion.umbralStatus === "aviso" && !operacion.avisoPresentado && (
-                            <Button size="sm" variant="outline" onClick={() => marcarAvisoPresentado(operacion.id)}>
-                              Presentado
+                            <Button size="sm" variant="outline" data-pld-action="browse" onClick={() => void marcarAvisoPresentado(operacion.id)}>
+                              Documentar acuse
                             </Button>
                           )}
                           {hasRealSatOutput(operacion) ? (
@@ -10067,8 +10083,8 @@ const cambiarMesCalendario = (delta: number) => {
                       </SelectTrigger>
                       <SelectContent>
                         {clientesRegistrados.map((cliente) => (
-                          <SelectItem key={cliente.rfc} value={cliente.rfc}>
-                            {cliente.nombre} ({cliente.rfc})
+                          <SelectItem key={cliente.id} value={cliente.id}>
+                            {cliente.nombre} ({cliente.rfc} · {cliente.id.slice(-8)})
                           </SelectItem>
                         ))}
                       </SelectContent>

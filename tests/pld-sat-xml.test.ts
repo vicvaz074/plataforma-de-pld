@@ -267,15 +267,16 @@ test("F4594 values fill the official Arrendamiento workbook cells with SAT-compa
   assertWorkbookCellsEquivalentToFixture(workbook, expectedWorkbook)
 })
 
-test("demo dataset includes the F4594 SAT validation scenario", () => {
+test("F4594 stays available as an independent golden fixture, outside the clean guided demo", () => {
   const dataset = buildPldDemoDataset(new Date("2026-05-13T12:00:00-06:00"))
   const packages = dataset["pld-sat-output-packages"] as any[]
-  const f4594 = packages.find((item) => item.id.includes("f4594") || item.xmlFileName.includes("AV202505"))
+  assert.equal(packages.some((item) => item.id.includes("f4594") || item.xmlFileName.includes("AV202505")), false)
+  const f4594 = generateSatOutputPackage(buildF4594Case())
 
-  assert.equal(Boolean(f4594), true)
+  assert.equal(f4594.validation.status, "listo")
   assert.equal(f4594.outputKind, "aviso_normal")
   assert.equal(f4594.satTemplateId, "sat-fraccion-xv-arrendamiento")
-  assert.equal(f4594.satFieldValues["persona_aviso.referencia"], "AV202505")
+  assert.equal(f4594.satFieldValues?.["persona_aviso.referencia"], "AV202505")
   assert.match(f4594.xml, /<clave_actividad>ARI<\/clave_actividad>/)
 })
 

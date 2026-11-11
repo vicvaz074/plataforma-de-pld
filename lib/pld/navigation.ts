@@ -182,8 +182,8 @@ export const APP_NAVIGATION_ITEMS: PldNavigationItem[] = [
     href: "/alicia",
     title: { es: "Alicia", en: "Alicia" },
     description: {
-      es: "Asistente PLD para consultar el expediente, criterios, pendientes y próximos pasos.",
-      en: "PLD assistant for file lookup, criteria, pending items and next steps.",
+      es: "Conoce Alicia y contacta al equipo de Davara.",
+      en: "Learn about Alicia and contact the Davara team.",
     },
   },
 ]

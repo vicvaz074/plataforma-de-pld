@@ -148,7 +148,9 @@ test("SAT queue consumes the shared V3 operation sanitizer and canonical cents",
 
   assert.equal(operations[0].schemaVersion, 3)
   assert.equal(items[0].montoCentavos, 1_000_000_000)
-  assert.equal(items[0].label, "Sólo identificación")
+  assert.equal(items[0].label, "Identidad por revisar")
+  assert.equal(operations[0].clientIdentityReviewRequired,true)
+  assert.equal(operations[0].umbralStatus,"identificacion","the historic obligation is not lowered while identity is unresolved")
   assert.equal(items[0].package, undefined)
 })
 

@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS pld_backups (
+ id TEXT PRIMARY KEY, companyId TEXT NOT NULL REFERENCES pld_companies(id),
+ manifestKey TEXT NOT NULL UNIQUE, sha256 TEXT NOT NULL, createdAt TEXT NOT NULL,
+ createdBy TEXT NOT NULL REFERENCES user(id), recordCount INTEGER NOT NULL, fileCount INTEGER NOT NULL
+);

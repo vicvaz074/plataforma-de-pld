@@ -1,4 +1,5 @@
 "use client"
+import { getModuleStorage, canWriteModuleStorage, flushModuleStorage } from "@/lib/pilot/module-storage"
 
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react"
 import { differenceInDays, format, parseISO } from "date-fns"
@@ -16,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { readFileAsDataUrl } from "@/lib/storage/read-file"
+import { getTrainingProofPolicy } from "@/lib/pld/training-proof-policy"
 import {
   AlertTriangle,
   BellRing,
@@ -55,6 +57,7 @@ interface DocumentRecord {
   size: number
   uploadedAt: string
   uploadedBy: string
+  sha256?: string
   sessionId?: string
   employeeId?: string
   checklistQuestionId?: string
@@ -165,7 +168,7 @@ const checklistQuestions: ChecklistQuestion[] = [
     id: "b1",
     section: "B",
     title: "Ejecución",
-    question: "¿El personal operativo recibió capacitación vigente en el último año?",
+    question: "¿Se documentó la capacitación del personal operativo para el periodo del programa?",
     recommendedCategories: ["asistencia", "constancia"],
     evidenceLabel: "Lista de asistencia y constancias",
   },
@@ -173,7 +176,7 @@ const checklistQuestions: ChecklistQuestion[] = [
     id: "b2",
     section: "B",
     title: "Ejecución",
-    question: "¿El Representante de Cumplimiento recibió su capacitación anual obligatoria?",
+    question: "¿Se documentó la capacitación del Representante Encargado de Cumplimiento para el periodo aplicable?",
     recommendedCategories: ["oficial"],
     evidenceLabel: "Constancia del Oficial de Cumplimiento",
   },
@@ -294,7 +297,7 @@ export default function CapacitacionControlPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const stored = localStorage.getItem(STORAGE_KEY)
+    const stored = getModuleStorage().getItem(STORAGE_KEY)
     if (stored) {
       try {
         const parsed = JSON.parse(stored) as PersistedState
@@ -307,14 +310,23 @@ export default function CapacitacionControlPage() {
         })
       } catch (error) {
         console.error("Error al leer el estado persistido", error)
+        toast({ title: "No se pudo recuperar capacitación", description: "Los datos originales se conservaron. Revisa el respaldo antes de continuar.", variant: "destructive" })
+        return
       }
     }
     setIsHydrated(true)
   }, [])
 
   useEffect(() => {
-    if (!isHydrated || typeof window === "undefined") return
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    if (!isHydrated || typeof window === "undefined" || !canWriteModuleStorage(STORAGE_KEY)) return
+    try {
+      getModuleStorage().setItem(STORAGE_KEY, JSON.stringify(state))
+      void flushModuleStorage().catch(() => {
+        toast({ title: "Cambios pendientes de guardar", description: "No se confirmó el guardado de capacitación. Mantén esta página abierta y vuelve a intentarlo.", variant: "destructive" })
+      })
+    } catch {
+      toast({ title: "Cambios sin guardar", description: "No se pudo guardar capacitación. Conserva esta página abierta y vuelve a intentarlo.", variant: "destructive" })
+    }
   }, [state, isHydrated])
 
   useEffect(() => {
@@ -336,7 +348,7 @@ export default function CapacitacionControlPage() {
   useEffect(() => {
     setOfficialForm({
       name: state.officialCompliance.name,
-      lastCertificationDate: state.officialCompliance.lastCertificationDate ?? "",
+      lastCertificationDate: state.officialCompliance.lastCertificationDate?.slice(0,10) ?? "",
     })
   }, [state.officialCompliance.name, state.officialCompliance.lastCertificationDate])
 
@@ -347,7 +359,7 @@ export default function CapacitacionControlPage() {
         {
           id: `trace-${Date.now()}`,
           timestamp: new Date().toISOString(),
-          user: "Oficial de Cumplimiento",
+          user: getModuleStorage().getItem("userEmail") || getModuleStorage().getItem("userName") || "Usuario en sesión",
           ...entry,
         },
         ...prev.traceability,
@@ -360,8 +372,12 @@ export default function CapacitacionControlPage() {
     category: DocumentCategory,
     options?: { sessionId?: string; employeeId?: string; checklistQuestionId?: string },
   ) => {
+    if (!isHydrated || !canWriteModuleStorage(STORAGE_KEY)) throw new Error("No tienes permiso para guardar documentos de capacitación.")
+    if (file.size > 20 * 1024 * 1024 || !/\.(pdf|png|jpe?g|xlsx?|xlsm|csv|docx?|pptx?)$/i.test(file.name)) throw new Error("Selecciona un documento, imagen o plantilla de hasta 20 MB.")
     const dataUrl = await readFileAsDataUrl(file)
-    const documentId = `doc-${Date.now()}`
+    const documentId = crypto.randomUUID()
+    const actor = getModuleStorage().getItem("userEmail") || getModuleStorage().getItem("userName") || "Usuario en sesión"
+    const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))).map((byte) => byte.toString(16).padStart(2, "0")).join("")
     const newDocument: DocumentRecord = {
       id: documentId,
       name: file.name,
@@ -370,20 +386,23 @@ export default function CapacitacionControlPage() {
       fileType: file.type,
       size: file.size,
       uploadedAt: new Date().toISOString(),
-      uploadedBy: "Oficial de Cumplimiento",
+      uploadedBy: actor,
+      sha256,
       ...options,
     }
 
-    setState((prev) => ({
-      ...prev,
-      documents: [newDocument, ...prev.documents],
-    }))
-
-    registerTrace({
+    const trace: TraceabilityEntry = {
+      id: crypto.randomUUID(), timestamp: new Date().toISOString(), user: actor,
       action: `Documento cargado (${category})`,
       details: file.name + " registrado en la bitácora digital de capacitación.",
       documentId,
-    })
+    }
+    const stored = getModuleStorage().getItem(STORAGE_KEY)
+    const previous = stored ? JSON.parse(stored) as PersistedState : state
+    if (!Array.isArray(previous.documents) || !Array.isArray(previous.traceability)) throw new Error("El registro de capacitación necesita revisión antes de agregar archivos.")
+    getModuleStorage().setItem(STORAGE_KEY, JSON.stringify({ ...previous, documents: [newDocument, ...previous.documents], traceability: [trace, ...previous.traceability] }))
+    await flushModuleStorage()
+    setState((prev) => ({ ...prev, documents: [newDocument, ...prev.documents], traceability: [trace, ...prev.traceability] }))
 
     toast({
       title: "Documento cargado",
@@ -401,9 +420,13 @@ export default function CapacitacionControlPage() {
     const file = event.target.files?.[0]
     if (!file) return undefined
 
-    const documentId = await storeDocument(file, category, options)
-    event.target.value = ""
-    return documentId
+    const input = event.target
+    try {
+      return await storeDocument(file, category, options)
+    } catch (error) {
+      toast({ title: "No se guardó el documento", description: error instanceof Error ? error.message : "Conserva el archivo y vuelve a intentarlo.", variant: "destructive" })
+      return undefined
+    } finally { input.value = "" }
   }
 
   const handlePlanScheduleChange = (index: number, field: keyof TrainingPlanScheduleItem, value: string) => {
@@ -455,8 +478,8 @@ export default function CapacitacionControlPage() {
     })
 
     toast({
-      title: "Plan de capacitación guardado",
-      description: "El plan anual quedó registrado con los módulos y audiencias definidos.",
+      title: "Plan de capacitación actualizado",
+      description: "Consulta el estado de guardado antes de salir de esta página.",
     })
   }
 
@@ -507,7 +530,7 @@ export default function CapacitacionControlPage() {
       attendees: sessionForm.attendees,
       observations: sessionForm.observations || undefined,
       createdAt: new Date().toISOString(),
-      createdBy: "Oficial de Cumplimiento",
+      createdBy: getModuleStorage().getItem("userEmail") || getModuleStorage().getItem("userName") || "Usuario en sesión",
     }
 
     setState((prev) => ({
@@ -562,8 +585,8 @@ export default function CapacitacionControlPage() {
     })
 
     toast({
-      title: "Sesión guardada",
-      description: "La sesión quedó registrada con sus materiales y asistentes vinculados.",
+      title: "Sesión actualizada",
+      description: "Consulta el estado de guardado antes de salir de esta página.",
     })
 
     setSessionForm({
@@ -583,22 +606,28 @@ export default function CapacitacionControlPage() {
   }
 
   const handleMaterialUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files
+    const input = event.target
+    const files = input.files
     if (!files) return
     const uploadedIds: string[] = []
-    for (const file of Array.from(files)) {
-      const documentId = await storeDocument(file, "material")
-      uploadedIds.push(documentId)
+    try {
+      for (const file of Array.from(files)) {
+        const documentId = await storeDocument(file, "material")
+        uploadedIds.push(documentId)
+      }
+    } catch (error) {
+      toast({ title: "Carga incompleta", description: error instanceof Error ? error.message : "Algunos archivos no se guardaron; revisa la lista antes de reintentar.", variant: "destructive" })
+    } finally {
+      input.value = ""
     }
+    if (!uploadedIds.length) return
     setSessionForm((prev) => ({
       ...prev,
       materialsDocumentIds: [...prev.materialsDocumentIds, ...uploadedIds],
     }))
-    event.target.value = ""
-
     toast({
       title: "Materiales cargados",
-      description: "Los archivos se asociarán automáticamente a la sesión al guardarla.",
+      description: `${uploadedIds.length} archivo(s) conservados; se asociarán a la sesión al guardarla.`,
     })
   }
 
@@ -662,8 +691,8 @@ export default function CapacitacionControlPage() {
         return {
           ...employee,
           certificates: [documentId, ...employee.certificates],
-          needsInitialTraining: false,
-          lastTrainingDate: employee.lastTrainingDate ?? new Date().toISOString(),
+          needsInitialTraining: employee.needsInitialTraining,
+          lastTrainingDate: employee.lastTrainingDate,
         }
       }),
     }))
@@ -690,13 +719,12 @@ export default function CapacitacionControlPage() {
       officialCompliance: {
         ...prev.officialCompliance,
         certificateDocumentId: documentId,
-        lastCertificationDate: prev.officialCompliance.lastCertificationDate ?? new Date().toISOString(),
       },
     }))
 
     registerTrace({
       action: "Constancia del Oficial cargada",
-      details: "Se acreditó la capacitación anual del Representante de Cumplimiento.",
+      details: "Se conservó el archivo de capacitación del REC; la fecha y el alcance requieren revisión del usuario.",
       documentId,
     })
   }
@@ -748,6 +776,11 @@ export default function CapacitacionControlPage() {
 
   const handleOfficialFormSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const policy=getTrainingProofPolicy({date:officialForm.lastCertificationDate,hasDocument:true})
+    if (["future-date","invalid-date","missing-date"].includes(policy.status)) {
+      toast({title:"Fecha de capacitación inválida",description:"Indica la fecha real del curso; no se aceptan fechas futuras.",variant:"destructive"})
+      return
+    }
     setState((prev) => ({
       ...prev,
       officialCompliance: {
@@ -760,7 +793,7 @@ export default function CapacitacionControlPage() {
     registerTrace({
       action: "Datos del Oficial actualizados",
       details:
-        "Se registró certificación de " +
+        "Se documentó capacitación de " +
         officialForm.name +
         " con fecha " +
         (officialForm.lastCertificationDate || "sin captura") +
@@ -769,34 +802,29 @@ export default function CapacitacionControlPage() {
 
     toast({
       title: "Oficial actualizado",
-      description: "Se guardó la información de capacitación del Representante de Cumplimiento.",
+      description: "Consulta el estado de guardado de la información de capacitación antes de salir.",
     })
   }
 
-  const handleModuleClosure = () => {
+  const handleModuleClosure = async () => {
     if (!officialCertificateValid) {
       toast({
         title: "Constancia del Oficial requerida",
-        description: "No es posible cerrar el módulo sin la constancia vigente del Oficial de Cumplimiento.",
+        description: "La política interna de revisión requiere archivo y fecha de capacitación no futura dentro de 365 días. No equivale a vigencia legal de certificación del REC.",
         variant: "destructive",
       })
       return
     }
 
-    setState((prev) => ({
-      ...prev,
-      moduleClosed: true,
-    }))
-
-    registerTrace({
-      action: "Módulo cerrado",
-      details: closingNotes ? "Cierre del módulo con notas: " + closingNotes : "Cierre del módulo sin observaciones adicionales.",
-    })
-
-    toast({
-      title: "Módulo cerrado",
-      description: "Se registró el cierre del módulo con trazabilidad completa.",
-    })
+    const trace:TraceabilityEntry={id:crypto.randomUUID(),timestamp:new Date().toISOString(),user:getModuleStorage().getItem("userEmail") || "Usuario en sesión",
+      action:"Revisión interna cerrada",details:closingNotes ? "Cierre documental con notas: "+closingNotes : "Cierre documental; no acredita aceptación de autoridad."}
+    const next={...state,moduleClosed:true,traceability:[trace,...state.traceability]}
+    try {
+      getModuleStorage().setItem(STORAGE_KEY,JSON.stringify(next))
+      await flushModuleStorage()
+      setState(next)
+      toast({title:"Revisión interna guardada",description:"Se conservó el cierre documental. No equivale a certificación legal del REC ni aceptación de autoridad."})
+    } catch (error) {toast({title:"No se guardó el cierre",description:error instanceof Error ? error.message : "Conserva la captura y reintenta.",variant:"destructive"})}
   }
 
   const exportReport = (formatType: "pdf" | "excel") => {
@@ -879,7 +907,7 @@ export default function CapacitacionControlPage() {
           "Empleado",
           employee.name.replace(/,/g, ";"),
           employee.lastTrainingDate ?? "Sin registro",
-          employee.needsInitialTraining ? "Inducción pendiente" : "Capacitación vigente",
+          employee.needsInitialTraining ? "Inducción pendiente" : "Capacitación documentada",
         ].join(","))
       })
 
@@ -907,10 +935,9 @@ export default function CapacitacionControlPage() {
   }
 
   const officialCertificateValid = useMemo(() => {
-    if (!state.officialCompliance.lastCertificationDate) return false
-    const diff = differenceInDays(new Date(), new Date(state.officialCompliance.lastCertificationDate))
-    return diff <= 365
-  }, [state.officialCompliance.lastCertificationDate])
+    const document=state.documents.find((item)=>item.id===state.officialCompliance.certificateDocumentId)
+    return getTrainingProofPolicy({date:state.officialCompliance.lastCertificationDate,hasDocument:Boolean(document?.dataUrl)}).ready
+  }, [state.officialCompliance.lastCertificationDate,state.officialCompliance.certificateDocumentId,state.documents])
 
   const employeesWithUpcomingExpiry = useMemo(() => {
     const today = new Date()
@@ -953,7 +980,7 @@ export default function CapacitacionControlPage() {
       items.push({
         id: "oficial",
         type: "warning",
-        message: "La constancia del Oficial de Cumplimiento vencerá o no está registrada. Actualízala para cerrar el módulo.",
+        message: "Revisión interna del REC pendiente: comprueba archivo y fecha no futura de capacitación. El criterio de 365 días es una política interna, no una vigencia legal de certificación.",
       })
     }
 
@@ -974,7 +1001,7 @@ export default function CapacitacionControlPage() {
       items.push({
         id: "vencimiento-" + employee.id,
         type: "warning",
-        message: "La capacitación de " + employee.name + " vencerá pronto. Programa sesión antes de cumplir 12 meses.",
+        message: "Revisión interna de capacitación próxima para " + employee.name + ". Programa seguimiento conforme al periodo del plan; no implica vencimiento legal de una constancia.",
       })
     })
 
@@ -982,7 +1009,7 @@ export default function CapacitacionControlPage() {
       items.push({
         id: "atraso-" + employee.id,
         type: "warning",
-        message: employee.name + " tiene capacitación vencida. Registra sesión o constancia actualizada.",
+        message: employee.name + " requiere revisión interna de su capacitación (han transcurrido más de 365 días). Verifica el programa anual aplicable.",
       })
     })
 
@@ -1025,14 +1052,14 @@ export default function CapacitacionControlPage() {
     "Materiales de apoyo (manuales, presentaciones, videos).",
     "Listas de asistencia firmadas o electrónicas.",
     "Constancias de capacitación emitidas a empleados.",
-    "Constancia de capacitación anual del Representante de Cumplimiento.",
+    "Evidencia de capacitación del Representante Encargado de Cumplimiento para el periodo aplicable.",
     "Evaluaciones aplicadas y resultados.",
     "Registro histórico de capacitación por empleado.",
   ]
 
   const specificEvidenceChecklist = [
     { label: "Personal operativo", description: "Listas de asistencia y constancias individuales." },
-    { label: "Oficial de Cumplimiento", description: "Constancia de capacitación anual especializada." },
+    { label: "Representante Encargado de Cumplimiento", description: "Evidencia de capacitación por periodo; certificación del REC se revisa por separado." },
     { label: "Nuevos empleados", description: "Constancia de inducción en PLD-FT." },
   ]
 
@@ -1080,7 +1107,7 @@ export default function CapacitacionControlPage() {
               <h4 className="text-sm font-semibold">Conexiones con otros módulos</h4>
               <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
                 <li>
-                  <strong>Módulo II (Registro SAT):</strong> seguimiento a la constancia anual del Oficial.
+                  <strong>Módulo II (Registro SAT):</strong> datos del REC y revisión documental de su capacitación; su certificación tiene tratamiento separado.
                 </li>
                 <li>
                   <strong>Módulo VIII (Auditoría):</strong> las evidencias se reutilizan en verificaciones internas.
@@ -1656,7 +1683,7 @@ export default function CapacitacionControlPage() {
                           Última capacitación: {employee.lastTrainingDate ? formatDisplayDate(employee.lastTrainingDate) : "Sin registro"}
                         </p>
                         <p className={employee.needsInitialTraining ? "text-amber-600" : "text-emerald-600"}>
-                          {employee.needsInitialTraining ? "Inducción pendiente" : "Capacitación vigente"}
+                          {employee.needsInitialTraining ? "Inducción pendiente" : "Capacitación documentada"}
                         </p>
                       </div>
                     </div>
@@ -1711,8 +1738,9 @@ export default function CapacitacionControlPage() {
             <ShieldCheck className="h-5 w-5" /> Constancia del Oficial de Cumplimiento
           </CardTitle>
           <CardDescription>
-            Valida automáticamente la constancia anual del Oficial y bloquea el cierre del módulo si está vencida.
+            Política interna de revisión: archivo y capacitación dentro de los últimos 365 días, sin fechas futuras. No verifica automáticamente autenticidad ni vigencia legal de una certificación del REC.
           </CardDescription>
+          <p className="text-xs text-muted-foreground">El programa anual del artículo 39 Bis tiene su primer periodo en 2027 (transitorio séptimo). El seguimiento anterior se registra como política interna, sin aplicar retroactivamente esa obligación. <a className="underline" href="https://dof.gob.mx/nota_detalle_popup.php?codigo=5795797" target="_blank" rel="noreferrer">Fuente DOF · consulta 11/11/2026</a>.</p>
         </CardHeader>
         <CardContent className="space-y-4">
           <form className="grid gap-4 md:grid-cols-3" onSubmit={handleOfficialFormSubmit}>
@@ -1740,7 +1768,7 @@ export default function CapacitacionControlPage() {
               <Input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleOfficialCertificateUpload} />
               {renderDocumentLink(state.officialCompliance.certificateDocumentId)}
               <span className="text-xs text-muted-foreground">
-                Sube la constancia anual del Oficial de Cumplimiento (PDF/JPG).
+                Sube evidencia de capacitación del REC (PDF/JPG). La fecha de carga no sustituye la fecha del curso.
               </span>
             </div>
             <div className="md:col-span-3 flex justify-end">
@@ -1750,11 +1778,11 @@ export default function CapacitacionControlPage() {
           <div className={`rounded-md border p-3 text-sm ${officialCertificateValid ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
             {officialCertificateValid ? (
               <div className="flex items-center gap-2 text-emerald-700">
-                <CheckCircle2 className="h-4 w-4" /> Constancia vigente. Se permite el cierre del módulo.
+                <CheckCircle2 className="h-4 w-4" /> Evidencia compatible con la política interna de revisión. No equivale a validación de autoridad ni a certificación vigente del REC.
               </div>
             ) : (
               <div className="flex items-center gap-2 text-amber-700">
-                <AlertTriangle className="h-4 w-4" /> La constancia está vencida o no se ha registrado. Actualízala para completar el módulo.
+                <AlertTriangle className="h-4 w-4" /> Revisa archivo y fecha: falta información, la fecha es futura o requiere actualización conforme a la política interna.
               </div>
             )}
           </div>
@@ -1887,7 +1915,7 @@ export default function CapacitacionControlPage() {
             <Download className="h-5 w-5" /> Exportar y cerrar módulo
           </CardTitle>
           <CardDescription>
-            Genera reportes en PDF/Excel para auditorías y cierra el módulo una vez acreditada la constancia del Oficial.
+            Genera reportes y documenta una revisión interna. El cierre no equivale a cumplimiento normativo aprobado ni a certificación del REC.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1907,12 +1935,12 @@ export default function CapacitacionControlPage() {
               placeholder="Describe hallazgos, acciones pendientes o acuerdos del Comité de Comunicación y Control."
             />
           </div>
-          <Button type="button" onClick={handleModuleClosure} disabled={!officialCertificateValid}>
-            Cerrar módulo
+          <Button type="button" data-pld-action="approve" onClick={()=>void handleModuleClosure()} disabled={!officialCertificateValid || state.moduleClosed}>
+            Cerrar revisión interna
           </Button>
           {state.moduleClosed && (
             <p className="text-sm text-emerald-600">
-              El módulo se cerró correctamente y quedó registrado en la trazabilidad.
+              Revisión interna documentada. Las obligaciones, los pendientes y la certificación del REC se revisan por separado.
             </p>
           )}
         </CardContent>

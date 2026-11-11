@@ -138,14 +138,13 @@ test("SAT demo scenarios distinguish workbook capture from independently validat
   assert.deepEqual(failures, [])
 })
 
-test("full PLD demo dataset records every concrete template scenario without certifying synthetic data as SAT acceptance", () => {
+test("guided demo injects only its three cases; forty synthetic QA scenarios remain separate", () => {
   const dataset = buildPldDemoDataset(new Date("2026-05-14T12:00:00-06:00"))
   const packages = dataset["pld-sat-output-packages"] as Array<{ satDemoScenarioId?: string; workbookValidationStatus?: string }>
   const scenarioPackages = packages.filter((item) => item.satDemoScenarioId?.startsWith("sat-demo-"))
 
-  assert.equal(scenarioPackages.length, getConcreteSatTemplates().length)
-  assert.equal(
-    scenarioPackages.every((item) => item.workbookValidationStatus === "strict_synthetic" || item.workbookValidationStatus === "golden_fixture"),
-    true,
-  )
+  assert.equal(scenarioPackages.length, 0, "no mezclar cuarenta fixtures técnicos con los datos concretos de la presentación")
+  assert.equal((dataset.actividades_vulnerables_operaciones as unknown[]).length, 3)
+  assert.equal(packages.length, 1)
+  assert.equal(buildSatTemplateDemoScenarios().length, getConcreteSatTemplates().length)
 })
