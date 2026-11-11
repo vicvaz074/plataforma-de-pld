@@ -71,7 +71,9 @@ import { RiskEvidencePicker } from "@/components/pld/risk-evidence-picker";
 import { EBR_METHODOLOGY, EMPTY_TRANSACTIONAL_PROFILE, EMPTY_EBR_REVIEW_PLAN, EMPTY_INSTITUTIONAL_FACTORS, INSTITUTIONAL_LABELS, evaluateInstitutionalRisk, consolidateEbrResults, evaluateTransactionalProfile,getEbrReviewPlanMissing, reviseEbrControl, transitionEbrAssessment,transitionInstitutionalAssessment,
   type EbrAssessmentHistory, type EbrControlReview, type EbrSourceSnapshot, type EbrWorkflowStatus, type EbrReviewPlan, type TransactionalProfile, type InstitutionalFactor } from "@/lib/pld/ebr-assessment";
 import { parseMoneyToCents, centsToDecimalString } from "@/lib/pld/money";
-import { getModuleStorage, flushModuleStorage, getPilotSession, getActiveCompany, canWriteModuleStorage } from "@/lib/pilot/module-storage";
+import { getModuleStorage, flushModuleStorage, getPilotSession, getActiveCompany, canWriteModuleStorage, captureModuleScope, assertModuleScope, isModuleScopeCurrent } from "@/lib/pilot/module-storage";
+import { ebrPepReviewBasis, ebrApprovalView, retainUnchangedPepScreeningDate, currentStoredEbrRisk, findCurrentEbrWhois } from "@/lib/pld/ebr-review-state";
+import { assertPepSearchResponse } from "@/lib/pld/record-shapes";
 import { sessionCan } from "@/lib/pilot/contracts";
 const RiskResults = dynamic(() => import("@/components/pld/risk-results").then((module) => module.RiskResults), { ssr: false });
 
@@ -102,6 +104,7 @@ interface StoredEvaluation {
   sources?: EbrSourceSnapshot[];
   methodologyAccepted?: boolean;
   pepWhoisSnapshot?: PepSearchResponse;
+  pepReviewBasis?: string;
   institutionalFactors?: InstitutionalFactor[];
   reviewPlan?:EbrReviewPlan;
   archivedAt?:string;
@@ -351,9 +354,12 @@ export default function EbrPage() {
     try {
       const raw = getModuleStorage().getItem(PEP_SEARCH_HISTORY_STORAGE_KEY);
       const parsed = raw ? (JSON.parse(raw) as PepSearchResponse[]) : [];
-      setPepWhoisHistory(Array.isArray(parsed) ? parsed : []);
+      if (!Array.isArray(parsed)) throw new Error("El historial PEP no contiene una colección válida.");
+      parsed.forEach(assertPepSearchResponse);
+      setPepWhoisHistory(parsed);
     } catch (_error) {
       setPepWhoisHistory([]);
+      setStorageValid(false);
     }
     };
     const onStorage = (event: StorageEvent) => {
@@ -439,21 +445,20 @@ export default function EbrPage() {
 
   const pepScreening = useMemo(() => {
     if (!pepCargo.trim() && !pepDependencia.trim()) return null;
-    return matchPepCargo({
+    const current = matchPepCargo({
       nombre: expedienteActual?.nombre,
       cargo: pepCargo,
       dependencia: pepDependencia,
       relacion: hasBeneficiaryController ? "beneficiario-controlador" : "cliente",
     });
-  }, [expedienteActual?.nombre, hasBeneficiaryController, pepCargo, pepDependencia]);
+    return savedEvaluation?.pepCargo === pepCargo && savedEvaluation?.pepDependencia === pepDependencia && savedEvaluation?.hasBeneficiaryController === hasBeneficiaryController
+      ? retainUnchangedPepScreeningDate(current, savedEvaluation.pepScreening) : current;
+  }, [expedienteActual?.nombre, hasBeneficiaryController, pepCargo, pepDependencia, savedEvaluation]);
 
   const pepWhoisActual = useMemo(() => {
     const expedienteNombre = normalizeName(expedienteActual?.nombre);
     if (!expedienteNombre) return null;
-    return (
-      pepWhoisHistory.find((item) => (item as PepSearchResponse & { expedienteId?: string }).expedienteId === clienteSeleccionado) ??
-      null
-    );
+    try { return findCurrentEbrWhois(pepWhoisHistory,clienteSeleccionado); } catch { return null; }
   }, [expedienteActual?.nombre, pepWhoisHistory, clienteSeleccionado]);
 
   const finalLevel = useMemo(() => {
@@ -461,8 +466,11 @@ export default function EbrPage() {
     if (!clienteActual || !evaluateTransactionalProfile(transactionalProfile,[]).complete || !institutionalRisk.complete || !methodologyAccepted || !institutionalMethodologyAccepted || !sources.length || !institutionalSources.length || getEbrReviewPlanMissing(reviewPlan,today).length || getEbrReviewPlanMissing(institutionalReviewPlan,today).length) return "Pendiente";
     return consolidateEbrResults([clientResult, subjectResult, beneficiaryResult], pepWhoisActual?.status || pepScreening?.status);
   }, [clienteActual, clientResult, subjectResult, beneficiaryResult, pepScreening?.status, pepWhoisActual?.status,transactionalProfile,institutionalRisk.complete,methodologyAccepted,institutionalMethodologyAccepted,sources.length,institutionalSources.length,reviewPlan,institutionalReviewPlan]);
-  const isCurrentApproved=savedEvaluation?.workflow?.status==="approved"&&!changedSinceSaved&&finalLevel!=="Pendiente";
-  const displayedStatus=changedSinceSaved?"cambios sin aprobar":historicalReviewPending||savedEvaluation?.workflow?.status==="approved"&&finalLevel==="Pendiente"?"aprobación histórica; revisión actual pendiente":({draft:"borrador",review:"en revisión",approved:"aprobada"}[savedEvaluation?.workflow?.status as EbrWorkflowStatus]||"borrador");
+  const pepReviewBasis = ebrPepReviewBasis({ identity: clienteActual ? { id: clienteActual.id, nombre: clienteActual.nombre, identifier: clienteActual.identifier, rfc: clienteActual.rfc, identifiers: clienteActual.identifiers } : null, cargo: pepCargo, dependencia: pepDependencia, screening: pepScreening, whois: pepWhoisActual });
+  const approvalView = ebrApprovalView({ saved: savedEvaluation, changed: changedSinceSaved, pepReviewBasis, reviewOverdue: historicalReviewPending || !storageValid, preliminaryLevel: finalLevel, preliminaryPercent: finalLevel === "Pendiente" ? 0 : Math.max(clientResult.percent, subjectResult.percent, beneficiaryResult?.percent || 0) });
+  const { isCurrentApproved } = approvalView;
+  const displayLevel = approvalView.level as typeof finalLevel;
+  const displayedStatus=changedSinceSaved||approvalView.sourceChanged?"cambios sin aprobar":savedEvaluation?.workflow?.status==="approved"&&approvalView.reviewPending?"aprobación histórica; revisión actual pendiente":({draft:"borrador",review:"en revisión",approved:"aprobada"}[savedEvaluation?.workflow?.status as EbrWorkflowStatus]||"borrador");
 
   const riskBadgeStyles = {
     Pendiente: "bg-slate-100 text-slate-700",
@@ -483,6 +491,7 @@ export default function EbrPage() {
   };
 
   const saveEvaluation = async (status: EbrWorkflowStatus = "draft") => {
+    const scope = captureModuleScope();
     if (!clienteActual || typeof window === "undefined") return;
     if (!storageValid) {toast({title:"Datos por recuperar",description:"No se sobrescribió la evaluación ilegible. Revisa el respaldo o recarga desde el servidor.",variant:"destructive"});return;}
     if (!canWriteModuleStorage(EBR_STORAGE_KEY)) {toast({title:"Acceso de consulta",description:"Tu perfil no permite modificar evaluaciones.",variant:"destructive"});return;}
@@ -509,40 +518,47 @@ export default function EbrPage() {
       updatedAt: new Date().toISOString(),
       transactionalProfile, reviewPlan, controls, sources, methodologyAccepted, institutionalFactors,
       pepWhoisSnapshot: pepWhoisActual ?? undefined,
+      pepReviewBasis,
     };
       const institutionRecord={id:company?.id||"institution",...transitionInstitutionalAssessment({status,canApprove,actor,at:updated.updatedAt,institutionalFactors,controls,sources:institutionalSources,methodologyAccepted:institutionalMethodologyAccepted,reviewPlan:institutionalReviewPlan,previous:institutionalStored})};
-      const next = saveClientEbrEvaluation(getModuleStorage(), clienteActual, updated);
-      getModuleStorage().setItem("ebr-institutional-assessment",JSON.stringify(institutionRecord));
-      await flushModuleStorage();
+      saveClientEbrEvaluation(scope.storage, clienteActual, updated);
+      scope.storage.setItem("ebr-institutional-assessment",JSON.stringify(institutionRecord));
+      await flushModuleStorage(scope);
+      assertModuleScope(scope);
+      const next = Object.fromEntries(normalizeEbrEvaluations(JSON.parse(scope.storage.getItem(EBR_STORAGE_KEY) || "{}")).map((item) => [item.clientId, item]));
       setInstitutionalStored(institutionRecord);
       setEvaluacionesGuardadas(next as Record<string, StoredEvaluation>);
       toast({ title: status === "approved" ? "Evaluación aprobada" : status === "review" ? "Enviada a revisión" : "Borrador guardado", description: "Se conserva la versión y sus fuentes." });
     } catch (error) {
+      if (!isModuleScopeCurrent(scope)) return;
       toast({ title: "No se pudo guardar", description: error instanceof Error ? error.message : "Revisa el almacenamiento local.", variant: "destructive" });
     }
   };
 
   const saveInstitutionalEvaluation=async(status:EbrWorkflowStatus)=>{
+    const scope = captureModuleScope();
     if(!storageValid||!canWriteModuleStorage("ebr-institutional-assessment"))return;
     try{
       const session=getPilotSession(),company=getActiveCompany();
       const record={id:company?.id||"institution",...transitionInstitutionalAssessment({status,actor:session?.user.id||"Usuario local",at:new Date().toISOString(),canApprove:sessionCan(session,company,"ebr","approve"),institutionalFactors,controls,sources:institutionalSources,methodologyAccepted:institutionalMethodologyAccepted,reviewPlan:institutionalReviewPlan,previous:institutionalStored})};
-      getModuleStorage().setItem("ebr-institutional-assessment",JSON.stringify(record));
-      await flushModuleStorage();setInstitutionalStored(record);
+      scope.storage.setItem("ebr-institutional-assessment",JSON.stringify(record));
+      await flushModuleStorage(scope);assertModuleScope(scope);setInstitutionalStored(JSON.parse(scope.storage.getItem("ebr-institutional-assessment") || "null"));
       toast({title:status==="approved"?"EBR institucional aprobada":"Borrador institucional guardado",description:"Se conservó por empresa, independientemente de sus clientes."});
-    }catch(error){toast({title:"No se pudo guardar",description:error instanceof Error?error.message:"Revisa la evaluación institucional.",variant:"destructive"});}
+    }catch(error){if (isModuleScopeCurrent(scope)) toast({title:"No se pudo guardar",description:error instanceof Error?error.message:"Revisa la evaluación institucional.",variant:"destructive"});}
   };
 
   const deleteEvaluation = async () => {
+    const scope = captureModuleScope();
     if (!clienteActual || typeof window === "undefined") return;
     if (!sessionCan(getPilotSession(),getActiveCompany(),"ebr","archive")) return;
     try {
       if(!savedEvaluation)return;
-      const next = saveClientEbrEvaluation(getModuleStorage(), clienteActual, {...savedEvaluation,archivedAt:new Date().toISOString(),archivedBy:getPilotSession()?.user.id,riskSummary:undefined});
-      await flushModuleStorage();
+      const next = saveClientEbrEvaluation(scope.storage, clienteActual, {...savedEvaluation,archivedAt:new Date().toISOString(),archivedBy:getPilotSession()?.user.id,riskSummary:undefined});
+      await flushModuleStorage(scope);assertModuleScope(scope);
       setEvaluacionesGuardadas(next as Record<string, StoredEvaluation>);
       toast({title:"Evaluación archivada",description:"El historial permanece disponible en el registro."});
     } catch (error) {
+      if (!isModuleScopeCurrent(scope)) return;
       toast({ title: "No se pudo eliminar", description: error instanceof Error ? error.message : "Revisa el almacenamiento local.", variant: "destructive" });
       return;
     }
@@ -592,7 +608,8 @@ export default function EbrPage() {
 
     y = 90;
     doc.setTextColor(31, 41, 55);
-    addLine(`Resumen ejecutivo: ${isCurrentApproved?"Riesgo aprobado":"Resultado preliminar"} ${finalLevel}.`);
+    addLine(`Resumen ejecutivo: ${isCurrentApproved?"Riesgo aprobado":"Resultado preliminar"} ${displayLevel} (${approvalView.percent}%).`);
+    if (approvalView.historicalApproved && !isCurrentApproved) addLine(`Aprobación histórica conservada: ${approvalView.historicalApproved.level} (${approvalView.historicalApproved.percent}%). Los datos actuales requieren revisión.`);
     addLine(`Estado: ${displayedStatus}. Metodología: ${EBR_METHODOLOGY.id}. No representa una probabilidad de lavado.`);
     addLine(
       `Cliente: ${clientResult.level} (${clientResult.percent}%). Regla: ${clientResult.reason}.`,
@@ -741,14 +758,15 @@ export default function EbrPage() {
           <CardHeader className="pb-3">
             <CardDescription>{isCurrentApproved?"Riesgo aprobado del cliente":"Resultado preliminar · sin aprobación"}</CardDescription>
             <CardTitle className="flex items-center gap-2 text-2xl">
-              {finalLevel}
-              <Badge className={riskBadgeStyles[finalLevel]}>
-                {finalLevel === "Pendiente" ? 0 : Math.max(clientResult.percent, subjectResult.percent, beneficiaryResult?.percent || 0)}%
+              {displayLevel}
+              <Badge className={riskBadgeStyles[displayLevel]}>
+                {approvalView.percent}%
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             Integra Cliente, Sujeto Obligado y Beneficiario Controlador.
+            {approvalView.historicalApproved && !isCurrentApproved && <p className="mt-2">Aprobación histórica: {approvalView.historicalApproved.level} ({approvalView.historicalApproved.percent}%). Revisión actual pendiente.</p>}
           </CardContent>
         </Card>
         <Card>
@@ -1004,7 +1022,7 @@ export default function EbrPage() {
 
         <TabsContent value="reporte" className="space-y-6">
           <RiskResults client={clientResult} subject={subjectResult} beneficiary={beneficiaryResult} history={savedEvaluation?.history ?? []} institution={institutionalRisk}
-            distribution={["Bajo","Medio","Alto","Reforzado"].map((level) => ({level,count:Object.values(evaluacionesGuardadas).filter((item) => !item.archivedAt && item.workflow?.status === "approved" && item.riskSummary?.level === level).length}))}/>
+            distribution={["Bajo","Medio","Alto","Reforzado"].map((level) => ({level,count:storageValid ? Object.values(evaluacionesGuardadas).filter((item) => currentStoredEbrRisk(item,expedientes.find((client) => client.id === (item.expedienteId || item.clientId)) ?? null,pepWhoisHistory)?.level === level).length : 0}))}/>
           <Card>
             <CardHeader>
               <CardTitle>Resumen del perfil consolidado</CardTitle>

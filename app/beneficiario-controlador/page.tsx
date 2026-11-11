@@ -1,5 +1,6 @@
 "use client"
-import { getModuleStorage, canWriteModuleStorage } from "@/lib/pilot/module-storage"
+import { DocumentLink } from "@/components/pld/document-link"
+import { getModuleStorage, canWriteModuleStorage, captureModuleScope, assertModuleScope, isModuleScopeCurrent } from "@/lib/pilot/module-storage"
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -52,10 +53,11 @@ import {
   Trash2,
 } from "lucide-react"
 import { motion } from "framer-motion"
-import { parseStoredObject, reviewSignature } from "@/lib/pld/module-continuity"
+import { parseStoredObject } from "@/lib/pld/module-continuity"
+import { beneficiaryReviewSignature } from "@/lib/pld/beneficiary-review"
 import { notifyPldIntegrationChange } from "@/lib/pld/integration-records"
 import { getIntegrationClient, type IntegrationClient } from "@/lib/pld/integration-records"
-import { readClientProfile, mergeClientProfile } from "@/lib/pld/client-module-profiles"
+import { readClientProfile, mergeClientProfile, appendClientProfileDocument } from "@/lib/pld/client-module-profiles"
 import { SearchableSelect } from "@/components/pld/searchable-select"
 import { readFileAsDataUrl } from "@/lib/storage/read-file"
 import { flushModuleStorage } from "@/lib/pilot/module-storage"
@@ -247,10 +249,9 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [storageReady, setStorageReady] = useState(false)
   const [validation, setValidation] = useState<{ validatedAt: string; signature: string } | null>(null)
-  const currentReviewSignature = reviewSignature({
-    preguntas: preguntasState.map(({ id, answer, notes }) => ({ id, answer, notes })),
-    documentos: documentos.map(({ id, category, uploadDate, expiryDate, status, sha256, url, archived }) => ({ id, category, uploadDate, expiryDate, status, fileIdentity: sha256 || url, archived })),
-    clientType, propertyChain, screeningResults, lastBCUpdate,
+  const currentReviewSignature = beneficiaryReviewSignature({
+    preguntas: preguntasState, documentos,
+    clientType, propertyChain, screeningResults, declaraciones, lastBCUpdate,
   })
   const isValidated = Boolean(validation && validation.signature === currentReviewSignature)
 
@@ -353,9 +354,20 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
       validation,
     }
     try {
-      getModuleStorage().setItem("beneficiario-controlador-data", JSON.stringify(mergeClientProfile(getModuleStorage().getItem("beneficiario-controlador-data"), clientId, data)))
-      void flushModuleStorage().then(() => notifyPldIntegrationChange("beneficiario-controlador-data")).catch(() => {
-        toast({ title: "Cambios pendientes de guardar", description: "No se confirmó el guardado del beneficiario. Mantén esta página abierta y vuelve a intentarlo.", variant: "destructive" })
+      const scope = captureModuleScope()
+      scope.storage.setItem("beneficiario-controlador-data", JSON.stringify(mergeClientProfile(scope.storage.getItem("beneficiario-controlador-data"), clientId, data)))
+      void flushModuleStorage(scope).then(() => {
+        if (!isModuleScopeCurrent(scope)) return
+        const canonical = readClientProfile(scope.storage.getItem("beneficiario-controlador-data"), clientId)
+        if (Array.isArray(canonical.declaraciones)) setDeclaraciones((previous) => {
+          // Do not replace a declaration added while this request was in flight.
+          if (JSON.stringify(previous) !== JSON.stringify(data.declaraciones)) return previous
+          const restored = canonical.declaraciones.map((entry: DeclarationHistoryEntry) => ({ ...entry, date: new Date(entry.date) }))
+          return JSON.stringify(previous) === JSON.stringify(restored) ? previous : restored
+        })
+        notifyPldIntegrationChange("beneficiario-controlador-data")
+      }).catch(() => {
+        if (isModuleScopeCurrent(scope)) toast({ title: "Cambios pendientes de guardar", description: "No se confirmó el guardado del beneficiario. Mantén esta página abierta y vuelve a intentarlo.", variant: "destructive" })
       })
     } catch {
       toast({ title: "No se pudo guardar el expediente", description: "Los cambios no se han conservado. Revisa el almacenamiento local antes de salir.", variant: "destructive" })
@@ -399,32 +411,35 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
   }
 
   const cargarDocumento = (tipo: string, category: string, _expiryDays = 0) => {
+    const scope = captureModuleScope()
     const input = document.createElement("input")
     input.type = "file"; input.accept = ".pdf,.png,.jpg,.jpeg,.xml"
     input.onchange = async () => {
       const file = input.files?.[0]
-      if (!file || !storageReady) return
+      if (!file || !storageReady || !isModuleScopeCurrent(scope)) return
       if (file.size > 20 * 1024 * 1024 || !/\.(pdf|png|jpe?g|xml)$/i.test(file.name)) {
         toast({ title: "Archivo no admitido", description: "Usa PDF, imagen o XML de hasta 20 MB.", variant: "destructive" }); return
       }
       try {
         const url = await readFileAsDataUrl(file)
+        assertModuleScope(scope)
         const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))).map((value) => value.toString(16).padStart(2, "0")).join("")
+        assertModuleScope(scope)
         const now = new Date()
-        const actor = getModuleStorage().getItem("userEmail") || getModuleStorage().getItem("userName") || "Usuario en sesión"
+        const actor = scope.storage.getItem("userEmail") || scope.storage.getItem("userName") || "Usuario en sesión"
         const uploaded: DocumentUpload = { id: crypto.randomUUID(), name: file.name, type: tipo,
           uploadDate: now, status: "vigente", category, url, sha256: hash,
           expiryDate: undefined }
-        const nextDocuments = [...documentos, uploaded]
-        const nextTrace = [{ id: crypto.randomUUID(), action: "Documento cargado", user: actor,
-          timestamp: now, details: file.name, section: "Carga documental" }, ...trazabilidad]
-        const data = { preguntas: preguntasState, documentos: nextDocuments, trazabilidad: nextTrace, clientType,
-          propertyChain, screeningResults, declaraciones, lastBCUpdate, folioCounter, validation: null }
-        getModuleStorage().setItem("beneficiario-controlador-data", JSON.stringify(mergeClientProfile(getModuleStorage().getItem("beneficiario-controlador-data"), clientId, data)))
-        await flushModuleStorage()
-        setDocumentos(nextDocuments); setTrazabilidad(nextTrace); setValidation(null)
+        const data = appendClientProfileDocument(scope.storage, "beneficiario-controlador-data", clientId, uploaded,
+          { id: crypto.randomUUID(), action: "Documento cargado", user: actor, timestamp: now, details: file.name, section: "Carga documental" })
+        setDocumentos(data.documentos.map((doc: DocumentUpload) => ({ ...doc, uploadDate: new Date(doc.uploadDate), expiryDate: doc.expiryDate ? new Date(doc.expiryDate) : undefined })))
+        setTrazabilidad(data.trazabilidad.map((entry: TraceabilityEntry) => ({ ...entry, timestamp: new Date(entry.timestamp) }))); setValidation(null)
+        await flushModuleStorage(scope)
+        assertModuleScope(scope)
+        const canonical = readClientProfile(scope.storage.getItem("beneficiario-controlador-data"), clientId)
+        setDocumentos((canonical.documentos || []).map((doc: DocumentUpload) => ({ ...doc, uploadDate: new Date(doc.uploadDate), expiryDate: doc.expiryDate ? new Date(doc.expiryDate) : undefined })))
         toast({ title: "Documento guardado", description: "El archivo y su hash quedaron vinculados al expediente." })
-      } catch (error) { toast({title:"No se guardó el archivo",description:error instanceof Error ? error.message : "Conserva el documento y reintenta.",variant:"destructive"}) }
+      } catch (error) { if (isModuleScopeCurrent(scope)) toast({title:"No se guardó el archivo",description:error instanceof Error ? error.message : "Conserva el documento y reintenta.",variant:"destructive"}) }
     }
     input.click()
   }
@@ -628,6 +643,7 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
   }
 
   const cerrarExpediente = async () => {
+    const scope = captureModuleScope()
     if (!storageReady || !clientType || preguntasState.some((question) => question.required && question.answer === null)) {
       toast({ title: "Revisión incompleta", description: "Selecciona el tipo de cliente y responde los controles obligatorios antes de validar.", variant: "destructive" })
       return
@@ -641,7 +657,6 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
       return
     }
 
-    const nextValidation = { validatedAt: new Date().toISOString(), signature: currentReviewSignature }
     const nextTrace: TraceabilityEntry[] = [
       {
         id: crypto.randomUUID(),
@@ -654,12 +669,22 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
       ...trazabilidad,
     ]
     try {
-      const data = { preguntas:preguntasState,documentos,trazabilidad:nextTrace,clientType,propertyChain,screeningResults,declaraciones,lastBCUpdate,folioCounter,validation:nextValidation }
-      getModuleStorage().setItem("beneficiario-controlador-data",JSON.stringify(mergeClientProfile(getModuleStorage().getItem("beneficiario-controlador-data"),clientId,data)))
-      await flushModuleStorage()
-      setValidation(nextValidation); setTrazabilidad(nextTrace)
+      // Server-stamped declaration history is part of the reviewed content.
+      // Finish pending writes before signing that exact version, not its local precursor.
+      await flushModuleStorage(scope)
+      assertModuleScope(scope)
+      const current = readClientProfile(scope.storage.getItem("beneficiario-controlador-data"), clientId)
+      const data = { ...current, trazabilidad: nextTrace, validation: { validatedAt: new Date().toISOString(), signature: beneficiaryReviewSignature(current) } }
+      scope.storage.setItem("beneficiario-controlador-data",JSON.stringify(mergeClientProfile(scope.storage.getItem("beneficiario-controlador-data"),clientId,data)))
+      await flushModuleStorage(scope)
+      assertModuleScope(scope)
+      const canonical = readClientProfile(scope.storage.getItem("beneficiario-controlador-data"), clientId)
+      setValidation(canonical.validation ?? null)
+      setDeclaraciones((previous) => JSON.stringify(previous) === JSON.stringify(declaraciones) ? (canonical.declaraciones || []).map((entry: DeclarationHistoryEntry) => ({ ...entry, date: new Date(entry.date) })) : previous)
+      setTrazabilidad((canonical.trazabilidad || []).map((entry: TraceabilityEntry) => ({ ...entry, timestamp: new Date(entry.timestamp) })))
+      if (!canonical.validation) { toast({ title: "Revisión pendiente", description: "El expediente cambió durante el guardado; confirma la versión actual.", variant: "destructive" }); return }
       toast({title:"Expediente validado",description:"Se conservó la revisión interna. Los cambios posteriores requerirán una nueva confirmación."})
-    } catch (error) { toast({title:"No se confirmó la revisión",description:error instanceof Error ? error.message : "Mantén la página abierta y reintenta.",variant:"destructive"}) }
+    } catch (error) { if (isModuleScopeCurrent(scope)) toast({title:"No se confirmó la revisión",description:error instanceof Error ? error.message : "Mantén la página abierta y reintenta.",variant:"destructive"}) }
   }
 
   const registrarActualizacionBC = () => {
@@ -752,7 +777,7 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
             <div className="space-y-3">
               <Label className="text-sm font-medium">Tipo de cliente</Label>
               <Select
-                value={clientType ?? undefined}
+                value={clientType ?? ""}
                 onValueChange={(value) => handleClientTypeChange(value as "fisica" | "moral" | "fideicomiso")}
               >
                 <SelectTrigger>
@@ -949,7 +974,7 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
                 {evidenciasDeclaracion.map((evidencia, index) => (
                   <div key={index} className="flex items-center justify-between p-2 border rounded">
                     <span className="text-sm">{evidencia}</span>
-                    <Button size="sm" variant="outline" onClick={() => cargarDocumento(evidencia, "declaracion")}>
+                    <Button size="sm" variant="outline" aria-label={`Cargar ${evidencia}`} onClick={() => cargarDocumento(evidencia, "declaracion")}>
                       <Upload className="h-3 w-3" />
                     </Button>
                   </div>
@@ -970,7 +995,7 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
                 {evidenciasDocumentacionSocietaria.map((evidencia, index) => (
                   <div key={index} className="flex items-center justify-between p-2 border rounded">
                     <span className="text-sm">{evidencia}</span>
-                    <Button size="sm" variant="outline" onClick={() => cargarDocumento(evidencia, "documentacion")}>
+                    <Button size="sm" variant="outline" aria-label={`Cargar ${evidencia}`} onClick={() => cargarDocumento(evidencia, "documentacion")}>
                       <Upload className="h-3 w-3" />
                     </Button>
                   </div>
@@ -991,7 +1016,7 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
                 {evidenciasIdentificacionBC.map((evidencia, index) => (
                   <div key={index} className="flex items-center justify-between p-2 border rounded">
                     <span className="text-sm">{evidencia}</span>
-                    <Button size="sm" variant="outline" onClick={() => cargarDocumento(evidencia, "identificacion")}>
+                    <Button size="sm" variant="outline" aria-label={`Cargar ${evidencia}`} onClick={() => cargarDocumento(evidencia, "identificacion")}>
                       <Upload className="h-3 w-3" />
                     </Button>
                   </div>
@@ -1012,7 +1037,7 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
                 {evidenciasValidaciones.map((evidencia, index) => (
                   <div key={index} className="flex items-center justify-between p-2 border rounded">
                     <span className="text-sm">{evidencia}</span>
-                    <Button size="sm" variant="outline" onClick={() => cargarDocumento(evidencia, "validaciones", evidencia.includes("actualización") ? 365 : 180)}>
+                    <Button size="sm" variant="outline" aria-label={`Cargar ${evidencia}`} onClick={() => cargarDocumento(evidencia, "validaciones", evidencia.includes("actualización") ? 365 : 180)}>
                       <Upload className="h-3 w-3" />
                     </Button>
                   </div>
@@ -1033,7 +1058,7 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
                 {evidenciasConservacion.map((evidencia, index) => (
                   <div key={index} className="flex items-center justify-between p-2 border rounded">
                     <span className="text-sm">{evidencia}</span>
-                    <Button size="sm" variant="outline" onClick={() => cargarDocumento(evidencia, "conservacion", 0)}>
+                    <Button size="sm" variant="outline" aria-label={`Cargar ${evidencia}`} onClick={() => cargarDocumento(evidencia, "conservacion", 0)}>
                       <Upload className="h-3 w-3" />
                     </Button>
                   </div>
@@ -1158,7 +1183,7 @@ function BeneficiarioClientProfile({ clientId }: { clientId: string }) {
                               ? "Por vencer"
                               : "Vencido"}
                         </Badge>
-                        {doc.url ? <><Button size="sm" variant="ghost" asChild><a href={doc.url} target="_blank" rel="noreferrer" aria-label={`Ver ${doc.name}`}><Eye className="h-4 w-4" /></a></Button><Button size="sm" variant="ghost" asChild><a href={doc.url} download={doc.name} aria-label={`Descargar ${doc.name}`}><Download className="h-4 w-4" /></a></Button></> : <Badge variant="outline">Archivo pendiente</Badge>}
+                        {doc.url ? <><Button size="sm" variant="ghost" asChild><DocumentLink href={doc.url} target="_blank" rel="noreferrer" aria-label={`Ver ${doc.name}`}><Eye className="h-4 w-4" /></DocumentLink></Button><Button size="sm" variant="ghost" asChild><DocumentLink href={doc.url} download={doc.name} aria-label={`Descargar ${doc.name}`}><Download className="h-4 w-4" /></DocumentLink></Button></> : <Badge variant="outline">Archivo pendiente</Badge>}
                         <Button
                           size="sm"
                           variant="ghost"

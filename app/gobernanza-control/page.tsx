@@ -1,5 +1,6 @@
 "use client"
-import { getModuleStorage, canWriteModuleStorage, flushModuleStorage } from "@/lib/pilot/module-storage"
+import { getModuleStorage, canWriteModuleStorage, flushModuleStorage, captureModuleScope, assertModuleScope, isModuleScopeCurrent, getActiveCompany } from "@/lib/pilot/module-storage"
+import { resolveSafeDocumentHref } from "@/lib/pld/document-links"
 
 import { useEffect, useMemo, useState } from "react"
 import { jsPDF } from "jspdf"
@@ -402,8 +403,14 @@ function base64ToText(data: string) {
   }
 }
 
-function governanceDocumentUrl(doc: DocumentRecord) {
-  return /^(?:data:|\/api\/)/.test(doc.base64) ? doc.base64 : `data:${doc.mimeType};base64,${doc.base64}`
+function governanceDocumentUrl(doc: DocumentRecord, purpose: "download" | "preview" = "download") {
+  const reference = /^(?:data:|\/api\/)/.test(doc.base64) ? doc.base64 : `data:${doc.mimeType};base64,${doc.base64}`
+  return resolveSafeDocumentHref(reference, {
+    mode: process.env.NEXT_PUBLIC_PLD_MODE === "demo" ? "demo" : "cloud",
+    companyId: getActiveCompany()?.id,
+    origin: typeof window !== "undefined" ? window.location.origin : undefined,
+    purpose,
+  })
 }
 
 export default function GobernanzaControlPage() {
@@ -473,9 +480,10 @@ export default function GobernanzaControlPage() {
       expedienteCerrado,
     }
     try {
-      getModuleStorage().setItem(STORAGE_KEY, JSON.stringify({ ...parseStoredObject(getModuleStorage().getItem(STORAGE_KEY)), ...stateToPersist }))
-      void flushModuleStorage().then(() => notifyPldIntegrationChange(STORAGE_KEY)).catch(() => {
-        toast({ title: "Cambios pendientes de guardar", description: "No se confirmó el guardado de Gobernanza. Mantén esta página abierta y vuelve a intentarlo.", variant: "destructive" })
+      const scope = captureModuleScope()
+      scope.storage.setItem(STORAGE_KEY, JSON.stringify({ ...parseStoredObject(scope.storage.getItem(STORAGE_KEY)), ...stateToPersist }))
+      void flushModuleStorage(scope).then(() => { if (isModuleScopeCurrent(scope)) notifyPldIntegrationChange(STORAGE_KEY) }).catch(() => {
+        if (isModuleScopeCurrent(scope)) toast({ title: "Cambios pendientes de guardar", description: "No se confirmó el guardado de Gobernanza. Mantén esta página abierta y vuelve a intentarlo.", variant: "destructive" })
       })
     } catch {
       toast({ title: "No se pudo guardar Gobernanza", description: "Los cambios no se han conservado. Revisa el espacio de almacenamiento local.", variant: "destructive" })
@@ -569,6 +577,7 @@ export default function GobernanzaControlPage() {
 
   async function handleDocumentUpload(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const scope = captureModuleScope()
     const form = event.currentTarget
     const formData = new FormData(form)
     const questionId = uploadContext.questionId
@@ -622,6 +631,7 @@ export default function GobernanzaControlPage() {
     const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer)
     const hashArray = Array.from(new Uint8Array(hashBuffer))
     const hash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
+    assertModuleScope(scope)
 
     const base64 = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader()
@@ -638,6 +648,7 @@ export default function GobernanzaControlPage() {
     })
 
     const status = evaluateDocumentStatus(issueDateObj.toISOString(), expiryDate)
+    assertModuleScope(scope)
 
     const record: DocumentRecord = {
       id: crypto.randomUUID(),
@@ -658,16 +669,21 @@ export default function GobernanzaControlPage() {
       notes,
     }
 
-    const nextDocuments = [record, ...documents]
-    const nextQuestions = questions.map((question) =>
+    const latest = parseStoredObject(scope.storage.getItem(STORAGE_KEY))
+    if (!Array.isArray(latest.documents) || !Array.isArray(latest.questions) || !Array.isArray(latest.manualVersions) || !Array.isArray(latest.trace)) throw new Error("El expediente de Gobernanza necesita revisión antes de agregar archivos.")
+    const latestDocuments = latest.documents as DocumentRecord[]
+    const latestQuestions = latest.questions as GovernanceQuestion[]
+    const latestManualVersions = latest.manualVersions as ManualVersion[]
+    const nextDocuments = [record, ...latestDocuments]
+    const nextQuestions = latestQuestions.map((question) =>
         question.id === questionId
           ? { ...question, relatedDocuments: Array.from(new Set([...question.relatedDocuments, record.id])) }
           : question,
       )
-    let nextManualVersions = manualVersions
+    let nextManualVersions = latestManualVersions
 
     if (questionId.startsWith("manuales")) {
-        const newVersion = manualVersions.length ? manualVersions[0].version + 1 : 1
+        const newVersion = latestManualVersions.length ? latestManualVersions[0].version + 1 : 1
         const folio = `MAN-${newVersion.toString().padStart(3, "0")}-${new Date().getFullYear()}`
         const versionRecord: ManualVersion = {
           id: crypto.randomUUID(),
@@ -677,17 +693,19 @@ export default function GobernanzaControlPage() {
           documentId: record.id,
           summary: documentType || "Actualización del manual",
         }
-        nextManualVersions = [versionRecord, ...manualVersions]
+        nextManualVersions = [versionRecord, ...latestManualVersions]
     }
 
-    const nextTrace = [{id:crypto.randomUUID(),action:`Carga de documento "${file.name}"`,section:questionBank.find((q) => q.id === questionId)?.category || "",user:getUserIdentifier(),timestamp:new Date().toISOString()}, ...trace]
-    getModuleStorage().setItem(STORAGE_KEY, JSON.stringify({ ...parseStoredObject(getModuleStorage().getItem(STORAGE_KEY)), questions:nextQuestions,documents:nextDocuments,manualVersions:nextManualVersions,trace:nextTrace,committeeSessions,alerts,expedienteCerrado }))
-    await flushModuleStorage()
-    setDocuments(nextDocuments); setQuestions(nextQuestions); setManualVersions(nextManualVersions); setTrace(nextTrace)
+    const nextTrace = [{id:crypto.randomUUID(),action:`Carga de documento "${file.name}"`,section:questionBank.find((q) => q.id === questionId)?.category || "",user:getUserIdentifier(),timestamp:new Date().toISOString()}, ...latest.trace]
+    scope.storage.setItem(STORAGE_KEY, JSON.stringify({ ...latest, questions:nextQuestions,documents:nextDocuments,manualVersions:nextManualVersions,trace:nextTrace }))
+    await flushModuleStorage(scope)
+    assertModuleScope(scope)
+    const canonical = parseStoredObject(scope.storage.getItem(STORAGE_KEY))
+    setDocuments(canonical.documents); setQuestions(canonical.questions); setManualVersions(canonical.manualVersions); setTrace(canonical.trace)
     toast({ title: "Documento guardado", description: "Archivo y hash conservados en el expediente." })
     closeUpload()
     form.reset()
-    } catch (error) { toast({title:"No se guardó el documento",description:error instanceof Error ? error.message : "Conserva el archivo y reintenta.",variant:"destructive"}) }
+    } catch (error) { if (isModuleScopeCurrent(scope)) toast({title:"No se guardó el documento",description:error instanceof Error ? error.message : "Conserva el archivo y reintenta.",variant:"destructive"}) }
   }
 
   function handleDeleteDocument(documentId: string) {
@@ -708,8 +726,13 @@ export default function GobernanzaControlPage() {
   }
 
   function handleDownload(doc: DocumentRecord) {
+    const href = governanceDocumentUrl(doc)
+    if (!href) {
+      toast({ title: "Archivo no disponible", description: "La referencia no es un archivo autorizado de esta empresa. Se conserva el registro para su revisión.", variant: "destructive" })
+      return
+    }
     const link = document.createElement("a")
-    link.href = governanceDocumentUrl(doc)
+    link.href = href
     link.download = doc.fileName
     link.click()
     appendTrace(
@@ -819,6 +842,7 @@ export default function GobernanzaControlPage() {
   }
 
   async function handleCloseExpediente() {
+    const scope = captureModuleScope()
     if (!canCloseExpediente()) {
       toast({
         title: "No es posible cerrar",
@@ -829,11 +853,14 @@ export default function GobernanzaControlPage() {
     }
     const nextTrace:TraceEntry[]=[{id:crypto.randomUUID(),action:"Cierre de revisión de Gobernanza",section:"Resumen del módulo",timestamp:new Date().toISOString(),user:getUserIdentifier(),details:complianceRatio===100 ? "Controles documentados; no constituye aceptación de autoridad." : "Revisión documentada con obligaciones o planes pendientes; no equivale a cumplimiento."},...trace]
     try {
-      getModuleStorage().setItem(STORAGE_KEY,JSON.stringify({...parseStoredObject(getModuleStorage().getItem(STORAGE_KEY)),questions,documents,manualVersions,committeeSessions,alerts,expedienteCerrado:true,trace:nextTrace}))
-      await flushModuleStorage()
-      setExpedienteCerrado(true);setTrace(nextTrace)
+      scope.storage.setItem(STORAGE_KEY,JSON.stringify({...parseStoredObject(scope.storage.getItem(STORAGE_KEY)),questions,documents,manualVersions,committeeSessions,alerts,expedienteCerrado:true,trace:nextTrace}))
+      await flushModuleStorage(scope)
+      assertModuleScope(scope)
+      const canonical = parseStoredObject(scope.storage.getItem(STORAGE_KEY))
+      setExpedienteCerrado(canonical.expedienteCerrado === true);setTrace(canonical.trace || [])
+      if (!canonical.expedienteCerrado) { toast({title:"Revisión pendiente",description:"El expediente cambió durante el guardado; confirma la versión actual.",variant:"destructive"}); return }
       toast({title:complianceRatio===100 ? "Revisión de Gobernanza guardada" : "Revisión guardada con pendientes",description:"Se conservó el cierre documental; los planes pendientes no equivalen a cumplimiento. Puedes reabrir para corregir."})
-    } catch (error) {toast({title:"No se guardó el cierre",description:error instanceof Error ? error.message : "La revisión sigue abierta; conserva la captura y reintenta.",variant:"destructive"})}
+    } catch (error) {if (isModuleScopeCurrent(scope)) toast({title:"No se guardó el cierre",description:error instanceof Error ? error.message : "La revisión sigue abierta; conserva la captura y reintenta.",variant:"destructive"})}
   }
 
   function handleExportPDF() {
@@ -1420,10 +1447,13 @@ export default function GobernanzaControlPage() {
                   </DialogPrimitive.Close>
                 </div>
                 <div className="flex-1 overflow-auto">
-                  {viewerDoc.mimeType.includes("pdf") || (viewerDoc.mimeType.includes("xml") && viewerDoc.base64.startsWith("/api/")) ? (
+                  {!governanceDocumentUrl(viewerDoc, "preview") ? (
+                    <p role="alert" className="p-4 text-sm text-destructive">La referencia del archivo requiere revisión. El registro original se conserva sin abrir contenido no autorizado.</p>
+                  ) : viewerDoc.mimeType.includes("pdf") || (viewerDoc.mimeType.includes("xml") && viewerDoc.base64.startsWith("/api/")) ? (
                     <iframe
                       title={viewerDoc.fileName}
-                      src={governanceDocumentUrl(viewerDoc)}
+                      src={governanceDocumentUrl(viewerDoc, "preview")!}
+                      sandbox=""
                       className="w-full min-h-[65vh]"
                     />
                   ) : viewerDoc.mimeType.includes("xml") && !viewerDoc.base64.startsWith("/api/") ? (
@@ -1432,7 +1462,7 @@ export default function GobernanzaControlPage() {
                     </pre>
                   ) : (
                     <Image
-                      src={governanceDocumentUrl(viewerDoc)}
+                      src={governanceDocumentUrl(viewerDoc, "preview")!}
                       alt={viewerDoc.fileName}
                       width={960}
                       height={720}

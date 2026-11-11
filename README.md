@@ -38,7 +38,7 @@ CI exige estas verificaciones. Un build no sustituye pruebas de permisos, recorr
 
 Los IDs de organización y empresa delimitan los registros y archivos. RFC, CURP y NIF no son llaves de autorización. Las escrituras usan revisión esperada y las ediciones concurrentes no se sobrescriben silenciosamente. Las llaves locales antiguas se conservan para una importación explícita con respaldo; nunca se migran usuarios, contraseñas ni privilegios demo.
 
-`wrangler.jsonc` separa local, preview y producción. El entorno de producción permanece sin configurar hasta aprobar la aceptación. No despliegues con IDs u orígenes de ejemplo. Las credenciales, respaldos y archivos personales no deben incluirse en Git ni en logs.
+`wrangler.worker.jsonc` separa el backend local, preview y producción. `wrangler.jsonc` configura Pages y su vínculo privado `API` al Worker; el build incluye el proxy de `/api/*`, conservando la dirección y las cookies del sitio. No despliegues con IDs u orígenes de ejemplo. Las credenciales, respaldos y archivos personales no deben incluirse en Git ni en logs.
 
 - [Contratos y operación del servidor](docs/pilot-api.md)
 - [Evidencia de validación y pendientes de aceptación](docs/pilot-validation.md)

@@ -18,13 +18,15 @@ import { getSatOperationBranchMissingLabels, withSatParticipantOptions } from ".
 import { satCatalogCode, satDate } from "../lib/pld/sat-xml"
 import { validateExpedienteIdentifiers } from "../lib/pld/expediente-eui"
 import { snapshotEvidenceVersion } from "../lib/pld/evidence-lifecycle"
+import { secureRecordState, validateDocumentReferences, validateStructuredRecord } from "./record-security"
+import { normalizeSatFieldValues } from "../lib/pld/sat-field-values"
 import type { SatXlsmLayout } from "../lib/pld/types"
 
 function isObject(value: unknown): value is Record<string, unknown> {return Boolean(value&&typeof value==="object"&&!Array.isArray(value))}
 export function validateRecordPayload(collection: string, id: string, payload: unknown) {
   const serialized = JSON.stringify(payload)
   if(serialized===undefined||serialized.length>750_000)throw new ApiError(413,"El registro supera el límite; adjunta archivos por el repositorio.","RECORD_TOO_LARGE")
-  if(/\bdata:[^\s"\\]+/i.test(serialized))throw new ApiError(400,"Los archivos deben guardarse en el repositorio documental.","EMBEDDED_FILE")
+  validateStructuredRecord(collection,payload)
   if(collection==="actividades_vulnerables_operaciones") {
     if(!isObject(payload)||payload.id!==id)throw new ApiError(400,"Identidad de operación no válida.","INVALID_OPERATION")
     if(payload.captureStatus!==undefined&&payload.captureStatus!=="draft"&&payload.captureStatus!=="complete")throw new ApiError(400,"Estado de captura no válido.","INVALID_OPERATION")
@@ -45,18 +47,30 @@ export function validateRecordPayload(collection: string, id: string, payload: u
 
 function decode(row: Record<string,unknown>): StoredRecord {return {collection:String(row.collection),id:String(row.id),revision:Number(row.revision),payload:JSON.parse(String(row.payload)),deleted:Boolean(row.deleted)}}
 async function validateSatOperation(payload:Record<string,unknown>,env:PilotEnv){
-  if(payload.captureStatus==="draft")return payload
+  for(const key of ["satFieldValues","satCellValues"]){const value=payload[key];if(value!==undefined&&(!isObject(value)||Object.values(value).some((item)=>typeof item!=="string")))throw new ApiError(400,"Los valores SAT deben ser mapas de texto válidos.","INVALID_SAT_FIELDS")}
+  const draft=payload.captureStatus==="draft",hasValues=Object.keys({...isObject(payload.satFieldValues)?payload.satFieldValues:{},...isObject(payload.satCellValues)?payload.satCellValues:{}}).length>0
+  if(draft&&!hasValues)return payload
+  if(draft&&(!payload.actividadKey||!payload.satTemplateId))throw new ApiError(400,"Selecciona el formato antes de guardar campos SAT.","INVALID_SAT_FIELDS")
+  if(!draft){
   const identifiers=isObject(payload.expedienteIdentifiers)?payload.expedienteIdentifiers:isObject(payload.identificadores)?payload.identificadores:isObject(payload.identifiers)?payload.identifiers:{rfc:payload.rfc}
   const identifierError=validateExpedienteIdentifiers({rfc:String(identifiers.rfc||payload.rfc||""),nif:String(identifiers.nif||""),curp:String(identifiers.curp||"")},String(payload.tipoCliente).startsWith("pf"))
   if(identifierError)throw new ApiError(400,identifierError,"INVALID_IDENTIFIERS")
+  }
   const template=resolveSatTemplateForActividad(String(payload.actividadKey),String(payload.satTemplateVariant||payload.satTemplateId||""))
   if(payload.satTemplateId!==template.templateId||!template.actividadKeys.includes(String(payload.actividadKey)))throw new ApiError(400,"El formato SAT no corresponde a la actividad.","INVALID_TEMPLATE")
   if(!env.ASSETS)throw new ApiError(503,"No se pudo validar el catálogo SAT.","SAT_LAYOUT_UNAVAILABLE")
   const response=await env.ASSETS.fetch(new Request(`${env.BETTER_AUTH_URL}/data/sat-xlsm-layouts/${template.templateId}.json`))
   if(!response.ok)throw new ApiError(503,"No se pudo cargar el formato SAT.","SAT_LAYOUT_UNAVAILABLE")
   const layout=normalizeSatXlsmLayout(await response.json() as SatXlsmLayout)
-  const values=Object.fromEntries(Object.entries({...isObject(payload.satFieldValues)?payload.satFieldValues:{},...isObject(payload.satCellValues)?payload.satCellValues:{}}).map(([key,value])=>[key,String(value??"")]))
+  let values:Record<string,string>
+  try{
+    const fields=layout.sections.flatMap((section)=>section.fields),semantic=normalizeSatFieldValues(fields,(payload.satFieldValues||{}) as Record<string,string>),cells=normalizeSatFieldValues(fields,(payload.satCellValues||{}) as Record<string,string>)
+    for(const [key,value] of Object.entries(cells))if(Object.hasOwn(semantic,key)&&semantic[key].toUpperCase()!==value.toUpperCase())throw new Error(`Los valores SAT del campo y su celda no coinciden: ${key}.`)
+    values={...cells,...semantic}
+  }catch(error){throw new ApiError(400,error instanceof Error?error.message:"Campos SAT no válidos.","INVALID_SAT_FIELDS")}
   const fields=withSatParticipantOptions(layout.sections.flatMap((section)=>section.fields),values),active=pruneInactiveSatFieldValues({fields,values})
+  const canonicalCells=Object.fromEntries(fields.filter((field)=>Object.hasOwn(active,field.id)).map((field)=>[`${field.sheetName}!${field.cell}`,active[field.id]]))
+  if(draft)return {...payload,satFieldValues:active,satCellValues:canonicalCells}
   const missing=fields.filter((field)=>isSatXlsmFieldRequired(field,active)&&!String(active[field.id]||active[`${field.sheetName}!${field.cell}`]||"").trim()).map((field)=>field.label)
   missing.push(...getSatOperationBranchMissingLabels(layout.templateId,active,fields))
   if(missing.length)throw new ApiError(400,`Completa los campos SAT: ${missing.slice(0,12).join("; ")}`,"SAT_FIELDS_INCOMPLETE")
@@ -67,7 +81,7 @@ async function validateSatOperation(payload:Record<string,unknown>,env:PilotEnv)
     if(field.options?.length&&!field.options.some((option)=>option.toUpperCase()===value.toUpperCase()||satCatalogCode(option)===satCatalogCode(value)))throw new ApiError(400,`Opción no válida: ${field.label}.`,"INVALID_CATALOG_VALUE")
     if(field.dataType==="fecha"&&!satDate(value))throw new ApiError(400,`Fecha no válida: ${field.label}.`,"INVALID_SAT_DATE")
   }
-  return {...payload,satFieldValues:Object.fromEntries(Object.entries(active).filter(([key])=>!key.includes("!"))),satCellValues:Object.fromEntries(Object.entries(active).filter(([key])=>key.includes("!"))),satMissingRequiredFields:[],satWorkbookStatus:"listo"}
+  return {...payload,satFieldValues:active,satCellValues:canonicalCells,satMissingRequiredFields:[],satWorkbookStatus:"listo"}
 }
 function serverPackage(operation:NonNullable<ReturnType<typeof sanitizeStoredPldOperation>>,company:CompanyRow,actor:PilotActor,at:string){
   const tenant=integrationSubjectToTenant({id:company.id,rfc:company.rfc,nombre:company.name,activityKeys:[operation.actividadKey],source:"tenant"})
@@ -148,7 +162,7 @@ export async function handleRecords(request: Request,url:URL,actor:PilotActor,en
       if(deleted||JSON.stringify(payload)!==JSON.stringify(oldPayload))throw new ApiError(409,"Un aviso presentado es inmutable. Prepara una corrección nueva y conserva su acuse histórico.","PRESENTED_SUBMISSION_IMMUTABLE")
       changes.push({collection,id,revision:expected,payload:oldPayload,deleted:false});continue
     }
-    if(!deleted)validateRecordPayload(collection,id,payload)
+    if(!deleted){validateRecordPayload(collection,id,payload);validateDocumentReferences(collection,payload,companyId,env.BETTER_AUTH_URL)}
     if(!deleted&&collection==="pld-active-tenant-id"&&payload!==company.id)throw new ApiError(400,"La empresa activa se selecciona mediante los accesos de la sesión.","COMPANY_IDENTITY_MISMATCH")
     if(collection==="actividades_vulnerables_operaciones"&&deleted){
       const prior=sanitizeStoredPldOperation(oldPayload,{now:at})
@@ -167,8 +181,7 @@ export async function handleRecords(request: Request,url:URL,actor:PilotActor,en
           migrationWarnings:["Se conservó la metodología y el resultado históricos en legacySnapshot; no constituyen una evaluación v3 aprobada. Completa cuestionario, fuentes y plan antes de aprobar."]}
       }
       const previous=isObject(oldPayload)?oldPayload:{}
-      const closureKey=collection==="gobernanza-control-data"?"expedienteCerrado":collection==="pld-training-module"?"moduleClosed":undefined
-      if(closureKey&&(payload[closureKey]===true)!==(previous[closureKey]===true))await requireCompany(actor,companyId,env,module,"approve")
+      if(!deleted)payload=await secureRecordState(collection,payload,previous,actor,companyId,env,at)
       if(["auditoria-interna-registros","auditoria-observaciones-autoridades","auditoria-planes-accion"].includes(collection)&&(payload.status==="Cerrado")!==(previous.status==="Cerrado"))await requireCompany(actor,companyId,env,module,"approve")
       if(collection==="auditoria-verificacion-workflow"){
         const next=isObject(payload.finalChecklist)?payload.finalChecklist:{},prior=isObject(previous.finalChecklist)?previous.finalChecklist:{}

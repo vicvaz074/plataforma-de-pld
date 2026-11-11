@@ -1,4 +1,5 @@
 "use client"
+import { DocumentLink } from "@/components/pld/document-link"
 import { getModuleStorage, canWriteModuleStorage } from "@/lib/pilot/module-storage"
 
 import Link from "next/link"
@@ -10668,9 +10669,9 @@ const cambiarMesCalendario = (delta: number) => {
                                   <div className="flex items-center gap-2">
                                     {documento.archivoContenido && documento.archivoNombre && (
                                       <Button variant="outline" size="sm" asChild>
-                                        <a href={documento.archivoContenido} download={documento.archivoNombre}>
+                                        <DocumentLink href={documento.archivoContenido} download={documento.archivoNombre}>
                                           <Download className="mr-2 h-4 w-4" /> Descargar
-                                        </a>
+                                        </DocumentLink>
                                       </Button>
                                     )}
                                     <Button

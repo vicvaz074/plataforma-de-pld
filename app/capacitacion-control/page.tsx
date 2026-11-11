@@ -1,5 +1,7 @@
 "use client"
-import { getModuleStorage, canWriteModuleStorage, flushModuleStorage } from "@/lib/pilot/module-storage"
+import { DocumentLink } from "@/components/pld/document-link"
+import { serializeCsv } from "@/lib/pld/csv"
+import { getModuleStorage, canWriteModuleStorage, flushModuleStorage, captureModuleScope, assertModuleScope, isModuleScopeCurrent } from "@/lib/pilot/module-storage"
 
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react"
 import { differenceInDays, format, parseISO } from "date-fns"
@@ -18,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { readFileAsDataUrl } from "@/lib/storage/read-file"
 import { getTrainingProofPolicy } from "@/lib/pld/training-proof-policy"
+import { assertTrainingState } from "@/lib/pld/record-shapes"
 import {
   AlertTriangle,
   BellRing,
@@ -301,6 +304,7 @@ export default function CapacitacionControlPage() {
     if (stored) {
       try {
         const parsed = JSON.parse(stored) as PersistedState
+        assertTrainingState(parsed)
         setState({
           ...defaultState,
           ...parsed,
@@ -320,9 +324,10 @@ export default function CapacitacionControlPage() {
   useEffect(() => {
     if (!isHydrated || typeof window === "undefined" || !canWriteModuleStorage(STORAGE_KEY)) return
     try {
-      getModuleStorage().setItem(STORAGE_KEY, JSON.stringify(state))
-      void flushModuleStorage().catch(() => {
-        toast({ title: "Cambios pendientes de guardar", description: "No se confirmó el guardado de capacitación. Mantén esta página abierta y vuelve a intentarlo.", variant: "destructive" })
+      const scope = captureModuleScope()
+      scope.storage.setItem(STORAGE_KEY, JSON.stringify(state))
+      void flushModuleStorage(scope).catch(() => {
+        if (isModuleScopeCurrent(scope)) toast({ title: "Cambios pendientes de guardar", description: "No se confirmó el guardado de capacitación. Mantén esta página abierta y vuelve a intentarlo.", variant: "destructive" })
       })
     } catch {
       toast({ title: "Cambios sin guardar", description: "No se pudo guardar capacitación. Conserva esta página abierta y vuelve a intentarlo.", variant: "destructive" })
@@ -373,11 +378,14 @@ export default function CapacitacionControlPage() {
     options?: { sessionId?: string; employeeId?: string; checklistQuestionId?: string },
   ) => {
     if (!isHydrated || !canWriteModuleStorage(STORAGE_KEY)) throw new Error("No tienes permiso para guardar documentos de capacitación.")
+    const scope = captureModuleScope()
     if (file.size > 20 * 1024 * 1024 || !/\.(pdf|png|jpe?g|xlsx?|xlsm|csv|docx?|pptx?)$/i.test(file.name)) throw new Error("Selecciona un documento, imagen o plantilla de hasta 20 MB.")
     const dataUrl = await readFileAsDataUrl(file)
+    assertModuleScope(scope)
     const documentId = crypto.randomUUID()
-    const actor = getModuleStorage().getItem("userEmail") || getModuleStorage().getItem("userName") || "Usuario en sesión"
+    const actor = scope.storage.getItem("userEmail") || scope.storage.getItem("userName") || "Usuario en sesión"
     const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))).map((byte) => byte.toString(16).padStart(2, "0")).join("")
+    assertModuleScope(scope)
     const newDocument: DocumentRecord = {
       id: documentId,
       name: file.name,
@@ -397,12 +405,16 @@ export default function CapacitacionControlPage() {
       details: file.name + " registrado en la bitácora digital de capacitación.",
       documentId,
     }
-    const stored = getModuleStorage().getItem(STORAGE_KEY)
+    const stored = scope.storage.getItem(STORAGE_KEY)
     const previous = stored ? JSON.parse(stored) as PersistedState : state
+    assertTrainingState(previous)
     if (!Array.isArray(previous.documents) || !Array.isArray(previous.traceability)) throw new Error("El registro de capacitación necesita revisión antes de agregar archivos.")
-    getModuleStorage().setItem(STORAGE_KEY, JSON.stringify({ ...previous, documents: [newDocument, ...previous.documents], traceability: [trace, ...previous.traceability] }))
-    await flushModuleStorage()
+    scope.storage.setItem(STORAGE_KEY, JSON.stringify({ ...previous, documents: [newDocument, ...previous.documents], traceability: [trace, ...previous.traceability] }))
     setState((prev) => ({ ...prev, documents: [newDocument, ...prev.documents], traceability: [trace, ...prev.traceability] }))
+    await flushModuleStorage(scope)
+    assertModuleScope(scope)
+    const canonical = JSON.parse(scope.storage.getItem(STORAGE_KEY)!) as PersistedState
+    setState((prev) => ({ ...prev, documents: canonical.documents, traceability: canonical.traceability }))
 
     toast({
       title: "Documento cargado",
@@ -421,10 +433,12 @@ export default function CapacitacionControlPage() {
     if (!file) return undefined
 
     const input = event.target
+    const scope = captureModuleScope()
     try {
-      return await storeDocument(file, category, options)
+      const documentId = await storeDocument(file, category, options)
+      return isModuleScopeCurrent(scope) ? documentId : undefined
     } catch (error) {
-      toast({ title: "No se guardó el documento", description: error instanceof Error ? error.message : "Conserva el archivo y vuelve a intentarlo.", variant: "destructive" })
+      if (isModuleScopeCurrent(scope)) toast({ title: "No se guardó el documento", description: error instanceof Error ? error.message : "Conserva el archivo y vuelve a intentarlo.", variant: "destructive" })
       return undefined
     } finally { input.value = "" }
   }
@@ -484,8 +498,9 @@ export default function CapacitacionControlPage() {
   }
 
   const handlePlanDocumentUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const scope = captureModuleScope()
     const documentId = await handleDocumentUpload(event, "plan")
-    if (!documentId) return
+    if (!documentId || !isModuleScopeCurrent(scope)) return
     setPlanForm((prev) => ({ ...prev, planDocumentId: documentId }))
     setState((prev) => ({
       ...prev,
@@ -606,21 +621,24 @@ export default function CapacitacionControlPage() {
   }
 
   const handleMaterialUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const scope = captureModuleScope()
     const input = event.target
     const files = input.files
     if (!files) return
     const uploadedIds: string[] = []
     try {
       for (const file of Array.from(files)) {
+        assertModuleScope(scope)
         const documentId = await storeDocument(file, "material")
+        assertModuleScope(scope)
         uploadedIds.push(documentId)
       }
     } catch (error) {
-      toast({ title: "Carga incompleta", description: error instanceof Error ? error.message : "Algunos archivos no se guardaron; revisa la lista antes de reintentar.", variant: "destructive" })
+      if (isModuleScopeCurrent(scope)) toast({ title: "Carga incompleta", description: error instanceof Error ? error.message : "Algunos archivos no se guardaron; revisa la lista antes de reintentar.", variant: "destructive" })
     } finally {
       input.value = ""
     }
-    if (!uploadedIds.length) return
+    if (!uploadedIds.length || !isModuleScopeCurrent(scope)) return
     setSessionForm((prev) => ({
       ...prev,
       materialsDocumentIds: [...prev.materialsDocumentIds, ...uploadedIds],
@@ -681,8 +699,9 @@ export default function CapacitacionControlPage() {
   }
 
   const handleCertificateUpload = async (event: ChangeEvent<HTMLInputElement>, employeeId: string) => {
+    const scope = captureModuleScope()
     const documentId = await handleDocumentUpload(event, "constancia", { employeeId })
-    if (!documentId) return
+    if (!documentId || !isModuleScopeCurrent(scope)) return
 
     setState((prev) => ({
       ...prev,
@@ -711,8 +730,9 @@ export default function CapacitacionControlPage() {
   }
 
   const handleOfficialCertificateUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const scope = captureModuleScope()
     const documentId = await handleDocumentUpload(event, "oficial")
-    if (!documentId) return
+    if (!documentId || !isModuleScopeCurrent(scope)) return
 
     setState((prev) => ({
       ...prev,
@@ -758,8 +778,9 @@ export default function CapacitacionControlPage() {
   }
 
   const handleChecklistEvidence = async (event: ChangeEvent<HTMLInputElement>, question: ChecklistQuestion) => {
+    const scope = captureModuleScope()
     const documentId = await handleDocumentUpload(event, "checklist", { checklistQuestionId: question.id })
-    if (!documentId) return
+    if (!documentId || !isModuleScopeCurrent(scope)) return
 
     setState((prev) => ({
       ...prev,
@@ -807,6 +828,7 @@ export default function CapacitacionControlPage() {
   }
 
   const handleModuleClosure = async () => {
+    const scope = captureModuleScope()
     if (!officialCertificateValid) {
       toast({
         title: "Constancia del Oficial requerida",
@@ -820,11 +842,15 @@ export default function CapacitacionControlPage() {
       action:"Revisión interna cerrada",details:closingNotes ? "Cierre documental con notas: "+closingNotes : "Cierre documental; no acredita aceptación de autoridad."}
     const next={...state,moduleClosed:true,traceability:[trace,...state.traceability]}
     try {
-      getModuleStorage().setItem(STORAGE_KEY,JSON.stringify(next))
-      await flushModuleStorage()
-      setState(next)
+      scope.storage.setItem(STORAGE_KEY,JSON.stringify(next))
+      await flushModuleStorage(scope)
+      assertModuleScope(scope)
+      const canonical = JSON.parse(scope.storage.getItem(STORAGE_KEY)!) as PersistedState
+      assertTrainingState(canonical)
+      setState(canonical)
+      if (!canonical.moduleClosed) { toast({title:"Revisión pendiente",description:"La información cambió durante el guardado; confirma la versión actual.",variant:"destructive"}); return }
       toast({title:"Revisión interna guardada",description:"Se conservó el cierre documental. No equivale a certificación legal del REC ni aceptación de autoridad."})
-    } catch (error) {toast({title:"No se guardó el cierre",description:error instanceof Error ? error.message : "Conserva la captura y reintenta.",variant:"destructive"})}
+    } catch (error) {if (isModuleScopeCurrent(scope)) toast({title:"No se guardó el cierre",description:error instanceof Error ? error.message : "Conserva la captura y reintenta.",variant:"destructive"})}
   }
 
   const exportReport = (formatType: "pdf" | "excel") => {
@@ -881,37 +907,36 @@ export default function CapacitacionControlPage() {
 
       doc.save("reporte-capacitacion-control.pdf")
     } else {
-      const header = ["Tipo", "Nombre", "Fecha", "Detalle"].join(",")
-      const rows: string[] = [header]
+      const rows: unknown[][] = [["Tipo", "Nombre", "Fecha", "Detalle"]]
 
       if (state.trainingPlan) {
         rows.push([
           "Plan",
           "Plan " + state.trainingPlan.year,
           state.trainingPlan.approvalDate,
-          state.trainingPlan.objectives.replace(/\n/g, " "),
-        ].join(","))
+          state.trainingPlan.objectives,
+        ])
       }
 
       state.sessions.forEach((session) => {
         rows.push([
           "Sesión",
-          session.title.replace(/,/g, ";"),
+          session.title,
           session.date,
           session.modality + " | " + session.attendees.length + " asistentes",
-        ].join(","))
+        ])
       })
 
       state.employees.forEach((employee) => {
         rows.push([
           "Empleado",
-          employee.name.replace(/,/g, ";"),
+          employee.name,
           employee.lastTrainingDate ?? "Sin registro",
           employee.needsInitialTraining ? "Inducción pendiente" : "Capacitación documentada",
-        ].join(","))
+        ])
       })
 
-      const csvContent = rows.join("\n")
+      const csvContent = serializeCsv(rows)
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
       const url = URL.createObjectURL(blob)
       const link = document.createElement("a")
@@ -1068,9 +1093,9 @@ export default function CapacitacionControlPage() {
     const document = state.documents.find((doc) => doc.id === documentId)
     if (!document) return null
     return (
-      <a key={document.id} href={document.dataUrl} download={document.name} className="text-sm text-primary underline">
+      <DocumentLink key={document.id} href={document.dataUrl} download={document.name} className="text-sm text-primary underline">
         {document.name}
-      </a>
+      </DocumentLink>
     )
   }
 
@@ -1436,8 +1461,9 @@ export default function CapacitacionControlPage() {
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
                   onChange={async (event) => {
+                    const scope = captureModuleScope()
                     const documentId = await handleDocumentUpload(event, "asistencia")
-                    if (!documentId) return
+                    if (!documentId || !isModuleScopeCurrent(scope)) return
                     setSessionForm((prev) => ({ ...prev, attendanceDocumentId: documentId }))
                   }}
                 />
@@ -1449,8 +1475,9 @@ export default function CapacitacionControlPage() {
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
                   onChange={async (event) => {
+                    const scope = captureModuleScope()
                     const documentId = await handleDocumentUpload(event, "temario")
-                    if (!documentId) return
+                    if (!documentId || !isModuleScopeCurrent(scope)) return
                     setSessionForm((prev) => ({ ...prev, temarioDocumentId: documentId }))
                   }}
                 />
@@ -1479,8 +1506,9 @@ export default function CapacitacionControlPage() {
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
                   onChange={async (event) => {
+                    const scope = captureModuleScope()
                     const documentId = await handleDocumentUpload(event, "evaluacion")
-                    if (!documentId) return
+                    if (!documentId || !isModuleScopeCurrent(scope)) return
                     setSessionForm((prev) => ({ ...prev, evaluationDocumentId: documentId }))
                   }}
                 />

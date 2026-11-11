@@ -1,5 +1,5 @@
 "use client"
-import { getModuleStorage, canWriteModuleStorage, flushModuleStorage } from "@/lib/pilot/module-storage"
+import { getModuleStorage, canWriteModuleStorage, flushModuleStorage, captureModuleScope, assertModuleScope, isModuleScopeCurrent } from "@/lib/pilot/module-storage"
 
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react"
 import { Badge } from "@/components/ui/badge"
@@ -1354,8 +1354,9 @@ export default function RegistroSATPage() {
   useEffect(() => {
     if (!registroStorageReady || !canWriteModuleStorage("registro-sat-data")) return
     try {
-      getModuleStorage().setItem("registro-sat-data", JSON.stringify(construirRegistroPersistido()))
-      void flushModuleStorage().catch((error)=>toast({title:"Cambios pendientes de guardar",description:error instanceof Error ? error.message : "No se confirmó el guardado. Mantén esta página abierta.",variant:"destructive"}))
+      const scope = captureModuleScope()
+      scope.storage.setItem("registro-sat-data", JSON.stringify(construirRegistroPersistido()))
+      void flushModuleStorage(scope).catch((error)=>{if (isModuleScopeCurrent(scope)) toast({title:"Cambios pendientes de guardar",description:error instanceof Error ? error.message : "No se confirmó el guardado. Mantén esta página abierta.",variant:"destructive"})})
     } catch (error) {
       console.error("No se pudo guardar el registro SAT en este navegador", error)
     }
@@ -1491,6 +1492,7 @@ export default function RegistroSATPage() {
     docs: Record<RegistroDocumentKey, DocumentUpload | null>,
     opciones?: { permitirIncompleto?: boolean },
   ) => {
+    const scope = captureModuleScope()
     if (!registroStorageReady || registroLoadError || !canWriteModuleStorage("registro-sat-data")) throw new Error("No se puede guardar el Alta hasta recuperar los datos y contar con permiso de edición.")
     if (connectedCompany && identificacion.rfc.trim().toUpperCase()!==connectedCompany.rfc.trim().toUpperCase()) throw new Error("El RFC debe corresponder a la empresa activa.")
     if (tipoSujeto === "none" || !nombreSujeto.trim() || !resumenActividades.trim()) return false
@@ -1555,8 +1557,9 @@ export default function RegistroSATPage() {
     })()
     const nextData=construirRegistroPersistido({sujetosRegistrados:connectedCompany ? [nuevoSujeto] : nextSubjects,documentosRegistro:documentosSeparados})
     if (connectedCompany) {const issue=cloudRegistrationIssue(nextData,connectedCompany);if(issue)throw new Error(issue)}
-    getModuleStorage().setItem("registro-sat-data",JSON.stringify(nextData))
-    await flushModuleStorage()
+    scope.storage.setItem("registro-sat-data",JSON.stringify(nextData))
+    await flushModuleStorage(scope)
+    assertModuleScope(scope)
     setSujetosRegistrados(connectedCompany ? [nuevoSujeto] : nextSubjects)
     setSujetoSeleccionadoId(nuevoSujeto.id)
     if (!connectedCompany) setDocumentosRegistro({ detalle: null, acuse: null, aceptacion: null })
@@ -1578,6 +1581,7 @@ export default function RegistroSATPage() {
   }
 
   const registrarSujetoManual = async () => {
+    const scope = captureModuleScope()
     if (!camposObligatoriosCapturados) {
       toast({
         title: "Faltan datos clave",
@@ -1590,11 +1594,11 @@ export default function RegistroSATPage() {
     setRegistroSaving(true)
     try {
       const saved=await registrarSujeto(documentosRegistro, { permitirIncompleto: true })
-      if (!saved) return
+      if (!saved || !isModuleScopeCurrent(scope)) return
       setActiveTab("registrados")
       if (!connectedCompany) limpiarFormulario()
-    } catch (error) {toast({title:"No se guardó el registro",description:error instanceof Error ? error.message : "Conserva la captura y reintenta.",variant:"destructive"})}
-    finally {setRegistroSaving(false)}
+    } catch (error) {if (isModuleScopeCurrent(scope)) toast({title:"No se guardó el registro",description:error instanceof Error ? error.message : "Conserva la captura y reintenta.",variant:"destructive"})}
+    finally {if (isModuleScopeCurrent(scope)) setRegistroSaving(false)}
   }
 
   const manejarCargaDocumentoRegistro = async (
@@ -1603,11 +1607,13 @@ export default function RegistroSATPage() {
   ) => {
     const file = event.target.files?.[0]
     if (!file) return
+    const scope = captureModuleScope()
 
     try {
       let datosExtraidos: ReturnType<typeof extraerDatosRegistroDesdeTexto> | null = null
       try {
         const texto = await obtenerTextoDocumentoRegistro(file)
+        assertModuleScope(scope)
         if (texto.trim()) {
           const candidato = extraerDatosRegistroDesdeTexto(texto)
           const hayDatosExtraidos = Boolean(
@@ -1637,6 +1643,7 @@ export default function RegistroSATPage() {
           })
         }
       } catch (error) {
+        assertModuleScope(scope)
         console.error("No se pudo extraer texto del documento", error)
         toast({
           title: "No se pudo leer el documento",
@@ -1647,11 +1654,13 @@ export default function RegistroSATPage() {
       }
 
       const documento = await crearDocumentoDesdeArchivo(file, tipoDoc)
+      assertModuleScope(scope)
       const current=construirRegistroPersistido()
       const nextDocuments=[documento,...(Array.isArray(current.documentos) ? current.documentos : [])]
       const nextRegistroDocuments={...separarDocumentosRegistro<DocumentUpload>(current.documentosRegistro),[tipoDoc]:documento}
-      getModuleStorage().setItem("registro-sat-data",JSON.stringify(construirRegistroPersistido({documentos:nextDocuments,documentosRegistro:nextRegistroDocuments})))
-      await flushModuleStorage()
+      scope.storage.setItem("registro-sat-data",JSON.stringify(construirRegistroPersistido({documentos:nextDocuments,documentosRegistro:nextRegistroDocuments})))
+      await flushModuleStorage(scope)
+      assertModuleScope(scope)
       setDocumentos((prev) => [documento, ...prev])
       setDocumentosRegistro(nextRegistroDocuments)
 
@@ -1662,6 +1671,7 @@ export default function RegistroSATPage() {
         }`,
       })
     } catch (error) {
+      if (!isModuleScopeCurrent(scope)) return
       console.error("Error al guardar archivo", error)
       toast({
         title: "No se pudo cargar el archivo",
@@ -1747,18 +1757,22 @@ export default function RegistroSATPage() {
   const manejarCargaDocumento = async (event: ChangeEvent<HTMLInputElement>, tipo: string) => {
     const file = event.target.files?.[0]
     if (!file) return
+    const scope = captureModuleScope()
 
     try {
       const documento = await crearDocumentoDesdeArchivo(file, tipo)
+      assertModuleScope(scope)
       const current=construirRegistroPersistido()
-      getModuleStorage().setItem("registro-sat-data",JSON.stringify(construirRegistroPersistido({documentos:[documento,...(Array.isArray(current.documentos) ? current.documentos : [])]})))
-      await flushModuleStorage()
+      scope.storage.setItem("registro-sat-data",JSON.stringify(construirRegistroPersistido({documentos:[documento,...(Array.isArray(current.documentos) ? current.documentos : [])]})))
+      await flushModuleStorage(scope)
+      assertModuleScope(scope)
       setDocumentos((prev) => [documento, ...prev])
       toast({
         title: "Documento cargado",
         description: `El documento ${documento.name} se almacenó como evidencia opcional.`,
       })
     } catch (error) {
+      if (!isModuleScopeCurrent(scope)) return
       console.error("Error al guardar archivo", error)
       toast({
         title: "No se pudo cargar el archivo",

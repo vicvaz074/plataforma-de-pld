@@ -17,26 +17,64 @@ const preferences = new Map<string, string>()
 const uploaded = new Map<string, string>()
 const companyNotices = new Map<string, string[]>()
 let loadEpoch = 0
+let scopeGeneration = 0
+let authGeneration = 0
+let loading = false
+
+export interface ModuleScope { readonly generation: number; readonly authGeneration: number; readonly companyId: string | null; readonly storage: Storage }
+const staleScope = () => new DOMException("La empresa o el acceso cambió. Vuelve a iniciar la acción en el expediente actual.", "AbortError")
+export function isModuleScopeCurrent(scope: ModuleScope) { return !loading && scope.generation === scopeGeneration && scope.authGeneration === authGeneration && scope.companyId === (company?.id ?? null) }
+export function assertModuleScope(scope: ModuleScope) {
+  if (!isModuleScopeCurrent(scope)) throw staleScope()
+}
+export function captureModuleScope(): ModuleScope {
+  const scope = { generation: scopeGeneration, authGeneration, companyId: company?.id ?? null, storage: null as unknown as Storage }
+  assertModuleScope(scope)
+  const target = !connected && typeof window !== "undefined" && process.env.NEXT_PUBLIC_PLD_MODE === "demo" ? window.localStorage : companyStorage
+  scope.storage = {
+    get length() { assertModuleScope(scope); return target.length },
+    key(index) { assertModuleScope(scope); return target.key(index) },
+    getItem(key) { assertModuleScope(scope); return target.getItem(key) },
+    setItem(key, value) { assertModuleScope(scope); target.setItem(key, value) },
+    removeItem(key) { assertModuleScope(scope); target.removeItem(key) },
+    clear() { assertModuleScope(scope); target.clear() },
+  }
+  return scope
+}
+
+// A drain may finish changes queued BEFORE switching began, but it must never
+// follow the mutable company/session binding after an asynchronous boundary.
+interface DrainScope { company: Company; authGeneration: number; pending: typeof pending; uploaded: typeof uploaded }
+function assertDrainScope(scope: DrainScope) {
+  if (scope.authGeneration !== authGeneration || scope.company !== company || scope.pending !== pending) throw staleScope()
+}
 
 export function getPilotSession() { return session }
 export function getActiveCompany() { return company }
 export function getCompanyRecordRevision(collection: string, id: string) { return records.find((record) => record.collection === collection && record.id === id && !record.deleted)?.revision }
 export function isCloudConnected() { return connected }
-export function canWriteModuleStorage(key: string) { return !connected ? process.env.NEXT_PUBLIC_PLD_MODE === "demo" : Boolean(COLLECTION_MODULES[key] && sessionCan(session, company, COLLECTION_MODULES[key], "edit")) }
+export function canWriteModuleStorage(key: string) { return !loading && (!connected ? process.env.NEXT_PUBLIC_PLD_MODE === "demo" : Boolean(COLLECTION_MODULES[key] && sessionCan(session, company, COLLECTION_MODULES[key], "edit"))) }
 export function getSaveState() { return state }
 export function subscribeSaveState(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } }
 function publish(next: SaveState) { state = { ...next, warnings: company ? companyNotices.get(company.id) : undefined }; listeners.forEach((listener) => listener()) }
 export function dismissStorageNotices() { if (company) companyNotices.delete(company.id); publish({ ...state, warnings: undefined }) }
-export function configurePilotSession(value: PilotSession | null) { session = value }
+export function configurePilotSession(value: PilotSession | null) {
+  if (JSON.stringify(session) !== JSON.stringify(value)) { scopeGeneration++; authGeneration++; loadEpoch++; loading = false }
+  session = value
+}
 
 export function getPendingModuleChanges() { return { companyId: company?.id, exportedAt: new Date().toISOString(), collections: Object.fromEntries([...pending].map(([key, value]) => [key, value === null ? null : JSON.parse(value)])) } }
 export async function loadCompanyStorage(nextCompany: Company, options: { discardUnsaved?: boolean } = {}) {
   const epoch = ++loadEpoch
+  const auth = authGeneration
+  scopeGeneration++; loading = true
+  try {
   if (options.discardUnsaved && running) throw new Error("Espera a que termine la solicitud actual.")
   if (!options.discardUnsaved) await flushModuleStorage()
+  if (epoch !== loadEpoch || auth !== authGeneration) throw staleScope()
   const snapshotPath = nextCompany.id.startsWith("inbox:") ? `/organizations/${encodeURIComponent(nextCompany.organizationId)}/inbox` : `/companies/${encodeURIComponent(nextCompany.id)}/snapshot`
   const result = await pilotApi<{ records: CloudRecord[] }>(snapshotPath)
-  if (epoch !== loadEpoch) throw new DOMException("Se abrió otra empresa durante la solicitud.", "AbortError")
+  if (epoch !== loadEpoch || auth !== authGeneration) throw staleScope()
   company = nextCompany; connected = true; records = result.records
   cache = new Map(); pending = new Map(); uploaded.clear(); lastError = null
   for (const key of Object.keys(COLLECTION_MODULES)) {
@@ -45,62 +83,83 @@ export async function loadCompanyStorage(nextCompany: Company, options: { discar
   }
   if (!cache.has("pld-tenants")) cache.set("pld-tenants", JSON.stringify({ schemaVersion: 1, activeTenantId: nextCompany.id, tenants: [{ id: nextCompany.id, schemaVersion: 1, rfc: nextCompany.rfc, razonSocial: nextCompany.name, nombreComercial: nextCompany.name, representanteCumplimiento: { nombre: "", cargo: "", email: "" }, responsablesInternos: [], actividades: [], manual: {}, ebr: {}, policies: { conservaAnios: 10, noGuardarEfirma: true, requiereCotejo: true } }] }))
   publish({ status: "saved", pending: 0 })
+  } finally { if (epoch === loadEpoch) loading = false }
 }
 export function resetCompanyStorage() {
   if (pending.size || running) throw new Error("Espera a que se guarden los cambios antes de salir.")
-  loadEpoch++; company = null; session = null; connected = false; cache.clear(); records = []; uploaded.clear(); companyNotices.clear(); lastError = null
+  loadEpoch++; scopeGeneration++; authGeneration++; loading = false; company = null; session = null; connected = false; cache.clear(); records = []; uploaded.clear(); companyNotices.clear(); lastError = null
   publish({ status: "saved", pending: 0 })
 }
 
 export async function uploadPilotFile(file: File, moduleKey: ModuleKey, documentId?: string, expectedRevision?: number) {
+  const scope = captureModuleScope()
   if (!connected || !company) throw new Error("Selecciona una empresa conectada para guardar el archivo.")
+  const result = await uploadScopedFile(file, moduleKey, { company, authGeneration, pending, uploaded }, documentId, expectedRevision)
+  assertModuleScope(scope)
+  return result
+}
+async function uploadScopedFile(file: File, moduleKey: ModuleKey, scope: DrainScope, documentId?: string, expectedRevision?: number) {
+  assertDrainScope(scope)
+  if (!sessionCan(session, scope.company, moduleKey, "edit")) throw new Error("Tu acceso es de consulta para este módulo.")
   const body = new FormData(); body.set("file", file); body.set("moduleKey", moduleKey)
   if (documentId) body.set("documentId", documentId)
   if (expectedRevision !== undefined) body.set("expectedRevision", String(expectedRevision))
-  return pilotApi<{ id: string; documentId: string; version: number; sha256: string; downloadUrl: string; fileName: string }>(`/companies/${encodeURIComponent(company.id)}/files`, { method: "POST", body })
+  const result = await pilotApi<{ id: string; documentId: string; version: number; sha256: string; downloadUrl: string; fileName: string }>(`/companies/${encodeURIComponent(scope.company.id)}/files`, { method: "POST", body })
+  assertDrainScope(scope)
+  return result
 }
 
-async function externalize(value: unknown, moduleKey: ModuleKey, fileName?: string): Promise<unknown> {
+async function externalize(value: unknown, moduleKey: ModuleKey, scope: DrainScope, fileName?: string): Promise<unknown> {
+  assertDrainScope(scope)
   if (typeof value === "string" && /^data:[^,]*,/i.test(value)) {
     const uploadKey = `${moduleKey}\u0000${value}`
-    const existing = uploaded.get(uploadKey)
+    const existing = scope.uploaded.get(uploadKey)
     if (existing) return existing
     const blob = await (await fetch(value)).blob()
+    assertDrainScope(scope)
     const extensions: Record<string, string> = { "application/pdf": "pdf", "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "application/xml": "xml", "text/xml": "xml", "application/json": "json", "text/plain": "txt", "text/csv": "csv", "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx", "application/vnd.ms-excel.sheet.macroenabled.12": "xlsm" }
-    const result = await uploadPilotFile(new File([blob], fileName || `evidencia.${extensions[blob.type.split(";")[0].toLowerCase()] || "bin"}`, { type: blob.type }), moduleKey)
-    uploaded.set(uploadKey, result.downloadUrl)
+    const result = await uploadScopedFile(new File([blob], fileName || `evidencia.${extensions[blob.type.split(";")[0].toLowerCase()] || "bin"}`, { type: blob.type }), moduleKey, scope)
+    assertDrainScope(scope)
+    scope.uploaded.set(uploadKey, result.downloadUrl)
     return result.downloadUrl
   }
-  if (Array.isArray(value)) { const next = []; for (const item of value) next.push(await externalize(item, moduleKey)); return next }
+  if (Array.isArray(value)) { const next = []; for (const item of value) next.push(await externalize(item, moduleKey, scope)); return next }
   if (value && typeof value === "object") {
     const next: Record<string, unknown> = {}
     const object = value as Record<string, unknown>
     const name = [object.fileName, object.archivoNombre, object.name].find((item) => typeof item === "string" && /\.[a-z0-9]{2,8}$/i.test(item)) as string | undefined
-    for (const [key, item] of Object.entries(value)) next[key] = await externalize(item, moduleKey, name)
+    for (const [key, item] of Object.entries(value)) next[key] = await externalize(item, moduleKey, scope, name)
     return next
   }
   return value
 }
 
 async function drain() {
+  if (!company) return
+  const scope: DrainScope = { company, authGeneration, pending, uploaded }
   while (pending.size && company) {
+    assertDrainScope(scope)
     const batch = [...pending.entries()]
     publish({ status: "saving", pending: batch.length })
     // Coalesce synchronous changes from a moduleKey into one atomic server batch.
     const mutations = []
     for (const [collection, raw] of batch) {
       const moduleKey = COLLECTION_MODULES[collection]
+      if (!sessionCan(session, scope.company, moduleKey, "edit")) throw new Error("Tu acceso es de consulta para este módulo.")
       const parsed = raw === null ? null : JSON.parse(raw)
-      const desired = raw === null ? new Map<string, unknown>() : encodeCollection(collection, await externalize(parsed, moduleKey))
+      const desired = raw === null ? new Map<string, unknown>() : encodeCollection(collection, await externalize(parsed, moduleKey, scope))
+      assertDrainScope(scope)
       mutations.push(...diffCollection(collection, desired, records))
     }
     const changedCollections = new Set<string>()
     if (mutations.length) {
-      const batchPath = company.id.startsWith("inbox:") ? `/organizations/${encodeURIComponent(company.organizationId)}/inbox/records/batch` : `/companies/${encodeURIComponent(company.id)}/records/batch`
+      const batchPath = scope.company.id.startsWith("inbox:") ? `/organizations/${encodeURIComponent(scope.company.organizationId)}/inbox/records/batch` : `/companies/${encodeURIComponent(scope.company.id)}/records/batch`
       // The API caps atomic batches. A large migration/import is persisted in
       // bounded chunks; each result advances revisions before the next chunk.
       for (let offset = 0; offset < mutations.length; offset += 100) {
+        assertDrainScope(scope)
         const result = await pilotApi<{ records: CloudRecord[]; warnings?: Array<{ message?: string; operationIds?: string[] }> }>(batchPath, jsonRequest("POST", { mutations: mutations.slice(offset, offset + 100) }))
+        assertDrainScope(scope)
         for (const warning of result.warnings || []) if (warning.message) companyNotices.set(company.id, [...new Set([...(companyNotices.get(company.id) || []), `${warning.message}${warning.operationIds?.length ? ` (${warning.operationIds.length} operaciones)` : ""}`])])
         const changed = new Map(result.records.map((r) => [`${r.collection}\u0000${r.id}`, r]))
         records = [...records.filter((r) => !changed.has(`${r.collection}\u0000${r.id}`)), ...result.records]
@@ -133,11 +192,13 @@ function schedule() {
     publish({ status: "error", pending: pending.size, message: lastError.message })
   }).finally(() => { running = null; if (pending.size && !lastError) schedule() })
 }
-export async function flushModuleStorage() {
+export async function flushModuleStorage(scope?: ModuleScope) {
+  if (scope) assertModuleScope(scope)
   if (!connected) return
   schedule()
   while (running) await running
   if (lastError) throw lastError
+  if (scope) assertModuleScope(scope)
 }
 export async function retryModuleStorage() { lastError = null; schedule(); await flushModuleStorage() }
 
@@ -170,9 +231,5 @@ const companyStorage: Storage = {
   clear() { throw new Error("No se permite borrar la empresa desde el almacenamiento del navegador.") },
 }
 export function getModuleStorage(): Storage {
-  if (connected) return companyStorage
-  if (typeof window === "undefined") return companyStorage
-  // Local demo is an explicit build mode, never a fallback after an API error.
-  if (process.env.NEXT_PUBLIC_PLD_MODE === "demo") return window.localStorage
-  return companyStorage
+  return captureModuleScope().storage
 }

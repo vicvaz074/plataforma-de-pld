@@ -22,7 +22,8 @@ import { getModuleStorage } from "@/lib/pilot/module-storage"
 import { usePilot } from "@/components/pilot/pilot-provider"
 import { PATH_MODULES, sessionCan } from "@/lib/pilot/contracts"
 import { countStoredRecords as countRecords, readActiveModuleOperations } from "@/lib/pld/module-continuity"
-import { normalizeEbrEvaluations } from "@/lib/pld/integration-records"
+import { getIntegrationClient, normalizeEbrEvaluations, type IntegrationClient } from "@/lib/pld/integration-records"
+import { currentStoredEbrRisk } from "@/lib/pld/ebr-review-state"
 
 type Snapshot = {
   sujetos: number
@@ -55,15 +56,20 @@ const countStoredRecords = (value: unknown, arrayKeys: string[] = []) => {
   return countRecords(value, arrayKeys)
 }
 
-const readSnapshot = (): Snapshot => ({
+const readSnapshot = (): Snapshot => {
+  const rawClients=parseLocalStorageValue("kyc_expedientes_detalle"),clients=Array.isArray(rawClients)?rawClients.map(getIntegrationClient).filter((client):client is IntegrationClient=>Boolean(client)):[]
+  let history:unknown=null
+  try{history=JSON.parse(getModuleStorage().getItem("pld-pep-search-history") || "[]")}catch{/* Unknown PEP state cannot confirm a current approval. */}
+  return ({
   sujetos: countStoredRecords(parseLocalStorageValue("registro-sat-data"), ["sujetosRegistrados", "tenants"]),
   expedientes: countStoredRecords(parseLocalStorageValue("kyc_expedientes_detalle"), ["expedientes", "items"]),
   operaciones: readActiveModuleOperations(getModuleStorage()).length,
-  ebr: normalizeEbrEvaluations(parseLocalStorageValue("ebr_evaluaciones")).filter((item) => !item.archivedAt && item.workflow?.status === "approved").length,
+  ebr: normalizeEbrEvaluations(parseLocalStorageValue("ebr_evaluaciones")).filter((item) => currentStoredEbrRisk(item,clients.find((client)=>client.id===(item.expedienteId||item.clientId))??null,history)).length,
   evidencias: countStoredRecords(parseLocalStorageValue("pld-evidences-documents"), ["documents", "items"]),
   paquetesSat: countStoredRecords(parseLocalStorageValue("pld-sat-output-packages"), ["packages", "paquetes", "items"]),
   pepConsultas: countStoredRecords(parseLocalStorageValue("pld-pep-search-history"), ["items"]),
-})
+  })
+}
 
 const statusTone = {
   bloqueado: "bg-rose-50 text-rose-700 border-rose-200",

@@ -1,4 +1,6 @@
 "use client"
+import { DocumentLink } from "@/components/pld/document-link"
+import { serializeCsv } from "@/lib/pld/csv"
 import { getModuleStorage } from "@/lib/pilot/module-storage"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
@@ -1099,21 +1101,19 @@ export default function AuditoriaVerificacionPage() {
   }
 
   const exportAuditsToExcel = () => {
-    const header = "ID,Fecha,Alcance,Hallazgos,Responsable,Estatus\n"
     const rows = auditLog
       .map((record) =>
         [
           record.id,
           format(record.date, "yyyy-MM-dd"),
           record.scope.join(" | "),
-          record.findings.replace(/\n/g, " "),
+          record.findings,
           record.responsible,
           record.status,
-        ].join(","),
+        ],
       )
-      .join("\n")
 
-    const csvContent = `${header}${rows}`
+    const csvContent = serializeCsv([["ID", "Fecha", "Alcance", "Hallazgos", "Responsable", "Estatus"], ...rows])
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
@@ -1376,13 +1376,13 @@ export default function AuditoriaVerificacionPage() {
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
-                              {evidence.url ? <a
+                              {evidence.url ? <DocumentLink
                                 href={evidence.url}
                                 download={evidence.fileName}
                                 className="text-xs font-medium text-primary hover:underline"
                               >
                                 Descargar
-                              </a> : <span className="text-xs text-amber-700">Archivo temporal no disponible; vuelve a adjuntarlo</span>}
+                              </DocumentLink> : <span className="text-xs text-amber-700">Archivo temporal no disponible; vuelve a adjuntarlo</span>}
                               <Button
                                 variant="ghost"
                                 size="sm"

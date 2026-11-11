@@ -18,3 +18,13 @@ export function mergeClientProfile(raw: string | null, clientId: string, profile
   return { schemaVersion: 3, legacyUnassigned: record.legacyUnassigned ?? (record.schemaVersion !== 3 && Object.keys(record).length ? record : undefined),
     profiles: { ...(record.profiles || {}), [clientId]: { ...profile, expedienteId: clientId } } }
 }
+
+/** Commit a finished file read against the latest profile, never its pre-await UI snapshot. */
+export function appendClientProfileDocument(storage: Pick<Storage, "getItem" | "setItem">, key: string, clientId: string, document: Profile, trace: Profile) {
+  const raw = storage.getItem(key)
+  const latest = readClientProfile(raw, clientId)
+  if (latest.documentos !== undefined && !Array.isArray(latest.documentos) || latest.trazabilidad !== undefined && !Array.isArray(latest.trazabilidad)) throw new Error("El expediente necesita revisión antes de agregar archivos.")
+  const next = { ...latest, documentos: [...(latest.documentos || []), document], trazabilidad: [trace, ...(latest.trazabilidad || [])], validation: null }
+  storage.setItem(key, JSON.stringify(mergeClientProfile(raw, clientId, next)))
+  return next
+}

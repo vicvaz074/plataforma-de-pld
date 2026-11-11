@@ -1,5 +1,8 @@
 "use client"
-import { getModuleStorage, canWriteModuleStorage, getPilotSession, getActiveCompany } from "@/lib/pilot/module-storage"
+import { DocumentLink } from "@/components/pld/document-link"
+import { resolveSafeDocumentHref } from "@/lib/pld/document-links"
+import { serializeCsv } from "@/lib/pld/csv"
+import { getModuleStorage, canWriteModuleStorage, getPilotSession, getActiveCompany, captureModuleScope, assertModuleScope, isModuleScopeCurrent, type ModuleScope } from "@/lib/pilot/module-storage"
 import { sessionCan } from "@/lib/pilot/contracts"
 
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -604,25 +607,25 @@ export default function EvidenciasTrazabilidadPage() {
     setFormState((prev) => ({ ...prev, [field]: value }))
   }
 
-  const commitEvidence = async (nextDocuments: EvidenceDocument[], nextLogs: TraceLogEntry[]) => {
-    const before = [STORAGE_KEYS.documents, STORAGE_KEYS.logs, STORAGE_KEYS.snapshot].map((key) => [key, getModuleStorage().getItem(key)] as const)
-    try {
-      getModuleStorage().setItem(STORAGE_KEYS.documents, JSON.stringify(nextDocuments))
-      getModuleStorage().setItem(STORAGE_KEYS.logs, JSON.stringify(nextLogs))
-      getModuleStorage().setItem(STORAGE_KEYS.snapshot, JSON.stringify({ documentos: nextDocuments, logs: nextLogs }))
-      await flushModuleStorage()
-      setDocuments(nextDocuments)
-      setLogs(nextLogs)
-      notifyPldIntegrationChange(STORAGE_KEYS.documents)
-    } catch (error) {
-      for (const [key, value] of before) {
-        try { if (value === null) getModuleStorage().removeItem(key); else getModuleStorage().setItem(key, value) } catch { /* original remains in memory for recovery */ }
-      }
-      throw error
-    }
+  const commitEvidence = async (scope: ModuleScope, update: (documents: EvidenceDocument[], logs: TraceLogEntry[]) => { documents: EvidenceDocument[]; logs: TraceLogEntry[] }) => {
+    assertModuleScope(scope)
+    const latestDocuments = parseStoredArray(scope.storage.getItem(STORAGE_KEYS.documents)) as EvidenceDocument[]
+    const latestLogs = parseStoredArray(scope.storage.getItem(STORAGE_KEYS.logs)) as TraceLogEntry[]
+    const next = update(latestDocuments, latestLogs)
+    scope.storage.setItem(STORAGE_KEYS.documents, JSON.stringify(next.documents))
+    scope.storage.setItem(STORAGE_KEYS.logs, JSON.stringify(next.logs))
+    scope.storage.setItem(STORAGE_KEYS.snapshot, JSON.stringify({ documentos: next.documents, logs: next.logs }))
+    // Failed saves remain pending for retry/conflict recovery. Never roll a
+    // pre-await snapshot back into a newer company or a concurrent edit.
+    await flushModuleStorage(scope)
+    assertModuleScope(scope)
+    setDocuments(parseStoredArray(scope.storage.getItem(STORAGE_KEYS.documents)) as EvidenceDocument[])
+    setLogs(parseStoredArray(scope.storage.getItem(STORAGE_KEYS.logs)) as TraceLogEntry[])
+    notifyPldIntegrationChange(STORAGE_KEYS.documents)
   }
 
   const handleUpload = async () => {
+    const scope = captureModuleScope()
     if (!storageReady || !formState.file || !formState.documentType || !formState.expedienteId || !formState.submodule || !formState.documentDate) {
       toast({ title: "Campos incompletos", description: "Selecciona expediente, tipo, fecha y archivo antes de guardar.", variant: "destructive" })
       return
@@ -634,10 +637,13 @@ export default function EvidenciasTrazabilidadPage() {
     }
     try {
       const fileData = await readFileAsDataUrl(selectedFile)
+      assertModuleScope(scope)
       const digest = await crypto.subtle.digest("SHA-256", await selectedFile.arrayBuffer())
+      assertModuleScope(scope)
       const sha256 = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("")
       const timestamp = new Date().toISOString()
-      const actor = getModuleStorage().getItem("userEmail") || getModuleStorage().getItem("userName") || formState.user || "Usuario en sesión"
+      const actor = scope.storage.getItem("userEmail") || scope.storage.getItem("userName") || formState.user || "Usuario en sesión"
+      await commitEvidence(scope, (documents, logs) => {
       const existing = documents.find((doc) => doc.expedienteId === formState.expedienteId && doc.module === selectedModule && doc.documentType === formState.documentType && !doc.archived)
       const id = existing?.id || randomId()
       const next: EvidenceDocument = {
@@ -655,39 +661,54 @@ export default function EvidenciasTrazabilidadPage() {
         sourceOverride: Boolean(existing?.source && existing.source !== "manual"), reviewStatus: "pending", reviewNote: undefined, reviewedHash: undefined, reviewedAt: undefined,
       }
       const log: TraceLogEntry = { id: randomId(), documentId: id, expedienteId: next.expedienteId, module: next.module, action: "upload", timestamp, user: actor, details: existing ? "Nueva versión: archivo anterior conservado" : "Carga inicial de documento" }
-      await commitEvidence([next, ...documents.filter((doc) => doc.id !== id)], [log, ...logs])
+      return { documents: [next, ...documents.filter((doc) => doc.id !== id)], logs: [log, ...logs] }
+      })
+      assertModuleScope(scope)
       toast({ title: "Evidencia guardada", description: "Archivo conservado con hash, historial y revisión pendiente." })
       setFormState({ expedienteId: "", submodule: "", documentType: "", title: "", documentDate: "", activityDate: "", auditPeriodYear: "", user: "", notes: "", file: null })
     } catch (error) {
-      toast({ title: "No se guardó la evidencia", description: error instanceof Error ? error.message : "Conserva el archivo y vuelve a intentarlo.", variant: "destructive" })
+      if (isModuleScopeCurrent(scope)) toast({ title: "No se guardó la evidencia", description: error instanceof Error ? error.message : "Conserva el archivo y vuelve a intentarlo.", variant: "destructive" })
     }
   }
 
   const restoreVersion = async (doc: EvidenceDocument, version: VersionEntry) => {
+    const scope = captureModuleScope()
     if (!version.fileData) return
-    const actor = getModuleStorage().getItem("userEmail") || getModuleStorage().getItem("userName") || "Usuario en sesión"
+    const actor = scope.storage.getItem("userEmail") || scope.storage.getItem("userName") || "Usuario en sesión"
     const timestamp = new Date().toISOString()
+    try {
+    await commitEvidence(scope, (documents, logs) => {
+    const latest = documents.find((item) => item.id === doc.id)
+    if (!latest) throw new Error("La evidencia ya no está disponible; recarga el repositorio.")
+    doc = latest
     const restored: EvidenceDocument = { ...doc, fileData: version.fileData, fileName: version.fileName || doc.fileName,
       fileSize: version.fileSize ?? doc.fileSize, fileType: version.fileType || doc.fileType, sha256: version.sha256,
       documentDate: version.documentDate || doc.documentDate, version: doc.version + 1, uploadDate: timestamp,
       versionHistory: [snapshotEvidenceVersion(doc, "Restauración de v" + version.version), ...doc.versionHistory],
       reviewStatus: "pending", reviewNote: undefined, reviewedHash: undefined, reviewedAt: undefined, user: actor }
-    try {
-      await commitEvidence(documents.map((item) => item.id === doc.id ? restored : item), [{id: randomId(),documentId:doc.id,expedienteId:doc.expedienteId,module:doc.module,action:"upload",timestamp,user:actor,details:"Restaurada v" + version.version + " como nueva versión"}, ...logs])
+      return { documents: documents.map((item) => item.id === doc.id ? restored : item), logs: [{id: randomId(),documentId:doc.id,expedienteId:doc.expedienteId,module:doc.module,action:"upload",timestamp,user:actor,details:"Restaurada v" + version.version + " como nueva versión"}, ...logs] }
+      })
+      assertModuleScope(scope)
       toast({ title: "Versión restaurada", description: "La restauración creó una versión nueva; las anteriores se conservan." })
-    } catch (error) { toast({ title: "No se restauró", description: error instanceof Error ? error.message : "Reintenta guardar.", variant:"destructive" }) }
+    } catch (error) { if (isModuleScopeCurrent(scope)) toast({ title: "No se restauró", description: error instanceof Error ? error.message : "Reintenta guardar.", variant:"destructive" }) }
   }
 
   const reviewEvidence = async (doc: EvidenceDocument, status: "approved" | "rejected") => {
+    const scope = captureModuleScope()
     if (!canReview || !doc.sha256) return
     const note = status === "rejected" ? window.prompt("Motivo de rechazo")?.trim() : "Archivo revisado"
     if (!note) return
-    const actor = getModuleStorage().getItem("userEmail") || "Usuario en sesión"
+    const actor = scope.storage.getItem("userEmail") || "Usuario en sesión"
     const at = new Date().toISOString()
     try {
-      await commitEvidence(documents.map((item) => item.id === doc.id ? { ...item, reviewStatus: status, reviewNote: note, reviewedHash: doc.sha256, reviewedAt: at } : item), [{ id:randomId(),documentId:doc.id,expedienteId:doc.expedienteId,module:doc.module,action:"view",timestamp:at,user:actor,details:`Revisión ${status}: ${note}` }, ...logs])
+      await commitEvidence(scope, (documents, logs) => {
+        const latest = documents.find((item) => item.id === doc.id)
+        if (!latest || latest.fileData !== doc.fileData || latest.sha256 !== doc.sha256 || latest.version !== doc.version) throw new Error("La versión cambió; revisa la evidencia actual antes de decidir.")
+        return { documents: documents.map((item) => item.id === doc.id ? { ...item, reviewStatus: status, reviewNote: note, reviewedHash: doc.sha256, reviewedAt: at } : item), logs: [{ id:randomId(),documentId:doc.id,expedienteId:doc.expedienteId,module:doc.module,action:"view",timestamp:at,user:actor,details:`Revisión ${status}: ${note}` }, ...logs] }
+      })
+      assertModuleScope(scope)
       toast({title:status === "approved" ? "Revisión aprobada" : "Revisión rechazada",description:"La decisión corresponde al hash de esta versión."})
-    } catch (error) { toast({title:"No se guardó la revisión",description:error instanceof Error ? error.message : "Reintenta.",variant:"destructive"}) }
+    } catch (error) { if (isModuleScopeCurrent(scope)) toast({title:"No se guardó la revisión",description:error instanceof Error ? error.message : "Reintenta.",variant:"destructive"}) }
   }
 
   const registerLog = (
@@ -714,16 +735,19 @@ export default function EvidenciasTrazabilidadPage() {
   const handleDownload = (doc: EvidenceDocument) => {
     let fileData = doc.fileData
     try { if (!fileData && doc.sourceReference) fileData = resolveEvidenceSource(getModuleStorage(), doc.sourceReference) } catch { /* keep the metadata even when the source is unavailable */ }
-    if (!fileData) {
+    const safeHref = resolveSafeDocumentHref(fileData, { mode: getPilotSession() ? "cloud" : process.env.NEXT_PUBLIC_PLD_MODE === "demo" ? "demo" : "cloud",
+      companyId: getActiveCompany()?.id, origin: window.location.origin, purpose: "download",
+      generated: !doc.fileData && Boolean(doc.sourceReference && ["record", "sat-xml"].includes(doc.sourceReference.kind)) })
+    if (!safeHref) {
       toast({
         title: "Archivo no disponible",
-        description: "No se encontró el archivo en el módulo de origen. La referencia y su historial se conservan.",
+        description: "No se encontró una referencia documental segura en el módulo de origen. Vuelve a cargar el archivo; la referencia y su historial se conservan.",
         variant: "destructive",
       })
       return
     }
     const link = document.createElement("a")
-    link.href = fileData
+    link.href = safeHref
     link.download = doc.fileName
     document.body.appendChild(link)
     link.click()
@@ -732,14 +756,16 @@ export default function EvidenciasTrazabilidadPage() {
   }
 
   const handleArchive = async (doc: EvidenceDocument) => {
+    const scope = captureModuleScope()
     const archiveState = !doc.archived
     if (!window.confirm(archiveState ? "¿Archivar esta evidencia? El archivo y sus versiones se conservarán." : "¿Reactivar esta evidencia?")) return
     const log: TraceLogEntry = { id:randomId(),documentId:doc.id,expedienteId:doc.expedienteId,module:doc.module,action:"archive",
       timestamp:new Date().toISOString(),user:sessionOperator || getModuleStorage().getItem("userEmail") || "Usuario en sesión",details:archiveState ? "Documento archivado" : "Documento reactivado" }
     try {
-      await commitEvidence(documents.map((item) => item.id === doc.id ? {...item,archived:archiveState} : item),[log,...logs])
+      await commitEvidence(scope, (documents, logs) => ({ documents: documents.map((item) => item.id === doc.id ? {...item,archived:archiveState} : item), logs: [log,...logs] }))
+      assertModuleScope(scope)
       toast({title:archiveState ? "Documento archivado" : "Documento reactivado",description:"Archivo, versiones y bitácora conservados."})
-    } catch (error) { toast({title:"No se guardó el cambio",description:error instanceof Error ? error.message : "Reintenta sin cerrar la página.",variant:"destructive"}) }
+    } catch (error) { if (isModuleScopeCurrent(scope)) toast({title:"No se guardó el cambio",description:error instanceof Error ? error.message : "Reintenta sin cerrar la página.",variant:"destructive"}) }
   }
 
   const exportExpedienteAsCSV = (expedienteId: string) => {
@@ -779,7 +805,7 @@ export default function EvidenciasTrazabilidadPage() {
         getRetentionStatus(doc).label,
       ]),
     ]
-    const csvContent = rows.map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n")
+    const csvContent = serializeCsv(rows)
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const link = document.createElement("a")
     link.href = URL.createObjectURL(blob)
@@ -1188,7 +1214,7 @@ export default function EvidenciasTrazabilidadPage() {
                                 {!doc.fileData && <p className="text-amber-600">{doc.sourceReference?.kind === "record" ? "Registro vinculado; no acredita documentación cargada" : doc.sourceReference ? "Archivo vinculado al módulo de origen" : "Archivo pendiente"}</p>}
                               </div>
                               <div className="flex flex-wrap items-center gap-2 pt-2">
-                                {doc.fileData && <Button size="sm" variant="outline" asChild><a href={doc.fileData} target="_blank" rel="noreferrer">Ver archivo</a></Button>}
+                                {doc.fileData && <Button size="sm" variant="outline" asChild><DocumentLink href={doc.fileData} target="_blank" rel="noreferrer">Ver archivo</DocumentLink></Button>}
                                 <Button size="sm" variant="outline" onClick={() => handleDownload(doc)}>
                                   <Download className="mr-2 h-4 w-4" /> {doc.sourceReference?.kind === "record" ? "Exportar registro JSON" : "Descargar"}
                                 </Button>

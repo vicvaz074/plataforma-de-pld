@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "davara-pld-pilot",
+  "main": "workers/index.ts",
+  "compatibility_date": "2026-11-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "assets": {"directory": "./out", "binding": "ASSETS", "run_worker_first": ["/api/*"]},
+  "vars": {"ENVIRONMENT": "local", "BETTER_AUTH_URL": "http://127.0.0.1:8787"},
+  "d1_databases": [{"binding": "DB", "database_name": "davara-pld-pilot", "database_id": "local-pilot-database", "migrations_dir": "migrations"}],
+  "r2_buckets": [{"binding": "EVIDENCE_BUCKET", "bucket_name": "davara-pld-pilot-evidence"}],
+  "queues": {"producers": [{"binding":"IMPORT_QUEUE","queue":"davara-pld-imports-local"}],"consumers":[{"queue":"davara-pld-imports-local","max_batch_size":1,"max_retries":5,"dead_letter_queue":"davara-pld-imports-local-dead"}]},
+  "triggers": {"crons":["*/5 * * * *"]},
+  "observability": {"enabled": true},
+  "env": {
+    "preview": {
+      "name": "davara-pld-preview",
+      "vars": {"ENVIRONMENT": "preview", "BETTER_AUTH_URL": "https://codex-piloto-real-multiempresa.plataforma-de-pld.pages.dev", "BOOTSTRAP_EMAIL":"qa.pilot@example.test"},
+      "d1_databases": [{"binding": "DB", "database_name": "davara-pld-preview", "database_id": "a116908e-7e32-46b3-97d1-2f36c5d69d0c", "migrations_dir": "migrations"}],
+      "r2_buckets": [{"binding": "EVIDENCE_BUCKET", "bucket_name": "davara-pld-preview-evidence"}],
+      "queues": {"producers": [{"binding":"IMPORT_QUEUE","queue":"davara-pld-preview-imports"}],"consumers":[{"queue":"davara-pld-preview-imports","max_batch_size":1,"max_retries":5,"dead_letter_queue":"davara-pld-preview-imports-dead"}]}
+    },
+    "production": {
+      "name": "davara-pld",
+      "workers_dev": false,
+      "vars": {"ENVIRONMENT": "production", "BETTER_AUTH_URL": "https://plataforma-de-pld.pages.dev", "BOOTSTRAP_EMAIL":"vvazquez@davara.com.mx"},
+      "d1_databases": [{"binding": "DB", "database_name": "davara-pld", "database_id": "da90f3e4-0903-486f-8348-307c960b47d3", "migrations_dir": "migrations"}],
+      "r2_buckets": [{"binding": "EVIDENCE_BUCKET", "bucket_name": "davara-pld-evidence"}],
+      "queues": {"producers": [{"binding":"IMPORT_QUEUE","queue":"davara-pld-imports"}],"consumers":[{"queue":"davara-pld-imports","max_batch_size":1,"max_retries":5,"dead_letter_queue":"davara-pld-imports-dead"}]}
+    }
+  }
+}

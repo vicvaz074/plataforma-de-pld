@@ -2,12 +2,14 @@ import { auditStatement, requireCompany } from "./access"
 import { body, identifier, json } from "./http"
 import { validateRecordPayload } from "./records"
 import { ApiError, type PilotActor, type PilotEnv } from "./types"
+import { validateDocumentReferences } from "./record-security"
+import { getPrivateDocumentReference } from "../lib/pld/document-links"
 
 type Version={id:string;documentId:string;objectKey:string;version:number;sha256:string;fileName:string;mimeType:string;size:number}
 const collection="kyc_expedientes_detalle"
 function object(value:unknown):value is Record<string,unknown>{return Boolean(value&&typeof value==="object"&&!Array.isArray(value))}
 function fileReference(value:string,origin:string){
-  try{const url=new URL(value,origin),match=url.pathname.match(/^\/api\/v1\/companies\/([^/]+)\/files\/([^/]+)$/);return match?{companyId:decodeURIComponent(match[1]),versionId:decodeURIComponent(match[2])}:undefined}catch{return undefined}
+  try{const url=new URL(value,origin),match=url.pathname.match(/^\/api\/v1\/companies\/([^/]+)\/files\/([^/]+)$/);return match?getPrivateDocumentReference(value,decodeURIComponent(match[1]),origin)||undefined:undefined}catch{return undefined}
 }
 function visit(value:unknown,consume:(value:string)=>void){if(typeof value==="string")consume(value);else if(Array.isArray(value))value.forEach((item)=>visit(item,consume));else if(object(value))Object.values(value).forEach((item)=>visit(item,consume))}
 
@@ -70,6 +72,8 @@ export async function handleExpedienteCopy(request:Request,url:URL,actor:PilotAc
   const provenance={companyId:source.id,recordId:id,revision:record.revision,copiedAt:at,copiedBy:actor.id}
   const payload={...bindSubject(rewritten),...(object(rewritten.expedienteEui)?{expedienteEui:bindSubject(rewritten.expedienteEui)}:{}),copiedFrom:provenance,actualizadoEn:at}
   validateRecordPayload(collection,id,payload)
+  validateDocumentReferences(collection,payload,target.id,env.BETTER_AUTH_URL)
+  for(const snapshot of history)validateDocumentReferences(collection,rewrite(JSON.parse(snapshot.payload)),target.id,env.BETTER_AUTH_URL)
   const revision=record.revision+1,guard=crypto.randomUUID()
   statements.push(env.DB.prepare("INSERT INTO pld_revision_guard(id,valid) VALUES(?,CASE WHEN (SELECT revision FROM pld_records WHERE companyId=? AND collection=? AND id=? AND deleted=0)=? AND NOT EXISTS(SELECT 1 FROM pld_records WHERE companyId=? AND collection=? AND id=?) THEN 1 ELSE 0 END)").bind(guard,source.id,collection,id,expectedRevision,target.id,collection,id))
   try{

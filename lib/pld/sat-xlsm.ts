@@ -1,5 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate"
 import { normalizeXiiFields } from "./sat-xii-rules"
+import { isSatCellAddress, normalizeSatFieldValues } from "./sat-field-values"
 
 import {
   BENEFICIARY_PERSON_TYPE_FIELD_ID,
@@ -535,23 +536,24 @@ export function fillSatXlsmTemplate(
 ): SatFilledWorkbookResult {
   const zip = unzipSync(input)
   const workbook = parseWorkbook(zip)
-  const layout = options.layout ? normalizeSatXlsmLayout(options.layout) : undefined
+  // Even the legacy no-layout caller writes only fields identified in the book.
+  const layout = options.layout ? normalizeSatXlsmLayout(options.layout) : extractSatXlsmLayoutFromBuffer(input, options.template)
   const styleKinds = parseWorkbookStyleKinds(readZipText(zip, "xl/styles.xml"))
   let postalCatalog: Map<string, PostalCatalogEntry> | undefined
   const getPostalCatalog = () => {
     postalCatalog = postalCatalog || extractPostalCatalog(zip, workbook)
     return postalCatalog
   }
-  const normalizedValues = Object.fromEntries(
+  const normalizedValues = normalizeSatFieldValues(layout.sections.flatMap((section) => section.fields), Object.fromEntries(
     Object.entries(options.values).map(([key, value]) => [key, normalizeString(value)]),
-  )
+  ))
   const activeValues = layout
     ? pruneInactiveSatFieldValues({
         fields: layout.sections.flatMap((section) => section.fields),
         values: normalizedValues,
       })
     : normalizedValues
-  const cellValues = resolveWorkbookCellValues(activeValues, layout)
+  const cellValues = resolveWorkbookCellValues(activeValues, layout, Boolean(options.layout))
   const writtenCells: string[] = []
 
   for (const sheet of workbook.sheets) {
@@ -567,7 +569,7 @@ export function fillSatXlsmTemplate(
     zip[sheet.path] = strToU8(updatedXml)
   }
 
-  const missingRequiredFields = layout
+  const missingRequiredFields = options.layout
     ? layout.sections
         .flatMap((section) => section.fields)
         .filter((field) => isSatXlsmFieldRequired(field, activeValues))
@@ -579,7 +581,7 @@ export function fillSatXlsmTemplate(
         })
         .map((field) => field.id)
     : []
-  if (layout) missingRequiredFields.push(...getSatOperationBranchMissingLabels(layout.templateId, activeValues, layout.sections.flatMap((section) => section.fields)))
+  if (options.layout) missingRequiredFields.push(...getSatOperationBranchMissingLabels(layout.templateId, activeValues, layout.sections.flatMap((section) => section.fields)))
 
   return {
     status: missingRequiredFields.length ? "blocked" : "filled",
@@ -598,9 +600,9 @@ export function satFieldValuesToWorkbookCells(
   const cells: Record<string, string> = {}
   const normalizedLayout = normalizeSatXlsmLayout(layout)
   const fields = normalizedLayout.sections.flatMap((section) => section.fields)
-  const normalizedValues = Object.fromEntries(
+  const normalizedValues = normalizeSatFieldValues(fields, Object.fromEntries(
     Object.entries(values).map(([key, value]) => [key, normalizeString(value)]),
-  )
+  ))
   const activeValues = pruneInactiveSatFieldValues({ fields, values: normalizedValues })
   const knownCells = new Set(fields.map((field) => `${field.sheetName}!${field.cell}`))
 
@@ -1967,6 +1969,7 @@ function fieldPriority(field: SatXlsmField) {
 function resolveWorkbookCellValues(
   values: Record<string, string | number | boolean | null | undefined>,
   layout?: SatXlsmLayout,
+  useFieldTypes = true,
 ): Map<string, Map<string, ResolvedWorkbookCellValue>> {
   const result = new Map<string, Map<string, ResolvedWorkbookCellValue>>()
   const fieldMap = new Map<string, SatXlsmField>()
@@ -1992,13 +1995,13 @@ function resolveWorkbookCellValues(
       sheetName = field.sheetName
       cell = field.cell
     }
-    if (!sheetName || !cell) continue
+    if (!sheetName || !isSatCellAddress(cell.toUpperCase()) || !field) throw new Error("La celda SAT no corresponde al formato seleccionado.")
     if (!result.has(sheetName)) result.set(sheetName, new Map())
     const value = normalizeWorkbookValue(key, rawValue, field)
     result.get(sheetName)?.set(cell.toUpperCase(), {
       value,
-      dataType: workbookDataTypeForField(field),
-      writeDateAsText: shouldWriteDateAsText(field),
+      dataType: useFieldTypes ? workbookDataTypeForField(field) : undefined,
+      writeDateAsText: useFieldTypes && shouldWriteDateAsText(field),
     })
   }
   return result
@@ -2096,7 +2099,7 @@ function setCellNumber(xml: string, cellRef: string, value: string): string {
     const attrs = existing[1] || existing[2] || ""
     const style = getAttr(attrs, "s")
     const styleAttr = style ? ` s="${style}"` : ""
-    return xml.replace(cellRegex, `<c r="${cellRef}"${styleAttr}><v>${escapeXml(value)}</v></c>`)
+    return xml.replace(cellRegex, () => `<c r="${cellRef}"${styleAttr}><v>${escapeXml(value)}</v></c>`)
   }
 
   const cellXml = `<c r="${cellRef}"><v>${escapeXml(value)}</v></c>`
@@ -2120,7 +2123,7 @@ function setCellInlineString(xml: string, cellRef: string, value: string): strin
     const attrs = existing[1] || existing[2] || ""
     const style = getAttr(attrs, "s")
     const styleAttr = style ? ` s="${style}"` : ""
-    return xml.replace(cellRegex, `<c r="${cellRef}"${styleAttr} t="inlineStr"><is><t>${escaped}</t></is></c>`)
+    return xml.replace(cellRegex, () => `<c r="${cellRef}"${styleAttr} t="inlineStr"><is><t>${escaped}</t></is></c>`)
   }
 
   const cellXml = `<c r="${cellRef}" t="inlineStr"><is><t>${escaped}</t></is></c>`

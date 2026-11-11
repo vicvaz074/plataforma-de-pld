@@ -10,8 +10,9 @@ import { isSatXlsmFieldRequired, pruneInactiveSatFieldValues } from "./ui-workfl
 import { getSatOperationBranchMissingLabels } from "./sat-operation-branches"
 import { BENEFICIARY_PERSON_TYPE_FIELD_ID, BENEFICIARY_REPEAT_MODE_FIELD_ID, BENEFICIARY_TRUST_MODE_FIELD_ID, PERSONA_OBJETO_DOMICILIO_FIELD_ID, PERSONA_OBJETO_TYPE_FIELD_ID } from "./sat-field-controls"
 import type { SatTemplateCatalogItem, SatXlsmField, SatXlsmLayout } from "./types"
+import { assertImportFileLimits, assertValidatedTabularWorkbookLimits, preflightCsvTable, IMPORT_LIMITS } from "./import-workbook-limits"
 
-export const IMPORT_LIMITS = { bytes: 10 * 1024 * 1024, uncompressedBytes: 80 * 1024 * 1024, rows: 2000, pages: 50 } as const
+export { assertImportFileLimits, IMPORT_LIMITS } from "./import-workbook-limits"
 export type ImportRowStatus = "valid" | "incomplete" | "duplicate" | "rejected"
 export interface OperationImportRow {
   id: string; rowNumber: number; status: ImportRowStatus; issues: string[];
@@ -51,24 +52,6 @@ export function getImportSatTemplates(): SatTemplateCatalogItem[] {
 export async function hashImportBytes(bytes: Uint8Array) {
   const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(bytes).buffer)
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("")
-}
-
-/** Inspect ZIP central-directory sizes before invoking the workbook reader. */
-export function assertImportFileLimits(bytes: Uint8Array, fileName: string) {
-  if (!bytes.length || bytes.length > IMPORT_LIMITS.bytes) throw new Error("El archivo debe tener contenido y pesar hasta 10 MB.")
-  if (!/\.(xlsx|xlsm|csv)$/i.test(fileName)) throw new Error("Selecciona un archivo .xlsx, .xlsm o .csv.")
-  if (/\.csv$/i.test(fileName)) return
-  let total = 0, entries = 0
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  for (let offset = 0; offset + 46 <= bytes.length; offset++) {
-    if (view.getUint32(offset, true) !== 0x02014b50) continue
-    const size = view.getUint32(offset + 24, true)
-    if (size === 0xffffffff) throw new Error("No se admiten libros ZIP64 en esta importación.")
-    total += size; entries++
-    if (total > IMPORT_LIMITS.uncompressedBytes || entries > 5000) throw new Error("El libro excede el tamaño expandido permitido.")
-    offset += 45 + view.getUint16(offset + 28, true) + view.getUint16(offset + 30, true) + view.getUint16(offset + 32, true)
-  }
-  if (!entries) throw new Error("El archivo no contiene una estructura Excel válida.")
 }
 
 function isoDate(value: unknown): string {
@@ -231,31 +214,42 @@ function satPreview(input: { workbook: XLSX.WorkBook; fileName: string; fileHash
   return buildRow({...input,values:rowValues,mapping,row:1,sheet:"SAT",sat:{templateId:input.template.templateId,templateFile:input.template.officialXlsmName,activity,fields:active,cells:satFieldValuesToWorkbookCells(active,layout),missing,paymentApplicable:all.some((field) => /instrumentomonetario/.test(label(field)))}})
 }
 
-export function readOperationImportWorkbook(bytes:Uint8Array,fileName:string):XLSX.WorkBook {
+export function readOperationImportWorkbook(bytes:Uint8Array,fileName:string,options: {tabular?:boolean} = {}):XLSX.WorkBook {
   assertImportFileLimits(bytes,fileName)
   if(/\.csv$/i.test(fileName)){
     let content:string
     try{content=new TextDecoder("utf-8",{fatal:true}).decode(bytes)}catch{content=new TextDecoder("windows-1252").decode(bytes)}
-    return XLSX.read(content,{type:"string",raw:true,cellFormula:false,cellHTML:false,bookVBA:false,sheetRows:IMPORT_LIMITS.rows+12})
+    const checked = preflightCsvTable(content)
+    return XLSX.read(checked.content,{type:"string",FS:checked.delimiter,raw:true,cellFormula:false,cellHTML:false,bookVBA:false,sheetRows:IMPORT_LIMITS.rows+12})
   }
+  if (options.tabular) assertValidatedTabularWorkbookLimits(bytes)
   return XLSX.read(bytes,{type:"array",raw:true,cellFormula:false,cellHTML:false,bookVBA:false,sheetRows:IMPORT_LIMITS.rows + 12})
 }
 
 export async function parseOperationImport(input: { bytes:Uint8Array;fileName:string;context:OperationImportContext;existing?:readonly StoredPldOperationV3[];mapping?:ImportColumnMapping;layouts?:SatXlsmLayout[];templateId?:string }): Promise<OperationImportPreview> {
-  const workbook=readOperationImportWorkbook(input.bytes,input.fileName)
-  const fileHash = await hashImportBytes(input.bytes)
-  const existing = input.existing || []
   const templates = getImportSatTemplates()
   const namedTemplate = input.templateId ? templates.find((template) => template.templateId === input.templateId && (!input.context.activityKey || template.actividadKeys.includes(input.context.activityKey)))
     : templates.find((template) => normal(template.officialXlsmName.replace(/\.xlsm$/i,"")) === normal(input.fileName.replace(/\.(?:xlsm|xlsx)$/i,"")))
   const layout = input.layouts?.find((candidate) => candidate.templateId === namedTemplate?.templateId)
+  const workbook=readOperationImportWorkbook(input.bytes,input.fileName,{tabular:!(namedTemplate && layout)})
+  const fileHash = await hashImportBytes(input.bytes)
+  const existing = input.existing || []
   if (namedTemplate && layout) {
     if (!layout.sections.every((section) => Boolean(workbook.Sheets[section.sheetName]))) throw new Error("Las hojas del libro no corresponden al formato SAT seleccionado.")
     return {fileHash,fileName:input.fileName,templateId:namedTemplate.templateId,headers:[],mapping:{},warnings:["El libro se leyó sin ejecutar macros ni controles."],rows:[satPreview({...input,workbook,fileHash,existing,layout,template:namedTemplate})]}
   }
   const sheet = workbook.SheetNames.find((name) => !/^(combos|catalogos|catálogos)$/i.test(name))
   if (!sheet) throw new Error("El libro no contiene una hoja de datos.")
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheet],{header:1,raw:true,defval:""})
+  const worksheet = workbook.Sheets[sheet]
+  // sheet_to_json iterates the declared rectangle, including empty cells. Validate
+  // the original range before expansion; !fullref prevents sheetRows truncation
+  // from silently hiding data outside the import batch.
+  const sourceRange = String(worksheet["!fullref"] || worksheet["!ref"] || "A1")
+  if (!/^[A-Z]{1,3}[1-9]\d*(?::[A-Z]{1,3}[1-9]\d*)?$/.test(sourceRange)) throw new Error("La tabla contiene un rango de celdas no válido.")
+  const range = XLSX.utils.decode_range(sourceRange)
+  const width = range.e.c - range.s.c + 1, height = range.e.r - range.s.r + 1
+  if (width < 1 || height < 1 || range.e.c >= 16384 || range.e.r >= IMPORT_LIMITS.rows + 10 || width > IMPORT_LIMITS.columns || height > IMPORT_LIMITS.rows + 10 || width * height > IMPORT_LIMITS.cells) throw new Error("La tabla excede el límite de 2,000 filas, 128 columnas o 256,000 celdas. Divide el archivo en lotes.")
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet,{header:1,raw:true,defval:""})
   let headerIndex = matrix.slice(0,10).findIndex((row) => Object.keys(suggestImportMapping(row.map(text))).length >= 2)
   const customHeaders=headerIndex<0
   if(customHeaders)headerIndex=matrix.slice(0,10).findIndex((row)=>row.filter((value)=>typeof value==="string"&&Boolean(value.trim())&&!/^\d+(?:[.,]\d+)?$/.test(value.trim())).length>=2)

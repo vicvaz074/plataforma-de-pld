@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { SearchableSelect } from "@/components/pld/searchable-select"
 import { getIntegrationClient, type IntegrationClient } from "@/lib/pld/integration-records"
 import { flushModuleStorage } from "@/lib/pilot/module-storage"
+import { assertPepInternalRecord, assertPepSearchResponse } from "@/lib/pld/record-shapes"
 import pepCargosData from "@/public/data/pep-cargos-mx.json"
 import pepOpenSanctionsData from "@/public/data/pep-open-sanctions-mx.json"
 import pepPersonasData from "@/public/data/pep-personas-mx.json"
@@ -847,7 +848,8 @@ function normalizeQuery(query: PepSearchQuery): PepSearchQuery {
 function readInternalRecords(): ScopedPepRecord[] {
   if (typeof window === "undefined") return []
   const parsed = JSON.parse(getModuleStorage().getItem(PEP_INTERNAL_STORAGE_KEY) || "[]")
-  if (!Array.isArray(parsed) || parsed.some((item) => !isPepInternalRecord(item))) throw new Error("Las decisiones PEP guardadas no son legibles.")
+  if (!Array.isArray(parsed)) throw new Error("Las decisiones PEP guardadas no son legibles.")
+  parsed.forEach(assertPepInternalRecord)
   return parsed
 }
 
@@ -859,7 +861,8 @@ function persistInternalRecords(records: PepInternalRecord[]) {
 function readSearchHistory(): ScopedPepSearch[] {
   if (typeof window === "undefined") return []
   const parsed = JSON.parse(getModuleStorage().getItem(PEP_SEARCH_HISTORY_STORAGE_KEY) || "[]")
-  if (!Array.isArray(parsed) || parsed.some((item) => !item || typeof item !== "object" || !item.query || !Array.isArray(item.results))) throw new Error("El historial PEP guardado no es legible.")
+  if (!Array.isArray(parsed)) throw new Error("El historial PEP guardado no es legible.")
+  parsed.forEach(assertPepSearchResponse)
   return parsed
 }
 
@@ -870,11 +873,6 @@ function persistSearchHistory(history: PepSearchResponse[]) {
     return
   }
   getModuleStorage().setItem(PEP_SEARCH_HISTORY_STORAGE_KEY, JSON.stringify(history))
-}
-
-function isPepInternalRecord(value: unknown): value is PepInternalRecord {
-  const record = value as Partial<PepInternalRecord>
-  return Boolean(record?.schemaVersion === 1 && record.subjectName && record.decision && record.evidence)
 }
 
 function getCurrentUser(): string {

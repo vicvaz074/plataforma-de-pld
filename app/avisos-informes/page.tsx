@@ -1,5 +1,8 @@
 "use client"
-import { getModuleStorage } from "@/lib/pilot/module-storage"
+import { DocumentLink } from "@/components/pld/document-link"
+import { serializeCsv } from "@/lib/pld/csv"
+import { currentStoredEbrRisk } from "@/lib/pld/ebr-review-state"
+import { getModuleStorage, captureModuleScope, assertModuleScope, isModuleScopeCurrent, type ModuleScope } from "@/lib/pilot/module-storage"
 
 import type { ChangeEvent } from "react"
 import Link from "next/link"
@@ -440,6 +443,7 @@ export default function AvisosInformesPage() {
   const [expedientesEui, setExpedientesEui] = useState<ExpedienteResumen[]>([])
   const [operaciones, setOperaciones] = useState<OperacionResumen[]>([])
   const [evaluacionesEbr, setEvaluacionesEbr] = useState<EvaluacionEbrResumen[]>([])
+  const [pepWhoisHistory, setPepWhoisHistory] = useState<unknown>(null)
   const [satOutputPackages, setSatOutputPackages] = useState<SatOutputPackageResumen[]>([])
   const [satLayouts, setSatLayouts] = useState<Record<string, SatXlsmLayout>>({})
   const [selectedClientId, setSelectedClientId] = useState("__all__")
@@ -578,6 +582,8 @@ export default function AvisosInformesPage() {
     } else {
       setEvaluacionesEbr([])
     }
+    try { setPepWhoisHistory(JSON.parse(getModuleStorage().getItem("pld-pep-search-history") || "[]")) }
+    catch { setPepWhoisHistory(null) }
 
     const satPackagesRaw = getModuleStorage().getItem(SAT_OUTPUT_PACKAGES_KEY)
     if (satPackagesRaw) {
@@ -728,7 +734,8 @@ export default function AvisosInformesPage() {
         event.key === SAT_OUTPUT_PACKAGES_KEY ||
         event.key === REGISTRO_STORAGE_KEY ||
         event.key === EXPEDIENTE_STORAGE_KEY ||
-        event.key === EBR_STORAGE_KEY
+        event.key === EBR_STORAGE_KEY ||
+        event.key === "pld-pep-search-history"
       ) {
         loadIntegrationData()
       }
@@ -901,22 +908,9 @@ export default function AvisosInformesPage() {
     return sujetoRegistroSeleccionado.registroCompleto
   }, [sujetoRegistroSeleccionado])
 
-  const riskScore = useMemo(() => {
-    if (typeof evaluacionSeleccionada?.riskSummary?.score === "number") return evaluacionSeleccionada.riskSummary.score
-    if (!evaluacionSeleccionada?.riskQuestions) return null
-    return evaluacionSeleccionada.riskQuestions.reduce((acc, question) => {
-      const option = question.options.find((item) => item.value === question.selectedValue)
-      return acc + (option?.score ?? 0)
-    }, 0)
-  }, [evaluacionSeleccionada])
-
-  const riskLevel = useMemo(() => {
-    if (evaluacionSeleccionada?.riskSummary?.level) return evaluacionSeleccionada.riskSummary.level
-    if (riskScore === null) return null
-    if (riskScore <= 12) return "Bajo"
-    if (riskScore <= 20) return "Medio"
-    return "Alto"
-  }, [riskScore, evaluacionSeleccionada])
+  const currentRisk = useMemo(() => currentStoredEbrRisk(evaluacionSeleccionada,clienteSeleccionado,pepWhoisHistory,currentTime),[evaluacionSeleccionada,clienteSeleccionado,pepWhoisHistory,currentTime])
+  const riskScore = currentRisk?.score ?? null
+  const riskLevel = currentRisk?.level ?? (evaluacionSeleccionada ? "Pendiente de revisión" : null)
 
   const alerts = useMemo(() => {
     const items: { type: "warning" | "danger" | "info"; title: string; description: string }[] = []
@@ -1030,29 +1024,29 @@ export default function AvisosInformesPage() {
     }))
   }
 
-  const saveSubmission = async (nextAttachments = attachments, present = false, action = "Avance guardado") => {
+  const saveSubmission = async (scope: ModuleScope, nextAttachments: SubmissionAttachment[] | ((current: SubmissionAttachment[]) => SubmissionAttachment[]) = attachments, present = false, action = "Avance guardado") => {
+    assertModuleScope(scope)
     if (!submissionStorageReady) throw new Error("El almacenamiento de avisos no se pudo recuperar; no se sobrescribirá.")
     if(workflowReadOnly)throw new Error("Este aviso es histórico o ya fue presentado. Prepara una nueva corrección sin reutilizar su acuse.")
     if(activeSubmission && activeSubmission.operationId!==selectedOperacionId)throw new Error("Espera a que se abra el aviso de la operación seleccionada.")
-    const actor = getModuleStorage().getItem("userEmail") || getModuleStorage().getItem("userName") || "Usuario en sesión"
+    const actor = scope.storage.getItem("userEmail") || scope.storage.getItem("userName") || "Usuario en sesión"
     const at = new Date().toISOString()
     const operation = operaciones.find((item) => item.id === selectedOperacionId)
     const base=activeSubmission || (operation ? createSubmissionDraft({operation,operationType:selectedOperationType,actor,at}) : undefined)
     const id=base?.id || `draft-${selectedOperationType}`
-    const previous=submissionRecords.find((item)=>item.id===id)
+    const current = readStoredSubmissions(scope.storage.getItem(SUBMISSIONS_STORAGE_KEY))
+    const previous=current.find((item)=>item.id===id)
+    const resolvedAttachments = typeof nextAttachments === "function" ? nextAttachments(previous?.attachments || attachments) : nextAttachments
     const nextTrace = [{ id: crypto.randomUUID(), action: present ? "Presentación documentada con acuse" : action,
       user: actor, timestamp: at, details: `Folio: ${noticeForm.folio || "pendiente"}.`, noticeId: id },
-      ...(traceabilityEntries.length ? traceabilityEntries.map((entry) => ({ ...entry, timestamp: entry.timestamp.toISOString() })) : base?.trace || [])]
+      ...(previous?.trace || (traceabilityEntries.length ? traceabilityEntries.map((entry) => ({ ...entry, timestamp: entry.timestamp.toISOString() })) : base?.trace || []))]
     let submission: StoredSubmission = { ...base,schemaVersion:base?.schemaVersion || 1, id, revision: previous?.revision || 0, operationId: selectedOperacionId,
       sourceOperationRevision: sourceOperationRevision || operation?.revision || 0, operationType: selectedOperationType,
-      form: { ...noticeForm }, checklist: checklistState, evidence: evidenceState, attachments: nextAttachments,
+      form: { ...noticeForm }, checklist: checklistState, evidence: evidenceState, attachments: resolvedAttachments,
       trace: nextTrace, status: previous?.status || "draft", createdAt: previous?.createdAt || at, updatedAt: at }
-    const originalOperations = getModuleStorage().getItem(OPERACIONES_STORAGE_KEY)
-    const originalSubmissions = getModuleStorage().getItem(SUBMISSIONS_STORAGE_KEY)
-    try {
-      const current = readStoredSubmissions(originalSubmissions)
+    let confirmedOperations: StoredPldOperationV3[] | undefined
       if (present) {
-        const records = loadStoredPldOperations(getModuleStorage(), { persistMigration: false })
+        const records = loadStoredPldOperations(scope.storage, { persistMigration: false })
         if (records.parseError || records.discardedCount || records.duplicateIds.length) throw new Error("Revisa los registros inconsistentes antes de confirmar presentación.")
         const packet = satOutputPackages.find((item) => item.sourceOperationId === selectedOperacionId)
         if (!packet || packet.validation.status !== "listo") throw new Error("La salida SAT debe estar validada localmente antes de registrar el acuse.")
@@ -1060,60 +1054,66 @@ export default function AvisosInformesPage() {
         if (packet.sourceOperationRevision!==currentOperation?.revision) throw new Error("La salida SAT corresponde a una revisión anterior de la operación. Prepara y revisa nuevamente su salida antes de vincular el acuse.")
         const confirmed = confirmSubmission({ submission, operations: records.operations, actor, at, packageId: packet.id,priorSubmissions:current })
         submission = confirmed.submission
-        getModuleStorage().setItem(OPERACIONES_STORAGE_KEY, JSON.stringify(confirmed.operations))
+        confirmedOperations = confirmed.operations
       }
       const next = mergeSubmission(current, submission, previous?.revision || 0)
-      getModuleStorage().setItem(SUBMISSIONS_STORAGE_KEY, JSON.stringify(next))
-      await flushModuleStorage()
-      setSubmissionRecords(next)
+      if (confirmedOperations) scope.storage.setItem(OPERACIONES_STORAGE_KEY, JSON.stringify(confirmedOperations))
+      scope.storage.setItem(SUBMISSIONS_STORAGE_KEY, JSON.stringify(next))
+      await flushModuleStorage(scope)
+      assertModuleScope(scope)
+      const canonical = readStoredSubmissions(scope.storage.getItem(SUBMISSIONS_STORAGE_KEY))
+      const saved = canonical.find((item) => item.id === id)
+      if (!saved) throw new Error("No se recuperó el aviso guardado; conserva la captura y recarga.")
+      setSubmissionRecords(canonical)
       setActiveSubmissionId(id)
-      setAttachments(nextAttachments)
-      setTraceabilityEntries(nextTrace.map((entry) => ({ ...entry, timestamp: new Date(entry.timestamp) })))
-      setSourceOperationRevision(submission.sourceOperationRevision)
+      setAttachments(saved.attachments)
+      setTraceabilityEntries(saved.trace.map((entry) => ({ ...entry, timestamp: new Date(entry.timestamp) })))
+      setSourceOperationRevision(saved.sourceOperationRevision)
       if (present) loadIntegrationData()
       window.dispatchEvent(new CustomEvent(PLD_INTEGRATION_EVENT, { detail: { key: SUBMISSIONS_STORAGE_KEY } }))
-    } catch (error) {
-      try {
-        if (originalSubmissions === null) getModuleStorage().removeItem(SUBMISSIONS_STORAGE_KEY); else getModuleStorage().setItem(SUBMISSIONS_STORAGE_KEY, originalSubmissions)
-        if (present && originalOperations !== null) getModuleStorage().setItem(OPERACIONES_STORAGE_KEY, originalOperations)
-      } catch { /* preserve current in-memory capture for recovery */ }
-      throw error
-    }
+    // Failure preserves queued changes for retry/conflict recovery. Never restore
+    // an old snapshot through a newly selected company's mutable binding.
   }
 
   const prepareCurrentSubmission=async()=>{
+    const scope=captureModuleScope()
     if(!selectedOperation || !submissionStorageReady)return
     setSubmissionSaving(true)
     try{
-      const records=loadStoredPldOperations(getModuleStorage(),{persistMigration:false})
+      const records=loadStoredPldOperations(scope.storage,{persistMigration:false})
       const operation=records.operations.find((item)=>item.id===selectedOperation.id)
       if(!operation || records.parseError || records.discardedCount || records.duplicateIds.length)throw new Error("Revisa la operación actual antes de preparar una corrección.")
-      const current=readStoredSubmissions(getModuleStorage().getItem(SUBMISSIONS_STORAGE_KEY))
+      const current=readStoredSubmissions(scope.storage.getItem(SUBMISSIONS_STORAGE_KEY))
       const currentDraft=current.find((item)=>item.operationId===operation.id && item.status==="draft" && item.sourceOperationRevision===operation.revision && (item.preparedOperationRevision??item.sourceOperationRevision)===operation.revision)
       if(currentDraft){applyStoredSubmission(currentDraft,operation.revision);return}
       const previous=current.filter((item)=>item.operationId===operation.id && item.status==="presented").sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0] || (activeSubmission?.operationId===operation.id ? activeSubmission : undefined)
       if(operation.submission.wasEverPresented && previous?.status!=="presented")throw new Error("Falta recuperar el aviso presentado anterior y su acuse; no se fabricará un vínculo histórico.")
-      const draft=createSubmissionDraft({operation,previous,operationType:selectedOperationType,actor:getModuleStorage().getItem("userEmail") || "Usuario en sesión",at:new Date().toISOString()})
+      const draft=createSubmissionDraft({operation,previous,operationType:selectedOperationType,actor:scope.storage.getItem("userEmail") || "Usuario en sesión",at:new Date().toISOString()})
       const next=mergeSubmission(current,draft,0)
-      getModuleStorage().setItem(SUBMISSIONS_STORAGE_KEY,JSON.stringify(next))
-      await flushModuleStorage()
-      setSubmissionRecords(next);applyStoredSubmission(next.find((item)=>item.id===draft.id),operation.revision)
+      scope.storage.setItem(SUBMISSIONS_STORAGE_KEY,JSON.stringify(next))
+      await flushModuleStorage(scope)
+      assertModuleScope(scope)
+      const canonical=readStoredSubmissions(scope.storage.getItem(SUBMISSIONS_STORAGE_KEY))
+      setSubmissionRecords(canonical);applyStoredSubmission(canonical.find((item)=>item.id===draft.id),operation.revision)
       toast({title:previous?.status==="presented" ? "Borrador de corrección preparado" : "Nueva revisión preparada",description:"El aviso anterior se conserva. Folio, sello, fechas y archivos están vacíos; adjunta un acuse nuevo para confirmar."})
-    }catch(error){toast({title:"No se preparó la corrección",description:error instanceof Error ? error.message : "Conserva los datos y reintenta.",variant:"destructive"})}
-    finally{setSubmissionSaving(false)}
+    }catch(error){if(isModuleScopeCurrent(scope))toast({title:"No se preparó la corrección",description:error instanceof Error ? error.message : "Conserva los datos y reintenta.",variant:"destructive"})}
+    finally{if(isModuleScopeCurrent(scope))setSubmissionSaving(false)}
   }
 
   const handleSaveSubmission = async (present = false) => {
+    const scope=captureModuleScope()
     setSubmissionSaving(true)
     try {
-      await saveSubmission(attachments, present)
+      await saveSubmission(scope, attachments, present)
+      assertModuleScope(scope)
       toast({ title: present ? "Presentación documentada" : "Avance guardado", description: present ? "Acuse y folio vinculados a la operación; el registro es manual y no envía nada al SAT." : "Fechas, archivos y checklist quedaron guardados." })
     } catch (error) {
-      toast({ title: "No se guardó el aviso", description: error instanceof Error ? error.message : "Reintenta guardar.", variant: "destructive" })
-    } finally { setSubmissionSaving(false) }
+      if(isModuleScopeCurrent(scope))toast({ title: "No se guardó el aviso", description: error instanceof Error ? error.message : "Reintenta guardar.", variant: "destructive" })
+    } finally { if(isModuleScopeCurrent(scope))setSubmissionSaving(false) }
   }
 
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>, type: string) => {
+    const scope=captureModuleScope()
     if(workflowReadOnly)return
     const file = event.target.files?.[0]
     if (!file) return
@@ -1123,6 +1123,7 @@ export default function AvisosInformesPage() {
     setSubmissionSaving(true)
     try {
       const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer())
+      assertModuleScope(scope)
       const hash=Array.from(new Uint8Array(digest)).map((byte)=>byte.toString(16).padStart(2,"0")).join("")
       if(type==="Acuse SAT" && (activeSubmission?.correctionOf || activeSubmission?.supersedesDraftId)){
         const previousReceipts=submissionRecords.filter((item)=>item.operationId===selectedOperacionId && item.id!==activeSubmissionId && (item.status==="presented" || item.id===activeSubmission.supersedesDraftId)).flatMap((item)=>item.attachments.filter((attachment)=>attachment.type==="Acuse SAT"))
@@ -1131,18 +1132,21 @@ export default function AvisosInformesPage() {
       const attachment: SubmissionAttachment = { id: crypto.randomUUID(), type, name: file.name, size: file.size,
         mimeType: file.type || "application/octet-stream", dataUrl: await readFileAsDataUrl(file),
         sha256: hash, uploadedAt: new Date().toISOString() }
-      await saveSubmission([...attachments, attachment], false, "Archivo de " + type + " guardado")
+      assertModuleScope(scope)
+      await saveSubmission(scope, (latest) => [...latest, attachment], false, "Archivo de " + type + " guardado")
+      assertModuleScope(scope)
       toast({ title: "Documento guardado", description: file.name + " se conservó con hash y vínculo al aviso." })
-    } catch (error) { toast({ title: "No se guardó el documento", description: error instanceof Error ? error.message : "Conserva el archivo y reintenta.", variant: "destructive" }) }
-    finally { setSubmissionSaving(false) }
+    } catch (error) { if(isModuleScopeCurrent(scope))toast({ title: "No se guardó el documento", description: error instanceof Error ? error.message : "Conserva el archivo y reintenta.", variant: "destructive" }) }
+    finally { if(isModuleScopeCurrent(scope))setSubmissionSaving(false) }
   }
 
   const removeDraftAttachment=async(file:SubmissionAttachment)=>{
+    const scope=captureModuleScope()
     if(workflowReadOnly || !window.confirm(`¿Retirar ${file.name} de este borrador? El archivo y las versiones históricas no se eliminarán.`))return
     setSubmissionSaving(true)
-    try{await saveSubmission(attachments.filter((item)=>item.id!==file.id),false,`Archivo retirado del borrador: ${file.name}`);toast({title:"Referencia retirada",description:"El archivo permanece conservado; solo se retiró de este borrador."})}
-    catch(error){toast({title:"No se guardó el cambio",description:error instanceof Error ? error.message : "Reintenta sin cerrar la página.",variant:"destructive"})}
-    finally{setSubmissionSaving(false)}
+    try{await saveSubmission(scope,(latest)=>latest.filter((item)=>item.id!==file.id),false,`Archivo retirado del borrador: ${file.name}`);assertModuleScope(scope);toast({title:"Referencia retirada",description:"El archivo permanece conservado; solo se retiró de este borrador."})}
+    catch(error){if(isModuleScopeCurrent(scope))toast({title:"No se guardó el cambio",description:error instanceof Error ? error.message : "Reintenta sin cerrar la página.",variant:"destructive"})}
+    finally{if(isModuleScopeCurrent(scope))setSubmissionSaving(false)}
   }
 
   const downloadReport = (fileName: string, content: BlobPart, mimeType = "text/csv") => {
@@ -1166,12 +1170,7 @@ export default function AvisosInformesPage() {
         const registro = subject ? sujetosRegistro.find((item) => item.id === subject.id || Boolean(subject.rfc && item.rfc === subject.rfc)) : undefined
         const expediente = expedientesEui.find((item) => item.id === cliente.id)
         const ebr = findClientEbrEvaluation(evaluacionesEbr, cliente) as EvaluacionEbrResumen | null
-        const score = typeof ebr?.riskSummary?.score === "number" ? ebr.riskSummary.score : ebr?.riskQuestions
-          ? ebr.riskQuestions.reduce((acc, question) => {
-              const option = question.options.find((item) => item.value === question.selectedValue)
-              return acc + (option?.score ?? 0)
-            }, 0)
-          : null
+        const risk = currentStoredEbrRisk(ebr,cliente,pepWhoisHistory)
 
         return [
           cliente.identifier,
@@ -1182,12 +1181,12 @@ export default function AvisosInformesPage() {
           String(ops.length),
           String(alertas),
           String(pendientes),
-          ebr?.riskSummary?.level ?? (score === null ? ebr ? "Evaluación guardada; consultar EBR" : "Sin evaluación" : `${score}`),
+          risk?.level ?? (ebr ? "Pendiente de revisión; consultar EBR histórica" : "Sin evaluación"),
         ]
       }),
     ]
 
-    const content = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\n")
+    const content = serializeCsv(rows)
     downloadReport(`reporte-consolidado-avisos-${new Date().toISOString().slice(0, 10)}.csv`, content)
     toast({ title: "Reporte generado", description: "Se descargó el reporte consolidado de avisos y operaciones." })
   }
@@ -1209,7 +1208,7 @@ export default function AvisosInformesPage() {
         ]),
     ]
 
-    const content = rows.map((row) => row.map((value) => `"${value}"`).join(",")).join("\n")
+    const content = serializeCsv(rows)
     downloadReport(`reporte-operaciones-aviso-${new Date().toISOString().slice(0, 10)}.csv`, content)
     toast({ title: "Reporte generado", description: "Se descargó el reporte de operaciones con obligación de aviso." })
   }
@@ -1226,7 +1225,7 @@ export default function AvisosInformesPage() {
       ]),
     ]
 
-    const content = rows.map((row) => row.map((value) => `"${value}"`).join(",")).join("\n")
+    const content = serializeCsv(rows)
     downloadReport(`bitacora-avisos-${new Date().toISOString().slice(0, 10)}.csv`, content)
     toast({ title: "Bitácora exportada", description: "Se descargó la bitácora completa de avisos." })
   }
@@ -1300,16 +1299,19 @@ export default function AvisosInformesPage() {
     })
   }
 
-  const loadSatLayout = async (templateId: string) => {
+  const loadSatLayout = async (templateId: string, scope: ModuleScope) => {
+    assertModuleScope(scope)
     if (satLayouts[templateId]) return satLayouts[templateId]
     const response = await fetch(`/data/sat-xlsm-layouts/${templateId}.json`)
     if (!response.ok) throw new Error(`No fue posible cargar layout ${templateId}`)
     const layout = (await response.json()) as SatXlsmLayout
+    assertModuleScope(scope)
     setSatLayouts((prev) => ({ ...prev, [layout.templateId]: layout }))
     return layout
   }
 
   const handleDownloadSatWorkbook = async (satPackage: SatOutputPackageResumen, compatible = true) => {
+    const scope=captureModuleScope()
     try {
       const template = resolveSatTemplateForActividad(
         satPackage.actividadKey,
@@ -1318,7 +1320,9 @@ export default function AvisosInformesPage() {
       const templatePath = satPackage.satTemplateLocalPath || getSatTemplatePublicPath(template)
       const response = await fetch(templatePath)
       if (!response.ok) throw new Error(`No fue posible cargar ${templatePath}`)
-      const layout = await loadSatLayout(satPackage.satTemplateId || template.templateId)
+      assertModuleScope(scope)
+      const layout = await loadSatLayout(satPackage.satTemplateId || template.templateId, scope)
+      assertModuleScope(scope)
       const demoScenario = satPackage.satDemoScenarioId
         ? buildSatTemplateDemoScenarios().find((scenario) => scenario.id === satPackage.satDemoScenarioId)
         : undefined
@@ -1344,6 +1348,7 @@ export default function AvisosInformesPage() {
         values: workbookValues,
         layout,
       })
+      assertModuleScope(scope)
 
       if (filled.status === "blocked") {
         toast({
@@ -1357,6 +1362,7 @@ export default function AvisosInformesPage() {
       const fileName = satPackage.satWorkbookFileName || filled.fileName
       if (compatible) {
         const { buildCompatibleSatWorkbook, compatibleWorkbookFileName, COMPATIBLE_WORKBOOK_MIME } = await import("@/lib/pld/sat-compatible-workbook")
+        assertModuleScope(scope)
         downloadReport(compatibleWorkbookFileName(fileName), buildCompatibleSatWorkbook(filled.workbook), COMPATIBLE_WORKBOOK_MIME)
       } else {
         downloadReport(fileName, filled.workbook, "application/vnd.ms-excel.sheet.macroEnabled.12")
@@ -1368,6 +1374,7 @@ export default function AvisosInformesPage() {
           : "Plantilla oficial con macros y ActiveX; esos controles no funcionan en Excel para Mac o web.",
       })
     } catch (error) {
+      if(!isModuleScopeCurrent(scope))return
       toast({
         title: "No se pudo generar el Excel",
         description: error instanceof Error ? error.message : "Verifica que la plantilla SAT esté sincronizada.",
@@ -2215,7 +2222,7 @@ export default function AvisosInformesPage() {
                 <UploadField label="Comprobantes bancarios" onChange={(event) => handleFileUpload(event, "Comprobante bancario")} />
                 <UploadField label="Reporte de screening" onChange={(event) => handleFileUpload(event, "Reporte de screening")} />
               </div>
-              {attachments.length > 0 && <div className="flex flex-wrap gap-2">{attachments.map((file) => <div key={file.id} className="flex gap-1"><Button asChild variant="outline" size="sm"><a href={file.dataUrl} download={file.name}>{file.type}: {file.name}</a></Button>{!workflowReadOnly && <Button data-pld-action="edit" variant="ghost" size="sm" disabled={submissionSaving} onClick={()=>void removeDraftAttachment(file)}>Retirar</Button>}</div>)}</div>}
+              {attachments.length > 0 && <div className="flex flex-wrap gap-2">{attachments.map((file) => <div key={file.id} className="flex gap-1"><Button asChild variant="outline" size="sm"><DocumentLink href={file.dataUrl} download={file.name}>{file.type}: {file.name}</DocumentLink></Button>{!workflowReadOnly && <Button data-pld-action="edit" variant="ghost" size="sm" disabled={submissionSaving} onClick={()=>void removeDraftAttachment(file)}>Retirar</Button>}</div>)}</div>}
 
               <Alert className={folioAndSealValid ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}>
                 {folioAndSealValid ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <AlertTriangle className="h-4 w-4" />}
