@@ -56,5 +56,13 @@ export function sessionCan(session: PilotSession | null, company: Company | null
   return Boolean(session.grants.find((grant) => grant.companyId === company.id && grant.userId === session.user.id)?.permissions[module]?.includes(action))
 }
 export function sessionIsAdmin(session: PilotSession | null) {
-  return Boolean(session && (session.user.platformRole === "superadmin" || session.memberships.some((m) => m.role === "admin")))
+  return Boolean(session?.user.status === "active" && (session.user.platformRole === "superadmin" || session.memberships.some((m) => m.role === "admin")))
+}
+
+/** Navigation is discoverability, not authorization to read or save company data.
+ * A global administrator can discover every module before creating a company
+ * (or while viewing a private inbox); sessionCan still requires its real scope. */
+export function sessionCanNavigate(session: PilotSession | null, company: Company | null, module: ModuleKey) {
+  if (!session || session.user.status !== "active") return false
+  return session.user.platformRole === "superadmin" || sessionCan(session, company, module, "view")
 }

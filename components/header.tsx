@@ -14,7 +14,7 @@ import { useLanguage } from "@/lib/LanguageContext"
 import { translations } from "@/lib/translations"
 import { CompanySwitcher, usePilot } from "@/components/pilot/pilot-provider"
 import { APP_NAVIGATION_ITEMS } from "@/lib/pld/navigation"
-import { PATH_MODULES, sessionCan } from "@/lib/pilot/contracts"
+import { PATH_MODULES, sessionCanNavigate } from "@/lib/pilot/contracts"
 import { GlobalSearch } from "@/components/pilot/global-search"
 import { SaveStatus } from "@/components/pilot/save-status"
 
@@ -54,7 +54,7 @@ export function Header() {
         <CompanySwitcher />
         <SaveStatus />
         <GlobalSearch />
-        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label="Abrir navegación" className="text-white hover:bg-white/10 md:hidden"><LayoutGrid className="h-5 w-5" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="max-h-[70vh] overflow-y-auto">{APP_NAVIGATION_ITEMS.filter((item) => !PATH_MODULES[item.href] || mode === "demo" || sessionCan(session, company, PATH_MODULES[item.href], "view")).map((item) => <DropdownMenuItem key={item.key} onSelect={() => router.push(item.href)}>{item.title[language]}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
+        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label="Abrir navegación" className="text-white hover:bg-white/10 md:hidden"><LayoutGrid className="h-5 w-5" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="max-h-[70vh] overflow-y-auto">{APP_NAVIGATION_ITEMS.filter((item) => !PATH_MODULES[item.href] || mode === "demo" || sessionCanNavigate(session, company, PATH_MODULES[item.href])).map((item) => <DropdownMenuItem key={item.key} onSelect={() => router.push(item.href)}>{item.title[language]}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
         <Select value={language} onValueChange={(value: "es" | "en") => setLanguage(value)}>
           <SelectTrigger aria-label="Idioma" className="hidden h-[clamp(42px,3vw,62px)] w-[clamp(72px,6.7vw,148px)] gap-2 border-white/55 bg-transparent px-3 text-white hover:bg-white/10 focus:ring-white/60 sm:flex [&>svg]:text-white">
             <Globe className="h-5 w-5 shrink-0" />

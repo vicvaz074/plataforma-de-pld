@@ -22,12 +22,13 @@ import {
 import type { LucideIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
 import { useLanguage } from "@/lib/LanguageContext"
 import { PLD_DASHBOARD_MODULES } from "@/lib/pld/navigation"
 import styles from "./home.module.css"
 import { usePilot } from "@/components/pilot/pilot-provider"
-import { PATH_MODULES, sessionCan } from "@/lib/pilot/contracts"
+import { PATH_MODULES, sessionCanNavigate } from "@/lib/pilot/contracts"
 
 const moduleIcons: Record<string, LucideIcon> = {
   FileCheck,
@@ -98,8 +99,18 @@ export default function Home() {
         {language === "es" ? "Programa de Prevención en Lavado de Dinero" : "Anti-Money Laundering Prevention Program"}
       </h1>
 
+      {mode === "cloud" && session?.user.platformRole === "superadmin" && !company && (
+        <Alert className="mx-auto mb-6 max-w-3xl">
+          <AlertTitle>Tu acceso de superadministrador está activo</AlertTitle>
+          <AlertDescription className="flex flex-col gap-3">
+            <p>Puedes administrar todas las organizaciones, empresas, usuarios y módulos. Crea tu primera empresa para comenzar a capturar datos sin mezclar razones sociales.</p>
+            <Button asChild className="w-fit"><Link href="/dashboard?setup=company">Crear mi primera empresa</Link></Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className={styles.grid}>
-        {PLD_DASHBOARD_MODULES.filter((module) => mode === "demo" || !PATH_MODULES[module.href] || sessionCan(session, company, PATH_MODULES[module.href], "view")).map((module) => {
+        {PLD_DASHBOARD_MODULES.filter((module) => mode === "demo" || !PATH_MODULES[module.href] || sessionCanNavigate(session, company, PATH_MODULES[module.href])).map((module) => {
           const Icon = moduleIcons[module.iconName] ?? FileText
           const isAlicia = module.key === "alicia"
           return (

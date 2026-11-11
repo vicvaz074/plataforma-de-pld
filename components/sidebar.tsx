@@ -8,7 +8,7 @@ import { ChevronLeft, LayoutDashboard, Shield, FileCheck, Users, FileText, Gradu
 import { translations } from "@/lib/translations"
 import { aliciaTranslations } from "@/lib/alicia-translations"
 import { usePilot } from "@/components/pilot/pilot-provider"
-import { PATH_MODULES, sessionCan } from "@/lib/pilot/contracts"
+import { PATH_MODULES, sessionCanNavigate } from "@/lib/pilot/contracts"
 
 const navigationItems = [
   { key: "dashboard", icon: LayoutDashboard, href: "/dashboard" },
@@ -56,7 +56,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       <nav className="flex-1 overflow-visible">
         <ul className="flex h-full flex-col justify-between gap-1 pb-[clamp(40px,4vw,90px)] pt-2">
-          {navigationItems.filter((item) => mode === "demo" || !PATH_MODULES[item.href] || sessionCan(session, company, PATH_MODULES[item.href], "view")).map((item) => {
+          {navigationItems.filter((item) => mode === "demo" || !PATH_MODULES[item.href] || sessionCanNavigate(session, company, PATH_MODULES[item.href])).map((item) => {
             const isActive = pathname === item.href
             const Icon = item.icon
             const displayText = item.key === "alicia" ? aliciaT[item.key] : t[item.key]

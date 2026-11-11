@@ -9,6 +9,7 @@ import { createHmac, createHash } from "node:crypto"
 import { buildPresentationCases } from "../lib/demo/pld-presentation-cases"
 import { buildDefaultPldTenants } from "../lib/pld/tenants"
 import { beneficiaryReviewSignature } from "../lib/pld/beneficiary-review"
+import { ALL_ACTIONS, MODULE_LABELS } from "../lib/pilot/contracts"
 
 function totp(secret:string){
   const alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";let bits=""
@@ -49,11 +50,39 @@ test("Worker real: cuentas, sesiones, aislamiento por empresa, conflictos y vers
     assert.equal((await request("/api/v1/bootstrap","POST",{},"","Bearer "+token)).status,409)
     let supreme=await login("supreme@example.test","test-password-only-2026")
     const session=await parse(await request("/api/v1/session","GET",undefined,supreme));assert.equal(session.data.user.platformRole,"superadmin")
-    const orgA=(await parse(await request("/api/v1/organizations","POST",{name:"Organización A"},supreme))).data
+    // A freshly activated owner has global rights but no company context yet.
+    // Onboarding must use these APIs, never fabricate memberships or grants.
+    for(const key of ["organizations","companies","memberships","grants"])assert.deepEqual(session.data[key],[],`Bootstrap starts without ${key}`)
+    const emptyAdmin=await parse(await request("/api/v1/admin","GET",undefined,supreme))
+    assert.equal(emptyAdmin.status,200,"The owner can open administration before creating an organization")
+    assert.deepEqual(emptyAdmin.data.organizations,[]);assert.deepEqual(emptyAdmin.data.companies,[])
+    assert.equal(emptyAdmin.data.users.some((user:any)=>user.id===session.data.user.id),true)
+    const missingOrganization=await parse(await request("/api/v1/companies","POST",{name:"Empresa sin contexto",rfc:"AAA010101AAA"},supreme))
+    assert.equal(missingOrganization.status,400);assert.equal(missingOrganization.data.code,"INVALID_FIELD")
+    assert.deepEqual((await parse(await request("/api/v1/admin","GET",undefined,supreme))).data.companies,[],"A rejected first step cannot leave a partial company")
+    const firstOrganization=await parse(await request("/api/v1/organizations","POST",{name:"Organización A"},supreme))
+    assert.equal(firstOrganization.status,201,JSON.stringify(firstOrganization.data))
+    const orgA=firstOrganization.data
     const orgB=(await parse(await request("/api/v1/organizations","POST",{name:"Organización B"},supreme))).data
-    const companyA=(await parse(await request("/api/v1/companies","POST",{organizationId:orgA.id,name:"Empresa A",rfc:"AAA010101AAA"},supreme))).data
+    const firstCompany=await parse(await request("/api/v1/companies","POST",{organizationId:orgA.id,name:"Empresa A",rfc:"AAA010101AAA"},supreme))
+    assert.equal(firstCompany.status,201,JSON.stringify(firstCompany.data))
+    const companyA=firstCompany.data
     const companyB=(await parse(await request("/api/v1/companies","POST",{organizationId:orgB.id,name:"Empresa B",rfc:"BBB010101BBB"},supreme))).data
     assert.ok(companyA.id&&companyB.id)
+    const ownerAfterSetup=await parse(await request("/api/v1/session","GET",undefined,supreme))
+    assert.deepEqual(ownerAfterSetup.data.companies.map((item:any)=>item.id).sort(),[companyA.id,companyB.id].sort())
+    assert.deepEqual(ownerAfterSetup.data.memberships,[]);assert.deepEqual(ownerAfterSetup.data.grants,[])
+    for(const moduleKey of Object.keys(MODULE_LABELS))for(const action of ALL_ACTIONS){
+      const authorized=await parse(await request(`/api/v1/companies/${companyA.id}/authorize`,"POST",{moduleKey,action},supreme))
+      assert.equal(authorized.status,200,`Superadmin requires no per-company grant for ${moduleKey}:${action}: ${JSON.stringify(authorized.data)}`)
+      assert.equal(authorized.data.companyId,companyA.id)
+    }
+    assert.equal((await request(`/api/v1/companies/${companyB.id}/authorize`,"POST",{moduleKey:"operaciones",action:"approve"},supreme)).status,200,"Global administration extends across organizations")
+    assert.equal((await request(`/api/v1/companies/${crypto.randomUUID()}/authorize`,"POST",{moduleKey:"operaciones",action:"edit"},supreme)).status,404,"Global authority does not create a missing company context")
+    assert.equal((await request(`/api/v1/companies/${companyB.id}`,"PATCH",{status:"archived"},supreme)).status,200)
+    const archivedCompany=await parse(await request(`/api/v1/companies/${companyB.id}/authorize`,"POST",{moduleKey:"operaciones",action:"edit"},supreme))
+    assert.equal(archivedCompany.status,409);assert.equal(archivedCompany.data.code,"COMPANY_ARCHIVED")
+    assert.equal((await request(`/api/v1/companies/${companyB.id}`,"PATCH",{status:"active"},supreme)).status,200)
     const created=await parse(await request("/api/v1/users","POST",{organizationId:orgA.id,name:"Captura A",email:"capture@example.test",role:"capture",companyIds:[companyA.id]},supreme))
     assert.equal(created.status,201,JSON.stringify(created.data))
     assert.equal("password" in created.data.user,false)
@@ -73,6 +102,8 @@ test("Worker real: cuentas, sesiones, aislamiento por empresa, conflictos y vers
     const ownSessions=await parse(await request("/api/v1/profile/sessions","GET",undefined,capture2));assert.equal(ownSessions.status,200);assert.equal(ownSessions.data.sessions.some((item:any)=>item.current),true);assert.equal(JSON.stringify(ownSessions.data).includes("token"),false)
     assert.equal((await request(`/api/v1/companies/${companyB.id}/snapshot`,"GET",undefined,capture2)).status,404)
     assert.equal((await request("/api/v1/admin","GET",undefined,capture2)).status,403)
+    assert.equal((await request("/api/v1/organizations","POST",{name:"Escalamiento rechazado"},capture2)).status,403)
+    assert.equal((await request("/api/v1/companies","POST",{organizationId:orgA.id,name:"Empresa no autorizada",rfc:"AAA010101AAA"},capture2)).status,403,"Ordinary users cannot inherit the owner's company-creation rights")
     const companyPath=`/api/v1/companies/${companyA.id}/records/batch`
     assert.equal((await request(companyPath,"POST",{mutations:[{collection:"registro-sat-data",id:"singleton",expectedRevision:0,payload:{sujetosRegistrados:[{id:"legacy-subject",identificacion:{rfc:companyB.rfc}}]}}]},capture2)).status,400)
     const alta=await parse(await request(companyPath,"POST",{mutations:[{collection:"registro-sat-data",id:"singleton",expectedRevision:0,payload:{identificacion:{rfc:""},sujetosRegistrados:[{id:"legacy-subject",identificacion:{rfc:companyA.rfc}}]}}]},capture2));assert.equal(alta.status,200);assert.equal(alta.data.records[0].payload.sujetosRegistrados[0].id,"legacy-subject");assert.equal(alta.data.records[0].payload.companyId,companyA.id)

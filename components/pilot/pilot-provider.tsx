@@ -12,7 +12,7 @@ import { PATH_MODULES, sessionCan, type Company, type PilotSession } from "@/lib
 import { configurePilotSession, dismissStorageNotices, flushModuleStorage, getPendingModuleChanges, getSaveState, getModuleStorageGeneration, loadCompanyStorage, resetCompanyStorage, retryModuleStorage, subscribeSaveState } from "@/lib/pilot/module-storage"
 import { ModuleActionGuard } from "./module-action-guard"
 
-interface PilotContextValue { mode: "cloud" | "demo"; session: PilotSession | null; company: Company | null; ready: boolean; refresh: () => Promise<void>; selectCompany: (company: Company) => Promise<void>; logout: () => Promise<void> }
+interface PilotContextValue { mode: "cloud" | "demo"; session: PilotSession | null; company: Company | null; ready: boolean; refresh: (options?: { companyId?: string }) => Promise<void>; selectCompany: (company: Company) => Promise<void>; logout: () => Promise<void> }
 const PilotContext = createContext<PilotContextValue | null>(null)
 const savedServerState = { status: "saved" as const, pending: 0 }
 export function usePilot() { const value = useContext(PilotContext); if (!value) throw new Error("Falta el contexto de la plataforma."); return value }
@@ -41,7 +41,7 @@ export function PilotProvider({ children }: { children: ReactNode }) {
     catch (reason) { if (reason instanceof DOMException && reason.name === "AbortError") return; if (epoch === switchEpoch.current) setGeneration(getModuleStorageGeneration()); throw reason }
     finally { if (epoch === switchEpoch.current) setSwitching(false) }
   }, [])
-  const refresh = useCallback(async (reloadCompany = false) => {
+  const refresh = useCallback(async (reloadCompany = false, preferredCompanyId?: string) => {
     const epoch = ++refreshEpoch.current
     if (mode === "demo") { setReady(true); return }
     try {
@@ -50,7 +50,7 @@ export function PilotProvider({ children }: { children: ReactNode }) {
       configurePilotSession(result); setSession(result); setError("")
       if (result.user.requiresPasswordChange) { setReady(true); setVerifiedPathname(pathname); setGeneration(getModuleStorageGeneration()); if (pathname !== "/profile" && pathname !== "/login") router.replace("/profile"); return }
       if (result.mfaRequired) { setReady(true); setVerifiedPathname(pathname); setGeneration(getModuleStorageGeneration()); if (pathname !== "/profile" && pathname !== "/login") router.replace("/profile"); return }
-      const requestedId = company?.id || sessionStorage.getItem("pld-company-id")
+      const requestedId = preferredCompanyId || company?.id || sessionStorage.getItem("pld-company-id")
       const inboxOrg = result.organizations.find((org) => requestedId === `inbox:${org.id}:${result.user.id}`)
       const current: Company | undefined = inboxOrg ? { id: requestedId!, organizationId: inboxOrg.id, name: `Expedientes sin asignar · ${inboxOrg.name}`, rfc: "", status: "active" } : result.companies.find((item) => item.id === requestedId) || result.companies.find((item) => item.status === "active")
       if (current && (!company || company.id !== current.id || reloadCompany)) await selectCompany(current)
@@ -89,12 +89,13 @@ export function PilotProvider({ children }: { children: ReactNode }) {
     else { for (const key of ["isAuthenticated", "userRole", "userName", "userEmail"]) localStorage.removeItem(key) }
     resetCompanyStorage(); setSession(null); setCompany(null); router.replace("/login")
   }, [mode, router])
-  const context = useMemo(() => ({ mode, session, company, ready, refresh, selectCompany, logout }), [mode, session, company, ready, refresh, selectCompany, logout])
+  const refreshSession = useCallback((options?: { companyId?: string }) => refresh(false, options?.companyId), [refresh])
+  const context = useMemo(() => ({ mode, session, company, ready, refresh: refreshSession, selectCompany, logout }), [mode, session, company, ready, refreshSession, selectCompany, logout])
   const moduleKey = PATH_MODULES[pathname]
-  const blocked = mode === "cloud" && moduleKey && company && !sessionCan(session, company, moduleKey, "view")
+  const needsCompany = mode === "cloud" && Boolean(moduleKey) && (!company || company.id.startsWith("inbox:") && moduleKey !== "expedientes")
+  const blocked = mode === "cloud" && moduleKey && company && !needsCompany && !sessionCan(session, company, moduleKey, "view")
   const isPublic = pathname === "/login" || pathname === "/setup"
   const credentialsPending = mode === "cloud" && session && (session.user.requiresPasswordChange || session.mfaRequired) && pathname !== "/profile" && !isPublic
-  const needsCompany = mode === "cloud" && !company && Boolean(moduleKey)
   // A route must be verified before its effects mount. The external generation
   // also gates synchronous store notifications before React applies switching.
   const moduleTransition = mode === "cloud" && !isPublic && (switching || verifiedPathname !== pathname || Boolean(company) && (storageGeneration === null || storageGeneration !== generation))
@@ -104,7 +105,7 @@ export function PilotProvider({ children }: { children: ReactNode }) {
     : credentialsPending ? <div className="p-8"><p>Actualiza tu acceso para continuar.</p><Button className="mt-3" onClick={() => router.replace("/profile")}>Abrir mi cuenta</Button></div>
     : moduleTransition ? <div role="status" aria-live="polite" className="flex min-h-[50vh] items-center justify-center gap-3"><Loader2 className="h-5 w-5 animate-spin" />Abriendo empresa…</div>
     : blocked ? <div className="p-8"><h1 className="text-xl font-semibold">Acceso no asignado</h1><p className="mt-2 text-sm text-muted-foreground">Solicita acceso a este módulo al administrador de tu empresa.</p></div>
-    : needsCompany ? <div className="mx-auto max-w-lg space-y-4 p-8"><Building2 className="h-8 w-8 text-orange-500" /><h1 className="text-xl font-semibold">Selecciona una empresa</h1><p className="text-sm text-muted-foreground">El administrador puede crear empresas y asignarte acceso desde el panel.</p><Button onClick={() => router.push("/dashboard")}>Ir al panel</Button></div>
+    : needsCompany ? <div className="mx-auto flex max-w-lg flex-col gap-4 p-8"><Building2 className="size-8 text-primary" /><h1 className="text-xl font-semibold">Selecciona una empresa</h1><p className="text-sm text-muted-foreground">{session?.user.platformRole === "superadmin" ? "Tu acceso global está activo. Para capturar o consultar información de este módulo, selecciona una razón social o crea una nueva. No necesitas asignarte permisos adicionales." : "El administrador puede crear empresas y asignarte acceso desde el panel."}</p><Button onClick={() => router.push(session?.user.platformRole === "superadmin" ? "/dashboard?setup=company" : "/dashboard")}>{session?.user.platformRole === "superadmin" ? "Crear o administrar empresas" : "Ir al panel"}</Button></div>
     : <div key={mode === "cloud" ? `${company?.id || "account"}:${generation}` : "demo"}><ModuleActionGuard moduleKey={moduleKey} mode={mode} session={session} company={company}>{children}</ModuleActionGuard></div>
   return <PilotContext.Provider value={context}>
     {mode === "cloud" && !isPublic && session && saveState.status !== "saved" && <div role="status" className={`sticky top-0 z-[60] flex items-center justify-between gap-3 px-4 py-2 text-sm ${saveState.status === "error" ? "bg-red-50 text-red-900" : "bg-amber-50 text-amber-900"}`}>
