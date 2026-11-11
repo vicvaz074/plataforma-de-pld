@@ -56,7 +56,9 @@ export function PilotProvider({ children }: { children: ReactNode }) {
       if (current && (!company || company.id !== current.id || reloadCompany)) await selectCompany(current)
       else if (current) { setCompany(current); setGeneration(getModuleStorageGeneration()) }
       if (epoch !== refreshEpoch.current) return
-      if (!current) setCompany(null)
+      // Initialize the account-only generation too. Otherwise the first session
+      // poll changes account:null → account:N and discards onboarding forms.
+      if (!current) { setCompany(null); setGeneration(getModuleStorageGeneration()) }
       setVerifiedPathname(pathname)
       setReady(true)
     } catch (reason) {

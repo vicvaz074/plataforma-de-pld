@@ -51,7 +51,7 @@ test("home, desktop and mobile share discovery while the provider keeps company 
   assert.match(provider, /\/dashboard\?setup=company/)
 })
 
-test("actual provider refresh selects the newly created company instead of its stale captured company", async () => {
+test("actual provider refresh selects the new company and initializes an account-only generation", async () => {
   const file = "components/pilot/pilot-provider.tsx"
   const source = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   let declaration = ""
@@ -64,16 +64,21 @@ test("actual provider refresh selects the newly created company instead of its s
   const next = { ...company, id: "new-company", name: "Nueva QA" }
   const selected: string[] = []
   const noop = () => undefined
+  const generations: Array<number | null> = []
   const dependencies = {
     useCallback: (callback: unknown) => callback,
     pilotApi: async () => ({ ...owner, companies: [company, next] }),
     mode: "cloud", refreshEpoch: { current: 0 }, configurePilotSession: noop, setSession: noop, setError: noop,
     company, sessionStorage: { getItem: () => company.id }, selectCompany: async (value: Company) => { selected.push(value.id) },
-    setCompany: noop, setGeneration: noop, getModuleStorageGeneration: () => 1, setVerifiedPathname: noop, setReady: noop,
+    setCompany: noop, setGeneration: (value: number | null) => { generations.push(value) }, getModuleStorageGeneration: () => 1, setVerifiedPathname: noop, setReady: noop,
     pathname: "/dashboard", router: { replace: noop },
   }
   const js = ts.transpileModule(declaration, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText
   const refresh = new Function(...Object.keys(dependencies), `${js}\nreturn refresh`)(...Object.values(dependencies))
   await refresh(false, next.id)
   assert.deepEqual(selected, [next.id])
+  const accountOnly = { ...dependencies, company: null, pilotApi: async () => owner }
+  const refreshAccount = new Function(...Object.keys(accountOnly), `${js}\nreturn refresh`)(...Object.values(accountOnly))
+  await refreshAccount()
+  assert.deepEqual(generations, [1], "An empty account must not wait until its first poll to initialize its render key")
 })
