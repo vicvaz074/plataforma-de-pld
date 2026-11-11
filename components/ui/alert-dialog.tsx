@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
+import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
@@ -32,8 +33,8 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
 
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content> & { showCloseButton?: boolean; closeButtonDisabled?: boolean }
+>(({ className, children, showCloseButton = true, closeButtonDisabled = false, ...props }, ref) => (
   <AlertDialogPortal>
     <AlertDialogOverlay />
     <AlertDialogPrimitive.Content
@@ -43,13 +44,32 @@ const AlertDialogContent = React.forwardRef<
         className,
       )}
       {...props}
-    />
+    >
+      {showCloseButton && (
+        <AlertDialogPrimitive.Cancel
+          type="button"
+          aria-label="Cerrar"
+          title="Cerrar"
+          data-pld-context="browse"
+          disabled={closeButtonDisabled}
+          className={cn(
+            "z-10 inline-flex size-10 shrink-0 items-center justify-center rounded-md border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&>svg]:size-4",
+            className?.split(/\s+/).includes("flex")
+              ? "absolute right-4 top-4"
+              : "sticky top-0 col-start-1 row-start-1 -mr-2 -mt-2 self-start justify-self-end",
+          )}
+        >
+          <X aria-hidden="true" />
+        </AlertDialogPrimitive.Cancel>
+      )}
+      {children}
+    </AlertDialogPrimitive.Content>
   </AlertDialogPortal>
 ))
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName
 
 const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col space-y-2 text-center sm:text-left", className)} {...props} />
+  <div className={cn("col-start-1 row-start-1 flex flex-col gap-2 pr-12 text-center sm:text-left", className)} {...props} />
 )
 AlertDialogHeader.displayName = "AlertDialogHeader"
 

@@ -1370,7 +1370,7 @@ export default function GobernanzaControlPage() {
                   </p>
                 </div>
                 <DialogPrimitive.Close asChild>
-                  <Button variant="ghost" size="icon">
+                  <Button type="button" variant="ghost" size="icon" aria-label="Cerrar" data-pld-context="browse">
                     <X className="h-4 w-4" />
                   </Button>
                 </DialogPrimitive.Close>
@@ -1443,7 +1443,7 @@ export default function GobernanzaControlPage() {
                     <p className="text-sm text-muted-foreground">{viewerDoc.fileName}</p>
                   </div>
                   <DialogPrimitive.Close asChild>
-                    <Button variant="ghost" size="icon" onClick={() => setViewerDoc(null)}>
+                    <Button type="button" variant="ghost" size="icon" aria-label="Cerrar" data-pld-context="browse" onClick={() => setViewerDoc(null)}>
                       <X className="h-4 w-4" />
                     </Button>
                   </DialogPrimitive.Close>
@@ -1489,7 +1489,7 @@ export default function GobernanzaControlPage() {
                   <DialogPrimitive.Title className="text-lg font-semibold">Aprobación interna</DialogPrimitive.Title>
                   <DialogPrimitive.Description className="sr-only">Confirma la revisión interna de esta versión documental.</DialogPrimitive.Description>
                   <DialogPrimitive.Close asChild>
-                    <Button variant="ghost" size="icon" onClick={() => setSignatureDoc(null)}>
+                    <Button type="button" variant="ghost" size="icon" aria-label="Cerrar" data-pld-context="browse" onClick={() => setSignatureDoc(null)}>
                       <X className="h-4 w-4" />
                     </Button>
                   </DialogPrimitive.Close>

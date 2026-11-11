@@ -98,10 +98,11 @@ import { mergeOperationClientsById, operationClientFromSnapshot, readSavedOperat
 import { IMPORT_CLIENT_LINK_MISSING, type ImportClientDecision } from "@/lib/pld/import-client-resolution"
 import { formatOperationFinancialSummary, resolveOperationFinance, resolveNotarialNoticeBase, type OperationFinance } from "@/lib/pld/operation-finance"
 import { applySatPersonEdit, applySatBeneficiaryEdit } from "@/lib/pld/sat-person-edit"
+import { normalizeSatFieldValues } from "@/lib/pld/sat-field-values"
 import { getSatPrimaryAmountFieldIds, getSatOperationBranchMissingLabels } from "@/lib/pld/sat-operation-branches"
 import { buildExpedienteFromActo, saveExpedienteRecord, readPldSubjects, integrationSubjectToTenant, notifyPldIntegrationChange, PLD_INTEGRATION_EVENT } from "@/lib/pld/integration-records"
 import { UMA_MONTHS, findUmaByMonthYear } from "@/lib/data/uma"
-import { CLIENTE_TIPOS, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
+import { CLIENTE_TIPOS, normalizeClienteTipo, type ClienteTipoOption } from "@/lib/data/tipos-cliente"
 import { CIUDADES_MEXICO, findCodigoPostalInfo } from "@/lib/data/codigos-postales"
 import { demoFraccionXV } from "@/lib/demo/fraccion-xv"
 import { PAISES, findPaisByCodigo, findPaisByNombre } from "@/lib/data/paises"
@@ -1027,11 +1028,8 @@ function buildReusableSatFieldValues(values?: Record<string, string>) {
 }
 
 function normalizarTipoCliente(value: string) {
-  const option = CLIENTE_TIPOS.find((tipo) => tipo.value === value)
-  if (option) {
-    return option.value
-  }
-  return LEGACY_CLIENTE_TIPO_MAP[value] ?? value
+  const normalized = normalizeClienteTipo(value)
+  return LEGACY_CLIENTE_TIPO_MAP[normalized] ?? normalized
 }
 
 function obtenerOpcionTipoCliente(value: string) {
@@ -3319,12 +3317,19 @@ export default function ActividadesVulnerablesPage() {
     )
   }, [satAllFieldsActual, satDynamicFormActual])
 
+  // Migrate known older XV IDs before merging so a saved correction wins over
+  // the EUI prefill, including independent repeat rows and their activation.
+  const satAdmittedFieldValues = useMemo(
+    () => satLayoutActual ? normalizeSatFieldValues(satAllFieldsActual, satFieldValues) : satFieldValues,
+    [satLayoutActual, satAllFieldsActual, satFieldValues],
+  )
+
   const satRawEffectiveFieldValues = useMemo(
     () => ({
       ...(satDynamicFormActual?.initialValues ?? {}),
-      ...satFieldValues,
+      ...satAdmittedFieldValues,
     }),
-    [satDynamicFormActual, satFieldValues],
+    [satDynamicFormActual, satAdmittedFieldValues],
   )
 
   const satEffectiveFieldValues = useMemo(
@@ -3846,7 +3851,7 @@ export default function ActividadesVulnerablesPage() {
         pais: BENEFICIARIO_FORM_DEFAULT.pais,
       }))
       if (expedienteActual?.tipoCliente) {
-        setTipoCliente(expedienteActual.tipoCliente)
+        setTipoCliente(normalizarTipoCliente(expedienteActual.tipoCliente))
       }
       if (expedienteActual?.detalleTipoCliente) {
         setDetalleTipoCliente(expedienteActual.detalleTipoCliente)
@@ -3919,7 +3924,7 @@ export default function ActividadesVulnerablesPage() {
     }
 
     if (expedienteActual?.tipoCliente) {
-      setTipoCliente(expedienteActual.tipoCliente)
+      setTipoCliente(normalizarTipoCliente(expedienteActual.tipoCliente))
     }
     if (expedienteActual?.detalleTipoCliente) {
       setDetalleTipoCliente(expedienteActual.detalleTipoCliente)
@@ -8492,7 +8497,7 @@ const cambiarMesCalendario = (delta: number) => {
                   values={satEffectiveFieldValues}
                   missingRequired={satMissingRequiredFields}
                   onChange={actualizarSatField}
-                  editedFieldIds={Object.keys(satFieldValues)}
+                  editedFieldIds={Object.keys(satAdmittedFieldValues)}
                   infoHintContent={ACTOS_INFO_HINTS.xlsmSat}
                   sectionKinds={[
                     "alta_sat",
@@ -9577,7 +9582,7 @@ const cambiarMesCalendario = (delta: number) => {
                     values={satEffectiveFieldValues}
                     missingRequired={satMissingRequiredFields}
                     onChange={actualizarSatField}
-                    editedFieldIds={Object.keys(satFieldValues)}
+                    editedFieldIds={Object.keys(satAdmittedFieldValues)}
                     infoHintContent={ACTOS_INFO_HINTS.xlsmSat}
                     sectionKinds={["beneficiario_controlador"]}
                   />
@@ -9594,10 +9599,16 @@ const cambiarMesCalendario = (delta: number) => {
                   <TrendingUp className="h-5 w-5 text-slate-600" /> Paso 5. Operación, forma de pago y umbral
                 </CardTitle>
                 <CardDescription>
-                  Revisa el cálculo con ventana de acumulación SAT de hasta seis meses antes de guardar.
+                  Revisa el monto, el pago y el resultado antes de guardar. Puedes corregir la captura sin perder el expediente ni el beneficiario.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 md:col-span-3">
+                  <p className="text-sm text-muted-foreground">Monto, pago y preguntas del Excel se capturan en el paso 3.</p>
+                  <Button type="button" variant="outline" onClick={() => setPasoActual(2)}>
+                    Editar monto, pago y datos SAT
+                  </Button>
+                </div>
                 <div className="rounded border bg-white p-4 text-sm">
                   <p className="text-xs uppercase tracking-wide text-slate-500">Monto actual</p>
                   <p className="mt-2 text-xl font-semibold text-slate-800">

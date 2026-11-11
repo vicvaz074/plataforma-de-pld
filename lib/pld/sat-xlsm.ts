@@ -367,7 +367,7 @@ function applySatTemplateFieldRules(
     fields: section.fields.map((field) =>
       field.dataType === "moneda" && /^fecha(?:-|$)/.test(slug(field.label))
         ? { ...field, dataType: "fecha" as const } : field
-    ).map(applyBeneficiaryFieldRules).map(applyPersonaObjetoFieldRules),
+    ).map(applyBeneficiaryFieldRules).map((field) => applyPersonaObjetoFieldRules(field, templateId)),
   })))))
   if (templateId !== XII_NOTARIOS_A_TEMPLATE_ID) return sectionsWithBeneficiaryRules
 
@@ -428,8 +428,21 @@ function applyBeneficiaryFieldRules(field: SatXlsmField): SatXlsmField {
  * sin esta regla los tres se piden a la vez y el libro termina con datos de una
  * figura que no participó en el acto.
  */
-function applyPersonaObjetoFieldRules(field: SatXlsmField): SatXlsmField {
+function applyPersonaObjetoFieldRules(field: SatXlsmField, templateId: string): SatXlsmField {
   if (!slug(field.sheetName).includes("persona-objeto")) return field
+
+  // Arrendamiento_v4_5, B44: este bloque es exclusivamente el representante
+  // de personas morales o fideicomisos. La PF se captura en B19:I28.
+  // Fuente SAT/SPPLD arrendamiento, consulta 2026-11-11.
+  if (templateId === "sat-fraccion-xv-arrendamiento" &&
+      slug(field.repeatGroup ?? "") === "persona-objeto-representante") {
+    return {
+      ...field,
+      activeWhen: appendSatFieldConditions(field.activeWhen, [
+        { fieldId: PERSONA_OBJETO_TYPE_FIELD_ID, equals: ["persona_moral", "fideicomiso"] },
+      ]),
+    }
+  }
 
   const domicilio = personaObjetoDomicilioBranch(field)
   if (domicilio) {
@@ -463,8 +476,8 @@ function personaObjetoFieldBranch(field: SatXlsmField): PersonaObjetoTipo | unde
   if (block.includes("domicilio") || block.includes("telefono") || block.includes("contacto")) {
     return undefined
   }
-  if (group.includes("persona-moral") || block.includes("persona-moral")) return "persona_moral"
-  if (group.includes("persona-fisica") || block.includes("persona-fisica")) return "persona_fisica"
+  if (group.includes("persona-moral") || block.includes("persona-moral") || block === "persona-objeto-pm") return "persona_moral"
+  if (group.includes("persona-fisica") || block.includes("persona-fisica") || block === "persona-objeto-pf") return "persona_fisica"
   return undefined
 }
 
@@ -1718,6 +1731,32 @@ function getArrendamientoManualFields(sheetName: string, optionLists: SatXlsmOpt
       field("persona_aviso.tipo_alerta", "Tipo de alerta", "C7", "catalogo", "Alertas", true, {
         sectionKind: "alta_sat",
       }),
+      // Arrendamiento_v4_5.xlsm, "Persona Objeto del aviso", headers B18:I18
+      // and input rows 19:28. The SAT marks names, nationality and activity with
+      // an asterisk; date of birth/RFC/CURP have no asterisk in this workbook.
+      // Source: SAT Fracción XV / arrendamiento.zip, consulted 2026-11-11.
+      ...buildRepeatedFields({
+        groupId: "persona_objeto_pf",
+        basePrefix: "persona_aviso.pf",
+        labelPrefix: "Persona física objeto del aviso",
+        sheetName,
+        startRow: 19,
+        count: 10,
+        sectionKind: "persona_objeto",
+        requiredFirstRow: true,
+        optionalFirstRowKeys: ["fecha_nacimiento", "rfc", "curp"],
+        columns: [
+          ["nombre", "Nombre(s)", "B", "texto"],
+          ["apellido_paterno", "Apellido paterno", "C", "texto"],
+          ["apellido_materno", "Apellido materno", "D", "texto"],
+          ["fecha_nacimiento", "Fecha de nacimiento", "E", "fecha"],
+          ["rfc", "RFC", "F", "texto"],
+          ["curp", "CURP", "G", "texto"],
+          ["pais_nacionalidad", "País de nacionalidad", "H", "catalogo", "Paises"],
+          ["actividad_economica", "Actividad económica", "I", "catalogo", "Actividades"],
+        ],
+        field,
+      }),
       ...buildRepeatedFields({
         groupId: "persona_objeto_pm",
         basePrefix: "persona_aviso.pm",
@@ -2595,8 +2634,8 @@ export function resolvePersonaObjetoScope(field: SatXlsmField): PersonaObjetoSco
     return "contacto"
   }
   if (block.includes("contacto") || block.includes("correo")) return "contacto"
-  if (block.includes("persona-moral") || block.includes("persona-fisica-o-moral")) return "cliente_pm"
-  if (block.includes("persona-fisica")) return "cliente_pf"
+  if (block.includes("persona-moral") || block.includes("persona-fisica-o-moral") || block === "persona-objeto-pm") return "cliente_pm"
+  if (block.includes("persona-fisica") || block === "persona-objeto-pf") return "cliente_pf"
   return undefined
 }
 
@@ -2606,7 +2645,7 @@ export function resolvePersonaObjetoScope(field: SatXlsmField): PersonaObjetoSco
  * datos del fiduciario y la persona moral por su denominación.
  */
 function personaObjetoPrefillTipo(prefill: Record<string, unknown>): PersonaObjetoTipo | undefined {
-  const declared = slug(stringPrefill(prefill.clienteTipoPersona))
+  const declared = slug(stringPrefill(prefill.clienteTipoPersona) || stringPrefill(prefill.clienteTipoPersonaSat))
   if (declared.includes("fideicomiso")) return "fideicomiso"
   if (declared.includes("moral")) return "persona_moral"
   if (declared.includes("fisica")) return "persona_fisica"

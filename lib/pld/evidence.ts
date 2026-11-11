@@ -1,4 +1,5 @@
 import type { DocumentRequirement, EvidenceChecklistEvaluation, OperacionEvidenceStatus } from "./types"
+import { normalizeClienteTipo } from "../data/tipos-cliente"
 
 const RCG_URL = "https://wwwnp.sat.gob.mx/minisitio/ActividadesVulnerables/documentos/Normateca/Nacional/LFPIORPI/RCG.pdf"
 
@@ -369,7 +370,8 @@ const LEGACY_CLIENT_TYPE_MAP: Record<string, string> = {
 
 export function normalizeClienteTipoForEvidence(tipoCliente: string | undefined | null) {
   if (!tipoCliente) return "pf_residente"
-  return LEGACY_CLIENT_TYPE_MAP[tipoCliente] ?? tipoCliente
+  const normalized = normalizeClienteTipo(tipoCliente)
+  return LEGACY_CLIENT_TYPE_MAP[normalized] ?? normalized
 }
 
 export function getDocumentRequirementsForCliente(
