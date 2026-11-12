@@ -24,7 +24,7 @@ function inputAttributes(file: string, id: string) {
   let attributes: Record<string, string> | undefined
   function visit(node: ts.Node) {
     if ((ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) && node.tagName.getText(parsed) === "Input") {
-      const attrs = Object.fromEntries(node.attributes.properties.filter(ts.isJsxAttribute).map(attr => [attr.name.getText(parsed), !attr.initializer ? "true" : ts.isStringLiteral(attr.initializer) ? attr.initializer.text : attr.initializer.expression?.getText(parsed) || ""]))
+      const attrs = Object.fromEntries(node.attributes.properties.filter(ts.isJsxAttribute).map(attr => [attr.name.getText(parsed), !attr.initializer ? "true" : ts.isStringLiteral(attr.initializer) ? attr.initializer.text : ts.isJsxExpression(attr.initializer) ? attr.initializer.expression?.getText(parsed) || "" : ""]))
       if (attrs.id === id) attributes = attrs
     }
     ts.forEachChild(node, visit)
