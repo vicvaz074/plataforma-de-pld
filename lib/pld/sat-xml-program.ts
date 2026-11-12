@@ -289,8 +289,8 @@ export function renderSatWorkbookXml(templateId: string, cells: Record<string, s
     }
     const moduleName = findRoutine(name, context)
     if (!moduleName) throw new Error(`Función XML no soportada: ${name}`)
-    const module = program.modules[moduleName]
-    let routine = module.routines[name]
+    const programModule = program.modules[moduleName]
+    let routine = programModule.routines[name]
     // FedatarioCompraVenta_v4_3 emits forma_pago, absent from the published
     // fep.xsd datos_liquidacion_type and ejemplo_fep6_compraventaacciones.xml.
     // Keep the workbook/macros and captured value intact; correct ONLY this
@@ -302,7 +302,7 @@ export function renderSatWorkbookXml(templateId: string, cells: Record<string, s
       }
       routine = { ...routine, lines: routine.lines.filter((line) => line !== incompatible) }
     }
-    const nested: Context = { module: moduleName, sheet: module.sheet || context.sheet, vars: { [name]: "" }, depth: context.depth + 1 }
+    const nested: Context = { module: moduleName, sheet: programModule.sheet || context.sheet, vars: { [name]: "" }, depth: context.depth + 1 }
     for (let i = 0; i < routine.params.length; i++) {
       const param = routine.params[i]
       nested.vars[param.name] = args[i] ?? (param.default ? expression(param.default, context) : "")

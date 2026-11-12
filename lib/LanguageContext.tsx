@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { createContext, useState, useContext, type ReactNode, useEffect } from "react"
+import { createContext, useState, useContext, type ReactNode, useEffect, useCallback } from "react"
 
 type Language = "es" | "en"
 
@@ -17,15 +17,15 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   useEffect(() => {
     const savedLanguage = localStorage.getItem("language") as Language
-    if (savedLanguage) {
+    if (savedLanguage === "es" || savedLanguage === "en") {
       setLanguage(savedLanguage)
     }
   }, [])
 
-  const handleSetLanguage = (lang: Language) => {
+  const handleSetLanguage = useCallback((lang: Language) => {
     setLanguage(lang)
     localStorage.setItem("language", lang)
-  }
+  }, [])
 
   return (
     <LanguageContext.Provider value={{ language, setLanguage: handleSetLanguage }}>{children}</LanguageContext.Provider>

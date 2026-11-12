@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "plataforma-de-pld",
+  "pages_build_output_dir": "./out",
+  "compatibility_date": "2026-11-11",
+  "services": [{"binding": "API", "service": "davara-pld"}],
+  "env": {
+    "preview": {"services": [{"binding": "API", "service": "davara-pld-preview"}]}
+  }
+}

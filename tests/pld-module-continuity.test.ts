@@ -1,12 +1,23 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { buildOperationalEvidenceLinks, countStoredRecords, mergeExternalEvidence, parseStoredArray, parseStoredObject, readActiveModuleOperations, readGovernanceIntegrationSnapshot, resolveEvidenceSource, restoreAuditWorkflow, reviewSignature } from "../lib/pld/module-continuity"
+import { buildAuditEvidenceLinks, buildOperationalEvidenceLinks, countStoredRecords, mergeExternalEvidence, parseStoredArray, parseStoredObject, readActiveModuleOperations, readGovernanceIntegrationSnapshot, resolveEvidenceSource, restoreAuditWorkflow, reviewSignature } from "../lib/pld/module-continuity"
 
 const NOW = "2026-09-26T12:00:00.000Z"
 function storage(initial: Record<string, unknown>) {
   const data = new Map(Object.entries(initial).map(([key, value]) => [key, JSON.stringify(value)]))
   return { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value) } }
 }
+
+test("audit questionnaire PDFs synchronize with exact private bytes references and keep history",()=>{
+  const source=storage({"auditoria-verificacion-workflow":{schemaVersion:2,responses:{"lineamientos-90-dias":{answer:"si",evidences:[{id:"pdf-one",fileName:"lineamientos.pdf",fileType:"application/pdf",fileSize:3,uploadedAt:NOW,url:"/api/v1/companies/authorized/files/original"}]}}}})
+  const first=buildAuditEvidenceLinks(source,NOW)
+  assert.equal(first.length,1);assert.equal(first[0].module,"auditoria");assert.equal(first[0].documentType,"evidencia-control-auditoria")
+  assert.equal(first[0].fileData,"/api/v1/companies/authorized/files/original")
+  assert.equal(resolveEvidenceSource(source,first[0].sourceReference),first[0].fileData)
+  const newer={...first[0],fileData:"/api/v1/companies/authorized/files/new-version",uploadDate:"2026-11-11T12:00:00Z"}
+  const merged=mergeExternalEvidence(first,[newer],NOW)[0]
+  assert.equal(merged.version,2);assert.equal((merged.versionHistory as Array<{fileData?:string}>)[0].fileData,first[0].fileData)
+})
 
 test("collection counts recognize indexed legacy maps without treating metadata as records", () => {
   assert.equal(countStoredRecords({ schemaVersion: 2, updatedAt: NOW, "id-one": { id: "one" }, "id-two": { id: "two" } }), 2)
@@ -28,7 +39,7 @@ test("malformed persistent collections are rejected instead of becoming empty de
 test("audit workflow survives serialization including portable data URLs and typed dates", () => {
   const raw = JSON.parse(JSON.stringify({
     schemaVersion: 2,
-    responses: { one: { answer: "si", evidences: [{ id: "file", fileName: "evidence.pdf", fileSize: 3, url: "data:application/pdf;base64,AAA", uploadedAt: new Date(NOW) }, { id: "legacy", url: "blob:expired", uploadedAt: NOW }] } },
+    responses: { one: { answer: "si", evidences: [{ id: "file", fileName: "evidence.pdf", fileSize: 3, url: "data:application/pdf;base64,AAA", uploadedAt: new Date(NOW) }, { id: "legacy", url: "blob:expired", uploadedAt: NOW }, { id: "private", url: "/api/v1/companies/authorized/files/immutable-version", uploadedAt: NOW }] } },
     scopeAnswers: { one: "no", two: "invalid" }, scopeExclusions: "Fuera del periodo revisado",
     reviewAnswers: { one: { rating: "cumple-parcial", findings: "Hallazgo", recommendations: "Corregir" } },
     finalChecklist: { one: true, two: "true" },
@@ -39,6 +50,7 @@ test("audit workflow survives serialization including portable data URLs and typ
   assert.equal(restored.responses.one.evidences[0].uploadedAt.toISOString(), NOW)
   assert.equal(restored.responses.one.evidences[1].id, "legacy", "retain legacy attachment metadata even when blob expired")
   assert.equal(restored.responses.one.evidences[1].url, "")
+  assert.equal(restored.responses.one.evidences[2].url, "/api/v1/companies/authorized/files/immutable-version", "private immutable version references survive reload")
   assert.equal(restored.scopeAnswers.one, "no")
   assert.equal(restored.scopeAnswers.two, "si")
   assert.equal(restored.scopeExclusions, "Fuera del periodo revisado")
@@ -96,7 +108,7 @@ test("operational references connect EUI, Actos and SAT without duplicating file
 })
 
 test("governance reads current module keys and excludes cancelled/draft/resolved operations", () => {
-  const operation = { id: "op", actividadKey: "fraccion-viii-vehiculos", cliente: "Cliente", rfc: "AAA010101AA1", tipoCliente: "pf_residente", monto: 10_000_000, fechaOperacion: "2026-09-26", periodo: "2026-09", alerta: "Preparar aviso", lifecycle: { status: "active" }, alertaResuelta: false }
+  const operation = { id: "op",clienteId:"fixture-linked-client", actividadKey: "fraccion-viii-vehiculos", cliente: "Cliente", rfc: "AAA010101AA1", tipoCliente: "pf_residente", monto: 10_000_000, fechaOperacion: "2026-09-26", periodo: "2026-09", alerta: "Preparar aviso", lifecycle: { status: "active" }, alertaResuelta: false }
   const source = storage({
     "pld-training-module": { documents: [{ id: "1" }, { id: "2" }] },
     "auditoria-interna-registros": [{ id: "1", findings: "Hallazgo pendiente" }, { id: "2", findings: "" }],

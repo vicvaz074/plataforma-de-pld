@@ -7,95 +7,40 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { LanguageProvider } from "@/lib/LanguageContext"
-import { AppProvider } from "@/lib/AppContext"
-import { DEFAULT_USERS } from "@/lib/default-users"
 import { Toaster } from "@/components/ui/toaster"
+import { PilotProvider, usePilot } from "@/components/pilot/pilot-provider"
 
-const SIDEBAR_EXPANDED_WIDTH = "clamp(15rem, 16.9vw, 24rem)"
-const SIDEBAR_COLLAPSED_WIDTH = "5rem"
-
+function ApplicationShell({ children }: { children: React.ReactNode }) {
+  const { mode, session } = usePilot()
+  const [demoAuthenticated, setDemoAuthenticated] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
+  const [compact, setCompact] = useState(false)
+  const pathname = usePathname(); const router = useRouter()
+  useEffect(() => {
+    const update = () => setCompact(window.innerWidth < 768)
+    update(); window.addEventListener("resize", update)
+    setCollapsed(localStorage.getItem("sidebarCollapsed") === "true")
+    return () => window.removeEventListener("resize", update)
+  }, [])
+  useEffect(() => {
+    if (mode !== "demo") return
+    const authenticated = localStorage.getItem("isAuthenticated") === "true"
+    setDemoAuthenticated(authenticated)
+    if (!authenticated && pathname !== "/login") router.replace("/login")
+    if (authenticated && pathname === "/login") router.replace("/")
+  }, [pathname, mode, router])
+  const authenticated = mode === "cloud" ? Boolean(session) : demoAuthenticated
+  const sidebarCollapsed = compact || collapsed
+  const offset = compact ? "0px" : sidebarCollapsed ? "5rem" : "clamp(15rem, 16.9vw, 24rem)"
+  if (pathname === "/login" || pathname === "/setup") return <>{children}</>
+  return <div className="flex min-h-screen overflow-x-clip" style={{ "--app-header-height": "68px" } as React.CSSProperties}>
+    {authenticated && !compact && <Sidebar collapsed={sidebarCollapsed} onToggle={() => setCollapsed((value) => { localStorage.setItem("sidebarCollapsed", String(!value)); return !value })} />}
+    <div className="flex min-w-0 flex-1 flex-col transition-[margin,width] duration-200" style={{ marginLeft: authenticated ? offset : 0, width: authenticated ? `calc(100% - ${offset})` : "100%" }}>
+      {authenticated && <Header />}
+      <main className={`min-w-0 flex-1 bg-background ${pathname === "/" ? "p-0" : "p-4 sm:p-6 lg:p-8"}`} style={authenticated ? { marginTop: "var(--app-header-height)" } : undefined}>{children}</main>
+    </div>
+  </div>
+}
 export function ClientLayout({ children }: { children: React.ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-  const [isCompactViewport, setIsCompactViewport] = useState(false)
-  const pathname = usePathname()
-  const router = useRouter()
-
-  useEffect(() => {
-    const storedUsers = JSON.parse(localStorage.getItem("users") || "[]")
-    let shouldUpdate = false
-
-    DEFAULT_USERS.forEach((defaultUser) => {
-      const exists = storedUsers.some((user: { email: string }) => user.email === defaultUser.email)
-      if (!exists) {
-        storedUsers.push(defaultUser)
-        shouldUpdate = true
-      }
-    })
-
-    if (shouldUpdate) {
-      localStorage.setItem("users", JSON.stringify(storedUsers))
-    }
-  }, [])
-
-  useEffect(() => {
-    const authStatus = localStorage.getItem("isAuthenticated")
-    setIsAuthenticated(authStatus === "true")
-
-    if (!authStatus && pathname !== "/login") {
-      router.push("/login")
-    } else if (authStatus === "true" && pathname === "/login") {
-      router.push("/")
-    }
-  }, [pathname, router])
-
-  useEffect(() => {
-    const persisted = localStorage.getItem("sidebarCollapsed")
-    if (persisted) {
-      setIsSidebarCollapsed(persisted === "true")
-    }
-  }, [])
-
-  useEffect(() => {
-    const updateViewport = () => setIsCompactViewport(window.innerWidth < 768)
-    updateViewport()
-    window.addEventListener("resize", updateViewport)
-    return () => window.removeEventListener("resize", updateViewport)
-  }, [])
-
-  const handleSidebarToggle = () => {
-    setIsSidebarCollapsed((prev) => {
-      const next = !prev
-      localStorage.setItem("sidebarCollapsed", String(next))
-      return next
-    })
-  }
-
-  const isLoginPage = pathname === "/login"
-  const effectiveSidebarCollapsed = isCompactViewport || isSidebarCollapsed
-  const sidebarOffset = effectiveSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH
-  const contentStyle = isAuthenticated
-    ? { marginLeft: sidebarOffset, width: `calc(100% - ${sidebarOffset})` }
-    : { marginLeft: 0, width: "100%" }
-
-  return (
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-      <AppProvider>
-        <LanguageProvider>
-          {isLoginPage ? (
-            children
-          ) : (
-            <div className="flex min-h-screen overflow-x-hidden" style={{ "--app-header-height": "clamp(68px, 4.55vw, 102px)" } as React.CSSProperties}>
-              {isAuthenticated && <Sidebar collapsed={effectiveSidebarCollapsed} onToggle={handleSidebarToggle} />}
-              <div className="flex-1 min-w-0 flex flex-col transition-[margin,width] duration-300" style={contentStyle}>
-                {isAuthenticated && <Header />}
-                <main className={`min-w-0 flex-1 bg-background ${pathname === "/" ? "p-0" : "p-4 sm:p-8"}`} style={isAuthenticated ? { marginTop: "var(--app-header-height)" } : undefined}>{children}</main>
-              </div>
-            </div>
-          )}
-          <Toaster />
-        </LanguageProvider>
-      </AppProvider>
-    </ThemeProvider>
-  )
+  return <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange><LanguageProvider><PilotProvider><ApplicationShell>{children}</ApplicationShell></PilotProvider><Toaster /></LanguageProvider></ThemeProvider>
 }

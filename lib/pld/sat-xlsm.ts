@@ -1,5 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate"
 import { normalizeXiiFields } from "./sat-xii-rules"
+import { isSatCellAddress, normalizeSatFieldValues } from "./sat-field-values"
 
 import {
   BENEFICIARY_PERSON_TYPE_FIELD_ID,
@@ -366,7 +367,7 @@ function applySatTemplateFieldRules(
     fields: section.fields.map((field) =>
       field.dataType === "moneda" && /^fecha(?:-|$)/.test(slug(field.label))
         ? { ...field, dataType: "fecha" as const } : field
-    ).map(applyBeneficiaryFieldRules).map(applyPersonaObjetoFieldRules),
+    ).map(applyBeneficiaryFieldRules).map((field) => applyPersonaObjetoFieldRules(field, templateId)),
   })))))
   if (templateId !== XII_NOTARIOS_A_TEMPLATE_ID) return sectionsWithBeneficiaryRules
 
@@ -427,8 +428,21 @@ function applyBeneficiaryFieldRules(field: SatXlsmField): SatXlsmField {
  * sin esta regla los tres se piden a la vez y el libro termina con datos de una
  * figura que no participó en el acto.
  */
-function applyPersonaObjetoFieldRules(field: SatXlsmField): SatXlsmField {
+function applyPersonaObjetoFieldRules(field: SatXlsmField, templateId: string): SatXlsmField {
   if (!slug(field.sheetName).includes("persona-objeto")) return field
+
+  // Arrendamiento_v4_5, B44: este bloque es exclusivamente el representante
+  // de personas morales o fideicomisos. La PF se captura en B19:I28.
+  // Fuente SAT/SPPLD arrendamiento, consulta 2026-11-11.
+  if (templateId === "sat-fraccion-xv-arrendamiento" &&
+      slug(field.repeatGroup ?? "") === "persona-objeto-representante") {
+    return {
+      ...field,
+      activeWhen: appendSatFieldConditions(field.activeWhen, [
+        { fieldId: PERSONA_OBJETO_TYPE_FIELD_ID, equals: ["persona_moral", "fideicomiso"] },
+      ]),
+    }
+  }
 
   const domicilio = personaObjetoDomicilioBranch(field)
   if (domicilio) {
@@ -462,8 +476,8 @@ function personaObjetoFieldBranch(field: SatXlsmField): PersonaObjetoTipo | unde
   if (block.includes("domicilio") || block.includes("telefono") || block.includes("contacto")) {
     return undefined
   }
-  if (group.includes("persona-moral") || block.includes("persona-moral")) return "persona_moral"
-  if (group.includes("persona-fisica") || block.includes("persona-fisica")) return "persona_fisica"
+  if (group.includes("persona-moral") || block.includes("persona-moral") || block === "persona-objeto-pm") return "persona_moral"
+  if (group.includes("persona-fisica") || block.includes("persona-fisica") || block === "persona-objeto-pf") return "persona_fisica"
   return undefined
 }
 
@@ -535,23 +549,24 @@ export function fillSatXlsmTemplate(
 ): SatFilledWorkbookResult {
   const zip = unzipSync(input)
   const workbook = parseWorkbook(zip)
-  const layout = options.layout ? normalizeSatXlsmLayout(options.layout) : undefined
+  // Even the legacy no-layout caller writes only fields identified in the book.
+  const layout = options.layout ? normalizeSatXlsmLayout(options.layout) : extractSatXlsmLayoutFromBuffer(input, options.template)
   const styleKinds = parseWorkbookStyleKinds(readZipText(zip, "xl/styles.xml"))
   let postalCatalog: Map<string, PostalCatalogEntry> | undefined
   const getPostalCatalog = () => {
     postalCatalog = postalCatalog || extractPostalCatalog(zip, workbook)
     return postalCatalog
   }
-  const normalizedValues = Object.fromEntries(
+  const normalizedValues = normalizeSatFieldValues(layout.sections.flatMap((section) => section.fields), Object.fromEntries(
     Object.entries(options.values).map(([key, value]) => [key, normalizeString(value)]),
-  )
+  ))
   const activeValues = layout
     ? pruneInactiveSatFieldValues({
         fields: layout.sections.flatMap((section) => section.fields),
         values: normalizedValues,
       })
     : normalizedValues
-  const cellValues = resolveWorkbookCellValues(activeValues, layout)
+  const cellValues = resolveWorkbookCellValues(activeValues, layout, Boolean(options.layout))
   const writtenCells: string[] = []
 
   for (const sheet of workbook.sheets) {
@@ -567,7 +582,7 @@ export function fillSatXlsmTemplate(
     zip[sheet.path] = strToU8(updatedXml)
   }
 
-  const missingRequiredFields = layout
+  const missingRequiredFields = options.layout
     ? layout.sections
         .flatMap((section) => section.fields)
         .filter((field) => isSatXlsmFieldRequired(field, activeValues))
@@ -579,7 +594,7 @@ export function fillSatXlsmTemplate(
         })
         .map((field) => field.id)
     : []
-  if (layout) missingRequiredFields.push(...getSatOperationBranchMissingLabels(layout.templateId, activeValues, layout.sections.flatMap((section) => section.fields)))
+  if (options.layout) missingRequiredFields.push(...getSatOperationBranchMissingLabels(layout.templateId, activeValues, layout.sections.flatMap((section) => section.fields)))
 
   return {
     status: missingRequiredFields.length ? "blocked" : "filled",
@@ -598,9 +613,9 @@ export function satFieldValuesToWorkbookCells(
   const cells: Record<string, string> = {}
   const normalizedLayout = normalizeSatXlsmLayout(layout)
   const fields = normalizedLayout.sections.flatMap((section) => section.fields)
-  const normalizedValues = Object.fromEntries(
+  const normalizedValues = normalizeSatFieldValues(fields, Object.fromEntries(
     Object.entries(values).map(([key, value]) => [key, normalizeString(value)]),
-  )
+  ))
   const activeValues = pruneInactiveSatFieldValues({ fields, values: normalizedValues })
   const knownCells = new Set(fields.map((field) => `${field.sheetName}!${field.cell}`))
 
@@ -1716,6 +1731,32 @@ function getArrendamientoManualFields(sheetName: string, optionLists: SatXlsmOpt
       field("persona_aviso.tipo_alerta", "Tipo de alerta", "C7", "catalogo", "Alertas", true, {
         sectionKind: "alta_sat",
       }),
+      // Arrendamiento_v4_5.xlsm, "Persona Objeto del aviso", headers B18:I18
+      // and input rows 19:28. The SAT marks names, nationality and activity with
+      // an asterisk; date of birth/RFC/CURP have no asterisk in this workbook.
+      // Source: SAT Fracción XV / arrendamiento.zip, consulted 2026-11-11.
+      ...buildRepeatedFields({
+        groupId: "persona_objeto_pf",
+        basePrefix: "persona_aviso.pf",
+        labelPrefix: "Persona física objeto del aviso",
+        sheetName,
+        startRow: 19,
+        count: 10,
+        sectionKind: "persona_objeto",
+        requiredFirstRow: true,
+        optionalFirstRowKeys: ["fecha_nacimiento", "rfc", "curp"],
+        columns: [
+          ["nombre", "Nombre(s)", "B", "texto"],
+          ["apellido_paterno", "Apellido paterno", "C", "texto"],
+          ["apellido_materno", "Apellido materno", "D", "texto"],
+          ["fecha_nacimiento", "Fecha de nacimiento", "E", "fecha"],
+          ["rfc", "RFC", "F", "texto"],
+          ["curp", "CURP", "G", "texto"],
+          ["pais_nacionalidad", "País de nacionalidad", "H", "catalogo", "Paises"],
+          ["actividad_economica", "Actividad económica", "I", "catalogo", "Actividades"],
+        ],
+        field,
+      }),
       ...buildRepeatedFields({
         groupId: "persona_objeto_pm",
         basePrefix: "persona_aviso.pm",
@@ -1967,6 +2008,7 @@ function fieldPriority(field: SatXlsmField) {
 function resolveWorkbookCellValues(
   values: Record<string, string | number | boolean | null | undefined>,
   layout?: SatXlsmLayout,
+  useFieldTypes = true,
 ): Map<string, Map<string, ResolvedWorkbookCellValue>> {
   const result = new Map<string, Map<string, ResolvedWorkbookCellValue>>()
   const fieldMap = new Map<string, SatXlsmField>()
@@ -1992,13 +2034,13 @@ function resolveWorkbookCellValues(
       sheetName = field.sheetName
       cell = field.cell
     }
-    if (!sheetName || !cell) continue
+    if (!sheetName || !isSatCellAddress(cell.toUpperCase()) || !field) throw new Error("La celda SAT no corresponde al formato seleccionado.")
     if (!result.has(sheetName)) result.set(sheetName, new Map())
     const value = normalizeWorkbookValue(key, rawValue, field)
     result.get(sheetName)?.set(cell.toUpperCase(), {
       value,
-      dataType: workbookDataTypeForField(field),
-      writeDateAsText: shouldWriteDateAsText(field),
+      dataType: useFieldTypes ? workbookDataTypeForField(field) : undefined,
+      writeDateAsText: useFieldTypes && shouldWriteDateAsText(field),
     })
   }
   return result
@@ -2096,7 +2138,7 @@ function setCellNumber(xml: string, cellRef: string, value: string): string {
     const attrs = existing[1] || existing[2] || ""
     const style = getAttr(attrs, "s")
     const styleAttr = style ? ` s="${style}"` : ""
-    return xml.replace(cellRegex, `<c r="${cellRef}"${styleAttr}><v>${escapeXml(value)}</v></c>`)
+    return xml.replace(cellRegex, () => `<c r="${cellRef}"${styleAttr}><v>${escapeXml(value)}</v></c>`)
   }
 
   const cellXml = `<c r="${cellRef}"><v>${escapeXml(value)}</v></c>`
@@ -2120,7 +2162,7 @@ function setCellInlineString(xml: string, cellRef: string, value: string): strin
     const attrs = existing[1] || existing[2] || ""
     const style = getAttr(attrs, "s")
     const styleAttr = style ? ` s="${style}"` : ""
-    return xml.replace(cellRegex, `<c r="${cellRef}"${styleAttr} t="inlineStr"><is><t>${escaped}</t></is></c>`)
+    return xml.replace(cellRegex, () => `<c r="${cellRef}"${styleAttr} t="inlineStr"><is><t>${escaped}</t></is></c>`)
   }
 
   const cellXml = `<c r="${cellRef}" t="inlineStr"><is><t>${escaped}</t></is></c>`
@@ -2470,6 +2512,10 @@ function inferPrefillValueForExtractedField(field: SatXlsmField, prefill: Record
     if (headerValue !== undefined) return headerValue
 
     const scope = resolvePersonaObjetoScope(field)
+    // Optional header RFCs (e.g. Entidad Colegiada C9/E9) have no client
+    // identity scope. Never populate them from the customer by label/row.
+    // Known subject headers are handled explicitly above/canonical lookup.
+    if (!scope && label.includes("rfc")) return undefined
     if (scope === "fideicomiso") return inferFideicomisoFieldPrefill(label, prefill)
     if (scope === "domicilio_nacional" || scope === "domicilio_internacional") {
       return inferDomicilioFieldPrefill(label, col, prefill)
@@ -2484,7 +2530,7 @@ function inferPrefillValueForExtractedField(field: SatXlsmField, prefill: Record
     if (row >= 46 && row <= 58) return inferPersonFieldPrefill(label, col, prefill, "representante")
     if (row >= 59 && row <= 85) return inferDomicilioFieldPrefill(label, col, prefill)
     if (row >= 86) return inferContactoFieldPrefill(label, col, prefill)
-    return inferPersonFieldPrefill(label, col, prefill, "cliente")
+    return undefined
   }
 
   if (sheet.includes("beneficiario")) {
@@ -2573,7 +2619,7 @@ type PersonaObjetoScope =
  * el prellenado en el resto. El rótulo del bloque —y el del grupo de columnas
  * cuando el Anexo separa persona moral de fideicomiso— sí es estable.
  */
-function resolvePersonaObjetoScope(field: SatXlsmField): PersonaObjetoScope | undefined {
+export function resolvePersonaObjetoScope(field: SatXlsmField): PersonaObjetoScope | undefined {
   const group = slug(field.conditionalGroup ?? "")
   if (group.includes("fideicomiso") || group.includes("fiduciari")) return "fideicomiso"
 
@@ -2588,8 +2634,8 @@ function resolvePersonaObjetoScope(field: SatXlsmField): PersonaObjetoScope | un
     return "contacto"
   }
   if (block.includes("contacto") || block.includes("correo")) return "contacto"
-  if (block.includes("persona-moral") || block.includes("persona-fisica-o-moral")) return "cliente_pm"
-  if (block.includes("persona-fisica")) return "cliente_pf"
+  if (block.includes("persona-moral") || block.includes("persona-fisica-o-moral") || block === "persona-objeto-pm") return "cliente_pm"
+  if (block.includes("persona-fisica") || block === "persona-objeto-pf") return "cliente_pf"
   return undefined
 }
 
@@ -2599,7 +2645,7 @@ function resolvePersonaObjetoScope(field: SatXlsmField): PersonaObjetoScope | un
  * datos del fiduciario y la persona moral por su denominación.
  */
 function personaObjetoPrefillTipo(prefill: Record<string, unknown>): PersonaObjetoTipo | undefined {
-  const declared = slug(stringPrefill(prefill.clienteTipoPersona))
+  const declared = slug(stringPrefill(prefill.clienteTipoPersona) || stringPrefill(prefill.clienteTipoPersonaSat))
   if (declared.includes("fideicomiso")) return "fideicomiso"
   if (declared.includes("moral")) return "persona_moral"
   if (declared.includes("fisica")) return "persona_fisica"

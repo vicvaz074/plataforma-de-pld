@@ -1,7 +1,11 @@
 "use client"
+import { DocumentLink } from "@/components/pld/document-link"
+import { serializeCsv } from "@/lib/pld/csv"
+import { getModuleStorage } from "@/lib/pilot/module-storage"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { differenceInBusinessDays, differenceInCalendarDays, format, formatDistanceToNow, parseISO } from "date-fns"
+import { differenceInBusinessDays, differenceInCalendarDays, format, formatDistanceToNow } from "date-fns"
+import { parsePldCalendarDate, stringifyPldCalendarFields } from "@/lib/pld/calendar-date"
 import { AUDIT_2026_CHECKLIST, AUDIT_2026_SECTIONS, RCG_2026_SOURCE } from "@/lib/pld/regulatory-calendar"
 import { es } from "date-fns/locale"
 import {
@@ -28,8 +32,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/components/ui/use-toast"
 import { AlertTriangle, CheckCircle2, CircleDashed, Download, FileCheck, FileWarning, Info, ShieldAlert, UploadCloud } from "lucide-react"
-import jsPDF from "jspdf"
-import { KYC_FORM_TEMPLATES, type KycFormType } from "@/lib/pld"
+import { downloadProfessionalReport } from "@/lib/pld/reports"
+import { buildFormalAuditProfessionalReport, buildInternalAuditsProfessionalReport, buildKycBlankProfessionalReport } from "@/lib/pld/module-reports"
+import { KYC_FORM_TEMPLATES, type KycFormType } from "@/lib/pld/forms"
 import { parseStoredArray, parseStoredObject, readActiveModuleOperations, restoreAuditWorkflow } from "@/lib/pld/module-continuity"
 import { notifyPldIntegrationChange, PLD_INTEGRATION_EVENT, readPldSubjects } from "@/lib/pld/integration-records"
 
@@ -354,10 +359,8 @@ type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS]
 
 const storeWithDates = <T,>(key: StorageKey, value: T) => {
   if (typeof window === "undefined") return
-  const payload = JSON.stringify(value, (_storageKey, storageValue) =>
-    storageValue instanceof Date ? storageValue.toISOString() : storageValue
-  )
-  window.localStorage.setItem(key, payload)
+  const payload = stringifyPldCalendarFields(value,["date","followUpDue","receivedAt","dueDate","respondedAt","deadline"])
+  getModuleStorage().setItem(key, payload)
   notifyPldIntegrationChange(key)
 }
 
@@ -369,7 +372,7 @@ const parseStoredLineamientos = (raw: unknown): LineamientoVersion[] => {
         date?: string
       }
       if (!version || !date || !approvedBy) return []
-      const parsedDate = new Date(date)
+      const parsedDate = parsePldCalendarDate(date)
       if (Number.isNaN(parsedDate.getTime())) return []
       return [{ version, date: parsedDate, approvedBy, notes }]
     })
@@ -391,10 +394,10 @@ const parseStoredAudits = (raw: unknown): InternalAuditRecord[] => {
         return []
       }
 
-      const parsedDate = new Date(date)
+      const parsedDate = parsePldCalendarDate(date)
       if (Number.isNaN(parsedDate.getTime())) return []
 
-      const parsedFollowUp = followUpDue ? new Date(followUpDue) : undefined
+      const parsedFollowUp = followUpDue ? parsePldCalendarDate(followUpDue) : undefined
       if (parsedFollowUp && Number.isNaN(parsedFollowUp.getTime())) return []
 
       const normalizedScope = scope
@@ -435,11 +438,11 @@ const parseStoredRequests = (raw: unknown): AuthorityRequest[] => {
       if (!["SAT", "UIF"].includes(authority)) return []
       if (!["Pendiente", "En progreso", "Cerrado"].includes(status)) return []
 
-      const parsedReceived = new Date(receivedAt)
-      const parsedDue = new Date(dueDate)
+      const parsedReceived = parsePldCalendarDate(receivedAt)
+      const parsedDue = parsePldCalendarDate(dueDate)
       if (Number.isNaN(parsedReceived.getTime()) || Number.isNaN(parsedDue.getTime())) return []
 
-      const parsedResponded = respondedAt ? new Date(respondedAt) : undefined
+      const parsedResponded = respondedAt ? parsePldCalendarDate(respondedAt) : undefined
       if (parsedResponded && Number.isNaN(parsedResponded.getTime())) return []
 
       const normalizedDocuments = Array.isArray(documents)
@@ -472,7 +475,7 @@ const parseStoredActionPlans = (raw: unknown): ActionPlan[] => {
 
       if (!id || !source || !action || !responsible || !deadline) return null
 
-      const parsedDeadline = new Date(deadline)
+      const parsedDeadline = parsePldCalendarDate(deadline)
       if (Number.isNaN(parsedDeadline.getTime())) return null
 
       const normalizedStatus = status && ["En seguimiento", "Cerrado", "Pendiente"].includes(status)
@@ -533,7 +536,7 @@ export default function AuditoriaVerificacionPage() {
   }, [toast])
   useEffect(() => {
     try {
-      const restored = restoreAuditWorkflow(parseStoredObject(localStorage.getItem(STORAGE_KEYS.workflow)), { responses, scopeAnswers, reviewAnswers, finalChecklist })
+      const restored = restoreAuditWorkflow(parseStoredObject(getModuleStorage().getItem(STORAGE_KEYS.workflow)), { responses, scopeAnswers, reviewAnswers, finalChecklist })
       setResponses(restored.responses as Record<string, ControlResponse>)
       setScopeAnswers(restored.scopeAnswers as Record<string, ScopeSelection>)
       setReviewAnswers(restored.reviewAnswers as typeof reviewAnswers)
@@ -585,8 +588,8 @@ export default function AuditoriaVerificacionPage() {
   const loadCrossModuleContext = useCallback(() => {
     if (typeof window === "undefined") return
 
-    const operaciones = readActiveModuleOperations(window.localStorage)
-    const subjects = readPldSubjects(window.localStorage)
+    const operaciones = readActiveModuleOperations(getModuleStorage())
+    const subjects = readPldSubjects(getModuleStorage())
 
     const periodos = operaciones
       .map((operacion) => (typeof operacion.periodo === "string" ? operacion.periodo : ""))
@@ -603,7 +606,7 @@ export default function AuditoriaVerificacionPage() {
     }, 0) / 100
 
     const ultimaOperacion = operaciones
-      .map((operacion) => (typeof operacion.fechaOperacion === "string" ? new Date(operacion.fechaOperacion) : null))
+      .map((operacion) => (typeof operacion.fechaOperacion === "string" ? parsePldCalendarDate(operacion.fechaOperacion) : null))
       .filter((date): date is Date => Boolean(date && !Number.isNaN(date.getTime())))
       .sort((a, b) => b.getTime() - a.getTime())[0] ?? null
 
@@ -639,7 +642,7 @@ export default function AuditoriaVerificacionPage() {
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEYS.lineamientos)
+      const stored = getModuleStorage().getItem(STORAGE_KEYS.lineamientos)
       if (stored) {
         const parsed = parseStoredLineamientos(parseStoredArray(stored))
         if (parsed.length) {
@@ -661,7 +664,7 @@ export default function AuditoriaVerificacionPage() {
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEYS.auditorias)
+      const stored = getModuleStorage().getItem(STORAGE_KEYS.auditorias)
       if (stored) {
         const parsed = parseStoredAudits(parseStoredArray(stored))
         if (parsed.length) {
@@ -683,7 +686,7 @@ export default function AuditoriaVerificacionPage() {
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEYS.observaciones)
+      const stored = getModuleStorage().getItem(STORAGE_KEYS.observaciones)
       if (stored) {
         const parsed = parseStoredRequests(parseStoredArray(stored))
         if (parsed.length) {
@@ -705,7 +708,7 @@ export default function AuditoriaVerificacionPage() {
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEYS.planes)
+      const stored = getModuleStorage().getItem(STORAGE_KEYS.planes)
       if (stored) {
         const parsed = parseStoredActionPlans(parseStoredArray(stored))
         if (parsed.length) {
@@ -969,7 +972,7 @@ export default function AuditoriaVerificacionPage() {
 
     const version: LineamientoVersion = {
       version: newVersion.version,
-      date: new Date(newVersion.date),
+      date: parsePldCalendarDate(newVersion.date),
       approvedBy: newVersion.approvedBy,
       notes: newVersion.notes || undefined,
     }
@@ -994,12 +997,12 @@ export default function AuditoriaVerificacionPage() {
 
     const record: InternalAuditRecord = {
       id: newAudit.id,
-      date: new Date(newAudit.date),
+      date: parsePldCalendarDate(newAudit.date),
       scope: newAudit.scope.split(",").map((item) => item.trim()).filter(Boolean),
       findings: newAudit.findings,
       responsible: newAudit.responsible,
       status: "En seguimiento",
-      followUpDue: newAudit.followUpDue ? new Date(newAudit.followUpDue) : undefined,
+      followUpDue: newAudit.followUpDue ? parsePldCalendarDate(newAudit.followUpDue) : undefined,
     }
 
     setAuditLog((prev) => sortByRecentDate([...prev, record], (item) => item.date))
@@ -1017,13 +1020,13 @@ export default function AuditoriaVerificacionPage() {
       return
     }
 
-    const receivedAt = parseISO(newRequest.receivedAt)
+    const receivedAt = parsePldCalendarDate(newRequest.receivedAt)
     const request: AuthorityRequest = {
       id: newRequest.id,
       authority: newRequest.authority as "SAT" | "UIF",
       receivedAt,
-      dueDate: parseISO(newRequest.dueDate),
-      respondedAt: newRequest.respondedAt ? new Date(newRequest.respondedAt) : undefined,
+      dueDate: parsePldCalendarDate(newRequest.dueDate),
+      respondedAt: newRequest.respondedAt ? parsePldCalendarDate(newRequest.respondedAt) : undefined,
       status: newRequest.respondedAt ? "Cerrado" : "Pendiente",
       responsible: newRequest.responsible,
       documents: newRequest.documents
@@ -1068,7 +1071,7 @@ export default function AuditoriaVerificacionPage() {
       source: newActionPlan.source,
       action: newActionPlan.action,
       responsible: newActionPlan.responsible,
-      deadline: new Date(newActionPlan.deadline),
+      deadline: parsePldCalendarDate(newActionPlan.deadline),
       status: "Pendiente",
       progress: 0,
     }
@@ -1099,21 +1102,19 @@ export default function AuditoriaVerificacionPage() {
   }
 
   const exportAuditsToExcel = () => {
-    const header = "ID,Fecha,Alcance,Hallazgos,Responsable,Estatus\n"
     const rows = auditLog
       .map((record) =>
         [
           record.id,
           format(record.date, "yyyy-MM-dd"),
           record.scope.join(" | "),
-          record.findings.replace(/\n/g, " "),
+          record.findings,
           record.responsible,
           record.status,
-        ].join(","),
+        ],
       )
-      .join("\n")
 
-    const csvContent = `${header}${rows}`
+    const csvContent = serializeCsv([["ID", "Fecha", "Alcance", "Hallazgos", "Responsable", "Estatus"], ...rows])
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
@@ -1123,189 +1124,36 @@ export default function AuditoriaVerificacionPage() {
     URL.revokeObjectURL(url)
   }
 
-  const exportAuditsToPdf = () => {
-    const doc = new jsPDF({ orientation: "landscape" })
-    doc.setFontSize(14)
-    doc.text("Informe de Auditorías Internas", 14, 18)
-
-    doc.setFontSize(10)
-    const startY = 28
-    const columnWidths = [30, 30, 60, 120, 40, 30]
-    const headers = ["ID", "Fecha", "Alcance", "Hallazgos", "Responsable", "Estatus"]
-
-    let currentY = startY
-
-    doc.setFont("helvetica", "bold")
-    headers.forEach((header, index) => {
-      doc.text(header, 14 + columnWidths.slice(0, index).reduce((acc, width) => acc + width, 0), currentY)
-    })
-
-    doc.setFont("helvetica", "normal")
-    currentY += 8
-
-    auditLog.forEach((record) => {
-      const values = [
-        record.id,
-        format(record.date, "dd/MM/yyyy"),
-        record.scope.join(" | "),
-        record.findings,
-        record.responsible,
-        record.status,
-      ]
-
-      values.forEach((value, index) => {
-        const text = doc.splitTextToSize(String(value), columnWidths[index] - 4)
-        doc.text(text, 14 + columnWidths.slice(0, index).reduce((acc, width) => acc + width, 0), currentY)
-      })
-
-      currentY += 10
-      if (currentY > 190) {
-        doc.addPage()
-        currentY = 20
-      }
-    })
-
-    doc.save("auditorias-internas.pdf")
+  const exportAuditsToPdf = async () => {
+    try {
+      const report = buildInternalAuditsProfessionalReport(auditLog)
+      await downloadProfessionalReport(report, "auditoria")
+    } catch (error) {
+      toast({ title: "No se pudo exportar la bitácora", description: error instanceof Error ? error.message : "Reintenta la descarga sin cambiar de empresa.", variant: "destructive" })
+    }
   }
 
-  const exportFormalAuditReport = () => {
-    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" })
-    const margin = 54
-    const width = doc.internal.pageSize.getWidth()
-    const height = doc.internal.pageSize.getHeight()
-    let y = 58
-
-    const ensureSpace = (needed = 44) => {
-      if (y + needed > height - margin) {
-        doc.addPage()
-        y = margin
-      }
-    }
-    const addText = (text: string, fontSize = 10, style: "normal" | "bold" = "normal") => {
-      doc.setFont("helvetica", style)
-      doc.setFontSize(fontSize)
-      const lines = doc.splitTextToSize(text, width - margin * 2)
-      ensureSpace(lines.length * 13 + 8)
-      doc.text(lines, margin, y)
-      y += lines.length * 13 + 8
-    }
-    const addHeading = (text: string) => {
-      ensureSpace(42)
-      doc.setFillColor(15, 23, 42)
-      doc.rect(margin, y, width - margin * 2, 22, "F")
-      doc.setTextColor(255, 255, 255)
-      doc.setFont("helvetica", "bold")
-      doc.setFontSize(11)
-      doc.text(text, margin + 10, y + 15)
-      doc.setTextColor(30, 41, 59)
-      y += 34
-    }
-
-    doc.setFillColor(15, 23, 42)
-    doc.rect(0, 0, width, 82, "F")
-    doc.setTextColor(255, 255, 255)
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(15)
-    doc.text("Informe de Auditoria PLD - Actividades Vulnerables", margin, 35)
-    doc.setFontSize(9)
-    doc.text(`${crossModuleContext.sujetoObligado} | RFC ${crossModuleContext.rfc}`, margin, 54)
-    doc.text(`Periodo: ${crossModuleContext.periodoRevision}`, margin, 69)
-    doc.setTextColor(30, 41, 59)
-    y = 112
-
-    addText(
-      `A quien corresponda: se emite el presente informe con base en la informacion capturada en la plataforma, la LFPIORPI, su Reglamento, Reglas de Caracter General, guias SAT/SPPLD y metodologia de auditoria documentada por el sujeto obligado.`,
-      10,
-    )
-    addText(
-      "El alcance comprende una revision documental y operativa de controles PLD aplicables a Actividades Vulnerables, sin constituir opinion legal definitiva ni sustitucion de avisos en portales oficiales.",
-      10,
-    )
-
-    addHeading("Capitulo I. Sintesis ejecutiva")
-    addText(`Sujeto obligado: ${crossModuleContext.sujetoObligado}. Actividad vulnerable principal: ${crossModuleContext.actividadVulnerable}.`)
-    addText(`Operaciones detectadas: ${crossModuleContext.totalOperaciones}. Monto total operado: ${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(crossModuleContext.montoOperado)}.`)
-    addText(`Cumplimiento operativo registrado: ${progressValue}%. Madurez metodologica: ${methodologyCompletion}%.`)
-
-    addHeading("Capitulo II. Marco normativo")
-    ;[
-      "LFPIORPI vigente y articulo 17 sobre Actividades Vulnerables.",
-      "Reglamento de la LFPIORPI y reglas de acumulacion para avisos.",
-      "Reglas de Caracter General, portal SAT/SPPLD y formatos oficiales aplicables.",
-      "Obligaciones de identificacion, beneficiario controlador, PEP, EBR, monitoreo, capacitacion y auditoria.",
-    ].forEach((line) => addText(`• ${line}`))
-
-    addHeading("Capitulo III. Informe detallado")
-    REVIEW_SECTIONS.forEach((section) => {
-      addText(section.title, 10, "bold")
-      section.questions.slice(0, 4).forEach((question) => {
-        const answer = reviewAnswers[question.id]
-        addText(
-          `${question.text} Resultado: ${answer?.rating || "No evaluado"}. Hallazgos: ${answer?.findings || "Sin hallazgos capturados"}. Recomendacion: ${answer?.recommendations || "Completar evidencia y criterio de cumplimiento."}`,
-          8,
-        )
+  const exportFormalAuditReport = async () => {
+    try {
+      const report = buildFormalAuditProfessionalReport({
+        context: crossModuleContext, sections: REVIEW_SECTIONS, answers: reviewAnswers,
+        controlQuestions, responses, scopeItems: SCOPE_ITEMS, scopeAnswers, scopeExclusions,
+        checklist: finalChecklistItems, audits: auditLog, requests: authorityRequests, plans: actionPlans,
+        versions: lineamientosVersions, source: RCG_2026_SOURCE,
       })
-    })
-
-    addHeading("Capitulo IV. Acciones correctivas")
-    if (actionPlans.length === 0) {
-      addText("No existen planes de accion capturados. Se recomienda documentar responsables, fechas compromiso y evidencia de cierre.")
-    } else {
-      actionPlans.forEach((plan) => {
-        addText(`${plan.action} | Responsable: ${plan.responsible} | Fecha compromiso: ${format(plan.deadline, "dd/MM/yyyy")} | Avance: ${plan.progress}% | Estado: ${plan.status}`)
-      })
+      await downloadProfessionalReport(report, "auditoria")
+    } catch (error) {
+      toast({ title: "No se pudo exportar el informe", description: error instanceof Error ? error.message : "Reintenta la descarga sin cambiar de empresa.", variant: "destructive" })
     }
-
-    addHeading("Anexo I. Matriz de cumplimiento")
-    controlQuestions.forEach((question) => {
-      const response = responses[question.id]
-      addText(`${question.question} | Respuesta: ${response?.answer || "Sin respuesta"} | Evidencias: ${response?.evidences?.length ?? 0}`, 8)
-    })
-
-    doc.save(`informe-auditoria-pld-${format(new Date(), "yyyyMMdd")}.pdf`)
   }
 
-  const exportKycFormTemplate = (type: KycFormType) => {
-    const template = KYC_FORM_TEMPLATES[type]
-    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" })
-    const margin = 42
-    const width = doc.internal.pageSize.getWidth()
-    const height = doc.internal.pageSize.getHeight()
-    let y = 44
-
-    const addLine = (text: string, size = 9, bold = false) => {
-      if (y > height - 54) {
-        doc.addPage()
-        y = margin
-      }
-      doc.setFont("helvetica", bold ? "bold" : "normal")
-      doc.setFontSize(size)
-      const lines = doc.splitTextToSize(text, width - margin * 2)
-      doc.text(lines, margin, y)
-      y += lines.length * 12 + 5
+  const exportKycFormTemplate = async (type: KycFormType) => {
+    try {
+      const report = buildKycBlankProfessionalReport(KYC_FORM_TEMPLATES[type])
+      await downloadProfessionalReport(report, "auditoria")
+    } catch (error) {
+      toast({ title: "No se pudo exportar la plantilla", description: error instanceof Error ? error.message : "Reintenta la descarga sin cambiar de empresa.", variant: "destructive" })
     }
-
-    doc.setFillColor(127, 29, 29)
-    doc.rect(0, 0, width, 62, "F")
-    doc.setTextColor(255, 255, 255)
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(13)
-    doc.text(template.title, margin, 30)
-    doc.setFontSize(9)
-    doc.text(`${template.code} | Version operativa PLD Mexico`, margin, 48)
-    doc.setTextColor(30, 41, 59)
-    y = 86
-
-    template.sections.forEach((section) => {
-      addLine(section.title, 10, true)
-      section.fields.forEach((field) => addLine(`□ ${field}: ______________________________________________________________`, 8))
-      y += 4
-    })
-
-    addLine("Declaracion: la persona cliente o usuaria manifiesta bajo protesta de decir verdad que la informacion proporcionada es completa y veraz, y autoriza su uso para fines de cumplimiento PLD.", 8)
-    addLine("Nombre y firma: ________________________________    Fecha: ____ / ____ / ______", 8)
-
-    doc.save(`${template.code.toLowerCase()}-${format(new Date(), "yyyyMMdd")}.pdf`)
   }
 
   const renderQuestions = (category: ControlCategory) => (
@@ -1376,13 +1224,13 @@ export default function AuditoriaVerificacionPage() {
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
-                              {evidence.url ? <a
+                              {evidence.url ? <DocumentLink
                                 href={evidence.url}
                                 download={evidence.fileName}
                                 className="text-xs font-medium text-primary hover:underline"
                               >
                                 Descargar
-                              </a> : <span className="text-xs text-amber-700">Archivo temporal no disponible; vuelve a adjuntarlo</span>}
+                              </DocumentLink> : <span className="text-xs text-amber-700">Archivo temporal no disponible; vuelve a adjuntarlo</span>}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1566,20 +1414,20 @@ export default function AuditoriaVerificacionPage() {
 	                  </CardDescription>
 	                </CardHeader>
 	                <CardContent className="flex flex-wrap gap-2">
-	                  <Button type="button" onClick={exportFormalAuditReport}>
+	                  <Button type="button" data-pld-action="download" onClick={exportFormalAuditReport}>
 	                    <FileCheck className="mr-2 h-4 w-4" />
 	                    Informe formal PDF
 	                  </Button>
-	                  <Button type="button" variant="outline" onClick={() => exportKycFormTemplate("persona-fisica")}>
+	                  <Button type="button" data-pld-action="download" variant="outline" onClick={() => exportKycFormTemplate("persona-fisica")}>
 	                    FI-PLD-FIS
 	                  </Button>
-	                  <Button type="button" variant="outline" onClick={() => exportKycFormTemplate("persona-moral")}>
+	                  <Button type="button" data-pld-action="download" variant="outline" onClick={() => exportKycFormTemplate("persona-moral")}>
 	                    FI-PLD-MOR
 	                  </Button>
-	                  <Button type="button" variant="outline" onClick={() => exportKycFormTemplate("persona-moral-derecho-publico")}>
+	                  <Button type="button" data-pld-action="download" variant="outline" onClick={() => exportKycFormTemplate("persona-moral-derecho-publico")}>
 	                    FI-PLD-PUB
 	                  </Button>
-	                  <Button type="button" variant="outline" onClick={() => exportKycFormTemplate("persona-moral-extranjera")}>
+	                  <Button type="button" data-pld-action="download" variant="outline" onClick={() => exportKycFormTemplate("persona-moral-extranjera")}>
 	                    FI-PLD-PMEX
 	                  </Button>
 	                </CardContent>
@@ -1968,10 +1816,10 @@ export default function AuditoriaVerificacionPage() {
             <CardFooter className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <p className="text-sm text-muted-foreground">Exporta la bitácora para visitas de verificación SAT/UIF.</p>
               <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="secondary" onClick={exportAuditsToExcel}>
+                <Button type="button" data-pld-action="download" variant="secondary" onClick={exportAuditsToExcel}>
                   <Download className="mr-2 h-4 w-4" /> Exportar Excel
                 </Button>
-                <Button type="button" onClick={exportAuditsToPdf}>
+                <Button type="button" data-pld-action="download" onClick={exportAuditsToPdf}>
                   <Download className="mr-2 h-4 w-4" /> Exportar PDF
                 </Button>
               </div>

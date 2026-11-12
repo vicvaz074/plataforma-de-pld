@@ -73,7 +73,7 @@ export function restoreAuditWorkflow(raw: RecordValue, defaults: {
       answer: ["si", "no", "na", ""].includes(saved.answer) ? saved.answer : fallback.answer,
       evidences: array(saved.evidences).flatMap((evidence) => {
         const uploadedAt = new Date(evidence.uploadedAt)
-        return evidence.id && typeof evidence.url === "string" && Number.isFinite(uploadedAt.getTime()) ? [{ ...evidence, uploadedAt, url: evidence.url.startsWith("data:") ? evidence.url : "" }] : []
+        return evidence.id && typeof evidence.url === "string" && Number.isFinite(uploadedAt.getTime()) ? [{ ...evidence, uploadedAt, url: /^(?:data:|\/api\/)/.test(evidence.url) ? evidence.url : "" }] : []
       }),
     }]
   }))
@@ -93,13 +93,14 @@ export function restoreAuditWorkflow(raw: RecordValue, defaults: {
 export interface EvidenceSourceReference {
   storageKey: string
   recordId: string
-  kind: "record" | "operation-document" | "sat-xml"
+  kind: "record" | "operation-document" | "sat-xml" | "audit-file"
   documentId?: string
 }
 
 interface MergeableEvidence {
   id: string; source?: string; sourceId?: string; fileData?: string; fileName: string; fileSize: number; fileType: string
-  sourceRevision?: string; sourceReference?: EvidenceSourceReference; sourceOverride?: boolean; version: number; versionHistory: { version: number; timestamp: string; user: string; changeNote: string }[]
+  sha256?: string; reviewStatus?: "pending" | "approved" | "rejected"; reviewNote?: string; reviewedHash?: string; reviewedAt?: string;
+  sourceRevision?: string; sourceReference?: EvidenceSourceReference; sourceOverride?: boolean; version: number; versionHistory: { version: number; timestamp: string; user: string; changeNote: string; fileData?: string; fileName?: string; fileSize?: number; fileType?: string; sha256?: string; sourceReference?: EvidenceSourceReference }[]
   archived: boolean; notes?: string; uploadDate: string; documentDate: string; user: string
 }
 
@@ -111,14 +112,17 @@ export function mergeExternalEvidence<T extends MergeableEvidence>(previous: T[]
     if (index < 0) { result.push(item); continue }
     const old = result[index]
     if (old.sourceOverride) continue
-    const changed = ["fileData", "fileName", "fileSize", "fileType", "sourceRevision"].some((key) => old[key as keyof T] !== item[key as keyof T])
+    const sameHash = Boolean(old.sha256 && item.sha256 && old.sha256 === item.sha256)
+    const changed = (!sameHash && old.fileData !== item.fileData) || ["fileName", "fileSize", "fileType", "sourceRevision", "sha256"].some((key) => old[key as keyof T] !== item[key as keyof T])
     result[index] = {
       ...old, ...item,
-      id: old.id, archived: old.archived, notes: old.notes ?? item.notes,
+      id: old.id, archived: old.archived || item.archived, notes: old.notes ?? item.notes,
       uploadDate: changed ? item.uploadDate : old.uploadDate,
       documentDate: changed ? item.documentDate : old.documentDate,
       version: old.version + (changed ? 1 : 0),
-      versionHistory: changed ? [{ version: old.version, timestamp: now, user: item.user, changeNote: "Actualización en el módulo de origen" }, ...old.versionHistory] : old.versionHistory,
+      versionHistory: changed ? [{ version: old.version, timestamp: old.uploadDate || now, user: old.user, changeNote: "Actualización en el módulo de origen", fileData: old.fileData, fileName: old.fileName, fileSize: old.fileSize, fileType: old.fileType, sha256: old.sha256, sourceReference: old.sourceReference }, ...old.versionHistory] : old.versionHistory,
+      reviewStatus: changed ? "pending" : old.reviewStatus, reviewNote: changed ? undefined : old.reviewNote,
+      reviewedHash: changed ? undefined : old.reviewedHash, reviewedAt: changed ? undefined : old.reviewedAt,
     }
   }
   return result
@@ -157,7 +161,30 @@ export function buildOperationalEvidenceLinks(storage: IntegrationStorage, now: 
   return [...expedientes, ...support, ...packages]
 }
 
+/** Audit's persisted questionnaire owns actual file bytes/references, not just
+ * its audit-register rows. Keep the exact private object and attachment ID. */
+export function buildAuditEvidenceLinks(storage:IntegrationStorage,now:string){
+  let workflow:RecordValue
+  try{workflow=parseStoredObject(storage.getItem("auditoria-verificacion-workflow"))}catch{return []}
+  return Object.entries(record(workflow.responses)).flatMap(([questionId,response])=>array(record(response).evidences).flatMap(file=>{
+    if(typeof file.id!=="string"||typeof file.url!=="string"||!/^(?:data:|\/api\/)/.test(file.url))return []
+    const uploadedAt=typeof file.uploadedAt==="string"&&Number.isFinite(Date.parse(file.uploadedAt))?file.uploadedAt:now
+    const documentDate=typeof file.documentDate==="string"&&/^\d{4}-\d{2}-\d{2}/.test(file.documentDate)?file.documentDate:uploadedAt.slice(0,10)
+    return [{id:`auditoria-${questionId}-${file.id}`,source:"auditoria" as const,sourceId:`${questionId}-${file.id}`,expedienteId:`auditoria:${questionId}`,
+      module:"auditoria" as const,submodule:questionId.startsWith("lineamientos")?"Lineamientos internos":"Revisión y controles",documentType:"evidencia-control-auditoria",
+      title:file.fileName||"Evidencia de auditoría",uploadDate:uploadedAt,documentDate,user:file.uploadedBy||"Auditoría · autor en bitácora de origen",
+      fileName:file.fileName||"evidencia",fileSize:Number(file.fileSize)||0,fileType:file.fileType||"application/octet-stream",fileData:file.url,
+      sha256:typeof file.sha256==="string"?file.sha256:undefined,version:1,versionHistory:[],archived:file.archived===true,
+      sourceReference:{storageKey:"auditoria-verificacion-workflow",recordId:questionId,documentId:file.id,kind:"audit-file" as const}}]
+  }))
+}
+
 export function resolveEvidenceSource(storage: IntegrationStorage, reference: EvidenceSourceReference): string | undefined {
+  if(reference.kind==="audit-file"){
+    const source=parseStoredObject(storage.getItem(reference.storageKey))
+    const file=array(record(record(source.responses)[reference.recordId]).evidences).find(item=>item.id===reference.documentId)
+    return typeof file?.url==="string"&&/^(?:data:|\/api\/)/.test(file.url)?file.url:undefined
+  }
   const records = parseStoredArray(storage.getItem(reference.storageKey))
   const source = records.find((entry) => entry.id === reference.recordId || getIntegrationClient(entry)?.id === reference.recordId)
   if (!source) return undefined

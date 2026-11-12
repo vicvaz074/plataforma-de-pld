@@ -8,12 +8,13 @@ import type {
   EbrRiskLevel,
 } from "./types"
 
-const WEIGHTS: EbrMethodologyEvaluation["weights"] = {
+export const EBR_FACTOR_WEIGHTS: EbrMethodologyEvaluation["weights"] = {
   clientesUsuarios: 0.3,
   productosServicios: 0.3,
   canalesTransacciones: 0.2,
   geografia: 0.2,
 }
+const WEIGHTS = EBR_FACTOR_WEIGHTS
 
 const CONTROL_LABELS: Record<string, string> = {
   gobiernoCorporativo: "Gobierno corporativo",

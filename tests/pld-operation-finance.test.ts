@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { resolveOperationFinance, resolveNotarialNoticeBase, sanitizeOperationFinance } from "../lib/pld/operation-finance"
+import { areOperationCurrenciesEquivalent, formatOperationFinancialSummary, resolveOperationFinance, resolveNotarialNoticeBase, sanitizeOperationFinance } from "../lib/pld/operation-finance"
+import { sanitizeStoredPldOperation } from "../lib/pld/stored-operations"
 import { evaluarOperacionVulnerable } from "../lib/pld/operations"
 
 test("MXN remains exactly ten million; foreign amount needs a documented rate", () => {
@@ -19,6 +20,18 @@ test("FX rounds once at the MXN cent, rejects missing source and invalid date", 
   assert.equal(result.ok && result.montoCentavos, 2)
   assert.equal(resolveOperationFinance({ ...input, exchangeRateSource: "" }).ok, false)
   assert.equal(resolveOperationFinance({ ...input, exchangeRateDate: "2026-02-30" }).ok, false)
+})
+
+test("original foreign amount is never labelled using the converted MXN cents", () => {
+  const result = resolveOperationFinance({ amountText: "100", currency: "USD", exchangeRate: "18", exchangeRateDate: "2026-11-11", exchangeRateSource: "QA documentada" })
+  assert.equal(result.ok, true); if (!result.ok) return
+  const summary = formatOperationFinancialSummary({ montoCentavos: result.montoCentavos, moneda: "USD", finance: result.finance })
+  assert.match(summary, /USD.*100\.00/); assert.match(summary, /equivalente.*1,800\.00.*MXN/)
+  assert.equal(areOperationCurrenciesEquivalent("001,Peso mexicano", "MXN"), true)
+  assert.equal(areOperationCurrenciesEquivalent("USD", "EUR"), false)
+  assert.equal(areOperationCurrenciesEquivalent("USD", "MXN"), false)
+  const mismatch = sanitizeStoredPldOperation({ id: "fx-mismatch", actividadKey: "fraccion-iv-prestamos", cliente: "QA", rfc: "AAA010101AAA", tipoCliente: "pm_mexicana", fechaOperacion: "2026-11-11", montoCentavos: result.montoCentavos, moneda: "EUR", finance: result.finance, captureStatus: "complete" })
+  assert.equal(mismatch?.financeReviewRequired, true); assert.equal(mismatch?.captureStatus, "draft")
 })
 
 test("a cent below a threshold must not trigger the notice", () => {

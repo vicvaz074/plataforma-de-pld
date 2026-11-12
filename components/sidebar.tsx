@@ -7,6 +7,8 @@ import Image from "next/image"
 import { ChevronLeft, LayoutDashboard, Shield, FileCheck, Users, FileText, GraduationCap, Search, Database, Settings, Book, ClipboardCheck, UserSearch, Monitor } from "lucide-react"
 import { translations } from "@/lib/translations"
 import { aliciaTranslations } from "@/lib/alicia-translations"
+import { usePilot } from "@/components/pilot/pilot-provider"
+import { PATH_MODULES, sessionCanNavigate } from "@/lib/pilot/contracts"
 
 const navigationItems = [
   { key: "dashboard", icon: LayoutDashboard, href: "/dashboard" },
@@ -34,6 +36,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const t = translations[language]
   const aliciaT = aliciaTranslations[language]
+  const { mode, session, company } = usePilot()
 
   return (
     <aside
@@ -53,7 +56,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       <nav className="flex-1 overflow-visible">
         <ul className="flex h-full flex-col justify-between gap-1 pb-[clamp(40px,4vw,90px)] pt-2">
-          {navigationItems.map((item) => {
+          {navigationItems.filter((item) => mode === "demo" || !PATH_MODULES[item.href] || sessionCanNavigate(session, company, PATH_MODULES[item.href])).map((item) => {
             const isActive = pathname === item.href
             const Icon = item.icon
             const displayText = item.key === "alicia" ? aliciaT[item.key] : t[item.key]

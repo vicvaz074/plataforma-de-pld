@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import {
   AlertTriangle,
@@ -18,6 +18,12 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { PLD_DASHBOARD_MODULES } from "@/lib/pld/navigation"
+import { getModuleStorage } from "@/lib/pilot/module-storage"
+import { usePilot } from "@/components/pilot/pilot-provider"
+import { PATH_MODULES, sessionCan } from "@/lib/pilot/contracts"
+import { countStoredRecords as countRecords, readActiveModuleOperations } from "@/lib/pld/module-continuity"
+import { getIntegrationClient, normalizeEbrEvaluations, type IntegrationClient } from "@/lib/pld/integration-records"
+import { currentStoredEbrRisk } from "@/lib/pld/ebr-review-state"
 
 type Snapshot = {
   sujetos: number
@@ -40,33 +46,30 @@ type WorkItem = {
 
 const parseLocalStorageValue = (key: string): unknown => {
   try {
-    return JSON.parse(window.localStorage.getItem(key) || "null")
+    return JSON.parse(getModuleStorage().getItem(key) || "null")
   } catch {
     return null
   }
 }
 
 const countStoredRecords = (value: unknown, arrayKeys: string[] = []) => {
-  if (Array.isArray(value)) return value.length
-  if (!value || typeof value !== "object") return 0
-
-  const record = value as Record<string, unknown>
-  for (const key of arrayKeys) {
-    const candidate = record[key]
-    if (Array.isArray(candidate)) return candidate.length
-  }
-  return Object.keys(record).length > 0 ? 1 : 0
+  return countRecords(value, arrayKeys)
 }
 
-const readSnapshot = (): Snapshot => ({
+const readSnapshot = (): Snapshot => {
+  const rawClients=parseLocalStorageValue("kyc_expedientes_detalle"),clients=Array.isArray(rawClients)?rawClients.map(getIntegrationClient).filter((client):client is IntegrationClient=>Boolean(client)):[]
+  let history:unknown=null
+  try{history=JSON.parse(getModuleStorage().getItem("pld-pep-search-history") || "[]")}catch{/* Unknown PEP state cannot confirm a current approval. */}
+  return ({
   sujetos: countStoredRecords(parseLocalStorageValue("registro-sat-data"), ["sujetosRegistrados", "tenants"]),
   expedientes: countStoredRecords(parseLocalStorageValue("kyc_expedientes_detalle"), ["expedientes", "items"]),
-  operaciones: countStoredRecords(parseLocalStorageValue("actividades_vulnerables_operaciones"), ["operaciones", "items"]),
-  ebr: countStoredRecords(parseLocalStorageValue("ebr_evaluaciones"), ["evaluaciones", "items"]),
+  operaciones: readActiveModuleOperations(getModuleStorage()).length,
+  ebr: normalizeEbrEvaluations(parseLocalStorageValue("ebr_evaluaciones")).filter((item) => currentStoredEbrRisk(item,clients.find((client)=>client.id===(item.expedienteId||item.clientId))??null,history)).length,
   evidencias: countStoredRecords(parseLocalStorageValue("pld-evidences-documents"), ["documents", "items"]),
   paquetesSat: countStoredRecords(parseLocalStorageValue("pld-sat-output-packages"), ["packages", "paquetes", "items"]),
   pepConsultas: countStoredRecords(parseLocalStorageValue("pld-pep-search-history"), ["items"]),
-})
+  })
+}
 
 const statusTone = {
   bloqueado: "bg-rose-50 text-rose-700 border-rose-200",
@@ -186,6 +189,8 @@ function buildWorkflow(snapshot: Snapshot) {
 }
 
 export const UserProgressDashboard = () => {
+  const { mode, session, company } = usePilot()
+  const canOpen = (href: string) => mode === "demo" || !PATH_MODULES[href] || sessionCan(session, company, PATH_MODULES[href], "view")
   const [snapshot, setSnapshot] = useState<Snapshot>({
     sujetos: 0,
     expedientes: 0,
@@ -201,15 +206,17 @@ export const UserProgressDashboard = () => {
     refresh()
     window.addEventListener("pld-demo-data-changed", refresh)
     window.addEventListener("storage", refresh)
+    window.addEventListener("pld-integration-change", refresh)
     return () => {
       window.removeEventListener("pld-demo-data-changed", refresh)
       window.removeEventListener("storage", refresh)
+      window.removeEventListener("pld-integration-change", refresh)
     }
   }, [])
 
-  const workItems = useMemo(() => buildWorkItems(snapshot), [snapshot])
-  const workflow = useMemo(() => buildWorkflow(snapshot), [snapshot])
-  const nextItem = workItems.find((item) => item.status !== "listo") ?? workItems[0]
+  const workItems = buildWorkItems(snapshot).filter((item) => canOpen(item.href))
+  const workflow = buildWorkflow(snapshot).filter((item) => canOpen(item.href))
+  const nextItem = workItems.find((item) => item.status !== "listo") ?? workItems[0] ?? { href: "/", label: "Sin tareas asignadas", detail: "Consulta tus módulos autorizados o solicita acceso al administrador." }
   const completedSteps = workflow.filter((step) => step.done).length
 
   return (
@@ -272,7 +279,7 @@ export const UserProgressDashboard = () => {
             </Button>
           </Link>
           <div className="mt-6 border-t border-amber-200 pt-4">
-            <p className="text-xs text-amber-700">Avance del flujo</p>
+            <p className="text-xs text-amber-700">Etapas con registros · no acredita cumplimiento</p>
             <p className="mt-1 text-3xl font-semibold">
               {completedSteps}
               <span className="text-base text-slate-500">/{workflow.length}</span>
@@ -305,7 +312,7 @@ export const UserProgressDashboard = () => {
 
       <section className="grid gap-8 py-6 lg:grid-cols-[0.8fr_1.2fr]">
         <div>
-          <h2 className="text-lg font-medium tracking-normal">Indicadores locales</h2>
+          <h2 className="text-lg font-medium tracking-normal">Registros de {company?.name || "la empresa"}</h2>
           <div className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
             {[
               ["Sujetos obligados", snapshot.sujetos],
@@ -326,7 +333,7 @@ export const UserProgressDashboard = () => {
         <div>
           <h2 className="text-lg font-medium tracking-normal">Módulos disponibles</h2>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {PLD_DASHBOARD_MODULES.map((module) => (
+            {PLD_DASHBOARD_MODULES.filter((module) => canOpen(module.href)).map((module) => (
               <Link
                 key={module.key}
                 href={module.href}

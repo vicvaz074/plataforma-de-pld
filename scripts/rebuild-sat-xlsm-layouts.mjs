@@ -41,8 +41,13 @@ function main() {
   const generatedAt = new Date().toISOString()
   const layouts = []
   const missing = []
+  const onlyTemplateId = process.argv.find((argument) => argument.startsWith("--only="))?.slice("--only=".length)
+  const templates = concreteTemplates()
+  if (onlyTemplateId && !templates.some((template) => template.templateId === onlyTemplateId)) {
+    throw new Error(`Plantilla no reconocida: ${onlyTemplateId}`)
+  }
 
-  for (const template of concreteTemplates()) {
+  for (const template of templates.filter((item) => !onlyTemplateId || item.templateId === onlyTemplateId)) {
     const cachePath = `public${template.localPath}`
     if (!existsSync(cachePath)) {
       missing.push(`${template.templateId} (${cachePath})`)
@@ -66,6 +71,18 @@ function main() {
   }
 
   mkdirSync("public/data/sat-xlsm-layouts", { recursive: true })
+  // A targeted cache normalization leaves the unchanged catalog and other
+  // templates alone. Useful for a verified, template-specific mapping repair.
+  if (onlyTemplateId) {
+    for (const layout of layouts) {
+      writeFileSync(
+        `public/data/sat-xlsm-layouts/${layout.templateId}.json`,
+        `${JSON.stringify(serializeSatXlsmLayout(layout))}\n`,
+      )
+    }
+    console.log(`\nLayout regenerado: ${onlyTemplateId}. Catálogo e índices sin cambios.`)
+    return
+  }
   // Publish the same activity/variant mapping consumed by the application.
   // This is a cache rebuild only; no template or legal source is downloaded.
   writeFileSync(

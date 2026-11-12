@@ -1,4 +1,5 @@
 "use client"
+import { flushModuleStorage, getModuleStorage } from "@/lib/pilot/module-storage"
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
@@ -13,6 +14,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { PldDemoDataControls } from "@/components/pld-demo-data-controls"
+import { PldImportDialog } from "@/components/pld/import-dialog"
+import { CopyExpedienteDialog } from "@/components/pilot/copy-expediente-dialog"
 import { ActividadVulnerableCombobox } from "@/components/pld/actividad-vulnerable-combobox"
 import { SearchableSelect } from "@/components/pld/searchable-select"
 import { SearchableSelectWithOther } from "@/components/pld/searchable-select-with-other"
@@ -1088,7 +1091,7 @@ function KycExpedienteContent() {
   }, [])
   useEffect(() => {
     if (typeof window === "undefined") return
-    const savedData = window.localStorage.getItem("registro-sat-data")
+    const savedData = getModuleStorage().getItem("registro-sat-data")
     if (!savedData) return
     try {
       const data = JSON.parse(savedData) as {
@@ -1238,6 +1241,7 @@ function KycExpedienteContent() {
   const activityLabel = actividadSeleccionada?.label || (activityKey ? getActividadEuiLabel(activityKey) : "")
   const esArrendamiento = activityKey === ARRENDAMIENTO_ACTIVITY_KEY
   const esFideicomiso = tipoExpediente === "fideicomiso"
+  const esCapturaEntidad = !["persona_fisica", "persona_moral_derecho_publico"].includes(tipoExpediente)
   const nifAplicaPersonaFisica = clienteFisicaPaisNacionalidad !== "MX"
   const nifAplicaPersonaMoral = clientePais !== "MX"
   const checklistPersonaMoral = useMemo(
@@ -1311,7 +1315,7 @@ function KycExpedienteContent() {
     if (typeof window === "undefined") return
     const load = () => {
       try {
-        const detalleList = readExpedienteRecords(window.localStorage)
+        const detalleList = readExpedienteRecords(getModuleStorage())
           .map(sanitizeDetalle)
           .filter((item): item is ExpedienteDetalle => Boolean(item))
         setExpedientesDetalle(Object.fromEntries(detalleList.map((detalle) => [detalle.expedienteId, detalle])))
@@ -1376,7 +1380,7 @@ function KycExpedienteContent() {
 
       if (!info && limpio.length === 5) {
         const cacheKey = `${SEPOMEX_STORAGE_PREFIX}${limpio}`
-        const cacheRaw = window.localStorage.getItem(cacheKey)
+        const cacheRaw = getModuleStorage().getItem(cacheKey)
         if (cacheRaw) {
           try {
             const parsed = JSON.parse(cacheRaw) as CodigoPostalInfo
@@ -1393,7 +1397,7 @@ function KycExpedienteContent() {
           if (fetched) {
             info = fetched
             registerCodigoPostalInfo(fetched)
-            window.localStorage.setItem(cacheKey, JSON.stringify(fetched))
+            getModuleStorage().setItem(cacheKey, JSON.stringify(fetched))
           }
         }
       }
@@ -1653,13 +1657,15 @@ function KycExpedienteContent() {
     }
   }, [aplicarDetalleEnFormulario, expedientesCargados, expedientesDisponibles, searchParams, toast])
 
-  const persistirExpediente = (detalle: ExpedienteDetalle, pendingDocuments?: number) => {
+  const persistirExpediente = async (detalle: ExpedienteDetalle, pendingDocuments?: number) => {
     let nextDetalle: Record<string, ExpedienteDetalle>
     try {
-      const merged = saveExpedienteRecord(window.localStorage, detalle, {
+      const merged = saveExpedienteRecord(getModuleStorage(), detalle, {
         expectedUpdatedAt: expedienteIdActual ? expedienteBaseActualizadoEnRef.current : undefined,
       }).map(sanitizeDetalle).filter((item): item is ExpedienteDetalle => Boolean(item))
       nextDetalle = Object.fromEntries(merged.map((item) => [item.expedienteId, item]))
+      expedienteBaseActualizadoEnRef.current = detalle.actualizadoEn || ""
+      await flushModuleStorage()
     } catch (error) {
       toast({
         title: "No se pudo guardar el expediente",
@@ -1687,7 +1693,7 @@ function KycExpedienteContent() {
     })
   }
 
-  const guardarExpediente = () => {
+  const guardarExpediente = async () => {
     if (!activityKey) {
       toast({
         title: "Falta actividad vulnerable",
@@ -1827,7 +1833,7 @@ function KycExpedienteContent() {
         beneficiariosControladores: expedientesDetalle[expedienteId]?.beneficiariosControladores ?? [],
         actualizadoEn: new Date().toISOString(),
       }
-      persistirExpediente(detalle)
+      await persistirExpediente(detalle)
       return
     }
 
@@ -1929,7 +1935,7 @@ function KycExpedienteContent() {
         beneficiariosControladores: expedientesDetalle[expedienteId]?.beneficiariosControladores ?? [],
         actualizadoEn: new Date().toISOString(),
       }
-      persistirExpediente(detalle)
+      await persistirExpediente(detalle)
       return
     }
 
@@ -2021,7 +2027,7 @@ function KycExpedienteContent() {
       beneficiariosControladores,
       actualizadoEn: new Date().toISOString(),
     }
-    persistirExpediente(detalle, checklistPersonaMoral.summary.missing)
+    await persistirExpediente(detalle, checklistPersonaMoral.summary.missing)
   }
 
   const expedientesTotales = expedientesDisponibles.length
@@ -2090,6 +2096,7 @@ function KycExpedienteContent() {
   return (
     <div className="space-y-6">
       <PldDemoDataControls />
+      <PldImportDialog destination="expedientes" onComplete={() => window.location.reload()} />
 
       {sujetoObligadoSeleccionado && (
         <Card className="border-emerald-200 bg-emerald-50/60">
@@ -2162,7 +2169,7 @@ function KycExpedienteContent() {
                 options={EXPEDIENTE_TIPOS}
                 placeholder="Selecciona tipo"
                 searchPlaceholder="Buscar tipo de expediente"
-                onChange={setTipoExpediente}
+                onChange={(value) => { setTipoExpediente(value); const mapped: Record<string, string> = { fideicomiso: "fideicomiso", entidad_financiera: "entidad_financiera", pm_derecho_publico_simplificado: "pm_derecho_publico_simplificado", embajada_consulado: "organismo_internacional", persona_moral: "pm_mexicana" }; if (mapped[value]) setTipoCliente(mapped[value]) }}
               />
             </div>
             <div className="space-y-2">
@@ -2225,13 +2232,7 @@ function KycExpedienteContent() {
             </div>
           </div>
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
-            {tipoExpediente === "persona_moral"
-              ? "Formulario activo: Persona Moral."
-              : tipoExpediente === "persona_fisica"
-                ? "Formulario activo: Persona Física."
-                : tipoExpediente === "persona_moral_derecho_publico"
-                  ? "Formulario activo: Persona Moral de Derecho Público."
-                  : "Por ahora solo están habilitados Persona Moral, Persona Física y Persona Moral de Derecho Público."}
+            Formulario activo: {EXPEDIENTE_TIPOS.find((item) => item.value === tipoExpediente)?.label}. Puedes conservar la captura parcial; los requisitos del acto se validan con su formato SAT.
           </div>
         </CardContent>
       </Card>
@@ -2256,6 +2257,7 @@ function KycExpedienteContent() {
                 </Button>
               )}
             </div>
+            <CopyExpedienteDialog expedienteId={expedienteSeleccionado || ""} />
             <ScrollArea className="h-52 rounded border border-slate-200 bg-white">
               <div className="divide-y divide-slate-200">
                 {expedientesFiltrados.map((item) => {
@@ -2887,7 +2889,7 @@ function KycExpedienteContent() {
         </>
       )}
 
-      {tipoExpediente === "persona_moral" && (
+      {esCapturaEntidad && (
         <Card className="border-slate-200">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -3373,7 +3375,7 @@ function KycExpedienteContent() {
         </>
       )}
 
-      {tipoExpediente === "persona_moral" && (
+      {esCapturaEntidad && (
         <>
       {esFideicomiso ? (
         <Card className="border-slate-200">

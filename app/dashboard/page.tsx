@@ -12,6 +12,11 @@ import { countStoredRecords, readActiveModuleOperations } from "@/lib/pld/module
 import { PLD_INTEGRATION_EVENT } from "@/lib/pld/integration-records"
 import Link from "next/link"
 import { AlertTriangle, ArrowRight, CheckCircle2, Database, ShieldCheck, Users } from "lucide-react"
+import { AdminDashboard } from "@/components/pilot/admin-dashboard"
+import { MigrationAssistant } from "@/components/pilot/migration-assistant"
+import { usePilot } from "@/components/pilot/pilot-provider"
+import { sessionIsAdmin } from "@/lib/pilot/contracts"
+import { CompanyBackups } from "@/components/pilot/company-backups"
 
 const parseLocalStorageValue = (key: string): unknown => {
   try {
@@ -22,6 +27,12 @@ const parseLocalStorageValue = (key: string): unknown => {
 }
 
 export default function DashboardPage() {
+  const { mode, session } = usePilot()
+  if (mode === "cloud") return <div className="space-y-8"><AdminDashboard /><CompanyBackups />{sessionIsAdmin(session) && <MigrationAssistant />}</div>
+  return <LegacyDashboard />
+}
+
+function LegacyDashboard() {
   const { language } = useLanguage()
   const t = translations[language]
   const [userRole, setUserRole] = useState<string | null>(null)

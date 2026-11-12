@@ -2,6 +2,7 @@ import { resolveSatFormatoForActividad } from "./sat-formatos"
 import { buildSatXmlResult } from "./sat-xml"
 import { resolveSatTemplateForActividad } from "./sat-template-catalog"
 import { centsToDecimalString, parseMoneyToCents } from "./money"
+import { serializeCsv } from "./csv"
 import type {
   PldOperationalCase,
   PldSubjectRegistrationLink,
@@ -326,7 +327,7 @@ function buildCaptureSheet(
     ["Advertencias", validation.warnings.join("; ")],
   ]
 
-  return rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\n")
+  return serializeCsv(rows)
 }
 
 function buildDownloads(input: {

@@ -57,7 +57,9 @@ function legacyOperation(overrides: Record<string, unknown> = {}) {
 }
 
 function operation(overrides: Record<string, unknown> = {}) {
-  const sanitized = sanitizeStoredPldOperation(legacyOperation(overrides), { now: NOW })
+  // These scenarios intentionally describe the same explicitly linked client;
+  // unlinked legacy records are tested separately and never joined by RFC.
+  const sanitized = sanitizeStoredPldOperation(legacyOperation({clienteId:"fixture-shared-client",...overrides}), { now: NOW })
   assert.ok(sanitized)
   return sanitized
 }
@@ -101,7 +103,7 @@ test("money parser rejects malformed grouping and more than two decimals", () =>
 
 test("legacy operations migrate in place to V3 without changing IDs or storage key", () => {
   const storageValues = new Map<string, string>([
-    [PLD_OPERATIONS_STORAGE_KEY, JSON.stringify([legacyOperation()])],
+    [PLD_OPERATIONS_STORAGE_KEY, JSON.stringify([legacyOperation({clienteId:"fixture-linked-client"})])],
   ])
   const writes: string[] = []
   const storage = {

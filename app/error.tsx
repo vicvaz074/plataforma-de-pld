@@ -11,7 +11,7 @@ export default function Error({
   reset: () => void
 }) {
   useEffect(() => {
-    console.error(error)
+    console.error("pld.frontend.failed", { type: error.name })
   }, [error])
 
   return (

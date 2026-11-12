@@ -1,7 +1,10 @@
 "use client"
+import { getModuleStorage, canWriteModuleStorage, flushModuleStorage, captureModuleScope, assertModuleScope, isModuleScopeCurrent, getActiveCompany } from "@/lib/pilot/module-storage"
+import { resolveSafeDocumentHref } from "@/lib/pld/document-links"
 
 import { useEffect, useMemo, useState } from "react"
-import { jsPDF } from "jspdf"
+import { downloadProfessionalReport } from "@/lib/pld/reports"
+import { buildGovernanceProfessionalReport } from "@/lib/pld/module-reports"
 import * as XLSX from "xlsx"
 import Image from "next/image"
 import { Badge } from "@/components/ui/badge"
@@ -16,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { parseStoredObject, readGovernanceIntegrationSnapshot } from "@/lib/pld/module-continuity"
 import { notifyPldIntegrationChange, PLD_INTEGRATION_EVENT } from "@/lib/pld/integration-records"
+import { summarizeGovernance } from "@/lib/pld/evidence-lifecycle"
 import {
   Activity,
   AlertCircle,
@@ -79,6 +83,7 @@ interface DocumentRecord {
   status: "vigente" | "por-vencer" | "vencido"
   hash: string
   base64: string
+  archived?: boolean
   relatedModules: string[]
   notes?: string
   signedBy?: string
@@ -371,7 +376,7 @@ function calculateStatusColor(status: DocumentRecord["status"]) {
 
 function getUserIdentifier() {
   if (typeof window === "undefined") return "usuario@plataforma"
-  return localStorage.getItem("userEmail") || localStorage.getItem("userName") || "usuario@plataforma"
+  return getModuleStorage().getItem("userEmail") || getModuleStorage().getItem("userName") || "usuario@plataforma"
 }
 
 function formatDate(dateIso?: string) {
@@ -389,7 +394,7 @@ function daysBetween(dateIso?: string) {
 function base64ToText(data: string) {
   if (typeof window === "undefined") return ""
   try {
-    const binary = atob(data)
+    const binary = atob(data.startsWith("data:") ? data.slice(data.indexOf(",") + 1) : data)
     const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
     const decoder = new TextDecoder("utf-8")
     return decoder.decode(bytes)
@@ -397,6 +402,16 @@ function base64ToText(data: string) {
     console.error("No se pudo decodificar el archivo", error)
     return ""
   }
+}
+
+function governanceDocumentUrl(doc: DocumentRecord, purpose: "download" | "preview" = "download") {
+  const reference = /^(?:data:|\/api\/)/.test(doc.base64) ? doc.base64 : `data:${doc.mimeType};base64,${doc.base64}`
+  return resolveSafeDocumentHref(reference, {
+    mode: process.env.NEXT_PUBLIC_PLD_MODE === "demo" ? "demo" : "cloud",
+    companyId: getActiveCompany()?.id,
+    origin: typeof window !== "undefined" ? window.location.origin : undefined,
+    purpose,
+  })
 }
 
 export default function GobernanzaControlPage() {
@@ -432,7 +447,7 @@ export default function GobernanzaControlPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const stored = localStorage.getItem(STORAGE_KEY)
+    const stored = getModuleStorage().getItem(STORAGE_KEY)
     try {
       const parsed = parseStoredObject(stored) as Partial<StoredState>
       setQuestions((prev) =>
@@ -455,7 +470,7 @@ export default function GobernanzaControlPage() {
   }, [])
 
   useEffect(() => {
-    if (typeof window === "undefined" || !storageReady) return
+    if (typeof window === "undefined" || !storageReady || !canWriteModuleStorage(STORAGE_KEY)) return
     const stateToPersist: StoredState = {
       questions,
       documents,
@@ -466,8 +481,11 @@ export default function GobernanzaControlPage() {
       expedienteCerrado,
     }
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...parseStoredObject(localStorage.getItem(STORAGE_KEY)), ...stateToPersist }))
-      notifyPldIntegrationChange(STORAGE_KEY)
+      const scope = captureModuleScope()
+      scope.storage.setItem(STORAGE_KEY, JSON.stringify({ ...parseStoredObject(scope.storage.getItem(STORAGE_KEY)), ...stateToPersist }))
+      void flushModuleStorage(scope).then(() => { if (isModuleScopeCurrent(scope)) notifyPldIntegrationChange(STORAGE_KEY) }).catch(() => {
+        if (isModuleScopeCurrent(scope)) toast({ title: "Cambios pendientes de guardar", description: "No se confirmó el guardado de Gobernanza. Mantén esta página abierta y vuelve a intentarlo.", variant: "destructive" })
+      })
     } catch {
       toast({ title: "No se pudo guardar Gobernanza", description: "Los cambios no se han conservado. Revisa el espacio de almacenamiento local.", variant: "destructive" })
     }
@@ -475,7 +493,7 @@ export default function GobernanzaControlPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    const refresh = () => setIntegrationSnapshot(readGovernanceIntegrationSnapshot(localStorage))
+    const refresh = () => setIntegrationSnapshot(readGovernanceIntegrationSnapshot(getModuleStorage()))
     refresh()
     window.addEventListener("storage", refresh)
     window.addEventListener(PLD_INTEGRATION_EVENT, refresh)
@@ -486,21 +504,12 @@ export default function GobernanzaControlPage() {
   }, [])
 
   const complianceRatio = useMemo(() => {
-    const totalRequired = questions.filter((q) => q.required).length
-    if (!totalRequired) return 0
-    const compliant = questions.filter((q) => {
-      if (!q.required || q.answer === null) return false
-      if (q.answer === "si") return q.relatedDocuments.length > 0
-      if (q.answer === "no") return Boolean(q.notes && q.actionPlan)
-      if (q.answer === "no-aplica") return Boolean(q.notes)
-      return false
-    }).length
-    return Math.round((compliant / totalRequired) * 100)
-  }, [questions])
+    return summarizeGovernance(questions.map((question)=>({...question,relatedDocuments:question.relatedDocuments.filter((id)=>documents.some((doc)=>doc.id===id && !doc.archived && Boolean(doc.base64)))}))).ratio
+  }, [questions,documents])
 
   const moduleStatus = useMemo(() => {
-    if (complianceRatio === 100) return { color: "bg-emerald-500", label: "Cumplimiento total" }
-    const nearExpiring = documents.some((doc) => doc.status === "por-vencer")
+    if (complianceRatio === 100) return { color: "bg-emerald-500", label: "Controles documentados" }
+    const nearExpiring = documents.some((doc) => !doc.archived && doc.status === "por-vencer")
     if (nearExpiring || complianceRatio >= 70) return { color: "bg-amber-500", label: "Seguimiento requerido" }
     return { color: "bg-red-500", label: "Acciones urgentes" }
   }, [complianceRatio, documents])
@@ -514,7 +523,7 @@ export default function GobernanzaControlPage() {
       user: getUserIdentifier(),
       details,
     }
-    setTrace((prev) => [entry, ...prev.slice(0, 199)])
+    setTrace((prev) => [entry, ...prev])
   }
 
   function handleAnswerChange(questionId: string, answer: AnswerValue) {
@@ -569,7 +578,9 @@ export default function GobernanzaControlPage() {
 
   async function handleDocumentUpload(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const formData = new FormData(event.currentTarget)
+    const scope = captureModuleScope()
+    const form = event.currentTarget
+    const formData = new FormData(form)
     const questionId = uploadContext.questionId
     if (!questionId) return
 
@@ -615,18 +626,20 @@ export default function GobernanzaControlPage() {
       }
     }
 
+    if (file.size > 20 * 1024 * 1024) { toast({title:"Archivo demasiado grande",description:"El límite es de 20 MB.",variant:"destructive"}); return }
+    try {
     const arrayBuffer = await file.arrayBuffer()
     const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer)
     const hashArray = Array.from(new Uint8Array(hashBuffer))
     const hash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
+    assertModuleScope(scope)
 
     const base64 = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = () => {
         const result = reader.result
         if (typeof result === "string") {
-          const commaIndex = result.indexOf(",")
-          resolve(commaIndex > -1 ? result.slice(commaIndex + 1) : result)
+          resolve(result)
         } else {
           reject(new Error("No se pudo convertir el archivo"))
         }
@@ -636,8 +649,7 @@ export default function GobernanzaControlPage() {
     })
 
     const status = evaluateDocumentStatus(issueDateObj.toISOString(), expiryDate)
-    const retentionUntil = new Date(issueDateObj)
-    retentionUntil.setFullYear(retentionUntil.getFullYear() + 5)
+    assertModuleScope(scope)
 
     const record: DocumentRecord = {
       id: crypto.randomUUID(),
@@ -650,7 +662,7 @@ export default function GobernanzaControlPage() {
       uploadDate: new Date().toISOString(),
       issueDate: issueDateObj.toISOString(),
       expiryDate,
-      retentionUntil: retentionUntil.toISOString(),
+      retentionUntil: "",
       status,
       hash,
       base64,
@@ -658,18 +670,21 @@ export default function GobernanzaControlPage() {
       notes,
     }
 
-    setDocuments((prev) => [record, ...prev])
-    setQuestions((prev) =>
-      prev.map((question) =>
+    const latest = parseStoredObject(scope.storage.getItem(STORAGE_KEY))
+    if (!Array.isArray(latest.documents) || !Array.isArray(latest.questions) || !Array.isArray(latest.manualVersions) || !Array.isArray(latest.trace)) throw new Error("El expediente de Gobernanza necesita revisión antes de agregar archivos.")
+    const latestDocuments = latest.documents as DocumentRecord[]
+    const latestQuestions = latest.questions as GovernanceQuestion[]
+    const latestManualVersions = latest.manualVersions as ManualVersion[]
+    const nextDocuments = [record, ...latestDocuments]
+    const nextQuestions = latestQuestions.map((question) =>
         question.id === questionId
           ? { ...question, relatedDocuments: Array.from(new Set([...question.relatedDocuments, record.id])) }
           : question,
-      ),
-    )
+      )
+    let nextManualVersions = latestManualVersions
 
     if (questionId.startsWith("manuales")) {
-      setManualVersions((prev) => {
-        const newVersion = prev.length ? prev[0].version + 1 : 1
+        const newVersion = latestManualVersions.length ? latestManualVersions[0].version + 1 : 1
         const folio = `MAN-${newVersion.toString().padStart(3, "0")}-${new Date().getFullYear()}`
         const versionRecord: ManualVersion = {
           id: crypto.randomUUID(),
@@ -679,20 +694,25 @@ export default function GobernanzaControlPage() {
           documentId: record.id,
           summary: documentType || "Actualización del manual",
         }
-        return [versionRecord, ...prev]
-      })
+        nextManualVersions = [versionRecord, ...latestManualVersions]
     }
 
-    appendTrace(`Carga de documento "${file.name}"`, questionBank.find((q) => q.id === questionId)?.category || "")
-    toast({ title: "Documento cargado", description: "La evidencia se ha almacenado con sello digital." })
+    const nextTrace = [{id:crypto.randomUUID(),action:`Carga de documento "${file.name}"`,section:questionBank.find((q) => q.id === questionId)?.category || "",user:getUserIdentifier(),timestamp:new Date().toISOString()}, ...latest.trace]
+    scope.storage.setItem(STORAGE_KEY, JSON.stringify({ ...latest, questions:nextQuestions,documents:nextDocuments,manualVersions:nextManualVersions,trace:nextTrace }))
+    await flushModuleStorage(scope)
+    assertModuleScope(scope)
+    const canonical = parseStoredObject(scope.storage.getItem(STORAGE_KEY))
+    setDocuments(canonical.documents); setQuestions(canonical.questions); setManualVersions(canonical.manualVersions); setTrace(canonical.trace)
+    toast({ title: "Documento guardado", description: "Archivo y hash conservados en el expediente." })
     closeUpload()
-    event.currentTarget.reset()
+    form.reset()
+    } catch (error) { if (isModuleScopeCurrent(scope)) toast({title:"No se guardó el documento",description:error instanceof Error ? error.message : "Conserva el archivo y reintenta.",variant:"destructive"}) }
   }
 
   function handleDeleteDocument(documentId: string) {
     const target = documents.find((doc) => doc.id === documentId)
     if (!target) return
-    setDocuments((prev) => prev.filter((doc) => doc.id !== documentId))
+    setDocuments((prev) => prev.map((doc) => doc.id === documentId ? { ...doc, archived: true } : doc))
     setQuestions((prev) =>
       prev.map((question) => ({
         ...question,
@@ -700,15 +720,20 @@ export default function GobernanzaControlPage() {
       })),
     )
     appendTrace(
-      `Eliminó el documento "${target.fileName}"`,
+      `Archivó el documento "${target.fileName}"`,
       questionBank.find((q) => q.id === target.relatedQuestionId)?.category || "",
     )
-    toast({ title: "Documento eliminado", description: "Se actualizó la evidencia del expediente." })
+    toast({ title: "Documento archivado", description: "El archivo e historial se conservan. Revisa el estado de guardado." })
   }
 
   function handleDownload(doc: DocumentRecord) {
+    const href = governanceDocumentUrl(doc)
+    if (!href) {
+      toast({ title: "Archivo no disponible", description: "La referencia no es un archivo autorizado de esta empresa. Se conserva el registro para su revisión.", variant: "destructive" })
+      return
+    }
     const link = document.createElement("a")
-    link.href = `data:${doc.mimeType};base64,${doc.base64}`
+    link.href = href
     link.download = doc.fileName
     link.click()
     appendTrace(
@@ -795,29 +820,30 @@ export default function GobernanzaControlPage() {
       ),
     )
     appendTrace(
-      `Firmó digitalmente "${signatureDoc.fileName}"`,
+      `Registró aprobación interna de "${signatureDoc.fileName}"`,
       questionBank.find((q) => q.id === signatureDoc.relatedQuestionId)?.category || "",
     )
-    toast({ title: "Documento firmado", description: "Se registró la firma digital interna." })
+    toast({ title: "Aprobación interna registrada", description: "Constancia de revisión; no equivale a firma electrónica avanzada. Revisa el estado de guardado." })
     setSignatureDoc(null)
     setSignatureData({ signer: "", notes: "" })
   }
 
   function getDocumentsForQuestion(questionId: string) {
-    return documents.filter((doc) => doc.relatedQuestionId === questionId)
+    return documents.filter((doc) => doc.relatedQuestionId === questionId && !doc.archived)
   }
 
   function canCloseExpediente() {
     return questions.every((question) => {
       if (question.required && question.answer === null) return false
-      if (question.answer === "si") return question.relatedDocuments.length > 0
+      if (question.answer === "si") return question.relatedDocuments.some((id)=>documents.some((doc)=>doc.id===id && !doc.archived && Boolean(doc.base64)))
       if (question.answer === "no") return Boolean(question.notes?.trim() && question.actionPlan?.trim())
       if (question.answer === "no-aplica") return Boolean(question.notes?.trim())
       return true
     })
   }
 
-  function handleCloseExpediente() {
+  async function handleCloseExpediente() {
+    const scope = captureModuleScope()
     if (!canCloseExpediente()) {
       toast({
         title: "No es posible cerrar",
@@ -826,46 +852,26 @@ export default function GobernanzaControlPage() {
       })
       return
     }
-    setExpedienteCerrado(true)
-    appendTrace("Cierre del expediente de Gobernanza", "Resumen del módulo")
-    toast({ title: "Expediente cerrado", description: "El checklist queda cerrado; puedes reabrirlo para realizar correcciones." })
+    const nextTrace:TraceEntry[]=[{id:crypto.randomUUID(),action:"Cierre de revisión de Gobernanza",section:"Resumen del módulo",timestamp:new Date().toISOString(),user:getUserIdentifier(),details:complianceRatio===100 ? "Controles documentados; no constituye aceptación de autoridad." : "Revisión documentada con obligaciones o planes pendientes; no equivale a cumplimiento."},...trace]
+    try {
+      scope.storage.setItem(STORAGE_KEY,JSON.stringify({...parseStoredObject(scope.storage.getItem(STORAGE_KEY)),questions,documents,manualVersions,committeeSessions,alerts,expedienteCerrado:true,trace:nextTrace}))
+      await flushModuleStorage(scope)
+      assertModuleScope(scope)
+      const canonical = parseStoredObject(scope.storage.getItem(STORAGE_KEY))
+      setExpedienteCerrado(canonical.expedienteCerrado === true);setTrace(canonical.trace || [])
+      if (!canonical.expedienteCerrado) { toast({title:"Revisión pendiente",description:"El expediente cambió durante el guardado; confirma la versión actual.",variant:"destructive"}); return }
+      toast({title:complianceRatio===100 ? "Revisión de Gobernanza guardada" : "Revisión guardada con pendientes",description:"Se conservó el cierre documental; los planes pendientes no equivalen a cumplimiento. Puedes reabrir para corregir."})
+    } catch (error) {if (isModuleScopeCurrent(scope)) toast({title:"No se guardó el cierre",description:error instanceof Error ? error.message : "La revisión sigue abierta; conserva la captura y reintenta.",variant:"destructive"})}
   }
 
-  function handleExportPDF() {
-    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" })
-    doc.setFontSize(14)
-    doc.text("Gobernanza y Control Interno - Reporte de Cumplimiento", 40, 40)
-    doc.setFontSize(10)
-    doc.text(`Fecha de generación: ${formatDate(new Date().toISOString())}`, 40, 60)
-    doc.text(`Estatus general: ${moduleStatus.label} (${complianceRatio}%)`, 40, 80)
-
-    let offset = 110
-    questions.forEach((question) => {
-      if (offset > 760) {
-        doc.addPage()
-        offset = 60
-      }
-      doc.setFont("helvetica", "bold")
-      doc.text(`${question.category} – ${question.question}`, 40, offset, { maxWidth: 515 })
-      offset += 14
-      doc.setFont("helvetica", "normal")
-      doc.text(`Respuesta: ${question.answer || "Sin respuesta"}`, 40, offset)
-      offset += 12
-      if (question.notes) {
-        doc.text(`Notas: ${question.notes}`, 40, offset, { maxWidth: 515 })
-        offset += 12
-      }
-      if (question.actionPlan) {
-        doc.text(`Plan de acción: ${question.actionPlan}`, 40, offset, { maxWidth: 515 })
-        offset += 12
-      }
-      const docCount = question.relatedDocuments.length
-      doc.text(`Evidencias vinculadas: ${docCount}`, 40, offset)
-      offset += 18
-    })
-
-    doc.save("gobernanza-control.pdf")
-    appendTrace("Generó reporte PDF", "Reportes")
+  async function handleExportPDF() {
+    try {
+      const report = buildGovernanceProfessionalReport({ questions, documents, manualVersions, committeeSessions, alerts, trace, expedienteCerrado })
+      await downloadProfessionalReport(report, "gobernanza")
+      appendTrace("Generó reporte PDF", "Reportes")
+    } catch (error) {
+      toast({ title: "No se pudo exportar el reporte", description: error instanceof Error ? error.message : "Reintenta la descarga sin cambiar de empresa.", variant: "destructive" })
+    }
   }
 
   function handleExportExcel() {
@@ -925,13 +931,13 @@ export default function GobernanzaControlPage() {
             </div>
             <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Evidencias vigentes: {documents.filter((doc) => doc.status === "vigente").length}
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Evidencias vigentes: {documents.filter((doc) => !doc.archived && doc.status === "vigente").length}
               </span>
               <span className="flex items-center gap-1">
-                <AlertTriangle className="h-4 w-4 text-amber-500" /> Por vencer: {documents.filter((doc) => doc.status === "por-vencer").length}
+                <AlertTriangle className="h-4 w-4 text-amber-500" /> Por vencer: {documents.filter((doc) => !doc.archived && doc.status === "por-vencer").length}
               </span>
               <span className="flex items-center gap-1">
-                <AlertCircle className="h-4 w-4 text-red-500" /> Vencidas: {documents.filter((doc) => doc.status === "vencido").length}
+                <AlertCircle className="h-4 w-4 text-red-500" /> Vencidas: {documents.filter((doc) => !doc.archived && doc.status === "vencido").length}
               </span>
               <span className="flex items-center gap-1">
                 <FileText className="h-4 w-4 text-blue-500" /> Documentos totales: {totalDocuments}
@@ -984,7 +990,7 @@ export default function GobernanzaControlPage() {
           <CardContent className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Capacitación</span>
-              <span>{integrationSnapshot?.capacitacionDocuments ?? 0} constancias</span>
+              <span>{integrationSnapshot?.capacitacionDocuments ?? 0} documentos de capacitación</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-2"><ClipboardCheck className="h-4 w-4" /> Auditoría</span>
@@ -1003,10 +1009,10 @@ export default function GobernanzaControlPage() {
       </section>
 
       <section className="flex flex-wrap gap-3">
-        <Button onClick={handleExportPDF} variant="outline" className="flex items-center gap-2">
+        <Button data-pld-action="download" onClick={handleExportPDF} variant="outline" className="flex items-center gap-2">
           <FileText className="h-4 w-4" /> Exportar reporte PDF
         </Button>
-        <Button onClick={handleExportExcel} variant="outline" className="flex items-center gap-2">
+        <Button data-pld-action="download" onClick={handleExportExcel} variant="outline" className="flex items-center gap-2">
           <Download className="h-4 w-4" /> Exportar a Excel
         </Button>
         <Button
@@ -1108,7 +1114,7 @@ export default function GobernanzaControlPage() {
                                     <div className="mt-2 grid gap-1 text-xs text-muted-foreground md:grid-cols-2">
                                       <span className="flex items-center gap-1"><CalendarClock className="h-3 w-3" /> Emisión: {formatDate(doc.issueDate)}</span>
                                       <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Vigencia: {formatDate(doc.expiryDate)}</span>
-                                      <span className="flex items-center gap-1"><History className="h-3 w-3" /> Retención hasta: {formatDate(doc.retentionUntil)}</span>
+                                      <span className="flex items-center gap-1"><History className="h-3 w-3" /> {doc.retentionUntil ? `Retención hasta: ${formatDate(doc.retentionUntil)}` : "Conservación: fecha aplicable pendiente"}</span>
                                       <span className="flex items-center gap-1"><Link2 className="h-3 w-3" /> Vinculado a: {doc.relatedModules.length ? doc.relatedModules.join(", ") : "—"}</span>
                                     </div>
                                     <div className="mt-3 flex flex-wrap gap-2">
@@ -1119,7 +1125,7 @@ export default function GobernanzaControlPage() {
                                         <Download className="h-4 w-4" /> Descargar
                                       </Button>
                                       <Button size="sm" variant="outline" className="flex items-center gap-2" onClick={() => setSignatureDoc(doc)}>
-                                        <Pen className="h-4 w-4" /> {doc.signedAt ? "Actualizar firma" : "Firmar"}
+                                        <Pen className="h-4 w-4" /> {doc.signedAt ? "Actualizar revisión" : "Aprobar internamente"}
                                       </Button>
                                       <Button
                                         size="sm"
@@ -1128,12 +1134,12 @@ export default function GobernanzaControlPage() {
                                         onClick={() => handleDeleteDocument(doc.id)}
                                         disabled={expedienteCerrado}
                                       >
-                                        <X className="h-4 w-4" /> Eliminar
+                                        <Archive className="h-4 w-4" /> Archivar
                                       </Button>
                                     </div>
                                     {doc.signedAt && (
                                       <p className="mt-2 text-xs text-emerald-600 flex items-center gap-1">
-                                        <Check className="h-3 w-3" /> Firmado por {doc.signedBy} el {formatDate(doc.signedAt)}
+                                        <Check className="h-3 w-3" /> Revisión interna por {doc.signedBy} el {formatDate(doc.signedAt)}
                                       </p>
                                     )}
                                     {doc.notes && (
@@ -1331,13 +1337,14 @@ export default function GobernanzaControlPage() {
             <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold">Carga de evidencia</h3>
+                  <DialogPrimitive.Title className="text-lg font-semibold">Carga de evidencia</DialogPrimitive.Title>
+                  <DialogPrimitive.Description className="sr-only">Carga un documento y sus datos de identificación para conservarlo en Gobernanza.</DialogPrimitive.Description>
                   <p className="text-sm text-muted-foreground">
                     Adjunta documentos en formato PDF, JPG o XML. El sistema validará vigencia y hash de integridad.
                   </p>
                 </div>
                 <DialogPrimitive.Close asChild>
-                  <Button variant="ghost" size="icon">
+                  <Button type="button" variant="ghost" size="icon" aria-label="Cerrar" data-pld-context="browse">
                     <X className="h-4 w-4" />
                   </Button>
                 </DialogPrimitive.Close>
@@ -1405,29 +1412,33 @@ export default function GobernanzaControlPage() {
               <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[95vh] overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between p-4 border-b">
                   <div>
-                    <h3 className="text-lg font-semibold">Visor de documento</h3>
+                    <DialogPrimitive.Title className="text-lg font-semibold">Visor de documento</DialogPrimitive.Title>
+                    <DialogPrimitive.Description className="sr-only">Vista previa del archivo privado seleccionado.</DialogPrimitive.Description>
                     <p className="text-sm text-muted-foreground">{viewerDoc.fileName}</p>
                   </div>
                   <DialogPrimitive.Close asChild>
-                    <Button variant="ghost" size="icon" onClick={() => setViewerDoc(null)}>
+                    <Button type="button" variant="ghost" size="icon" aria-label="Cerrar" data-pld-context="browse" onClick={() => setViewerDoc(null)}>
                       <X className="h-4 w-4" />
                     </Button>
                   </DialogPrimitive.Close>
                 </div>
                 <div className="flex-1 overflow-auto">
-                  {viewerDoc.mimeType.includes("pdf") ? (
+                  {!governanceDocumentUrl(viewerDoc, "preview") ? (
+                    <p role="alert" className="p-4 text-sm text-destructive">La referencia del archivo requiere revisión. El registro original se conserva sin abrir contenido no autorizado.</p>
+                  ) : viewerDoc.mimeType.includes("pdf") || (viewerDoc.mimeType.includes("xml") && viewerDoc.base64.startsWith("/api/")) ? (
                     <iframe
                       title={viewerDoc.fileName}
-                      src={`data:${viewerDoc.mimeType};base64,${viewerDoc.base64}`}
-                      className="w-full h-full"
+                      src={governanceDocumentUrl(viewerDoc, "preview")!}
+                      sandbox=""
+                      className="w-full min-h-[65vh]"
                     />
-                  ) : viewerDoc.mimeType.includes("xml") ? (
+                  ) : viewerDoc.mimeType.includes("xml") && !viewerDoc.base64.startsWith("/api/") ? (
                     <pre className="p-4 text-xs whitespace-pre-wrap">
                       {base64ToText(viewerDoc.base64)}
                     </pre>
                   ) : (
                     <Image
-                      src={`data:${viewerDoc.mimeType};base64,${viewerDoc.base64}`}
+                      src={governanceDocumentUrl(viewerDoc, "preview")!}
                       alt={viewerDoc.fileName}
                       width={960}
                       height={720}
@@ -1449,9 +1460,10 @@ export default function GobernanzaControlPage() {
             {signatureDoc && (
               <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Firma digital interna</h3>
+                  <DialogPrimitive.Title className="text-lg font-semibold">Aprobación interna</DialogPrimitive.Title>
+                  <DialogPrimitive.Description className="sr-only">Confirma la revisión interna de esta versión documental.</DialogPrimitive.Description>
                   <DialogPrimitive.Close asChild>
-                    <Button variant="ghost" size="icon" onClick={() => setSignatureDoc(null)}>
+                    <Button type="button" variant="ghost" size="icon" aria-label="Cerrar" data-pld-context="browse" onClick={() => setSignatureDoc(null)}>
                       <X className="h-4 w-4" />
                     </Button>
                   </DialogPrimitive.Close>

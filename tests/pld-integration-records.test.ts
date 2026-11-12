@@ -133,8 +133,8 @@ test("CURP and NIF clients remain visible and operations link by EUI ID after ch
 test("EBR accepts legacy array and V2 maps while preserving ID, risk summary and other clients", () => {
   const client = getIntegrationClient({ expedienteId: "nif-only", nombre: "Extranjero", identifiers: { nif: "NIF-12345" } })!
   const legacy = { rfc: "NIF-12345", schemaVersion: 2, clientAnswers: { pep: "none" }, updatedAt: "2026-09-01" }
-  assert.equal(findClientEbrEvaluation(normalizeEbrEvaluations({ "NIF-12345": legacy }), client)?.schemaVersion, 2)
-  assert.equal(findClientEbrEvaluation(normalizeEbrEvaluations([legacy]), client)?.schemaVersion, 2)
+  assert.equal(findClientEbrEvaluation(normalizeEbrEvaluations({ "NIF-12345": legacy }), client), null)
+  assert.equal(findClientEbrEvaluation(normalizeEbrEvaluations([legacy]), client, { allowLegacyIdentifierMatch: true })?.schemaVersion, 2)
   const storage = memoryStorage({ [EBR_EVALUATIONS_STORAGE_KEY]: { "NIF-12345": legacy, unrelated: { rfc: "BBB020202BBB", notes: "Preservar" } } })
   const next = saveClientEbrEvaluation(storage, client, { schemaVersion: 2, riskSummary: { level: "Alto", score: 20, percent: 80 }, updatedAt: "2026-09-22" })
   assert.equal(next[client.id].riskSummary.level, "Alto")
@@ -143,7 +143,23 @@ test("EBR accepts legacy array and V2 maps while preserving ID, risk summary and
   assert.equal(Object.values(next).some((item) => item.notes === "Preservar"), true)
   assert.equal(findClientEbrEvaluation(normalizeEbrEvaluations(next), client)?.expedienteId, client.id)
   const deleted = saveClientEbrEvaluation(storage, client, null)
-  assert.equal(Object.values(deleted).length, 1)
+  assert.equal(Object.values(deleted).length, 2)
+  assert.equal(Object.values(deleted).some((item) => item.updatedAt === legacy.updatedAt), true, "The unlinked historical assessment must not be deleted by an RFC/NIF inference")
+})
+
+test("operation client IDs never fan out to EUI or EBR records sharing an RFC", () => {
+  const first = { ...original, expedienteId: "stable-a" }
+  const second = { ...original, expedienteId: "stable-b" }
+  const operation = { id: "operation", clienteId: "import-person-one", cliente: "Cliente", rfc: original.rfc }
+  const a = getIntegrationClient(first)!; const b = getIntegrationClient(second)!
+  assert.equal(getIntegrationClient(operation)?.id, "import-person-one")
+  assert.equal(matchesIntegrationClient(operation, a), false)
+  assert.equal(matchesIntegrationClient(operation, b), false)
+  assert.equal(buildIntegrationClients([first, second], [operation]).length, 3)
+  assert.equal(matchesIntegrationClient({ ...operation, expedienteReferenciado: "stable-a" }, a), true)
+  assert.equal(matchesIntegrationClient({ ...operation, expedienteReferenciado: "stable-a" }, b), false)
+  const assessment = { expedienteId: "stable-a", clientId: "stable-a", rfc: original.rfc, workflow: { status: "approved" } }
+  assert.equal(findClientEbrEvaluation([assessment], b), null)
 })
 
 test("invalid EBR storage is preserved rather than overwritten", () => {
@@ -154,9 +170,10 @@ test("invalid EBR storage is preserved rather than overwritten", () => {
 })
 
 test("historical EBR v2 questionnaires use the same scoring as the current EBR screen", () => {
-  const answers = { ...initialAnswers, nationalityRisk: "black", ngoNonRegulated: "yes" }
+  const completeAnswers = { ...initialAnswers, incomeSources: ["empresario" as const],geographyReviewed:true,behaviorReviewed:true }
+  const answers = { ...completeAnswers, nationalityRisk: "black", ngoNonRegulated: "yes" }
   const current = calculateRisk(answers, true, "Cliente")
-  const stored = { rfc: "AAA010101AAA", schemaVersion: 2, clientAnswers: answers, subjectAnswers: initialAnswers, hasBeneficiaryController: false, updatedAt: "2026-09-23" }
+  const stored = { rfc: "AAA010101AAA", schemaVersion: 2, clientAnswers: answers, subjectAnswers: completeAnswers, hasBeneficiaryController: false, updatedAt: "2026-09-23" }
   const summary = normalizeEbrEvaluations({ AAA010101AAA: stored })[0].riskSummary
   assert.equal(summary.level, current.level)
   assert.equal(summary.score, current.total)

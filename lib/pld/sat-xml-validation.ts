@@ -5,6 +5,70 @@ type Schema = { file: string; root: SchemaNode; types: Record<string, SchemaNode
 type XmlNode = { name: string; text: string; children: XmlNode[] }
 const schemas = schemaJson as unknown as Record<string, Schema>
 
+// Only human-readable types whose SAT XSD restricts capitalization may be
+// normalized. Never touch wallet addresses, hashes, account IDs or references.
+const humanTextType = /^(?:nombre(?:_banco|_institucion)?|denominacion_razon|correo_electronico|direccion_\d+-\d+|descripcion_\d+-\d+|descripcion_activo_virtual)_type$/
+
+/** Output-only case conversion, scoped by the exact official XSD type/path.
+ * Captured cells remain unchanged. A candidate is used only if it satisfies
+ * every restriction of that type; invalid punctuation/accents are not erased.
+ */
+export function normalizeGeneratedSatXmlText(xml: string): string {
+  try {
+    const { root, namespace } = parseGeneratedXml(xml)
+    const schema = schemas[namespace]
+    if (!schema) return xml
+    const changes = new Map<string, string>()
+    const occurrences = new Map<string, number>()
+    const elements = (definition: SchemaNode): SchemaNode[] => definition.tag === "element"
+      ? [definition] : (definition.children || []).flatMap(elements)
+    const accepts = (rules: SchemaNode[], value: string) => rules.every((rule) => {
+      const length = Array.from(value).length
+      if (rule.tag === "pattern") return new RegExp(`^(?:${rule.value})$`).test(value)
+      if (rule.tag === "length") return length === Number(rule.value)
+      if (rule.tag === "minLength") return length >= Number(rule.value)
+      if (rule.tag === "maxLength") return length <= Number(rule.value)
+      return false // Unsupported restrictions never authorize a transformation.
+    })
+    const visit = (node: XmlNode, definition: SchemaNode, path: string, depth: number) => {
+      if (depth > 100 || node.name !== definition.name) return
+      const occurrence = (occurrences.get(path) || 0) + 1
+      occurrences.set(path, occurrence)
+      const type = schema.types[definition.type || ""]
+      if (type?.tag === "complexType") {
+        const children = (type.children || []).flatMap(elements)
+        for (const child of node.children) {
+          const childDefinition = children.find((item) => item.name === child.name)
+          if (childDefinition) visit(child, childDefinition, `${path}/${child.name}`, depth + 1)
+        }
+      } else if (type?.tag === "simpleType" && humanTextType.test(definition.type || "") && !node.children.length) {
+        const rules = type.children?.find((item) => item.tag === "restriction")?.children || []
+        const candidate = node.text.toUpperCase()
+        if (candidate !== node.text && rules.length && !accepts(rules, node.text) && accepts(rules, candidate)) changes.set(`${path}#${occurrence}`, candidate)
+      }
+    }
+    visit(root, schema.root, `/${root.name}`, 0)
+    if (!changes.size) return xml
+    const stack: Array<{ name: string; occurrence: number }> = []
+    occurrences.clear()
+    return xml.replace(/<[^>]+>|[^<]+/g, (token) => {
+      if (/^<\//.test(token)) stack.pop()
+      else if (/^<[a-z_]/i.test(token)) {
+        const name=token.match(/^<([a-z_][\w.-]*)/i)![1]
+        const path=`/${[...stack.map((item)=>item.name),name].join("/")}`
+        const occurrence=(occurrences.get(path)||0)+1
+        occurrences.set(path,occurrence)
+        if(!/\/\s*>$/.test(token))stack.push({name,occurrence})
+      }
+      else if (!token.startsWith("<")) {
+        const replacement = changes.get(`/${stack.map((item)=>item.name).join("/")}#${stack.at(-1)?.occurrence}`)
+        if (replacement !== undefined) return replacement.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;")
+      }
+      return token
+    })
+  } catch { return xml } // The validator still reports malformed/unknown XML.
+}
+
 function decodeXml(text: string): string {
   if (/&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);)/i.test(text)) throw new Error("Entidad XML no válida.")
   return text.replace(/&(amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);/gi, (_, entity: string) => {

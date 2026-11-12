@@ -5,8 +5,8 @@ import "./globals.css"
 
 export const metadata: Metadata = {
   title: "Programa de Prevención en Lavado de Dinero",
-  description: "Plataforma integral para la gestión y gobernanza de sistemas de inteligencia artificial",
-  generator: "v0.dev",
+  description: "Identificación, operaciones, riesgos y evidencias para la prevención de lavado de dinero en México.",
+  icons: { icon: "/logo-davara-governance/logo-davara-governance-black.png" },
 }
 
 export default function RootLayout({

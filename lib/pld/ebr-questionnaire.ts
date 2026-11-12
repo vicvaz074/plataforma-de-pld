@@ -1,6 +1,6 @@
 import { PAISES } from "../data/paises";
 
-export type CashExposure = "alto" | "medio" | "bajo";
+export type CashExposure = "alto" | "medio" | "bajo" | "";
 
 export type IncomeSourceId =
   | "asalariado"
@@ -27,6 +27,8 @@ export interface EvaluationAnswers {
   cashExposure: CashExposure;
   ngoNonRegulated: string;
   institutionAge: string;
+  behaviorReviewed?: boolean;
+  geographyReviewed?: boolean;
 }
 
 
@@ -35,9 +37,11 @@ export interface ScoredResult {
   max: number;
   percent: number;
   fours: number;
-  level: "Bajo" | "Medio" | "Alto" | "Reforzado";
+  level: "Pendiente" | "Bajo" | "Medio" | "Alto" | "Reforzado";
+  complete: boolean;
+  missing: string[];
   reason: string;
-  details: Array<{ question: string; score: number; answer: string }>;
+  details: Array<{ question: string; score: number; maximum:number; answer: string }>;
 }
 
 
@@ -163,6 +167,29 @@ export const initialAnswers: EvaluationAnswers = {
   institutionAge: "public_or_mature",
 };
 
+/** New captures never assume a favorable answer. initialAnswers remains the
+ * legacy fixture contract; historical evaluations keep their original data. */
+export const emptyEbrAnswers: EvaluationAnswers = {
+  nationalityRisk: "", nationalityCountryCode: "", pep: "", bankInstitution: "",
+  suspiciousBehaviors: [], incomeSources: [], cashExposure: "", ngoNonRegulated: "",
+  institutionAge: "", behaviorReviewed: false, geographyReviewed: false,
+};
+
+export function getEbrAnswerMissing(answers: EvaluationAnswers, includeBankAndBehavior: boolean): string[] {
+  const missing: string[] = [];
+  if (!PAISES.some((country) => country.code === answers.nationalityCountryCode) || !NATIONALITY_OPTIONS.some((option) => option.value === answers.nationalityRisk)) missing.push("País y riesgo geográfico");
+  if (answers.geographyReviewed !== true) missing.push("Verificación de fuentes geográficas");
+  if (!PEP_OPTIONS.some((option) => option.value === answers.pep)) missing.push("PEP y relación");
+  if (!answers.incomeSources.length || answers.incomeSources.some((value) => !INCOME_SOURCES.some((option) => option.value === value))) missing.push("Fuentes de ingreso");
+  if (!CASH_EXPOSURE_OPTIONS.some((option) => option.value === answers.cashExposure)) missing.push("Exposición a efectivo");
+  if (!NGO_OPTIONS.some((option) => option.value === answers.ngoNonRegulated)) missing.push("Naturaleza de la entidad");
+  if (!INSTITUTION_AGE_OPTIONS.some((option) => option.value === answers.institutionAge)) missing.push("Antigüedad");
+  if (includeBankAndBehavior && !BANK_OPTIONS.some((option) => option.value === answers.bankInstitution)) missing.push("Instituciones bancarias");
+  if (includeBankAndBehavior && answers.behaviorReviewed !== true) missing.push("Revisión de comportamiento");
+  if (includeBankAndBehavior && answers.suspiciousBehaviors.some((value)=>!SUSPICIOUS_BEHAVIORS.some((option)=>option.value===value))) missing.push("Señales de comportamiento válidas del catálogo");
+  return missing;
+}
+
 export const getOptionScore = (
   value: string,
   options: Array<{ value: string; score: number }>,
@@ -210,6 +237,7 @@ export const calculateRisk = (
   answers: EvaluationAnswers,
   includeBankAndBehavior: boolean,
   questionnaireName: string,
+  legacySnapshot = false,
 ): ScoredResult => {
   const countryLabel =
     PAISES.find((pais) => pais.code === answers.nationalityCountryCode)
@@ -218,26 +246,31 @@ export const calculateRisk = (
   const details: ScoredResult["details"] = [
     {
       question: `Nacionalidad (${questionnaireName})`,
+      maximum:4,
       score: getOptionScore(answers.nationalityRisk, NATIONALITY_OPTIONS),
       answer: `${countryLabel} / ${getLabel(answers.nationalityRisk, NATIONALITY_OPTIONS)}`,
     },
     {
       question: `PEP o relación con PEP (${questionnaireName})`,
+      maximum:4,
       score: getOptionScore(answers.pep, PEP_OPTIONS),
       answer: getLabel(answers.pep, PEP_OPTIONS),
     },
     {
       question: `Fuentes de ingreso + giro (${questionnaireName})`,
+      maximum:3,
       score: getIncomeRiskScore(answers.incomeSources, answers.cashExposure),
       answer: `${answers.incomeSources.length || 0} fuente(s), giro ${answers.cashExposure}`,
     },
     {
       question: `ONG/beneficencia no regulada (${questionnaireName})`,
+      maximum:4,
       score: getOptionScore(answers.ngoNonRegulated, NGO_OPTIONS),
       answer: getLabel(answers.ngoNonRegulated, NGO_OPTIONS),
     },
     {
       question: `Antigüedad de institución (${questionnaireName})`,
+      maximum:4,
       score: getOptionScore(answers.institutionAge, INSTITUTION_AGE_OPTIONS),
       answer: getLabel(answers.institutionAge, INSTITUTION_AGE_OPTIONS),
     },
@@ -249,11 +282,13 @@ export const calculateRisk = (
       0,
       {
         question: `Institución bancaria (${questionnaireName})`,
+        maximum:3,
         score: getOptionScore(answers.bankInstitution, BANK_OPTIONS),
         answer: getLabel(answers.bankInstitution, BANK_OPTIONS),
       },
       {
         question: `Acciones observadas (${questionnaireName})`,
+        maximum:3,
         score: Math.max(
           1,
           ...answers.suspiciousBehaviors.map((value) =>
@@ -268,7 +303,7 @@ export const calculateRisk = (
   }
 
   const total = details.reduce((sum, detail) => sum + detail.score, 0);
-  const max = includeBankAndBehavior ? 25 : 19;
+  const max = details.reduce((sum,detail)=>sum+detail.maximum,0);
   const percent = Math.round((total / max) * 100);
   const fours = details.filter((detail) => detail.score === 4).length;
 
@@ -289,14 +324,18 @@ export const calculateRisk = (
     reason = "Puntaje acumulado medio";
   }
 
-  return { total, max, percent, fours, level, reason, details };
+  const missing = legacySnapshot ? [] : getEbrAnswerMissing(answers, includeBankAndBehavior);
+  return { total, max, percent: missing.length ? 0 : percent, fours,
+    level: missing.length ? "Pendiente" : level,
+    reason: missing.length ? `Faltan ${missing.length} respuestas; sin clasificación aprobada.` : reason,
+    complete: !missing.length, missing, details };
 };
 
 
 export function normalizeEbrAnswers(value: unknown): EvaluationAnswers {
   const raw = value && typeof value === "object" ? value as Record<string, any> : {};
   return {
-    ...initialAnswers,
+    ...emptyEbrAnswers,
     ...raw,
     suspiciousBehaviors: Array.isArray(raw?.suspiciousBehaviors) ? raw.suspiciousBehaviors : [],
     incomeSources: Array.isArray(raw?.incomeSources) ? raw.incomeSources : [],
@@ -306,11 +345,14 @@ export function normalizeEbrAnswers(value: unknown): EvaluationAnswers {
 /** Read v2 persisted questionnaires using the same scoring as the EBR screen. */
 export function summarizeStoredEbrQuestionnaire(value: Record<string, any>) {
   if (!value.clientAnswers || !value.subjectAnswers) return undefined;
-  const client = calculateRisk(normalizeEbrAnswers(value.clientAnswers), true, "Cliente");
-  const subject = calculateRisk(normalizeEbrAnswers(value.subjectAnswers), true, "Sujeto obligado");
+  const historical = !value.schemaVersion || value.schemaVersion < 3;
+  const client = calculateRisk(normalizeEbrAnswers(value.clientAnswers), true, "Cliente", historical);
+  const subject = calculateRisk(normalizeEbrAnswers(value.subjectAnswers), true, "Sujeto obligado", historical);
   const beneficiary = value.hasBeneficiaryController
-    ? calculateRisk(normalizeEbrAnswers(value.beneficiaryAnswers), false, "Beneficiario controlador")
+    ? calculateRisk(normalizeEbrAnswers(value.beneficiaryAnswers), false, "Beneficiario controlador", historical)
     : undefined;
+  if (value.schemaVersion >= 3 && value.workflow?.status !== "approved") return undefined;
+  if (!client.complete || !subject.complete || (beneficiary && !beneficiary.complete)) return undefined;
   const levels = [client.level, subject.level, beneficiary?.level];
   const pepStatus = value.pepScreening?.status;
   const level = pepStatus === "coincidencia-cargo" || levels.includes("Reforzado") ? "Reforzado"

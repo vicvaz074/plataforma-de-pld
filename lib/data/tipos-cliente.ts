@@ -18,6 +18,7 @@ function normalizeIdentifier(value: string) {
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .trim()
+    .replace(/\s+/g, " ")
     .toLowerCase()
 }
 
@@ -131,12 +132,40 @@ export const CLIENTE_TIPOS: ClienteTipoOption[] = [
   },
 ]
 
+// EUI labels and historical short codes are persisted in existing records.
+// Only exact aliases are accepted: nationality alone does not establish the
+// residence/visitor status of a foreign natural person.
+const CLIENTE_TIPO_ALIASES: Record<string, string> = {
+  pfn: "pf_residente",
+  pfe: "pf_visitante",
+  pmn: "pm_mexicana",
+  pme: "pm_extranjera",
+  dependencia: "pm_derecho_publico",
+  autoridad: "pm_derecho_publico",
+  "persona fisica mexicana": "pf_residente",
+  "persona moral mexicana": "pm_mexicana",
+  "persona moral extranjera": "pm_extranjera",
+  "persona moral de derecho publico": "pm_derecho_publico",
+  persona_moral_derecho_publico: "pm_derecho_publico",
+  "pm de derecho publico regimen simplificado": "pm_derecho_publico_simplificado",
+  "embajada, consulado u organismo": "organismo_internacional",
+  embajada_consulado: "organismo_internacional",
+  "entidad financiera / seguros": "entidad_financiera",
+}
+
+export function normalizeClienteTipo(identifier: string | undefined | null): string {
+  if (!identifier) return ""
+  const normalized = normalizeIdentifier(identifier)
+  const option = CLIENTE_TIPOS.find(
+    (item) => normalizeIdentifier(item.value) === normalized || normalizeIdentifier(item.label) === normalized,
+  )
+  return option?.value ?? CLIENTE_TIPO_ALIASES[normalized] ?? identifier.trim()
+}
+
 export function findClienteTipoOption(identifier: string | undefined | null) {
   if (!identifier) return undefined
-  return (
-    CLIENTE_TIPOS.find((option) => option.value === identifier) ||
-    CLIENTE_TIPOS.find((option) => normalizeIdentifier(option.label) === normalizeIdentifier(identifier))
-  )
+  const normalized = normalizeClienteTipo(identifier)
+  return CLIENTE_TIPOS.find((option) => option.value === normalized)
 }
 
 export function findClienteTipoLabel(identifier: string | undefined | null) {
