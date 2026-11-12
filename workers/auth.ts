@@ -3,6 +3,7 @@ import { twoFactor } from "better-auth/plugins"
 import { Kysely } from "kysely"
 import { D1Dialect } from "kysely-d1"
 import { ApiError, type PilotActor, type PilotEnv } from "./types"
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "../lib/pilot/password-policy"
 
 /** Instances are request-local: Cloudflare forbids carrying I/O clients across requests. */
 export function getAuth(env: PilotEnv) {
@@ -12,7 +13,7 @@ export function getAuth(env: PilotEnv) {
     secret: env.BETTER_AUTH_SECRET,
     database: { db: new Kysely({ dialect: new D1Dialect({ database: env.DB as never }) }), type: "sqlite", transaction: false },
     trustedOrigins: [env.BETTER_AUTH_URL],
-    emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: 12, maxPasswordLength: 128 },
+    emailAndPassword: { enabled: true, disableSignUp: true, minPasswordLength: PASSWORD_MIN_LENGTH, maxPasswordLength: PASSWORD_MAX_LENGTH },
     session: { expiresIn: 60 * 60 * 12, updateAge: 60 * 10, cookieCache: { enabled: false } },
     advanced: { database: { generateId: "uuid" }, ipAddress: { ipAddressHeaders: ["cf-connecting-ip", "x-forwarded-for"] } },
     rateLimit: { enabled: true, storage: "database", window: 60, max: 60, customRules: { "/sign-in/email": { window: 60, max: 8 }, "/two-factor/*": {window: 60, max: 8} } },

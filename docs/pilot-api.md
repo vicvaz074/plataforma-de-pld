@@ -7,7 +7,7 @@ El Worker sirve el export estático y `/api/*` bajo el mismo origen. D1 conserva
 1. Crear D1, R2 y las colas principal/de fallos de cada entorno; sustituir los identificadores de configuración de `wrangler.worker.jsonc`.
 2. Aplicar `pnpm exec wrangler d1 migrations apply <nombre> -c wrangler.worker.jsonc --env preview --remote` (local: `--local --env=''`).
 3. Configurar `BETTER_AUTH_URL` al origen HTTPS real y secretos `BETTER_AUTH_SECRET` (al menos 32 caracteres) y `BOOTSTRAP_TOKEN` (al menos 32 caracteres) por el canal seguro de Wrangler. Nunca publicarlos en Git ni en el frontend.
-4. El superadministrador inicial se crea una sola vez con `POST /api/v1/bootstrap`, cabecera `Authorization: Bearer <BOOTSTRAP_TOKEN>` y `{email,name,password}`. La contraseña debe tener al menos 12 caracteres. Cuando existe `BOOTSTRAP_EMAIL`, el correo debe coincidir con ese titular. El endpoint se cierra cuando existe cualquier cuenta; retirar el secreto de instalación después. La contraseña la elige el titular durante la activación; no hay contraseña inicial publicada ni cuenta creada automáticamente.
+4. El superadministrador inicial se crea una sola vez con `POST /api/v1/bootstrap`, cabecera `Authorization: Bearer <BOOTSTRAP_TOKEN>` y `{email,name,password}`. La contraseña debe tener entre 11 y 128 caracteres, sin recorte ni normalización adicional de la aplicación; se conserva el hashing existente de Better Auth. Cuando existe `BOOTSTRAP_EMAIL`, el correo debe coincidir con ese titular. El endpoint se cierra cuando existe cualquier cuenta; retirar el secreto de instalación después. La contraseña la elige el titular durante la activación; no hay contraseña inicial publicada ni cuenta creada automáticamente.
 5. Compilar frontend, verificar Worker mediante `pnpm exec wrangler deploy -c wrangler.worker.jsonc --dry-run --env preview` y validar preview antes de promover. Pages usa el `wrangler.jsonc` raíz y `out/_worker.js`: reenvía `/api` y `/api/*` por el service binding `API`, sin cambiar origen, cookies ni encabezados. El resto permanece estático. El backend conserva los layouts SAT mediante su binding `ASSETS`. El acceso de preview utiliza exclusivamente el alias real asignado por Pages `https://codex-piloto-real-multiempre.plataforma-de-pld.pages.dev`, que coincide con `BETTER_AUTH_URL`; Pages trunca el nombre de la rama. Los URLs únicos de cada despliegue no son orígenes de sesión autorizados.
 
 `GET /api/v1/health` devuelve `{mode:'cloud',configured,environment}`. No afirma aceptación normativa ni disponibilidad de recursos remotos no comprobados.
@@ -18,6 +18,7 @@ El Worker sirve el export estático y `/api/*` bajo el mismo origen. D1 conserva
 - `GET /api/v1/session`: `{user,organizations,companies,memberships,grants,mfaRequired}`. `user` contiene sólo `id,name,email,platformRole,status,requiresPasswordChange,twoFactorEnabled`.
 - `/api/auth/change-password {currentPassword,newPassword,revokeOtherSessions}` elimina la exigencia de contraseña temporal sólo después de una respuesta exitosa del servicio de identidad.
 - Cuentas suspendidas y usuarios con cambio pendiente no pueden operar con datos. Todos los guards consultan el estado y permisos vigentes.
+- La navegación permite a administradores activos de organización y superadministradores descubrir los módulos aun sin empresa seleccionada o durante el cambio inicial de contraseña. Esta visibilidad no concede acceso a registros: se mantienen el cambio obligatorio, el ámbito de empresa, los permisos y los guards del servidor. El administrador de organización puede abrir la creación de su primera empresa desde el módulo sin obtener acceso a otras organizaciones.
 - MFA empieza apagado. Sólo el supremo modifica la política de organización; al activarla se revocan sesiones del resto de sus miembros. El superadministrador también debe enrolarse cuando cualquier organización requiere MFA. Los usuarios configuran TOTP mediante Better Auth; mientras falte enrolamiento el API de datos devuelve `MFA_ENROLLMENT_REQUIRED`. Al verificar la configuración se conserva la sesión verificada rotada y se revocan las anteriores. No hay envío de correo ni SMS.
 - Registro público y recuperación pública están cerrados: las cuentas y restablecimientos se administran en plataforma. No se anuncian correos enviados.
 - `GET /api/v1/profile` devuelve `{user,preferences:{language,theme,notifications}}`. `PATCH {name?,preferences?}` modifica únicamente nombre y preferencias propios; rechaza claves o valores ajenos a ese contrato.
@@ -33,7 +34,7 @@ El Worker sirve el export estático y `/api/*` bajo el mismo origen. D1 conserva
 | `/organizations/:id` | PATCH `{name?,mfaEnabled?}` | Sólo supremo cambia MFA |
 | `/companies` | POST `{organizationId,name,rfc}` | Empresa activa |
 | `/companies/:id` | PATCH `{name?,rfc?,status:'active'\|'archived'}` | RFC inicial validado; no cambio de identidad con historial. Archivo reversible, no borrado en cascada |
-| `/users` | POST `{organizationId,name,email,role,companyIds}` | `{user,temporaryPassword}`; contraseña mostrada una sola vez |
+| `/users` | POST `{organizationId,name,email,role,companyIds,initialPassword?}` | Omitida: `{user,temporaryPassword}` aleatoria, mostrada una sola vez. Elegida: `{user,initialPasswordSet:true}`, sin devolver la contraseña. Siempre exige cambio al primer ingreso |
 | `/users/:id` | PATCH `{organizationId,name?,status?,role?}` | Actualiza cuenta y revoca sesiones |
 | `/users/:id/reset-password` | POST `{organizationId}` | Contraseña temporal nueva, cambio obligatorio y sesiones revocadas |
 | `/users/:id/sessions` | GET `?organizationId=...` | Metadatos de sesiones, sin tokens |
@@ -42,6 +43,8 @@ El Worker sirve el export estático y `/api/*` bajo el mismo origen. D1 conserva
 | `/grants` | DELETE `{organizationId,userId,companyId}` | Revocación inmediata |
 
 Roles organizativos: `admin`, `compliance`, `capture`, `viewer`. Sólo el supremo crea/modifica administradores. Un administrador no puede resetear cuentas con alcances administrativos o ajenos a su ámbito. Al crear una cuenta se materializan los permisos del perfil; en un grant existente, omitir un módulo o asignarle `[]` lo niega. `{}` revoca el acceso a todos los módulos.
+
+`initialPassword`, cuando se proporciona, debe ser una cadena de entre 11 y 128 caracteres. La aplicación no añade recorte ni normalización antes del hashing existente de Better Auth (que conserva su tratamiento Unicode); no la devuelve ni la incluye en auditoría. El formulario sólo la mantiene durante la captura y la descarta al cerrar o completar la solicitud. La misma política de longitud se aplica a activación y cambio propio de contraseña; omitir la contraseña inicial mantiene el flujo temporal aleatorio.
 
 ## Datos e inbox
 

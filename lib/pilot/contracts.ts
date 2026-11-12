@@ -60,9 +60,9 @@ export function sessionIsAdmin(session: PilotSession | null) {
 }
 
 /** Navigation is discoverability, not authorization to read or save company data.
- * A global administrator can discover every module before creating a company
+ * An active administrator can discover every module before creating a company
  * (or while viewing a private inbox); sessionCan still requires its real scope. */
 export function sessionCanNavigate(session: PilotSession | null, company: Company | null, module: ModuleKey) {
   if (!session || session.user.status !== "active") return false
-  return session.user.platformRole === "superadmin" || sessionCan(session, company, module, "view")
+  return sessionIsAdmin(session) || sessionCan(session, company, module, "view")
 }

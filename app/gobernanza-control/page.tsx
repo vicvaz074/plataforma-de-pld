@@ -3,7 +3,8 @@ import { getModuleStorage, canWriteModuleStorage, flushModuleStorage, captureMod
 import { resolveSafeDocumentHref } from "@/lib/pld/document-links"
 
 import { useEffect, useMemo, useState } from "react"
-import { jsPDF } from "jspdf"
+import { downloadProfessionalReport } from "@/lib/pld/reports"
+import { buildGovernanceProfessionalReport } from "@/lib/pld/module-reports"
 import * as XLSX from "xlsx"
 import Image from "next/image"
 import { Badge } from "@/components/ui/badge"
@@ -863,41 +864,14 @@ export default function GobernanzaControlPage() {
     } catch (error) {if (isModuleScopeCurrent(scope)) toast({title:"No se guardó el cierre",description:error instanceof Error ? error.message : "La revisión sigue abierta; conserva la captura y reintenta.",variant:"destructive"})}
   }
 
-  function handleExportPDF() {
-    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" })
-    doc.setFontSize(14)
-    doc.text("Gobernanza y Control Interno - Reporte de Cumplimiento", 40, 40)
-    doc.setFontSize(10)
-    doc.text(`Fecha de generación: ${formatDate(new Date().toISOString())}`, 40, 60)
-    doc.text(`Estatus general: ${moduleStatus.label} (${complianceRatio}%)`, 40, 80)
-
-    let offset = 110
-    questions.forEach((question) => {
-      if (offset > 760) {
-        doc.addPage()
-        offset = 60
-      }
-      doc.setFont("helvetica", "bold")
-      doc.text(`${question.category} – ${question.question}`, 40, offset, { maxWidth: 515 })
-      offset += 14
-      doc.setFont("helvetica", "normal")
-      doc.text(`Respuesta: ${question.answer || "Sin respuesta"}`, 40, offset)
-      offset += 12
-      if (question.notes) {
-        doc.text(`Notas: ${question.notes}`, 40, offset, { maxWidth: 515 })
-        offset += 12
-      }
-      if (question.actionPlan) {
-        doc.text(`Plan de acción: ${question.actionPlan}`, 40, offset, { maxWidth: 515 })
-        offset += 12
-      }
-      const docCount = question.relatedDocuments.length
-      doc.text(`Evidencias vinculadas: ${docCount}`, 40, offset)
-      offset += 18
-    })
-
-    doc.save("gobernanza-control.pdf")
-    appendTrace("Generó reporte PDF", "Reportes")
+  async function handleExportPDF() {
+    try {
+      const report = buildGovernanceProfessionalReport({ questions, documents, manualVersions, committeeSessions, alerts, trace, expedienteCerrado })
+      await downloadProfessionalReport(report, "gobernanza")
+      appendTrace("Generó reporte PDF", "Reportes")
+    } catch (error) {
+      toast({ title: "No se pudo exportar el reporte", description: error instanceof Error ? error.message : "Reintenta la descarga sin cambiar de empresa.", variant: "destructive" })
+    }
   }
 
   function handleExportExcel() {
@@ -1035,10 +1009,10 @@ export default function GobernanzaControlPage() {
       </section>
 
       <section className="flex flex-wrap gap-3">
-        <Button onClick={handleExportPDF} variant="outline" className="flex items-center gap-2">
+        <Button data-pld-action="download" onClick={handleExportPDF} variant="outline" className="flex items-center gap-2">
           <FileText className="h-4 w-4" /> Exportar reporte PDF
         </Button>
-        <Button onClick={handleExportExcel} variant="outline" className="flex items-center gap-2">
+        <Button data-pld-action="download" onClick={handleExportExcel} variant="outline" className="flex items-center gap-2">
           <Download className="h-4 w-4" /> Exportar a Excel
         </Button>
         <Button
@@ -1370,7 +1344,7 @@ export default function GobernanzaControlPage() {
                   </p>
                 </div>
                 <DialogPrimitive.Close asChild>
-                  <Button variant="ghost" size="icon">
+                  <Button type="button" variant="ghost" size="icon" aria-label="Cerrar" data-pld-context="browse">
                     <X className="h-4 w-4" />
                   </Button>
                 </DialogPrimitive.Close>
@@ -1443,7 +1417,7 @@ export default function GobernanzaControlPage() {
                     <p className="text-sm text-muted-foreground">{viewerDoc.fileName}</p>
                   </div>
                   <DialogPrimitive.Close asChild>
-                    <Button variant="ghost" size="icon" onClick={() => setViewerDoc(null)}>
+                    <Button type="button" variant="ghost" size="icon" aria-label="Cerrar" data-pld-context="browse" onClick={() => setViewerDoc(null)}>
                       <X className="h-4 w-4" />
                     </Button>
                   </DialogPrimitive.Close>
@@ -1489,7 +1463,7 @@ export default function GobernanzaControlPage() {
                   <DialogPrimitive.Title className="text-lg font-semibold">Aprobación interna</DialogPrimitive.Title>
                   <DialogPrimitive.Description className="sr-only">Confirma la revisión interna de esta versión documental.</DialogPrimitive.Description>
                   <DialogPrimitive.Close asChild>
-                    <Button variant="ghost" size="icon" onClick={() => setSignatureDoc(null)}>
+                    <Button type="button" variant="ghost" size="icon" aria-label="Cerrar" data-pld-context="browse" onClick={() => setSignatureDoc(null)}>
                       <X className="h-4 w-4" />
                     </Button>
                   </DialogPrimitive.Close>

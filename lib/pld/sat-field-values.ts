@@ -15,6 +15,40 @@ const LEGACY_SEMANTIC_FIELD_IDS = new Set([
   "beneficiario.pf.nombre", "beneficiario.pf.apellido_paterno", "beneficiario.pf.apellido_materno", "beneficiario.pf.fecha_nacimiento", "beneficiario.pf.rfc", "beneficiario.pf.curp", "beneficiario.pf.pais_nacionalidad",
 ])
 
+// The original XV extractor used these exact eight field/cell names in B19:I28.
+// Admit only their finite migration to the canonical official mapping: never a
+// generic suffix/cell match that could authorize arbitrary workbook destinations.
+const LEGACY_XV_PF_COLUMNS = [
+  ["nombre-s", "nombre", "B"],
+  ["apellido-paterno", "apellido_paterno", "C"],
+  ["apellido-materno", "apellido_materno", "D"],
+  ["fecha-nacimiento", "fecha_nacimiento", "E"],
+  ["rfc", "rfc", "F"],
+  ["curp", "curp", "G"],
+  ["pais-de-nacionalidad", "pais_nacionalidad", "H"],
+  ["actividad-economica", "actividad_economica", "I"],
+] as const
+
+function legacyXvPfAliases(byId: ReadonlyMap<string, SatXlsmField>, controls: ReadonlySet<string>): Map<string, string> {
+  const aliases = new Map<string, string>()
+  for (let row = 1; row <= 10; row++) {
+    let recognizedRow = false
+    for (const [legacyName, canonicalName, column] of LEGACY_XV_PF_COLUMNS) {
+      const canonical = `persona_aviso.pf.${row === 1 ? "" : `${row}.`}${canonicalName}`
+      const field = byId.get(canonical)
+      if (field?.sheetName !== "Persona Objeto del aviso" || field.cell !== `${column}${18 + row}`) continue
+      const oldId = `persona-objeto-del-aviso.persona-fisica-r19.${legacyName}.${row === 1 ? "" : `${row}.`}${column.toLowerCase()}${18 + row}`
+      aliases.set(oldId, canonical)
+      recognizedRow = true
+    }
+    if (row > 1 && recognizedRow) {
+      const canonicalControl = `sat.row.persona-objeto-del-aviso.persona-objeto-pf.${row}`
+      if (controls.has(canonicalControl)) aliases.set(`sat.row.persona-objeto-del-aviso.persona-fisica-r19.${row}`, canonicalControl)
+    }
+  }
+  return aliases
+}
+
 /** Canonical Excel A1 addresses only: never interpolate untrusted syntax in XML/regex. */
 export function isSatCellAddress(value: string): boolean {
   if (!/^[A-Z]{1,3}[1-9]\d{0,6}$/.test(value)) return false
@@ -42,16 +76,18 @@ export function normalizeSatFieldValues(
       if (/^sat\.(?:branch|row)\.[a-z0-9_.-]+$/i.test(condition.fieldId)) controls.add(condition.fieldId)
     }
   }
+  const legacyAliases = legacyXvPfAliases(byId, controls)
   const output: Record<string, string> = {}
   for (const [key, value] of Object.entries(values)) {
-    let field = byId.get(key)
-    if (!field && key.includes("!")) {
-      const split = key.lastIndexOf("!")
-      const cell = key.slice(split + 1).toUpperCase()
+    const admittedKey = legacyAliases.get(key) || key
+    let field = byId.get(admittedKey)
+    if (!field && admittedKey.includes("!")) {
+      const split = admittedKey.lastIndexOf("!")
+      const cell = admittedKey.slice(split + 1).toUpperCase()
       if (!isSatCellAddress(cell)) throw new Error("La dirección de celda SAT no es válida.")
-      field = byCell.get(`${key.slice(0, split)}!${cell}`)
+      field = byCell.get(`${admittedKey.slice(0, split)}!${cell}`)
     }
-    const canonical = field?.id || (controls.has(key) || LEGACY_SEMANTIC_FIELD_IDS.has(key) ? key : undefined)
+    const canonical = field?.id || (controls.has(admittedKey) || LEGACY_SEMANTIC_FIELD_IDS.has(admittedKey) ? admittedKey : undefined)
     if (!canonical) throw new Error(`El campo SAT no corresponde al formato seleccionado: ${key}.`)
     if (Object.hasOwn(output, canonical)) {
       // Official workbooks normalize captured strings to uppercase. This is the
