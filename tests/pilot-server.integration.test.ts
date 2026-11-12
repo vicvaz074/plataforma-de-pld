@@ -10,6 +10,7 @@ import { buildPresentationCases } from "../lib/demo/pld-presentation-cases"
 import { buildDefaultPldTenants } from "../lib/pld/tenants"
 import { beneficiaryReviewSignature } from "../lib/pld/beneficiary-review"
 import { ALL_ACTIONS, MODULE_LABELS } from "../lib/pilot/contracts"
+import { verifyPassword } from "better-auth/crypto"
 
 function totp(secret:string){
   const alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";let bits=""
@@ -83,6 +84,22 @@ test("Worker real: cuentas, sesiones, aislamiento por empresa, conflictos y vers
     const archivedCompany=await parse(await request(`/api/v1/companies/${companyB.id}/authorize`,"POST",{moduleKey:"operaciones",action:"edit"},supreme))
     assert.equal(archivedCompany.status,409);assert.equal(archivedCompany.data.code,"COMPANY_ARCHIVED")
     assert.equal((await request(`/api/v1/companies/${companyB.id}`,"PATCH",{status:"active"},supreme)).status,200)
+    const accountBase={organizationId:orgA.id,name:"Contraseña elegida ficticia",email:"chosen-password@example.test",role:"viewer",companyIds:[companyA.id]}
+    for(const initialPassword of ["x".repeat(10),"x".repeat(129),null,12345678901,{}]){
+      const rejected=await parse(await request("/api/v1/users","POST",{...accountBase,initialPassword},supreme))
+      assert.equal(rejected.status,400);assert.equal(rejected.data.code,"INVALID_PASSWORD_LENGTH")
+      assert.equal(await db.prepare("SELECT id FROM user WHERE email=?").bind(accountBase.email).first(),null,"Invalid credentials cannot leave a partial account")
+    }
+    const chosenPassword=" T3st-Pass ",chosen=await parse(await request("/api/v1/users","POST",{...accountBase,initialPassword:chosenPassword},supreme))
+    assert.equal(chosenPassword.length,11);assert.equal(chosen.status,201,JSON.stringify(chosen.data));assert.equal(chosen.data.initialPasswordSet,true);assert.equal("temporaryPassword" in chosen.data,false);assert.equal(JSON.stringify(chosen.data).includes(chosenPassword),false)
+    const chosenHash=await db.prepare("SELECT password FROM account WHERE userId=? AND providerId='credential'").bind(chosen.data.user.id).first<{password:string}>()
+    assert.ok(chosenHash);assert.notEqual(chosenHash.password,chosenPassword);assert.equal(await verifyPassword({hash:chosenHash.password,password:chosenPassword}),true);assert.equal(await verifyPassword({hash:chosenHash.password,password:chosenPassword.trim()}),false)
+    const chosenSession=await login(accountBase.email,chosenPassword)
+    assert.equal((await request(`/api/v1/companies/${companyA.id}/snapshot`,"GET",undefined,chosenSession)).status,403,"A selected initial password still requires first-login change")
+    const elevenCharacterChange=await parse(await request("/api/auth/change-password","POST",{currentPassword:chosenPassword,newPassword:"QAtest2026!",revokeOtherSessions:true},chosenSession))
+    assert.equal(elevenCharacterChange.status,200,JSON.stringify(elevenCharacterChange.data))
+    const passwordAudit=await db.prepare("SELECT details FROM pld_audit WHERE entityId=?").bind(chosen.data.user.id).all()
+    assert.equal(JSON.stringify(passwordAudit.results).includes(chosenPassword),false);assert.equal(JSON.stringify(passwordAudit.results).includes(chosenHash.password),false)
     const created=await parse(await request("/api/v1/users","POST",{organizationId:orgA.id,name:"Captura A",email:"capture@example.test",role:"capture",companyIds:[companyA.id]},supreme))
     assert.equal(created.status,201,JSON.stringify(created.data))
     assert.equal("password" in created.data.user,false)

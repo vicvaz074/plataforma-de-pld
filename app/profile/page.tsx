@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { usePilot } from "@/components/pilot/pilot-provider"
 import { pilotApi, jsonRequest } from "@/lib/pilot/api"
+import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH, isValidPasswordLength } from "@/lib/pilot/password-policy"
 
 export default function ProfilePage() {
   const { session, mode, refresh } = usePilot()
@@ -20,6 +21,7 @@ export default function ProfilePage() {
   const change = async (event:FormEvent) => {
     event.preventDefault();setError("");setSuccess("")
     if(newPassword!==confirmation){setError("Las contraseñas no coinciden.");return}
+    if(!isValidPasswordLength(newPassword)){setError(`Usa una contraseña de entre ${PASSWORD_MIN_LENGTH} y ${PASSWORD_MAX_LENGTH} caracteres.`);return}
     setBusy(true)
     try {
       await pilotApi("/api/auth/change-password",jsonRequest("POST",{currentPassword,newPassword,revokeOtherSessions:true}))
@@ -48,7 +50,8 @@ export default function ProfilePage() {
     {success&&<p role="status" className="rounded-xl bg-green-50 p-3 text-sm text-green-800">{success}</p>}
     {mode==="cloud"&&<form onSubmit={change} className="space-y-4 rounded-2xl border bg-white p-5"><h2 className="flex items-center gap-2 font-medium"><KeyRound className="h-4 w-4"/>Contraseña</h2>
       <div className="space-y-2"><Label htmlFor="current">Contraseña actual</Label><Input id="current" autoComplete="current-password" type="password" value={currentPassword} onChange={e=>setCurrentPassword(e.target.value)} required/></div>
-      <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="new">Nueva contraseña</Label><Input id="new" autoComplete="new-password" minLength={12} type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} required/></div><div className="space-y-2"><Label htmlFor="confirmation">Confirmar contraseña</Label><Input id="confirmation" autoComplete="new-password" minLength={12} type="password" value={confirmation} onChange={e=>setConfirmation(e.target.value)} required/></div></div>
+      <div className="grid gap-4 sm:grid-cols-2"><div className="flex flex-col gap-2"><Label htmlFor="new">Nueva contraseña</Label><Input id="new" autoComplete="new-password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} aria-describedby="password-length-help" type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} required/></div><div className="flex flex-col gap-2"><Label htmlFor="confirmation">Confirmar contraseña</Label><Input id="confirmation" autoComplete="new-password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} aria-describedby="password-length-help" type="password" value={confirmation} onChange={e=>setConfirmation(e.target.value)} required/></div></div>
+      <p id="password-length-help" className="text-sm text-muted-foreground">Entre {PASSWORD_MIN_LENGTH} y {PASSWORD_MAX_LENGTH} caracteres. No reutilices una contraseña de otro servicio.</p>
       <Button className="rounded-xl" disabled={busy}>Actualizar contraseña</Button>
     </form>}
     <section className="space-y-4 rounded-2xl border bg-white p-5"><h2 className="flex items-center gap-2 font-medium"><ShieldCheck className="h-4 w-4"/>Segundo factor</h2>
