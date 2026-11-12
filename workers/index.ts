@@ -9,6 +9,7 @@ import { handleBackups } from "./backups"
 import { ACTIONS, MODULES, auditStatement, requireCompany } from "./access"
 import { ApiError, type PilotActor, type PilotEnv } from "./types"
 import { body, identifier, json, text } from "./http"
+import { isValidPasswordLength, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "../lib/pilot/password-policy"
 
 async function bootstrap(request:Request,env:PilotEnv){
   if(!env.BOOTSTRAP_TOKEN||env.BOOTSTRAP_TOKEN.length<32)throw new ApiError(404,"Recurso no disponible.","NOT_FOUND")
@@ -16,9 +17,9 @@ async function bootstrap(request:Request,env:PilotEnv){
   const a=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(token))),b=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(env.BOOTSTRAP_TOKEN)))
   if(a.reduce((diff,value,i)=>diff|(value^b[i]),0)!==0)throw new ApiError(401,"Credencial de instalación no válida.","UNAUTHENTICATED")
   if(await env.DB.prepare("SELECT id FROM user LIMIT 1").first())throw new ApiError(409,"La instalación ya tiene cuentas.","BOOTSTRAP_CLOSED")
-  const input=await body(request),email=text(input.email,"el correo",254).toLowerCase(),name=text(input.name,"el nombre"),password=text(input.password,"la contraseña",128)
+  const input=await body(request),email=text(input.email,"el correo",254).toLowerCase(),name=text(input.name,"el nombre"),password=input.password
   if(env.BOOTSTRAP_EMAIL&&email!==env.BOOTSTRAP_EMAIL.trim().toLowerCase())throw new ApiError(403,"El correo no corresponde al titular de esta instalación.","BOOTSTRAP_OWNER_MISMATCH")
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||password.length<12)throw new ApiError(400,"Usa un correo válido y al menos doce caracteres de contraseña.","INVALID_FIELD")
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!isValidPasswordLength(password))throw new ApiError(400,`Usa un correo válido y una contraseña de ${PASSWORD_MIN_LENGTH} a ${PASSWORD_MAX_LENGTH} caracteres.`,"INVALID_FIELD")
   const hash=await hashPassword(password),id=crypto.randomUUID(),at=Date.now(),actor:PilotActor={id,name,email,platformRole:"superadmin",status:"active",requiresPasswordChange:false,twoFactorEnabled:false}
   try{await env.DB.batch([
     env.DB.prepare("INSERT INTO pld_revision_guard(id,valid) VALUES('bootstrap',CASE WHEN NOT EXISTS(SELECT 1 FROM user) THEN 1 ELSE 0 END)"),

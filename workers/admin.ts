@@ -2,6 +2,7 @@ import { hashPassword } from "better-auth/crypto"
 import { ACTIONS, MODULES, auditStatement, roleActions, requireCompany, requireOrgAdmin } from "./access"
 import { ApiError, type CompanyRow, type MembershipRow, type PilotActor, type PilotEnv } from "./types"
 import { body, identifier, json, text } from "./http"
+import { isValidPasswordLength, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "../lib/pilot/password-policy"
 
 const publicUserFields = "u.id,u.name,u.email,u.platformRole,u.status,u.requiresPasswordChange,u.twoFactorEnabled,u.createdAt,u.updatedAt,(SELECT MAX(a.createdAt) FROM pld_audit a WHERE a.actorId=u.id AND a.action='user.signed_in') AS lastAccess"
 const roles = ["admin", "compliance", "capture", "viewer"]
@@ -94,19 +95,21 @@ export async function handleAdmin(request: Request, url: URL, actor: PilotActor,
     const name=text(input.name,"el nombre"),email=text(input.email,"el correo",254).toLowerCase(),role=text(input.role||"viewer","el perfil",20)
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!roles.includes(role))throw new ApiError(400,"Revisa correo y perfil.","INVALID_FIELD")
     if(role==="admin"&&actor.platformRole!=="superadmin")throw new ApiError(403,"Sólo el superadministrador crea administradores.","FORBIDDEN")
+    const initialPasswordSet=Object.prototype.hasOwnProperty.call(input,"initialPassword")
+    if(initialPasswordSet&&!isValidPasswordLength(input.initialPassword))throw new ApiError(400,`La contraseña inicial debe tener entre ${PASSWORD_MIN_LENGTH} y ${PASSWORD_MAX_LENGTH} caracteres.`,"INVALID_PASSWORD_LENGTH")
     if(await env.DB.prepare("SELECT id FROM user WHERE email=?").bind(email).first())throw new ApiError(409,"Ya existe una cuenta con ese correo.","EMAIL_EXISTS")
     const companyIds=Array.isArray(input.companyIds)?[...new Set(input.companyIds.map(identifier))]:[]
     if(companyIds.length>100)throw new ApiError(400,"Demasiadas empresas.","INVALID_FIELD")
     for(const companyId of companyIds){const c=await requireCompany(actor,companyId,env);if(c.organizationId!==orgId)throw new ApiError(403,"La empresa pertenece a otra organización.","FORBIDDEN")}
-    const id=crypto.randomUUID(),password=temporaryPassword(),hash=await hashPassword(password),at=Date.now()
+    const id=crypto.randomUUID(),password=initialPasswordSet?input.initialPassword as string:temporaryPassword(),hash=await hashPassword(password),at=Date.now()
     await env.DB.batch([
-      env.DB.prepare("INSERT INTO user(id,name,email,emailVerified,createdAt,updatedAt) VALUES(?,?,?,1,?,?)").bind(id,name,email,at,at),
+      env.DB.prepare("INSERT INTO user(id,name,email,emailVerified,requiresPasswordChange,createdAt,updatedAt) VALUES(?,?,?,1,1,?,?)").bind(id,name,email,at,at),
       env.DB.prepare("INSERT INTO account(id,accountId,providerId,userId,password,createdAt,updatedAt) VALUES(?,?,'credential',?,?,?,?)").bind(crypto.randomUUID(),id,id,hash,at,at),
       env.DB.prepare("INSERT INTO pld_memberships(userId,organizationId,role) VALUES(?,?,?)").bind(id,orgId,role),
       ...companyIds.map((companyId)=>env.DB.prepare("INSERT INTO pld_grants(userId,companyId,role,permissions) VALUES(?,?,?,?)").bind(id,companyId,role,JSON.stringify(Object.fromEntries(MODULES.map((module)=>[module,roleActions(role)]))))),
       auditStatement(env,actor,"user.created","user",id,orgId,undefined,{role,companyIds}),
     ])
-    return json({user:{id,name,email,platformRole:"user",status:"active",requiresPasswordChange:true},temporaryPassword:password},201)
+    return json({user:{id,name,email,platformRole:"user",status:"active",requiresPasswordChange:true},...(initialPasswordSet?{initialPasswordSet:true}:{temporaryPassword:password})},201)
   }
   match=path.match(/^\/users\/([^/]+)(?:\/(reset-password|sessions))?$/)
   if(match) {
