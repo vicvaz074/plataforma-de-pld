@@ -6,7 +6,8 @@ import { getModuleStorage, canWriteModuleStorage, getPilotSession, getActiveComp
 import { sessionCan } from "@/lib/pilot/contracts"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { jsPDF } from "jspdf"
+import { downloadProfessionalReport } from "@/lib/pld/reports"
+import { buildEvidenceProfessionalReport } from "@/lib/pld/module-reports"
 import { differenceInMonths, format } from "date-fns"
 import { es } from "date-fns/locale"
 import {
@@ -814,7 +815,7 @@ export default function EvidenciasTrazabilidadPage() {
     registerLog(docs[0].id, "download", docs[0], "Exportación CSV expediente", sessionOperator)
   }
 
-  const exportExpedienteAsPDF = (expedienteId: string) => {
+  const exportExpedienteAsPDF = async (expedienteId: string) => {
     const docs = expedienteMap.get(expedienteId) || []
     if (docs.length === 0) {
       toast({
@@ -825,49 +826,18 @@ export default function EvidenciasTrazabilidadPage() {
       return
     }
 
-    const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" })
-    doc.setFontSize(16)
-    doc.text(`Expediente ${expedienteId}`, 40, 50)
-    doc.setFontSize(11)
-    doc.text(
-      `Fecha de emisión: ${format(new Date(), "dd 'de' MMMM 'de' yyyy HH:mm", { locale: es })}`,
-      40,
-      70,
-    )
-
-    let currentY = 100
-
-    docs.forEach((evidence) => {
-      if (currentY > 730) {
-        doc.addPage()
-        currentY = 60
-      }
-      doc.setFont("helvetica", "bold")
-      doc.text(`${getModuleName(evidence.module)} - ${evidence.title}`, 40, currentY)
-      currentY += 18
-      doc.setFont("helvetica", "normal")
-      const details = [
-        `Submódulo: ${evidence.submodule}`,
-        `Tipo: ${evidence.documentType}`,
-        `Usuario: ${evidence.user}`,
-        `Fecha del documento: ${format(parsePldCalendarDate(evidence.documentDate), "dd/MM/yyyy")}`,
-        `Fecha de carga: ${format(new Date(evidence.uploadDate), "dd/MM/yyyy HH:mm")}`,
-        `Versión: ${evidence.version}`,
-        `Conservación: ${getRetentionStatus(evidence).label}`,
-      ]
-      details.forEach((detail) => {
-        doc.text(detail, 40, currentY)
-        currentY += 16
+    try {
+      const retentionById = new Map(docs.map(document => [document.id, getRetentionStatus(document).label]))
+      const report = buildEvidenceProfessionalReport({
+        expedienteId, documents: docs, logs,
+        moduleName: module => getModuleName(module as ModuleKey),
+        retentionLabel: document => retentionById.get(document.id) || "Sin estado de conservación",
       })
-      if (evidence.notes) {
-        doc.text(`Notas: ${evidence.notes}`, 40, currentY)
-        currentY += 16
-      }
-      currentY += 10
-    })
-
-    doc.save(`expediente-${expedienteId}.pdf`)
-    registerLog(docs[0].id, "download", docs[0], "Exportación PDF expediente", sessionOperator)
+      await downloadProfessionalReport(report, "evidencias")
+      registerLog(docs[0].id, "download", docs[0], "Exportación PDF expediente", sessionOperator)
+    } catch (error) {
+      toast({ title: "No se pudo exportar el expediente", description: error instanceof Error ? error.message : "Reintenta la descarga sin cambiar de empresa.", variant: "destructive" })
+    }
   }
 
   const getExpedienteProgress = (expedienteId: string) => {

@@ -1,8 +1,11 @@
 "use client"
 import { DocumentLink } from "@/components/pld/document-link"
 import { serializeCsv } from "@/lib/pld/csv"
+import { buildAvisosProfessionalReport, type AvisosReportKind, type AvisosReportInput } from "@/lib/pld/reports-avisos"
+import { downloadProfessionalReport } from "@/lib/pld/reports"
 import { currentStoredEbrRisk } from "@/lib/pld/ebr-review-state"
-import { getModuleStorage, captureModuleScope, assertModuleScope, isModuleScopeCurrent, type ModuleScope } from "@/lib/pilot/module-storage"
+import { getModuleStorage, getActiveCompany, getPilotSession, isCloudConnected, captureModuleScope, assertModuleScope, isModuleScopeCurrent, type ModuleScope } from "@/lib/pilot/module-storage"
+import { sessionCan } from "@/lib/pilot/contracts"
 
 import type { ChangeEvent } from "react"
 import Link from "next/link"
@@ -459,6 +462,7 @@ export default function AvisosInformesPage() {
   const [attachments, setAttachments] = useState<SubmissionAttachment[]>([])
   const [submissionStorageReady, setSubmissionStorageReady] = useState(false)
   const [submissionSaving, setSubmissionSaving] = useState(false)
+  const [reportDownloading, setReportDownloading] = useState<AvisosReportKind | null>(null)
   const [sourceOperationRevision, setSourceOperationRevision] = useState(0)
   const [activeSubmissionId,setActiveSubmissionId]=useState("")
   const selectedOperation=operaciones.find((operation)=>operation.id===selectedOperacionId)
@@ -1159,75 +1163,36 @@ export default function AvisosInformesPage() {
     window.URL.revokeObjectURL(url)
   }
 
-  const handleDownloadConsolidated = () => {
-    const rows = [
-      ["Identificador cliente", "Cliente", "Tipo cliente", "Sujeto obligado", "Registro completo", "Operaciones", "Alertas", "Avisos pendientes", "Riesgo EBR"],
-      ...clientesDisponibles.map((cliente) => {
-        const ops = operacionesDelSujeto.filter((op) => matchesIntegrationClient(op, cliente))
-        const alertas = ops.filter((op) => op.alerta).length
-        const pendientes = ops.filter((op) => op.umbralStatus === "aviso" && !op.avisoPresentado).length
-        const subject = sujetoSeleccionado ?? integrationSubjects.find((item) => matchesIntegrationSubject(cliente, item))
-        const registro = subject ? sujetosRegistro.find((item) => item.id === subject.id || Boolean(subject.rfc && item.rfc === subject.rfc)) : undefined
-        const expediente = expedientesEui.find((item) => item.id === cliente.id)
-        const ebr = findClientEbrEvaluation(evaluacionesEbr, cliente) as EvaluacionEbrResumen | null
-        const risk = currentStoredEbrRisk(ebr,cliente,pepWhoisHistory)
+  const reportInput = (): AvisosReportInput => ({
+    operations: operaciones, clients: buildIntegrationClients(expedientesEui, operaciones), subjects: integrationSubjects,
+    packages: satOutputPackages as SatOutputPackage[], submissions: submissionRecords,
+    subjectRegistrations: sujetosRegistro,
+    subjectId: selectedSubjectId, clientId: selectedClientId,
+    currentOperationId: selectedOperacionId, currentSubmissionId: activeSubmissionId, currentTrace: traceabilityEntries,
+    clientRiskLabels: Object.fromEntries(clientesDisponibles.map((client) => {
+      const saved = findClientEbrEvaluation(evaluacionesEbr, client)
+      const risk = currentStoredEbrRisk(saved, client, pepWhoisHistory)
+      return [client.id, risk?.level || (saved ? "Revisión pendiente; aprobación histórica no vigente" : "Sin evaluación vigente")]
+    })),
+  })
 
-        return [
-          cliente.identifier,
-          cliente.nombre,
-          expediente?.tipoCliente ?? "",
-          subject?.nombre ?? "Sin sujeto seleccionado",
-          registro ? registro.registroCompleto ? "Sí" : "No" : "Sin registro vinculado",
-          String(ops.length),
-          String(alertas),
-          String(pendientes),
-          risk?.level ?? (ebr ? "Pendiente de revisión; consultar EBR histórica" : "Sin evaluación"),
-        ]
-      }),
-    ]
-
-    const content = serializeCsv(rows)
-    downloadReport(`reporte-consolidado-avisos-${new Date().toISOString().slice(0, 10)}.csv`, content)
-    toast({ title: "Reporte generado", description: "Se descargó el reporte consolidado de avisos y operaciones." })
-  }
-
-  const handleDownloadOperacionesAviso = () => {
-    const rows = [
-      ["RFC", "Cliente", "Actividad", "Tipo operación", "Monto", "Fecha", "Umbral", "Alerta"],
-      ...operacionesActivas
-        .filter((op) => op.umbralStatus === "aviso")
-        .map((op) => [
-          op.rfc,
-          op.cliente,
-          op.actividadNombre,
-          op.tipoOperacion,
-          formatOperationFinancialSummary(op),
-          op.fechaOperacion,
-          op.umbralStatus ?? "",
-          op.alerta ?? "",
-        ]),
-    ]
-
-    const content = serializeCsv(rows)
-    downloadReport(`reporte-operaciones-aviso-${new Date().toISOString().slice(0, 10)}.csv`, content)
-    toast({ title: "Reporte generado", description: "Se descargó el reporte de operaciones con obligación de aviso." })
-  }
-
-  const handleDownloadBitacora = () => {
-    const rows = [
-      ["Acción", "Usuario", "Fecha", "Detalle", "Aviso"],
-      ...traceabilityEntries.map((entry) => [
-        entry.action,
-        entry.user,
-        formatDate(entry.timestamp),
-        entry.details,
-        entry.noticeId,
-      ]),
-    ]
-
-    const content = serializeCsv(rows)
-    downloadReport(`bitacora-avisos-${new Date().toISOString().slice(0, 10)}.csv`, content)
-    toast({ title: "Bitácora exportada", description: "Se descargó la bitácora completa de avisos." })
+  const handleDownloadProfessional = async (kind: AvisosReportKind, csv = false) => {
+    setReportDownloading(kind)
+    try {
+      const { report, csvRows } = buildAvisosProfessionalReport(kind, reportInput())
+      if (csv) {
+        const scope = captureModuleScope()
+        const connected = isCloudConnected()
+        const demo = !connected && process.env.NEXT_PUBLIC_PLD_MODE === "demo"
+        if (!demo && (!connected || !getActiveCompany() || !sessionCan(getPilotSession(), getActiveCompany(), "avisos", "download"))) throw new Error("No tienes un ámbito autorizado para descargar este anexo.")
+        assertModuleScope(scope)
+        downloadReport(report.filename.replace(/\.pdf$/, ".csv"), serializeCsv(csvRows))
+      }
+      else await downloadProfessionalReport(report, "avisos")
+      toast({ title: csv ? "Anexo CSV descargado" : "Reporte PDF descargado", description: "Se respetó el ámbito de empresa, sujeto y cliente seleccionado." })
+    } catch (error) {
+      toast({ title: "No se descargó el reporte", description: error instanceof Error ? error.message : "Conserva la captura y vuelve a intentarlo.", variant: "destructive" })
+    } finally { setReportDownloading(null) }
   }
 
   const handleDownloadSatXml = (satPackage: SatOutputPackageResumen) => {
@@ -1973,19 +1938,25 @@ export default function AvisosInformesPage() {
               <CardHeader>
                 <CardTitle>Reportes consolidados</CardTitle>
                 <CardDescription>
-                  Exporta información cruzada entre módulos para auditorías o revisiones regulatorias.
+                  PDF ejecutivo con gráficas, detalle y fuentes; CSV como anexo de datos.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button data-pld-action="download" className="w-full justify-start gap-2" onClick={handleDownloadConsolidated}>
-                  <Download className="h-4 w-4" /> Reporte consolidado por cliente
-                </Button>
-                <Button data-pld-action="download" variant="secondary" className="w-full justify-start gap-2" onClick={handleDownloadOperacionesAviso}>
-                  <Download className="h-4 w-4" /> Operaciones con obligación de aviso
-                </Button>
-                <Button data-pld-action="download" variant="outline" className="w-full justify-start gap-2" onClick={handleDownloadBitacora}>
-                  <Download className="h-4 w-4" /> Bitácora completa de avisos
-                </Button>
+                <p className="text-xs text-muted-foreground">{sujetoSeleccionado?.nombre || "Todos los sujetos vinculados"} · {clienteSeleccionado?.nombre || "Todos los clientes"}</p>
+                {([
+                  ["consolidated", "Reporte consolidado por cliente"],
+                  ["notice", "Operaciones con obligación de aviso"],
+                  ["trace", "Bitácora completa de avisos"],
+                ] as const).map(([kind, label]) => (
+                  <div key={kind} className="flex flex-col gap-2 sm:flex-row">
+                    <Button data-pld-action="download" className="min-h-11 flex-1 justify-start gap-2 rounded-2xl whitespace-normal text-left" disabled={reportDownloading !== null} onClick={() => handleDownloadProfessional(kind)}>
+                      <FileText className="h-4 w-4 shrink-0" /> {reportDownloading === kind ? "Preparando…" : `${label} · PDF`}
+                    </Button>
+                    <Button data-pld-action="download" variant="outline" className="min-h-11 rounded-2xl" aria-label={`Anexo CSV: ${label}`} disabled={reportDownloading !== null} onClick={() => handleDownloadProfessional(kind, true)}>
+                      <Download className="mr-2 h-4 w-4" /> CSV
+                    </Button>
+                  </div>
+                ))}
               </CardContent>
             </Card>
 

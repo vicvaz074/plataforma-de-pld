@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { jsPDF } from "jspdf";
+import { downloadProfessionalReport } from "@/lib/pld/reports";
+import { buildEbrProfessionalReport, institutionalReportApprovalState } from "@/lib/pld/reports-ebr";
 import {
   AlertTriangle,
   Check,
@@ -315,7 +316,12 @@ export default function EbrPage() {
   const [institutionalSourceNote,setInstitutionalSourceNote]=useState("");
   const [institutionalMethodologyAccepted,setInstitutionalMethodologyAccepted]=useState(false);
   const [storageValid,setStorageValid]=useState(true);
+  const [reportDownloading,setReportDownloading]=useState(false);
   const institutionalRisk=useMemo(()=>evaluateInstitutionalRisk(institutionalFactors,controls),[institutionalFactors,controls]);
+  const institutionalApproval = useMemo(() => institutionalReportApprovalState({
+    institutionalSnapshot: institutionalStored, institutionalFactors, controls, institutionalSources,
+    institutionalReviewPlan, institutionalMethodologyAccepted, institutionalRisk,
+  }), [institutionalStored, institutionalFactors, controls, institutionalSources, institutionalReviewPlan, institutionalMethodologyAccepted, institutionalRisk]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -471,6 +477,14 @@ export default function EbrPage() {
   const { isCurrentApproved } = approvalView;
   const displayLevel = approvalView.level as typeof finalLevel;
   const displayedStatus=changedSinceSaved||approvalView.sourceChanged?"cambios sin aprobar":savedEvaluation?.workflow?.status==="approved"&&approvalView.reviewPending?"aprobación histórica; revisión actual pendiente":({draft:"borrador",review:"en revisión",approved:"aprobada"}[savedEvaluation?.workflow?.status as EbrWorkflowStatus]||"borrador");
+  const companyRiskDistribution = useMemo(() => {
+    const risks = [...new Map(expedientes.map((client) => [client.id, client])).values()].map((client) =>
+      currentStoredEbrRisk(findClientEbrEvaluation(Object.values(evaluacionesGuardadas), client), client, pepWhoisHistory));
+    return {
+      rows: ["Bajo", "Medio", "Alto", "Reforzado"].map((level) => ({ level, count: storageValid ? risks.filter((risk) => risk?.level === level).length : null })),
+      unapproved: storageValid ? risks.filter((risk) => !risk).length : null,
+    };
+  }, [expedientes, evaluacionesGuardadas, pepWhoisHistory, storageValid]);
 
   const riskBadgeStyles = {
     Pendiente: "bg-slate-100 text-slate-700",
@@ -571,104 +585,25 @@ export default function EbrPage() {
     setNotes("");
   };
 
-  const exportPdfReport = () => {
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "pt",
-      format: "a4",
-    });
-    const margin = 40;
-    const lineHeight = 15;
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const contentWidth = doc.internal.pageSize.getWidth() - margin * 2;
-    let y = 54;
-
-    const addLine = (text: string, font = 10) => {
-      doc.setFontSize(font);
-      const lines = doc.splitTextToSize(text, contentWidth);
-      if (y + lines.length * lineHeight > pageHeight - 40) {
-        doc.addPage();
-        y = 54;
-      }
-      doc.text(lines, margin, y);
-      y += lines.length * lineHeight + 4;
-    };
-
-    doc.setFillColor(15, 23, 42);
-    doc.rect(0, 0, doc.internal.pageSize.getWidth(), 68, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
-    doc.text("Reporte EBR - Cliente y Sujeto Obligado", margin, 34);
-    doc.setFontSize(10);
-    doc.text(
-      `Cliente: ${clienteActual?.nombre ?? "Sin nombre"} | Identificador: ${clienteActual?.identifier || "N/A"}`,
-      margin,
-      50,
-    );
-
-    y = 90;
-    doc.setTextColor(31, 41, 55);
-    addLine(`Resumen ejecutivo: ${isCurrentApproved?"Riesgo aprobado":"Resultado preliminar"} ${displayLevel} (${approvalView.percent}%).`);
-    if (approvalView.historicalApproved && !isCurrentApproved) addLine(`Aprobación histórica conservada: ${approvalView.historicalApproved.level} (${approvalView.historicalApproved.percent}%). Los datos actuales requieren revisión.`);
-    addLine(`Estado: ${displayedStatus}. Metodología: ${EBR_METHODOLOGY.id}. No representa una probabilidad de lavado.`);
-    addLine(
-      `Cliente: ${clientResult.level} (${clientResult.percent}%). Regla: ${clientResult.reason}.`,
-    );
-    addLine(
-      `Sujeto obligado: ${subjectResult.level} (${subjectResult.percent}%). Regla: ${subjectResult.reason}.`,
-    );
-    if (beneficiaryResult) {
-      addLine(
-        `Beneficiario controlador: ${beneficiaryResult.level} (${beneficiaryResult.percent}%). Regla: ${beneficiaryResult.reason}.`,
-      );
-    }
-    if (pepScreening) {
-      addLine(`Validacion PEP por cargos SHCP/UIF: ${pepScreening.status}. ${pepScreening.note}`);
-      pepScreening.matches.slice(0, 3).forEach((match) => {
-        addLine(`- ${match.cargo} | ${match.dependencia}`, 8);
+  const exportPdfReport = async () => {
+    setReportDownloading(true);
+    try {
+      const report = buildEbrProfessionalReport({
+        client: clienteActual, displayLevel, displayedStatus, isCurrentApproved,
+        approvalPercent: approvalView.percent, historicalApproved: approvalView.historicalApproved,
+        clientResult, subjectResult, beneficiaryResult, institutionalRisk, institutionalFactors,
+        controls, sources, institutionalSources, reviewPlan, institutionalReviewPlan,
+        transactionalProfile, operations: operacionesCliente.filter((operation) => operation.lifecycle.status === "active" && operation.captureStatus !== "draft"),
+        notes, pepScreening, pepWhois: pepWhoisActual, history: savedEvaluation?.history ?? [],
+        revision: savedEvaluation?.revision || 0, institutionalSnapshot: institutionalStored,
+        institutionalMethodologyAccepted, distribution: companyRiskDistribution.rows,
+        unapprovedClients: companyRiskDistribution.unapproved,
       });
-    }
-    if (pepWhoisActual) {
-      addLine(`WhoIs PEP local-first: ${pepWhoisActual.status}. ${pepWhoisActual.recommendation}`);
-      pepWhoisActual.results.slice(0, 3).forEach((match) => {
-        addLine(`- ${match.entity.name} | ${match.source} | score ${match.score}`, 8);
-      });
-    }
-
-    addLine("\nDetalle por cuestionario", 12);
-    clientResult.details.forEach((item) =>
-      addLine(`- ${item.question}: ${item.answer}. Puntaje ${item.score}.`),
-    );
-    subjectResult.details.forEach((item) =>
-      addLine(`- ${item.question}: ${item.answer}. Puntaje ${item.score}.`),
-    );
-    if (beneficiaryResult) {
-      beneficiaryResult.details.forEach((item) =>
-        addLine(`- ${item.question}: ${item.answer}. Puntaje ${item.score}.`),
-      );
-    }
-
-    addLine("\nObservaciones", 12);
-    addLine(notes || "Sin observaciones");
-    addLine("\nGráfica de factores del cliente (misma escala de la pantalla)", 12);
-    if (clientResult.complete) for (const factor of clientResult.details) {
-      addLine(`${factor.question}: ${factor.score}/${factor.maximum}`, 9);
-      if (y > pageHeight - 60) { doc.addPage(); y = 54; }
-      doc.setFillColor(217, 119, 6); doc.rect(margin, y, contentWidth * factor.score / factor.maximum, 7, "F"); y += 23;
-    }
-    addLine("\nFuentes y evidencia", 12);
-    addLine(`Riesgo institucional inherente: ${institutionalRisk.inherentScore??"Pendiente"}/3 (${institutionalRisk.inherentLevel}). Residual: ${institutionalRisk.residualScore??"Pendiente"}/3 (${institutionalRisk.residualLevel}).`);
-    for(const item of [{label:"Inherente",percent:institutionalRisk.inherentPercent},{label:"Residual",percent:institutionalRisk.residualPercent}]){if(item.percent===null)continue;addLine(`${item.label}: ${item.percent}% del máximo`,9);if(y>pageHeight-60){doc.addPage();y=54;}doc.setFillColor(15,118,110);doc.rect(margin,y,contentWidth*item.percent/100,7,"F");y+=23;}
-    institutionalFactors.forEach((factor)=>addLine(`${INSTITUTIONAL_LABELS[factor.key]}: ${factor.score??"Pendiente"}/3. ${factor.rationale}. Evidencia: ${factor.evidenceId||"Pendiente"}`,9));
-    sources.forEach((source) => addLine(`${source.consultedAt}: ${source.label} ${source.result || ""}`, 9));
-    addLine("\nPlan de revisión del cliente",12);
-    addLine(`Próxima revisión definida por la empresa: ${reviewPlan.nextReviewAt||"Pendiente"}.`,9);
-    reviewPlan.actions.forEach((action)=>addLine(`${action.title}. Responsable: ${action.ownerId||"Pendiente"}. Fecha: ${action.dueAt||"Pendiente"}. ${action.status==="completed"?"Cerrada":"Abierta"}. Evidencia: ${action.evidenceId||"Sin referencia"}.`,9));
-    addLine("\nPlan de revisión institucional",12);
-    addLine(`Próxima revisión definida por la empresa: ${institutionalReviewPlan.nextReviewAt||"Pendiente"}.`,9);
-    institutionalReviewPlan.actions.forEach((action)=>addLine(`${action.title}. Responsable: ${action.ownerId||"Pendiente"}. Fecha: ${action.dueAt||"Pendiente"}. ${action.status==="completed"?"Cerrada":"Abierta"}. Evidencia: ${action.evidenceId||"Sin referencia"}.`,9));
-    institutionalSources.forEach((source)=>addLine(`Fuente institucional ${source.consultedAt}: ${source.label}`,9));
-    doc.save(`ebr-${clienteSeleccionado || "cliente"}.pdf`);
+      await downloadProfessionalReport(report, "ebr");
+      toast({ title: "Reporte PDF descargado", description: "Incluye cuestionarios completos, factores, fuentes y planes; los resultados preliminares conservan su estado." });
+    } catch (error) {
+      toast({ title: "No se descargó el reporte", description: error instanceof Error ? error.message : "Conserva la captura y vuelve a intentarlo.", variant: "destructive" });
+    } finally { setReportDownloading(false); }
   };
 
   return (
@@ -828,7 +763,7 @@ export default function EbrPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" disabled={!canWriteModuleStorage("ebr-institutional-assessment")} onClick={()=>saveInstitutionalEvaluation("draft")}>Guardar borrador institucional</Button>
             <Button variant="outline" disabled={!canWriteModuleStorage("ebr-institutional-assessment")||!sessionCan(getPilotSession(),getActiveCompany(),"ebr","approve")} onClick={()=>saveInstitutionalEvaluation("approved")}>Aprobar institucional</Button>
-            <span className="text-xs text-muted-foreground">Revisión institucional {institutionalStored.revision||0} · {institutionalStored.workflow?.status==="approved"?"aprobada (modificar requiere nueva revisión)":institutionalStored.workflow?.status==="review"?"en revisión":"borrador"}</span>
+            <span className="text-xs text-muted-foreground">Revisión institucional {institutionalStored.revision||0} · {institutionalApproval.label}</span>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-2"><Label htmlFor="ebr-expected-amount">Monto mensual esperado (MXN)</Label><Input id="ebr-expected-amount" inputMode="decimal" placeholder="0.00" value={transactionalProfile.expectedMonthlyAmountCents === null ? "" : centsToDecimalString(transactionalProfile.expectedMonthlyAmountCents)} onChange={(event) => { const parsed = parseMoneyToCents(event.target.value, {allowZero:true}); setTransactionalProfile((prev) => ({...prev, expectedMonthlyAmountCents:parsed.ok ? parsed.cents : null})); }}/></div>
@@ -1022,7 +957,8 @@ export default function EbrPage() {
 
         <TabsContent value="reporte" className="space-y-6">
           <RiskResults client={clientResult} subject={subjectResult} beneficiary={beneficiaryResult} history={savedEvaluation?.history ?? []} institution={institutionalRisk}
-            distribution={["Bajo","Medio","Alto","Reforzado"].map((level) => ({level,count:storageValid ? Object.values(evaluacionesGuardadas).filter((item) => currentStoredEbrRisk(item,expedientes.find((client) => client.id === (item.expedienteId || item.clientId)) ?? null,pepWhoisHistory)?.level === level).length : 0}))}/>
+            distribution={companyRiskDistribution.rows.map((row) => ({level:row.level,count:row.count ?? 0}))}/>
+          <p role="status" className="text-sm text-muted-foreground">{companyRiskDistribution.unapproved === null ? "La distribución no está disponible: revisa los datos antes de interpretar la gráfica." : `${companyRiskDistribution.unapproved} cliente(s) sin aprobación vigente; no se clasifican como riesgo bajo.`}</p>
           <Card>
             <CardHeader>
               <CardTitle>Resumen del perfil consolidado</CardTitle>
@@ -1083,12 +1019,12 @@ export default function EbrPage() {
                 <div>
                   <p className="font-medium">Exportación</p>
                   <p className="text-sm text-muted-foreground">
-                    Incluye detalle por cuestionario y resumen ejecutivo.
+                    Resumen ejecutivo, gráficas, cuestionarios completos, fuentes e historial.
                   </p>
                 </div>
-                <Button variant="outline" onClick={exportPdfReport}>
+                <Button data-pld-action="download" className="rounded-full" variant="outline" onClick={exportPdfReport} disabled={reportDownloading}>
                   <FileText className="mr-2 h-4 w-4" />
-                  Exportar PDF
+                  {reportDownloading ? "Preparando reporte…" : "Descargar reporte PDF"}
                 </Button>
               </div>
 

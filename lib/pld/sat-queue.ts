@@ -185,7 +185,7 @@ function classifyOperationQueueKind(operation: SatQueueOperationSource): SatQueu
   return "internal_record"
 }
 
-function resolveOperationOutputKind(operation: SatQueueOperationSource): SatOutputKind | null {
+export function resolveOperationOutputKind(operation: SatQueueOperationSource): SatOutputKind | null {
   if(operation.clientIdentityReviewRequired)return null
   if (operation.captureStatus === "draft") return null
   if (
