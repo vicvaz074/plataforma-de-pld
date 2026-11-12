@@ -14,6 +14,7 @@ import { UserSecurityDialog } from "./user-security-dialog"
 import { createCompanyWithOrganization } from "./admin-onboarding"
 import { usePilot } from "./pilot-provider"
 import { jsonRequest, pilotApi } from "@/lib/pilot/api"
+import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH, isValidPasswordLength } from "@/lib/pilot/password-policy"
 import { ALL_ACTIONS, MODULE_LABELS, rolePermissions, sessionIsAdmin, type AdminSnapshot, type Company, type CompanyGrant, type ModuleKey, type Organization, type OrganizationRole, type PilotUser } from "@/lib/pilot/contracts"
 
 const ROLE_LABELS: Record<OrganizationRole,string> = {admin:"Administrador",compliance:"Cumplimiento",capture:"Captura",viewer:"Consulta"}
@@ -30,9 +31,10 @@ export function AdminDashboard() {
   const [dialog,setDialog]=useState<"company"|"user"|"organization"|null>(null)
   const [organizationId,setOrganizationId]=useState("");const [name,setName]=useState("");const [email,setEmail]=useState("");const [rfc,setRfc]=useState("")
   const [organizationName,setOrganizationName]=useState("")
+  const [initialPassword,setInitialPassword]=useState("")
   const setupHandled=useRef(false)
   const [role,setRole]=useState<OrganizationRole>("capture");const [companyIds,setCompanyIds]=useState<string[]>([])
-  const [credential,setCredential]=useState<{email:string;password:string}|null>(null)
+  const [credential,setCredential]=useState<{email:string;password?:string;initialPasswordSet?:boolean}|null>(null)
   const [permissionsUser,setPermissionsUser]=useState<PilotUser|null>(null);const [permissionsCompany,setPermissionsCompany]=useState("")
   const [editingCompany,setEditingCompany]=useState<Company|null>(null)
   const [securityUser,setSecurityUser]=useState<PilotUser|null>(null)
@@ -42,11 +44,11 @@ export function AdminDashboard() {
   const userId=session?.user.id
   const load=useCallback(async()=>{setLoading(true);setError("");try{const result=await pilotApi<AdminSnapshot>("/admin");setData(result);setHasLoaded(true);setOrganizationId(value=>value||result.organizations[0]?.id||"")}catch(reason){setError(reason instanceof Error?reason.message:"No se pudo cargar el panel.")}finally{setLoading(false)}},[])
   useEffect(()=>{if(isAdmin)void load()},[load,isAdmin,userId])
-  const mutate=async(path:string,method:string,body:unknown,refreshActor=!path.endsWith("/reset-password"))=>{setBusy(true);setError("");try{const result=await pilotApi<Record<string,unknown>>(path,jsonRequest(method,body));await load();if(refreshActor)await refreshSession();return result}catch(reason){setError(reason instanceof Error?reason.message:"No se pudo guardar.");return null}finally{setBusy(false)}}
+  const mutate=async(path:string,method:string,body:unknown,refreshActor=!path.endsWith("/reset-password"))=>{setBusy(true);setError("");try{const result=await pilotApi<Record<string,unknown>>(path,jsonRequest(method,body));if(path==="/users"&&method==="POST")setInitialPassword("");await load();if(refreshActor)await refreshSession();return result}catch(reason){if(path==="/users"&&method==="POST")setInitialPassword("");setError(reason instanceof Error?reason.message:"No se pudo guardar.");return null}finally{setBusy(false)}}
   const companies=data.companies.filter(item=>normalize(`${item.name} ${item.rfc}`).includes(normalize(search)))
   const users=data.users.filter(item=>normalize(`${item.name} ${item.email}`).includes(normalize(search)))
   const scopedCompanies=data.companies.filter(item=>item.organizationId===organizationId&&item.status==="active")
-  const open=useCallback((kind:"company"|"user"|"organization"|null)=>{setError("");setName("");setEmail("");setRfc("");setCompanyIds([]);setRole("capture");setDialog(kind)},[])
+  const open=useCallback((kind:"company"|"user"|"organization"|null)=>{setError("");setName("");setEmail("");setRfc("");setInitialPassword("");setCompanyIds([]);setRole("capture");setDialog(kind)},[])
   useEffect(()=>{
     if(!hasLoaded||loading||!isAdmin||setupHandled.current)return
     const url=new URL(window.location.href)
@@ -79,8 +81,9 @@ export function AdminDashboard() {
       finally{setBusy(false)}
       return
     }
-    const result=await mutate(dialog==="organization"?"/organizations":"/users","POST",{organizationId,name,email,rfc,role,companyIds},dialog!=="user")
-    if(result){setDialog(null);if(typeof result.temporaryPassword==="string")setCredential({email,password:result.temporaryPassword})}
+    if(dialog==="user"&&initialPassword&&!isValidPasswordLength(initialPassword)){setError(`La contraseña inicial debe tener entre ${PASSWORD_MIN_LENGTH} y ${PASSWORD_MAX_LENGTH} caracteres.`);return}
+    const result=await mutate(dialog==="organization"?"/organizations":"/users","POST",{organizationId,name,email,rfc,role,...(dialog==="user"&&initialPassword?{initialPassword}:{}),companyIds},dialog!=="user")
+    if(result){setInitialPassword("");setDialog(null);if(result.initialPasswordSet===true)setCredential({email,initialPasswordSet:true});else if(typeof result.temporaryPassword==="string")setCredential({email,password:result.temporaryPassword})}
   }
   const memberOrganization=(user:PilotUser)=>data.memberships.find(item=>item.userId===user.id)?.organizationId||organizationId
   const selectPermissionUser=(user:PilotUser)=>{if(data.memberships.some(item=>item.userId===user.id&&item.role==="admin")){setSecurityUser(user);return}setPermissionsUser(user);const id=data.companies.find(item=>item.organizationId===memberOrganization(user))?.id||"";setPermissionsCompany(id);setPermissions(data.grants.find(item=>item.userId===user.id&&item.companyId===id)?.permissions||{})}
@@ -103,7 +106,7 @@ export function AdminDashboard() {
     </Tabs>
     <CompanyEditor company={editingCompany} onClose={()=>setEditingCompany(null)} onSaved={async()=>{await load();await refreshSession()}}/>
     <UserSecurityDialog user={securityUser} organizationId={securityUser?memberOrganization(securityUser):organizationId} initialRole={data.memberships.find(item=>item.userId===securityUser?.id)?.role||"viewer"} superadmin={superadmin} onClose={()=>setSecurityUser(null)} onChanged={load}/>
-    <Dialog open={Boolean(dialog)} onOpenChange={open=>{if(!open&&!busy)setDialog(null)}}>
+    <Dialog open={Boolean(dialog)} onOpenChange={open=>{if(!open&&!busy){setInitialPassword("");setDialog(null)}}}>
       <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl">
         <DialogHeader>
           <DialogTitle>{dialog==="organization"?"Nueva organización":dialog==="company"?"Nueva empresa":"Nuevo usuario"}</DialogTitle>
@@ -125,16 +128,17 @@ export function AdminDashboard() {
             {dialog==="company"&&<div className="flex flex-col gap-2"><Label htmlFor="admin-rfc">RFC</Label><Input id="admin-rfc" value={rfc} onChange={event=>setRfc(event.target.value.toUpperCase())} required maxLength={13}/></div>}
             {dialog==="user"&&<>
               <div className="flex flex-col gap-2"><Label htmlFor="admin-email">Correo electrónico</Label><Input id="admin-email" type="email" value={email} onChange={event=>setEmail(event.target.value)} required maxLength={254}/></div>
+              <div className="flex flex-col gap-2"><Label htmlFor="admin-initial-password">Contraseña inicial (opcional)</Label><Input id="admin-initial-password" type="password" autoComplete="new-password" minLength={PASSWORD_MIN_LENGTH} maxLength={PASSWORD_MAX_LENGTH} aria-describedby="admin-initial-password-help" value={initialPassword} onChange={event=>setInitialPassword(event.target.value)}/><p id="admin-initial-password-help" className="text-sm text-muted-foreground">Entre {PASSWORD_MIN_LENGTH} y {PASSWORD_MAX_LENGTH} caracteres. Si la dejas vacía, se genera una contraseña temporal. El usuario deberá cambiarla al entrar.</p></div>
               <div className="flex flex-col gap-2"><Label>Perfil</Label><SearchableSelect value={role} onChange={value=>setRole(value as OrganizationRole)} options={Object.entries(ROLE_LABELS).filter(([key])=>superadmin||key!=="admin").map(([value,label])=>({value,label}))} disabled={busy} ariaLabel="Perfil del usuario"/></div>
               <fieldset className="flex flex-col gap-2"><legend className="mb-2 text-sm font-medium">Empresas autorizadas</legend>{scopedCompanies.map(item=><label key={item.id} className="flex items-center gap-2 rounded-lg border p-3 text-sm"><input type="checkbox" checked={companyIds.includes(item.id)} onChange={event=>setCompanyIds(previous=>event.target.checked?[...previous,item.id]:previous.filter(id=>id!==item.id))}/>{item.name}</label>)}</fieldset>
             </>}
           </fieldset>
           <Button type="submit" disabled={busy||dialog!=="organization"&&!needsOrganization&&!organizationId} className="w-full rounded-xl">{busy?"Guardando…":needsOrganization?"Crear organización y empresa":dialog==="company"?"Crear empresa":"Crear"}</Button>
-          <Button type="button" variant="ghost" disabled={busy} onClick={()=>setDialog(null)}>Cancelar</Button>
+          <Button type="button" variant="ghost" disabled={busy} onClick={()=>{setInitialPassword("");setDialog(null)}}>Cancelar</Button>
         </form>
       </DialogContent>
     </Dialog>
-    <Dialog open={Boolean(credential)} onOpenChange={open=>{if(!open)setCredential(null)}}><DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>Acceso creado</DialogTitle><DialogDescription>La contraseña temporal se muestra una sola vez. El usuario deberá cambiarla al entrar.</DialogDescription></DialogHeader><p className="break-all text-sm">{credential?.email}</p><div className="flex gap-2"><Input readOnly aria-label="Contraseña temporal" value={credential?.password||""}/><Button variant="outline" aria-label="Copiar contraseña temporal" onClick={()=>void navigator.clipboard.writeText(credential?.password||"")}><Copy className="h-4 w-4"/></Button></div><Button onClick={()=>setCredential(null)}>Ya la guardé</Button></DialogContent></Dialog>
+    <Dialog open={Boolean(credential)} onOpenChange={open=>{if(!open)setCredential(null)}}><DialogContent className="rounded-2xl"><DialogHeader><DialogTitle>Acceso creado</DialogTitle><DialogDescription>{credential?.initialPasswordSet?"La contraseña inicial quedó registrada y no se volverá a mostrar. El usuario deberá cambiarla al entrar.":"La contraseña temporal se muestra una sola vez. El usuario deberá cambiarla al entrar."}</DialogDescription></DialogHeader><p className="break-all text-sm">{credential?.email}</p>{credential?.password&&<div className="flex gap-2"><Input readOnly aria-label="Contraseña temporal" value={credential.password}/><Button variant="outline" aria-label="Copiar contraseña temporal" onClick={()=>void navigator.clipboard.writeText(credential.password||"")}><Copy className="h-4 w-4"/></Button></div>}<Button onClick={()=>setCredential(null)}>{credential?.initialPasswordSet?"Entendido":"Ya la guardé"}</Button></DialogContent></Dialog>
     <Dialog open={Boolean(permissionsUser)} onOpenChange={open=>{if(!open)setPermissionsUser(null)}}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto rounded-2xl"><DialogHeader><DialogTitle>Accesos de {permissionsUser?.name}</DialogTitle><DialogDescription>Selecciona una empresa y ajusta las acciones permitidas.</DialogDescription></DialogHeader><SearchableSelect value={permissionsCompany} options={data.companies.filter(item=>permissionsUser&&item.organizationId===memberOrganization(permissionsUser)).map(item=>({value:item.id,label:item.name}))} onChange={id=>{setPermissionsCompany(id);setPermissions(data.grants.find(item=>item.userId===permissionsUser?.id&&item.companyId===id)?.permissions||{})}} ariaLabel="Empresa cuyos permisos se editan"/><div className="flex flex-wrap gap-2">{(["compliance","capture","viewer"] as OrganizationRole[]).map(profile=><Button key={profile} size="sm" variant="outline" onClick={()=>setPermissions(rolePermissions(profile))}>{ROLE_LABELS[profile]}</Button>)}<Button size="sm" variant="ghost" onClick={()=>setPermissions({})}>Retirar acceso</Button></div><div className="space-y-3">{Object.entries(MODULE_LABELS).map(([key,label])=><fieldset key={key} className="rounded-xl border p-3"><legend className="px-1 text-sm font-medium">{label}</legend><div className="flex flex-wrap gap-x-4 gap-y-2">{ALL_ACTIONS.map(action=><label key={action} className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={permissions[key as ModuleKey]?.includes(action)||false} onChange={e=>setPermissions(previous=>({...previous,[key]:e.target.checked?[...(previous[key as ModuleKey]||[]),action]:(previous[key as ModuleKey]||[]).filter(value=>value!==action)}))}/>{ACTION_LABELS[action]}</label>)}</div></fieldset>)}</div><Button disabled={busy||!permissionsCompany} onClick={async()=>{if(!permissionsUser)return;const result=await mutate("/grants","PUT",{organizationId:memberOrganization(permissionsUser),userId:permissionsUser.id,companyId:permissionsCompany,permissions});if(result)setPermissionsUser(null)}}>Guardar permisos</Button></DialogContent></Dialog>
   </div>
 }

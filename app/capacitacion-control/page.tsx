@@ -6,7 +6,8 @@ import { getModuleStorage, canWriteModuleStorage, flushModuleStorage, captureMod
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react"
 import { differenceInDays, format, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
-import { jsPDF } from "jspdf"
+import { downloadProfessionalReport } from "@/lib/pld/reports"
+import { buildTrainingProfessionalReport } from "@/lib/pld/module-reports"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -853,59 +854,11 @@ export default function CapacitacionControlPage() {
     } catch (error) {if (isModuleScopeCurrent(scope)) toast({title:"No se guardó el cierre",description:error instanceof Error ? error.message : "Conserva la captura y reintenta.",variant:"destructive"})}
   }
 
-  const exportReport = (formatType: "pdf" | "excel") => {
+  const exportReport = async (formatType: "pdf" | "excel") => {
+    try {
     if (formatType === "pdf") {
-      const doc = new jsPDF({ orientation: "portrait", unit: "pt" })
-      let y = 40
-      doc.setFont("helvetica", "bold")
-      doc.setFontSize(16)
-      doc.text("Reporte de Capacitación y Control Interno", 40, y)
-      y += 30
-      doc.setFontSize(11)
-      doc.setFont("helvetica", "normal")
-
-      const addLine = (text: string) => {
-        const lines = doc.splitTextToSize(text, 515) as string[]
-        lines.forEach((line) => {
-          if (y > 760) {
-            doc.addPage()
-            y = 40
-          }
-          doc.text(line, 40, y)
-          y += 18
-        })
-      }
-
-      addLine(
-        "Plan anual: " +
-          (state.trainingPlan
-            ? state.trainingPlan.year + " aprobado por " + state.trainingPlan.approvedBy
-            : "No registrado"),
-      )
-      addLine("Sesiones registradas: " + state.sessions.length)
-      state.sessions.slice(0, 20).forEach((session) => {
-        addLine(
-          "• " +
-            session.title +
-            " (" +
-            formatDisplayDate(session.date) +
-            ") - " +
-            session.modality +
-            ", asistentes: " +
-            session.attendees.length,
-        )
-      })
-      addLine("Colaboradores registrados: " + state.employees.length)
-      state.employees.slice(0, 25).forEach((employee) => {
-        const status = employee.needsInitialTraining
-          ? "Pendiente de inducción"
-          : employee.lastTrainingDate
-          ? "Última capacitación: " + formatDisplayDate(employee.lastTrainingDate)
-          : "Capacitación registrada sin fecha"
-        addLine("• " + employee.name + " (" + employee.role + ") - " + status)
-      })
-
-      doc.save("reporte-capacitacion-control.pdf")
+      const report = buildTrainingProfessionalReport(state, checklistQuestions)
+      await downloadProfessionalReport(report, "capacitacion")
     } else {
       const rows: unknown[][] = [["Tipo", "Nombre", "Fecha", "Detalle"]]
 
@@ -957,6 +910,9 @@ export default function CapacitacionControlPage() {
       title: "Reporte exportado",
       description: "Se generó el archivo en formato " + formatType.toUpperCase() + " para auditoría externa.",
     })
+    } catch (error) {
+      toast({ title: "No se pudo exportar el reporte", description: error instanceof Error ? error.message : "Reintenta la descarga sin cambiar de empresa.", variant: "destructive" })
+    }
   }
 
   const officialCertificateValid = useMemo(() => {
@@ -1948,10 +1904,10 @@ export default function CapacitacionControlPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-3">
-            <Button type="button" variant="outline" onClick={() => exportReport("pdf")}>
+            <Button type="button" data-pld-action="download" variant="outline" onClick={() => exportReport("pdf")}>
               Exportar reporte PDF
             </Button>
-            <Button type="button" variant="outline" onClick={() => exportReport("excel")}>
+            <Button type="button" data-pld-action="download" variant="outline" onClick={() => exportReport("excel")}>
               Exportar reporte Excel
             </Button>
           </div>

@@ -49,6 +49,50 @@ test("home, desktop and mobile share discovery while the provider keeps company 
   assert.match(provider, /storageGeneration !== generation/)
   assert.match(provider, /!sessionCan\(session, company, moduleKey, "view"\)/)
   assert.match(provider, /\/dashboard\?setup=company/)
+  assert.match(provider, /sessionIsAdmin\(session\) \? "\/dashboard\?setup=company"/)
+  assert.match(provider, /session\.user\.requiresPasswordChange \|\| session\.mfaRequired/)
+  assert.ok(provider.indexOf(": credentialsPending ?") < provider.indexOf(": needsCompany ?"), "Credential change must still block module contents before company setup")
+  assert.match(provider, /Actualiza tu acceso para continuar/)
+})
+
+test("organization administrators discover all modules before first-company setup, including pending password change", () => {
+  const otherCompany = { ...company, id: "other-company", organizationId: "other-org" }
+  for (const requiresPasswordChange of [false, true]) {
+    const admin: PilotSession = {
+      ...owner,
+      user: { ...owner.user, platformRole: "user", requiresPasswordChange },
+      organizations: [{ id: "org", name: "QA organization", mfaEnabled: false }],
+      memberships: [{ organizationId: "org", userId: owner.user.id, role: "admin" }],
+    }
+    assert.equal(sessionIsAdmin(admin), true)
+    for (const module of Object.keys(MODULE_LABELS) as ModuleKey[]) {
+      assert.equal(sessionCanNavigate(admin, null, module), true, module)
+      for (const action of ALL_ACTIONS) {
+        assert.equal(sessionCan(admin, null, module, action), false, "Discovery must not authorize account-only data")
+        assert.equal(sessionCan(admin, company, module, action), true, "Existing organization permissions remain unchanged")
+        assert.equal(sessionCan(admin, otherCompany, module, action), false, "No cross-organization data permission")
+        assert.equal(sessionCan(admin, { ...company, status: "archived" }, module, action), false)
+      }
+    }
+    const inbox = { ...company, id: `inbox:org:${admin.user.id}` }
+    for (const module of Object.keys(MODULE_LABELS) as ModuleKey[]) {
+      assert.equal(sessionCanNavigate(admin, inbox, module), true)
+      for (const action of ALL_ACTIONS) assert.equal(sessionCan(admin, inbox, module, action), module === "expedientes" && ["view", "edit", "upload", "download"].includes(action), "Inbox remains EUI-only")
+    }
+    const suspended = { ...admin, user: { ...admin.user, status: "suspended" as const } }
+    assert.equal(sessionIsAdmin(suspended), false)
+    for (const module of Object.keys(MODULE_LABELS) as ModuleKey[]) assert.equal(sessionCanNavigate(suspended, null, module), false)
+  }
+})
+
+test("ordinary organizational membership does not grant administrator discovery or cross-company data", () => {
+  for (const role of ["compliance", "capture", "viewer"] as const) {
+    const ordinary: PilotSession = { ...owner, user: { ...owner.user, platformRole: "user", requiresPasswordChange: true }, memberships: [{ organizationId: "org", userId: owner.user.id, role }], grants: [{ companyId: company.id, userId: owner.user.id, permissions: { expedientes: ["view"] } }] }
+    for (const module of Object.keys(MODULE_LABELS) as ModuleKey[]) assert.equal(sessionCanNavigate(ordinary, null, module), false)
+    assert.equal(sessionCanNavigate(ordinary, company, "expedientes"), true)
+    assert.equal(sessionCanNavigate(ordinary, company, "operaciones"), false)
+    assert.equal(sessionCan(ordinary, { ...company, id: "other-company" }, "expedientes", "view"), false)
+  }
 })
 
 test("actual provider refresh selects the new company and initializes an account-only generation", async () => {
