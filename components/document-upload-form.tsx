@@ -34,7 +34,7 @@ const formSchema = z.object({
   type: z.string().min(1, "Document type is required"),
   status: z.string().min(1, "Document status is required"),
   date: z.date({
-    required_error: "Date is required",
+    error: (issue) => issue.input === undefined ? "Date is required" : undefined,
   }),
   file: z
     .custom<FileList>()

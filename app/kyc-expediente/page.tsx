@@ -963,7 +963,7 @@ function KycExpedienteContent() {
   const [registroRevision, setRegistroRevision] = useState(0)
   const [tipoExpediente, setTipoExpediente] = useState<string>(EXPEDIENTE_TIPOS[0]?.value ?? "persona_moral")
   const [expedienteIdActual, setExpedienteIdActual] = useState("")
-  const expedienteBaseActualizadoEnRef = useRef<string | undefined>()
+  const expedienteBaseActualizadoEnRef = useRef<string | undefined>(undefined)
   const loadedSearchRef = useRef("")
   const [sujetoObligadoId, setSujetoObligadoId] = useState("")
   const [activityKey, setActivityKey] = useState("")

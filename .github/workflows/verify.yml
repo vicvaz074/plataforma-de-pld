@@ -17,6 +17,10 @@ jobs:
           node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Comprobar dependencias de producción desde severidad baja
+        run: pnpm audit --prod --audit-level low --registry=https://registry.npmjs.org
+      - name: Comprobar también herramientas y pruebas desde severidad baja
+        run: pnpm audit --audit-level low --registry=https://registry.npmjs.org
       - name: Install XML validator
         run: |
           sudo apt-get update

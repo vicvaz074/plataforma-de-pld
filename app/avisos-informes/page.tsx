@@ -1153,8 +1153,8 @@ export default function AvisosInformesPage() {
     finally{if(isModuleScopeCurrent(scope))setSubmissionSaving(false)}
   }
 
-  const downloadReport = (fileName: string, content: BlobPart, mimeType = "text/csv") => {
-    const blob = new Blob([content], { type: mimeType })
+  const downloadReport = (fileName: string, content: string | Uint8Array, mimeType = "text/csv") => {
+    const blob = new Blob([typeof content === "string" ? content : Uint8Array.from(content)], { type: mimeType })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url

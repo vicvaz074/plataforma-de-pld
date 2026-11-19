@@ -27,7 +27,7 @@ tarea separada.
 
 ## Stack, Flujo y Comandos
 
-- Framework: Next.js 14 con App Router en `app/`.
+- Framework: Next.js 15 con App Router en `app/`.
 - Lenguaje: TypeScript estricto en `tsconfig.json`, aunque el build actualmente
   ignora errores de TypeScript y ESLint en `next.config.js`.
 - UI: Tailwind CSS, shadcn/Radix en `components/ui`, iconos de `lucide-react`.

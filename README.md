@@ -34,6 +34,8 @@ pnpm build:worker
 
 CI exige estas verificaciones. Un build no sustituye pruebas de permisos, recorridos de navegador, comparación de libros ni validación de XML contra XSD.
 
+Antes de liberar, `pnpm check:release-config` contrasta las configuraciones versionadas de Pages y Worker para preview y producción. Comprueba el destino de la API, orígenes HTTPS distintos y que no se compartan D1, buckets R2 ni colas. Rechaza el modo demo declarado en esas configuraciones o en el entorno del comando, así como `BETTER_AUTH_SECRET` o `BOOTSTRAP_TOKEN` declarados en `vars`. Esta prueba también corre dentro de `pnpm test:pld` en CI. No consulta Cloudflare, inspecciona la compilación publicada ni verifica los secretos o variables cargados fuera del repositorio; no constituye SAST, DAST ni certificación de seguridad.
+
 ## Datos, autorización y publicación
 
 Los IDs de organización y empresa delimitan los registros y archivos. RFC, CURP y NIF no son llaves de autorización. Las escrituras usan revisión esperada y las ediciones concurrentes no se sobrescriben silenciosamente. Las llaves locales antiguas se conservan para una importación explícita con respaldo; nunca se migran usuarios, contraseñas ni privilegios demo.
