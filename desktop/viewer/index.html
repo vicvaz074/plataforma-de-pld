@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self'; connect-src 'self'; img-src blob: data:; font-src 'self' blob:; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">
+  <title>Vista previa del documento · Davara PLD</title><link rel="stylesheet" href="./viewer.css">
+</head>
+<body>
+  <header><span class="brand">Davara <b>PLD</b></span><h1 id="name">Documento</h1><a id="download" hidden>Descargar original</a></header>
+  <main>
+    <p id="message" role="status" aria-live="polite">Verificando el archivo…</p>
+    <nav aria-label="Páginas del PDF" hidden><button id="previous" disabled>Página anterior</button><span id="count" aria-live="polite"></span><button id="next" disabled>Página siguiente</button></nav>
+    <div class="sheet"><canvas role="img" aria-label="Página del documento PDF" hidden></canvas><img id="image" alt="Vista previa de la evidencia" hidden><pre id="plain" hidden></pre></div>
+  </main>
+  <script type="module" src="./viewer.mjs"></script>
+</body></html>

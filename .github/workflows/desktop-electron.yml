@@ -68,6 +68,7 @@ jobs:
           test -f "$binary"
           lipo "$binary" -verify_arch arm64 x86_64
           cd "$GITHUB_WORKSPACE"
+          node desktop/qa/icon.cjs mac "$binary"
           node desktop/qa/smoke.cjs "$binary"
       - name: Instalar el EXE y probar el primer inicio
         if: runner.os == 'Windows'
@@ -85,6 +86,8 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "Instalación: $($p.ExitCode)" }
           $exe = Join-Path $destination 'Davara PLD.exe'
           foreach ($f in @($exe, "$destination/resources/app.asar", "$destination/resources/pld/worker.cjs", "$destination/resources/pld/contracts.cjs", "$destination/resources/pld/out/index.html")) { if (!(Test-Path $f)) {throw "Falta $f"} }
+          node desktop/qa/icon.cjs win "$exe" "$($setup[0].FullName)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node desktop/qa/smoke.cjs "$exe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4

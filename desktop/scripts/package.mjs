@@ -32,10 +32,10 @@ const config={
   appId:'mx.com.davara.pld',productName:'Davara PLD',electronVersion:runtime.electron,
   directories:{output:out,buildResources:'installer-assets'},
   asar:true,npmRebuild:false,buildDependenciesFromSource:false,publish:null,
-  files:['package.json','main.cjs','preload.cjs','setup/**/*','shared/**/*.cjs','runtime/**/*.cjs','offline/**/*',
+  files:['package.json','main.cjs','preload.cjs','setup/**/*','branding/icono-pld-1024.png','shared/**/*.cjs','runtime/**/*.cjs','offline/**/*',
     '!**/*.test.*','!**/tests/**/*','!**/*.map','!**/.DS_Store'],
   extraResources:[{from:pl,to:'pld',filter:['**/*','!**/.DS_Store']}],
-  mac:{identity:'-',icon:icons.png,category:'public.app-category.business',hardenedRuntime:false,
+  mac:{identity:'-',icon:icons.icns||icons.png,category:'public.app-category.business',hardenedRuntime:false,
        mergeASARs:true,minimumSystemVersion:'13.0'},
   win:{signExecutable:false,icon:icons.ico,executableName:'Davara PLD'},
 };

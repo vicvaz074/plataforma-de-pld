@@ -47,6 +47,21 @@ function copyTree(dir,prefix='') {
   }
 }
 copyTree(source);
+// The internal PDF viewer is an explicit first-party entry point and has no
+// preload or external fetch. Do not publish vendor examples or local files.
+const viewer=path.join(stage,'_pld-viewer');
+fs.mkdirSync(viewer);
+for(const name of ['index.html','viewer.mjs','viewer.css']){
+  fs.copyFileSync(path.join(desktop,'viewer',name),path.join(viewer,name));
+}
+fs.copyFileSync(requireRoot.resolve('pdfjs-dist/build/pdf.min.mjs'),path.join(viewer,'pdf.min.mjs'));
+const pdfRoot=path.dirname(requireRoot.resolve('pdfjs-dist/package.json'));
+for(const name of ['cmaps','standard_fonts','wasm']){
+  const folder=path.join(pdfRoot,name);
+  if(!fs.existsSync(folder) && name==='wasm')continue; // not distributed separately in PDF.js 4.x
+  fs.cpSync(folder,path.join(viewer,name),{recursive:true});
+}
+fs.copyFileSync(path.join(pdfRoot,'LICENSE'),path.join(viewer,'LICENSE-pdfjs.txt'));
 for (const base of ['index.html','login.html','actividades-vulnerables.html','registro-sat.html','pdf.worker.min.mjs']) if(!fs.existsSync(path.join(stage,base))) throw Error('La exportación no contiene '+base);
 // Only replace our specific generated staging target.
 if(fs.existsSync(path.join(dst,'out'))) fs.rmSync(path.join(dst,'out'),{recursive:true});

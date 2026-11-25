@@ -58,6 +58,8 @@ Para usar una estación sin red, la persona debe haber iniciado sesión y abiert
 
 **Copia de recuperación** significa otra cosa: es trabajo protegido para revisión manual. Por ejemplo, si un archivo se subió por separado y se perdió la conexión, la estación no puede saber a qué versión debe vincularlo. En **Sincronización → Copias de recuperación de esta empresa**, recuperar o descargar el original en un destino corporativo autorizado, comparar con el historial del servidor y adjuntarlo manualmente sólo si falta. Para lotes admitidos se ofrece **Revalidar y enviar**; para las demás decisiones se regresa al flujo correspondiente en línea. No archivar ni borrar una copia hasta verificar el resultado y su asociación.
 
+En **Evidencias → Ver archivo** se abre un visor interno de la versión autorizada: permite pasar de página en un PDF, ver una imagen admitida o consultar texto. **Descargar original** conserva los bytes de la versión; para formatos sin vista previa, como Excel, se ofrece la descarga sin ejecutar macros. Una estación necesita acceso al servidor para recuperar una evidencia central, aunque ya haya consultado sus metadatos.
+
 Límites por archivo: hasta 20 MB y formatos admitidos por el servidor (PDF, imágenes compatibles, Office, CSV, TXT, JSON o XML). El paquete completo debe caber en el almacén local; los adjuntos embebidos para autoenvío deben estar codificados en base64 y tener un tipo reconocido. Si se agota la capacidad, la aplicación no debe dar el borrador por guardado: conservar el original y recuperar la conexión. El respaldo central **no contiene los pendientes locales**: no borrar el perfil, reinstalar ni cambiar de equipo con pendientes.
 
 ### Matriz de comprobación de permisos

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 670 670" role="img" aria-label="PLD">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+  </defs>
+  <rect x="20" y="25" width="622" height="622" rx="52" fill="#35220C" opacity=".12" filter="url(#shadow)"/>
+  <rect x="20" y="18" width="622" height="622" rx="52" fill="#F7941C"/>
+  <!-- Optical outlines, independent of installed fonts. Keep the negative
+       space above the mark and the right-aligned placement of the reference. -->
+  <g id="letters" fill="#fff" fill-rule="evenodd">
+    <path d="M234 384h55c35 0 54 17 54 49 0 31-20 50-54 50h-24v38h-31zm31 26v46h22c16 0 24-8 24-23 0-16-8-23-24-23z"/>
+    <path d="M366 384h31v110h58v27h-89z"/>
+    <path d="M477 384h50c45 0 74 25 74 68 0 43-27 69-74 69h-50zm31 27v83h19c28 0 43-14 43-42 0-27-15-41-43-41z"/>
+  </g>
+</svg>

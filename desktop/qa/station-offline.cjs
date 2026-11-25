@@ -157,7 +157,9 @@ async function main(){
     assert.equal((await adminApi(base+'/snapshot')).data.records.find(r=>r.id===id).revision,2);
     console.log('OK: edición concurrente detectada, comparación y resolución explícita sin sobrescritura.');
     await cut();
-    const docRecord='eui-'+randomUUID(),pdf=Buffer.from('%PDF-1.4\n% archivo sintético de la estación\n%%EOF');
+    const docRecord='eui-'+randomUUID(),{jsPDF}=require('jspdf'),pdfFixture=new jsPDF();
+    pdfFixture.setFontSize(20);pdfFixture.text('Expediente ficticio | Estacion de prueba',16,30);pdfFixture.addPage();pdfFixture.text('Segunda pagina de prueba',16,30);
+    const pdf=Buffer.from(pdfFixture.output('arraybuffer'));
     const withFile={collection:mutation.collection,id:docRecord,expectedRevision:0,payload:{id:docRecord,nombre:'Expediente sintético con PDF',attachments:[{fileName:'constancia.pdf',dataUrl:'data:application/pdf;base64,'+pdf.toString('base64')}]}};
     const recovery='/api/v1/desktop-offline/recovery?companyId='+encodeURIComponent(co.id);
     const receipt=(await expect(api(recovery,'POST',{kind:'records',mutations:[withFile]}),201,'Proteger expediente con adjunto')).data;
@@ -180,6 +182,23 @@ async function main(){
     assert.equal(downloaded.status,200);assert.deepEqual(Buffer.from(downloaded.bytes),pdf);
     assert.ok(actualUploadKeys.length>=2,'El envío sin acuse debe reintentarse contra el servidor');assert.match(actualUploadKeys[0],/^[a-f0-9]{64}$/);assert.equal(new Set(actualUploadKeys).size,1);
     console.log('OK: expediente + PDF offline; un acuse perdido no duplica el archivo, que se recupera desde la referencia privada del registro.');
+    const viewerPath='/_pld-viewer/index.html#'+encodeURIComponent(ref);
+    await win.loadURL(origin+viewerPath);
+    const assertPainted=async(n)=>{
+      const until=Date.now()+15000;
+      while(Date.now()<until){
+        const output=await win.webContents.executeJavaScript('(()=>{const c=document.querySelector("canvas"),title=document.querySelector("#count")?.innerText;if(!c||c.hidden||title!=='+JSON.stringify('Página '+n+' de 2')+')return false;const pix=c.getContext("2d").getImageData(0,0,c.width,c.height).data;let ink=0;for(let i=0;i<pix.length;i+=4)if(pix[i+3]===255&&pix[i]<100)ink++;return ink>100})()');
+        if(output)return;await pause(100);
+      }
+      throw Error('La vista previa no pintó la página '+n);
+    };
+    await assertPainted(1);await win.webContents.executeJavaScript('document.getElementById("next").click()');await assertPainted(2);
+    const original=path.join(temp,'original-recuperado.pdf');
+    const fetched=new Promise((ok,fail)=>s.once('will-download',(_e,item)=>{item.setSavePath(original);item.once('done',(_e,state)=>state==='completed'?ok():fail(Error('No se descargó el original: '+state)));}));
+    await win.webContents.executeJavaScript('document.getElementById("download").click()',true);
+    let deadline;try{await Promise.race([fetched,new Promise((_,fail)=>{deadline=setTimeout(()=>fail(Error('Descarga del visor no confirmada.')),15000);})]);}finally{clearTimeout(deadline);}
+    assert.deepEqual(fs.readFileSync(original),pdf);
+    await win.loadURL(origin+'/login.txt');console.log('OK: visor empacado, dos páginas con contenido renderizado y descarga idéntica al PDF vinculado.');
     await cut();
     const logout=await expect(api('/api/auth/sign-out','POST',{}),200,'Cerrar sesión sólo en esta estación');
     assert.equal(logout.data.serverRevocationConfirmed,false);assert.equal((await api(statusPath)).data.authorized,false);

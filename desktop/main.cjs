@@ -5,6 +5,8 @@ const {pathToFileURL}=require('node:url');
 const {createHash}=require('node:crypto');
 const {DEFAULT_PORT,makeService,localFile,probeOrigin}=require('./shared/setup.cjs');
 const homeUrl=pathToFileURL(path.join(__dirname,'setup','index.html')).href;
+const brandPng=path.join(__dirname,'branding','icono-pld-1024.png');
+const windowBrand=process.platform==='win32'?{icon:brandPng}:{};
 const {classify}=require('./shared/links.cjs');
 let knownLinks;
 function openLink(parent,origin,s,target){
@@ -13,9 +15,13 @@ function openLink(parent,origin,s,target){
   if(kind==='external'){
     void dialog.showMessageBox(parent,{type:'question',title:'Salir de la plataforma',message:'¿Abrir esta referencia fuera de PLD?',detail:target,buttons:['Cancelar','Abrir'],defaultId:0,cancelId:0}).then(({response})=>{if(response===1)return shell.openExternal(target);}).catch(()=>{});
   }else if(kind==='document'){
-    const viewer=new BrowserWindow({parent,width:980,height:760,title:'Documento · Davara PLD',webPreferences:{session:s,contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true,javascript:false,devTools:false,webviewTag:false}});
-    viewer.removeMenu();secureWindow(viewer,url=>url===target);
-    void viewer.loadURL(target).catch(()=>{if(!viewer.isDestroyed())viewer.close();});
+    // Navigate only to our own packaged renderer, never to user-supplied bytes
+    // as an executable document. Its fragment identifies a single authorized
+    // private file version (or a shipped regulatory template).
+    const location=origin+'/_pld-viewer/index.html#'+encodeURIComponent(new URL(target).pathname);
+    const viewer=new BrowserWindow({...windowBrand,parent,width:980,height:760,title:'Documento · Davara PLD',webPreferences:{session:s,contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true,devTools:false,webviewTag:false}});
+    viewer.removeMenu();secureWindow(viewer,url=>url===location);
+    void viewer.loadURL(location).catch(()=>{if(!viewer.isDestroyed())viewer.close();});
   }
   return !!kind;
 }
@@ -50,7 +56,7 @@ function setupWindow() {
   const s=session.fromPartition('wizard');restrictPermissions(s);
   const dirUrl=pathToFileURL(path.join(__dirname,'setup')+path.sep).href;
   s.webRequest.onBeforeRequest((details,done)=>done({cancel:!details.url.startsWith(dirUrl)}));
-  wizard=new BrowserWindow({width:960,height:780,minWidth:620,minHeight:540,title:'Configurar Plataforma PLD',backgroundColor:'#faf8f4',show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),session:s,contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true,devTools:false}});
+  wizard=new BrowserWindow({...windowBrand,width:960,height:780,minWidth:620,minHeight:540,title:'Configurar Plataforma PLD',backgroundColor:'#faf8f4',show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),session:s,contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true,devTools:false}});
   secureWindow(wizard,url=>url===homeUrl);
   wizard.on('closed',()=>{wizard=null;});wizard.once('ready-to-show',()=>wizard?.show());
   void wizard.loadURL(homeUrl).catch(()=>{});
@@ -74,7 +80,7 @@ function openPlatform(origin) {
     done({cancel:!allow});
   });
   s.on('will-download',(_e,item)=>{if(!allowedUrl(item.getURL(),origin) && !item.getURL().startsWith('blob:'+origin+'/'))item.cancel();});
-  const w=new BrowserWindow({width:1360,height:890,minWidth:740,minHeight:520,title:'Plataforma PLD · Davara',backgroundColor:'#fff',webPreferences:{session:s,contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true,devTools:false,webviewTag:false}});
+  const w=new BrowserWindow({...windowBrand,width:1360,height:890,minWidth:740,minHeight:520,title:'Plataforma PLD · Davara',backgroundColor:'#fff',webPreferences:{session:s,contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true,devTools:false,webviewTag:false}});
   if(station)w.webContents.setUserAgent(w.webContents.getUserAgent()+' DavaraPLDStation/1');
   work=w;secureWindow(w,url=>{try{return new URL(url).origin===origin && /^(https?):/.test(url);}catch{return false;}});
   w.webContents.setWindowOpenHandler(({url})=>{openLink(w,origin,s,url);return {action:'deny'};});
@@ -113,6 +119,8 @@ function installMenu(){
   Menu.setApplicationMenu(Menu.buildFromTemplate(menu));
 }
 async function launch() {
+  if(process.platform==='win32')app.setAppUserModelId('mx.com.davara.pld');
+  if(process.platform==='darwin'&&!app.isPackaged)app.dock.setIcon(brandPng);
   resourceBase=app.isPackaged?path.join(process.resourcesPath,'pld'):path.join(__dirname,'build','pld');
   service=makeService({userData:app.getPath('userData'),resources:{assetsPath:path.join(resourceBase,'out'),migrationsPath:path.join(resourceBase,'migrations'),workerPath:path.join(resourceBase,'worker.cjs')},runtime:require('./runtime/index.cjs'),crypt:safeStorage,probe:origin=>probeOrigin(origin,(...args)=>net.fetch(...args))});
   bind('state',()=>{
