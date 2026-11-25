@@ -39,8 +39,14 @@ const MIME={'.css':'text/css','.js':'application/javascript','.mjs':'application
 // Self-hosted HTML, inline Next hydration and PDF workers. A desktop install
 // cannot silently send form values or the postal lookup to external services.
 const CSP="default-src 'self'; connect-src 'self' blob: data:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; worker-src 'self' blob:; frame-src 'self' blob: data:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+function belowRoot(dir,file,paths=path) {
+  const relative=paths.relative(dir,file);
+  return !!relative && relative!=='..' && !relative.startsWith('..'+paths.sep) && !paths.isAbsolute(relative);
+}
 function staticAssets(rootDir) {
-  const dir=fs.realpathSync(rootDir)
+  // Use the same native canonicalisation on both sides (Windows temp roots
+  // can contain short names and differently cased volume/user segments).
+  const dir=fs.realpathSync.native(rootDir)
   return {async fetch(request){
     if(!['GET','HEAD'].includes(request.method))return new Response(null,{status:405})
     let name
@@ -51,7 +57,7 @@ function staticAssets(rootDir) {
     for(const item of list){
       let real,stat
       try{real=await fsp.realpath(path.resolve(dir,item));stat=await fsp.stat(real)}catch(e){if(e.code==='ENOENT'||e.code==='ENOTDIR')continue;throw e}
-      if(!real.startsWith(dir+path.sep)||!stat.isFile())continue
+      if(!belowRoot(dir,real)||!stat.isFile())continue
       const ext=path.extname(real).toLowerCase()
       const headers={'Content-Type':MIME[ext]||'application/octet-stream','Content-Length':String(stat.size),'Cache-Control':name.startsWith('_next/static/')?'public, max-age=31536000, immutable':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}
       if(ext==='.html')headers['Content-Security-Policy']=CSP
@@ -60,4 +66,4 @@ function staticAssets(rootDir) {
     return new Response('No encontrado',{status:404})
   }}
 }
-module.exports={privateBucket,staticAssets}
+module.exports={privateBucket,staticAssets,belowRoot}

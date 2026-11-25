@@ -6,9 +6,14 @@ const {randomBytes,createHash}=require('node:crypto')
 const {DatabaseSync}=require('node:sqlite')
 const {startServer,inspectDatabase}=require('./index.cjs')
 const {makeBinding}=require('./sqlite.cjs')
-const {privateBucket}=require('./files.cjs')
+const {privateBucket,belowRoot}=require('./files.cjs')
 const root=path.resolve(__dirname,'../..'), migrationsPath=path.join(root,'migrations')
 const secret=randomBytes(40).toString('hex')
+test('contención de recursos Windows admite casing del volumen pero nunca otra raíz, unidad ni carpeta vecina',()=>{
+  const p=path.win32,dir='C:/Users/RunnerAdmin/Temp/pld';
+  assert.equal(belowRoot(dir,'c:/users/RUNNERadmin/temp/pld/login.html',p),true);
+  for(const outside of ['C:/Users/RunnerAdmin/Temp/pld-privado/login.html','D:/otros/login.html',dir])assert.equal(belowRoot(dir,outside,p),false);
+})
 function folder(t){
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'davara-test-runtime-'))
   t.after(()=>fs.rmSync(dir,{recursive:true,force:true}))
