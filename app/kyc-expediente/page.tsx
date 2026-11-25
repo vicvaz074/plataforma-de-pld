@@ -37,11 +37,10 @@ import { actividadesVulnerables } from "@/lib/data/actividades"
 import { PAISES, findPaisByCodigo } from "@/lib/data/paises"
 import {
   findCodigoPostalInfo,
-  findCodigoPostalInfoInCatalog,
   registerCodigoPostalInfo,
   type CodigoPostalInfo,
-  type CodigoPostalSnapshot,
 } from "@/lib/data/codigos-postales"
+import { lookupBundledPostalCode } from "@/lib/data/postal-lookup"
 import {
   ARRENDAMIENTO_ACTIVITY_KEY,
   EXPEDIENTE_EUI_SCHEMA_VERSION,
@@ -543,26 +542,7 @@ interface SujetoObligadoResumen {
 }
 
 const EXPEDIENTE_DETALLE_STORAGE_KEY = "kyc_expedientes_detalle"
-const SEPOMEX_API_BASE = "https://api.zippopotam.us/mx"
 const SEPOMEX_STORAGE_PREFIX = "codigo_postal_cache_"
-let satPostalCatalogPromise: Promise<CodigoPostalInfo[]> | null = null
-
-function loadSatPostalCatalog() {
-  if (!satPostalCatalogPromise) {
-    satPostalCatalogPromise = fetch("/data/sat-postal-catalog-mx.json")
-      .then((response) => {
-        if (!response.ok) throw new Error(`No se pudo cargar el catálogo postal SAT (${response.status})`)
-        return response.json() as Promise<CodigoPostalSnapshot>
-      })
-      .then((snapshot) => (Array.isArray(snapshot.records) ? snapshot.records : []))
-      .catch((error) => {
-        console.error("No se pudo cargar el catálogo postal SAT:", error)
-        satPostalCatalogPromise = null
-        return []
-      })
-  }
-  return satPostalCatalogPromise
-}
 
 function createDireccion(pais = "MX"): DireccionState {
   return {
@@ -647,41 +627,6 @@ function todayDateString() {
   return new Date().toISOString().split("T")[0]
 }
 
-async function fetchCodigoPostalInfo(codigo: string): Promise<CodigoPostalInfo | undefined> {
-  try {
-    const response = await fetch(`${SEPOMEX_API_BASE}/${codigo}`)
-    if (!response.ok) return undefined
-    const data = (await response.json()) as {
-      country?: string
-      "country abbreviation"?: string
-      places?: Array<{
-        "place name"?: string
-        state?: string
-        "province"?: string
-        "community"?: string
-      }>
-    }
-    if (!data || !Array.isArray(data.places) || data.places.length === 0) return undefined
-    const place = data.places[0] ?? {}
-    const asentamientos = Array.from(
-      new Set(
-        data.places
-          .map((item) => item["place name"])
-          .filter((nombre): nombre is string => Boolean(nombre && nombre.trim().length > 0)),
-      ),
-    )
-    return {
-      codigo,
-      estado: place.state ?? "",
-      municipio: place.province ?? place.state ?? "",
-      ciudad: place.community ?? "",
-      asentamientos,
-    }
-  } catch (error) {
-    console.error("No se pudo consultar el código postal:", error)
-    return undefined
-  }
-}
 
 function normalizarBusqueda(valor: string) {
   return valor
@@ -1374,8 +1319,7 @@ function KycExpedienteContent() {
       let info: CodigoPostalInfo | undefined
 
       if (limpio.length === 5) {
-        const catalogoSat = await loadSatPostalCatalog()
-        info = findCodigoPostalInfoInCatalog(catalogoSat, limpio) ?? findCodigoPostalInfo(limpio)
+        info = await lookupBundledPostalCode(limpio)
       }
 
       if (!info && limpio.length === 5) {
@@ -1390,14 +1334,6 @@ function KycExpedienteContent() {
             }
           } catch (error) {
             console.error("No se pudo leer cache de código postal:", error)
-          }
-        }
-        if (!info) {
-          const fetched = await fetchCodigoPostalInfo(limpio)
-          if (fetched) {
-            info = fetched
-            registerCodigoPostalInfo(fetched)
-            getModuleStorage().setItem(cacheKey, JSON.stringify(fetched))
           }
         }
       }

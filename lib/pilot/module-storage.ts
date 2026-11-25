@@ -1,6 +1,8 @@
 import { pilotApi, jsonRequest } from "./api"
 import { COLLECTION_MODULES, sessionCan, type CloudRecord, type Company, type ModuleKey, type PilotSession } from "./contracts"
 import { decodeCollection, diffCollection, encodeCollection } from "./record-codecs"
+import { isStationRenderer, protectDraft, forgetDraft, getRecovery } from "./station-recovery"
+import type { RecordMutation } from "./contracts"
 
 export type SaveState = { status: "saved" | "saving" | "error"; pending: number; message?: string; warnings?: string[] }
 let session: PilotSession | null = null
@@ -125,8 +127,22 @@ export function resetCompanyStorage() {
 export async function uploadPilotFile(file: File, moduleKey: ModuleKey, documentId?: string, expectedRevision?: number) {
   const scope = captureModuleScope()
   if (!connected || !company) throw new Error("Selecciona una empresa conectada para guardar el archivo.")
-  const result = await uploadScopedFile(file, moduleKey, { company, authGeneration, pending, uploaded }, documentId, expectedRevision)
+  const bound={company,authGeneration,pending,uploaded}
+  let recoveryId:string|undefined
+  if(isStationRenderer()&&!company.id.startsWith("inbox:")&&file.size>0&&file.size<=20*1024*1024){
+    const collection=Object.keys(COLLECTION_MODULES).find(k=>COLLECTION_MODULES[k]===moduleKey)
+    if(collection && sessionCan(session,company,moduleKey,"upload")){
+      const data=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(Error("No se pudo leer el archivo original."));reader.readAsDataURL(file)})
+      assertModuleScope(scope)
+      try{recoveryId=await protectDraft(bound.company.id,{kind:"file",collection,name:file.name,data})}catch{/* A confirmed online upload is still permitted when there is no local recovery capacity. */}
+    }
+  }
   assertModuleScope(scope)
+  let result
+  try{result=await uploadScopedFile(file,moduleKey,bound,documentId,expectedRevision)}
+  catch(e){if(recoveryId)throw Error("El servidor no confirmó el archivo. Hay una copia en Sincronización de esta estación; verifica las versiones antes de volver a adjuntarlo.");throw e}
+  assertModuleScope(scope)
+  if(recoveryId)await forgetDraft(bound.company.id,recoveryId).catch(()=>undefined)
   return result
 }
 async function uploadScopedFile(file: File, moduleKey: ModuleKey, scope: DrainScope, documentId?: string, expectedRevision?: number) {
@@ -171,6 +187,14 @@ async function drain(scope: DrainScope) {
     assertDrainScope(scope)
     const batch = [...pending.entries()]
     publish({ status: "saving", pending: batch.length })
+    // Protect original revisions and any embedded attachment before a network
+    // operation. This is a private recovery copy, not a confirmed write.
+    let recoveryId: string | undefined
+    if(isStationRenderer()&&!scope.company.id.startsWith("inbox:")){
+      const original=batch.flatMap(([collection,raw])=>diffCollection(collection,raw===null?new Map():encodeCollection(collection,JSON.parse(raw)),records))
+      if(original.length)try { recoveryId=await protectDraft(scope.company.id,{kind:"records",mutations:original}) }catch{/* If local space is unavailable, still attempt the real server. */}
+      assertDrainScope(scope)
+    }
     // Coalesce synchronous changes from a moduleKey into one atomic server batch.
     const mutations = []
     for (const [collection, raw] of batch) {
@@ -211,6 +235,8 @@ async function drain(scope: DrainScope) {
       if (value === null) cache.delete(key)
       else cache.set(key, JSON.stringify(value))
     }
+    if (recoveryId) await forgetDraft(scope.company.id,recoveryId).catch(()=>undefined)
+    assertDrainScope(scope)
     publish({ status: pending.size ? "saving" : "saved", pending: pending.size })
     if (typeof window !== "undefined") for (const key of changedCollections) window.dispatchEvent(new CustomEvent("pld-integration-change", { detail: { key } }))
   }
@@ -239,6 +265,34 @@ export async function flushModuleStorage(scope?: ModuleScope) {
   if (scope) assertModuleScope(scope)
 }
 export async function retryModuleStorage() { lastError = null; schedule(); await flushModuleStorage() }
+
+/** Explicit review action after an interrupted save. Never rebase a change
+ * against the latest value or replace a collection from a stale snapshot. */
+export async function replayStationRecovery(id:string) {
+  if(!company||!isStationRenderer()||running||pending.size)throw Error("Primero resuelve los cambios abiertos en esta pantalla.")
+  const scope=captureModuleScope(),bound={company,authGeneration,pending,uploaded},companyId=company.id
+  const item=await getRecovery(companyId,id);assertModuleScope(scope)
+  if(item.companyId!==companyId||item.body.kind!=="records")throw Error("No corresponde a esta empresa o no es un borrador de registros.")
+  // Only the real server may decide a replay. Revisions are rechecked again
+  // by the server on commit; this first check prevents orphan file uploads.
+  const url="/api/v1/companies/"+encodeURIComponent(companyId)
+  const fresh=await fetch(url+"/snapshot",{credentials:"same-origin",cache:"no-store",headers:{"x-pld-require-online":"1"}})
+  if(!fresh.ok||fresh.headers.has("x-pld-offline"))throw Error("Reconecta la estación para comparar con el servidor.")
+  const {records:central}=await fresh.json() as {records:CloudRecord[]};assertModuleScope(scope)
+  const values: RecordMutation[]=[]
+  if(item.body.mutations.length>100)throw Error("Revisa este lote por partes con el administrador. No se aplicó una actualización parcial.")
+  for(const m of item.body.mutations){
+    const moduleKey=COLLECTION_MODULES[m.collection]
+    if(!moduleKey||!sessionCan(session,bound.company,moduleKey,"edit"))throw Error("El permiso de edición ya no está vigente.")
+    const old=central.find(r=>r.id===m.id&&r.collection===m.collection)
+    if((old?.revision??0)!==m.expectedRevision)throw Error("La revisión cambió. Compara tu copia y el registro actual antes de volver a capturar.")
+  }
+  for(const m of item.body.mutations){const payload=await externalize(m.payload,COLLECTION_MODULES[m.collection],bound);assertModuleScope(scope);values.push({...m,payload})}
+  const r=await fetch(url+"/records/batch",{method:"POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json","x-pld-require-online":"1"},body:JSON.stringify({mutations:values})})
+  const data=await r.json();assertModuleScope(scope)
+  if(!r.ok||r.headers.has("x-pld-offline")||!values.every(m=>data.records?.some((row:CloudRecord)=>row.id===m.id&&row.collection===m.collection&&row.revision===m.expectedRevision+1)))throw Error(data?.message||"No se confirmó el lote. Tu borrador se conserva.")
+  await forgetDraft(companyId,id)
+}
 
 const companyStorage: Storage = {
   get length() { return cache.size },

@@ -21,6 +21,7 @@ import { usePilot } from "@/components/pilot/pilot-provider"
 import { cloudRegistrationIssue, prefillCompanyRegistration } from "@/lib/pilot/company-registration"
 import { actividadesVulnerables } from "@/lib/data/actividades"
 import { findCodigoPostalInfo, registerCodigoPostalInfo, type CodigoPostalInfo } from "@/lib/data/codigos-postales"
+import { lookupBundledPostalCode } from "@/lib/data/postal-lookup"
 import { PAISES, findPaisByNombre } from "@/lib/data/paises"
 import {
   evaluateRegistroChecklist,
@@ -262,7 +263,6 @@ const tiposSujetos: { value: SubjectType; label: string }[] = [
 
 const opcionesDocumento = ["Registro", "Autorización", "Patente", "Certificado", "Otro"]
 const opcionesAutoridad = ["SAT", "SHCP", "CNBV", "UIF", "Otra"]
-const SEPOMEX_API_BASE = "https://api.zippopotam.us/mx"
 const SEPOMEX_STORAGE_PREFIX = "codigo_postal_cache_"
 const actividadEjemplo = actividadesVulnerables[0]?.key ?? ""
 const actividadLabels = Object.fromEntries(
@@ -896,47 +896,6 @@ const obtenerEtiquetaNombre = (tipo: SubjectType) => {
   return "Nombre"
 }
 
-async function fetchCodigoPostalInfo(codigo: string): Promise<CodigoPostalInfo | undefined> {
-  try {
-    const response = await fetch(`${SEPOMEX_API_BASE}/${codigo}`)
-    if (!response.ok) return undefined
-    const data = (await response.json()) as {
-      "post code"?: string
-      country?: string
-      "country abbreviation"?: string
-      places?: Array<{
-        "place name"?: string
-        state?: string
-        "state abbreviation"?: string
-        "province"?: string
-        "province abbreviation"?: string
-        "community"?: string
-        "community abbreviation"?: string
-      }>
-    }
-    if (!data || !Array.isArray(data.places) || data.places.length === 0) return undefined
-    const place = data.places[0] ?? {}
-    const asentamientos = Array.from(
-      new Set(
-        data.places
-          .map((item) => item["place name"])
-          .filter((nombre): nombre is string => Boolean(nombre && nombre.trim().length > 0)),
-      ),
-    )
-    return {
-      codigo,
-      estado: place.state ?? "",
-      // Zippopotam devuelve la alcaldía/municipio en `community`; `province`
-      // suele repetir la entidad (por ejemplo, Distrito Federal/CDMX).
-      municipio: place.community ?? place.province ?? place.state ?? "",
-      ciudad: place.community ?? "",
-      asentamientos,
-    }
-  } catch (error) {
-    console.error("No se pudo consultar el código postal:", error)
-    return undefined
-  }
-}
 
 export default function RegistroSATPage() {
   const { toast } = useToast()
@@ -1802,7 +1761,7 @@ export default function RegistroSATPage() {
       }
 
       if (!info) {
-        info = await fetchCodigoPostalInfo(limpio)
+        info = await lookupBundledPostalCode(limpio)
         if (info) {
           getModuleStorage().setItem(cacheKey, JSON.stringify(info))
         }

@@ -1,0 +1,101 @@
+name: Instaladores PLD
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/app-electron-onprem]
+permissions:
+  contents: read
+concurrency:
+  group: pld-instaladores-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  installer:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: mac
+          - os: windows-2025
+            target: win
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            desktop/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir desktop install --frozen-lockfile
+      - run: pnpm --dir desktop audit --audit-level=low --registry=https://registry.npmjs.org
+      - name: Probar servidor, asistente y modo sin conexión
+        run: node --test "desktop/runtime/*.test.cjs" "desktop/shared/*.test.cjs" "desktop/offline/*.test.cjs"
+      - run: pnpm --dir desktop run prepare:resources
+      - name: Probar estación sin red en Electron real
+        if: runner.os == 'macOS'
+        run: |
+          pnpm --dir desktop exec install-electron
+          pnpm --dir desktop exec electron qa/station-offline.cjs
+      - name: Obtener NSIS en Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (!(Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) {
+            choco install nsis --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - run: pnpm --dir desktop run package:${{ matrix.target }}
+      - name: Verificar PKG y probar la aplicación extraída
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd desktop/release/mac
+          shasum -a 256 -c SHA256SUMS.txt
+          pkg=$(find . -maxdepth 1 -name '*.pkg')
+          pkgutil --expand-full "$pkg" "$RUNNER_TEMP/pld-expanded"
+          binary=$(find "$RUNNER_TEMP/pld-expanded" -path '*/Davara PLD.app/Contents/MacOS/Davara PLD' -print -quit)
+          test -f "$binary"
+          lipo "$binary" -verify_arch arm64 x86_64
+          cd "$GITHUB_WORKSPACE"
+          node desktop/qa/smoke.cjs "$binary"
+      - name: Instalar el EXE y probar el primer inicio
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $release = Join-Path $PWD 'desktop/release/win'
+          foreach ($line in Get-Content (Join-Path $release 'SHA256SUMS.txt')) {
+            $pair = $line -split '  ', 2
+            if ((Get-FileHash (Join-Path $release $pair[1]) -Algorithm SHA256).Hash.ToLowerInvariant() -ne $pair[0]) { throw "Huella incorrecta: $($pair[1])" }
+          }
+          $setup = @(Get-ChildItem $release -Filter '*.exe' -File)
+          if ($setup.Count -ne 1) { throw 'Se esperaba un único instalador.' }
+          $destination = Join-Path $env:RUNNER_TEMP 'DavaraPLD'
+          $p = Start-Process -FilePath $setup[0].FullName -ArgumentList "/S /D=$destination" -PassThru -Wait
+          if ($p.ExitCode -ne 0) { throw "Instalación: $($p.ExitCode)" }
+          $exe = Join-Path $destination 'Davara PLD.exe'
+          foreach ($f in @($exe, "$destination/resources/app.asar", "$destination/resources/pld/worker.cjs", "$destination/resources/pld/contracts.cjs", "$destination/resources/pld/out/index.html")) { if (!(Test-Path $f)) {throw "Falta $f"} }
+          node desktop/qa/smoke.cjs "$exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Davara-PLD-${{ matrix.target }}-${{ github.sha }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+          path: |
+            desktop/release/${{ matrix.target }}/*.pkg
+            desktop/release/${{ matrix.target }}/*.exe
+            desktop/release/${{ matrix.target }}/SBOM-*.json
+            desktop/release/${{ matrix.target }}/MANIFIESTO-compilacion.json
+            desktop/release/${{ matrix.target }}/SHA256SUMS.txt

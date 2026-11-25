@@ -5,6 +5,7 @@ Plataforma de prevención de lavado de dinero para actividades vulnerables: alta
 ## Modos de ejecución
 
 - **Conectado (predeterminado):** Next.js exportado estáticamente y Cloudflare Worker bajo el mismo origen. Better Auth gestiona sesiones; D1 conserva registros y revisiones; R2 mantiene archivos privados; Queues procesa importaciones. Nunca vuelve a datos demo tras un error de API.
+- **Escritorio on-premise:** instalador universal para Mac y asistente para Windows x64. Un servidor de la organización aloja SQLite y evidencias; las estaciones se enlazan a su dominio corporativo, sin necesitar la nube del proveedor. Consulta la [guía de instalación, conectividad y recuperación](docs/escritorio-onprem.md).
 - **Demo local explícita:** `NEXT_PUBLIC_PLD_MODE=demo pnpm dev`. Usa las llaves históricas de `localStorage`; sus usuarios y datos ficticios no constituyen autenticación ni cumplimiento reales.
 
 ## Desarrollo conectado

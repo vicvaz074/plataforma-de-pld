@@ -1,0 +1,27 @@
+{
+  "name": "davara-pld-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Instalación interna de la plataforma PLD de Davara",
+  "author": "Davara Abogados S.C.",
+  "productName": "Davara PLD",
+  "main": "main.cjs",
+  "scripts": {
+    "prepare:resources": "node scripts/prepare.mjs",
+    "start": "electron .",
+    "package:mac": "node scripts/package.mjs mac",
+    "package:win": "node scripts/package.mjs win"
+  },
+  "devDependencies": {
+    "electron": "45.5.0",
+    "electron-builder": "26.18.0",
+    "esbuild": "0.28.2",
+    "playwright-core": "1.65.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron", "esbuild"],
+    "overrides": {
+      "minimatch@>=7.0.0 <11.0.1": "11.0.1"
+    }
+  }
+}

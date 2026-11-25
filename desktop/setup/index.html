@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Configurar Plataforma PLD</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header><img src="wordmark.png" alt="Davara Governance"><span>Instalación interna</span></header>
+  <main>
+    <p id="progress" class="eyebrow">Configuración inicial</p>
+    <h1 id="title" tabindex="-1">Configura este equipo</h1>
+    <p id="intro" class="intro">Elige la función de este equipo en la instalación de tu organización.</p>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <form id="wizard" novalidate>
+      <section id="roles" aria-label="Función de este equipo">
+        <label class="choice"><input id="server-mode" type="radio" name="mode" value="server"><span><strong>Configurar el servidor</strong><small>Para TI: crea o enlaza la base central. Los datos y archivos quedan en el equipo servidor de tu organización.</small></span></label>
+        <label class="choice"><input id="client-mode" type="radio" name="mode" value="client"><span><strong>Conectarme como estación de trabajo</strong><small>El servidor ya existe. Sólo necesitas la dirección HTTPS que te entregó TI y una cuenta autorizada.</small></span></label>
+      </section>
+      <section id="db-step" hidden>
+        <div class="plate"><h2>Base de datos central · SQLite</h2><p id="db-kind"></p><code id="db-path"></code>
+          <div class="actions"><button id="choose-new" type="button" class="outline">Cambiar ubicación</button><button id="choose-existing" type="button" class="outline">Enlazar existente</button></div>
+        </div>
+        <p class="hint">Usa un disco local del servidor. No abras el archivo en dos equipos ni lo pongas en una carpeta de red o sincronizada. Los demás equipos deben usar el modo estación.</p>
+        <details id="advanced"><summary>Red y acceso desde otros equipos</summary><div class="fields">
+          <label>Puerto local<input id="port" type="number" min="1024" max="65535" step="1" value="6731"></label>
+          <label>Dominio HTTPS corporativo (opcional)<input id="public-origin" type="url" placeholder="https://pld.empresa.mx" spellcheck="false"></label>
+        </div><p class="hint">Para empezar en este equipo, deja el dominio vacío. Para otras estaciones, TI debe configurar un proxy inverso HTTPS hacia el puerto local, conservar el encabezado Host y volver a entrar con el dominio corporativo. La aplicación no expone automáticamente el servidor a la red.</p></details>
+      </section>
+      <section id="account-step" hidden>
+        <div id="account-fields" class="fields">
+          <label>Nombre de la persona administradora<input id="name" maxlength="160" autocomplete="off"></label>
+          <label>Correo electrónico · usuario de acceso<input id="email" type="email" maxlength="254" autocomplete="off" spellcheck="false"></label>
+          <label>Contraseña<input id="password" type="password" maxlength="128" autocomplete="new-password"></label>
+          <label>Confirmar contraseña<input id="confirmation" type="password" maxlength="128" autocomplete="new-password"></label>
+        </div>
+        <p id="account-hint" class="hint">Utiliza entre 11 y 128 caracteres. No hay una clave predeterminada ni se envía por correo.</p>
+        <div id="existing-note" class="plate" hidden><h2>La base ya tiene cuentas</h2><p>Conservaremos las cuentas, los permisos y los expedientes. Inicia sesión con tus credenciales existentes.</p></div>
+      </section>
+      <section id="station-step" hidden>
+        <label>Dirección del servidor PLD de tu organización<input id="client-origin" type="url" placeholder="https://pld.empresa.mx" autocomplete="off" spellcheck="false"></label>
+        <div class="actions"><button id="test-connection" type="button" class="outline">Probar conexión</button><span id="test-result" role="status"></span></div>
+        <p class="hint">Necesitas red corporativa o VPN para la primera sesión. Después, una estación autorizada puede consultar información previamente sincronizada y conservar borradores permitidos cifrados cuando se interrumpa la conexión. Los trámites, evidencias y funciones administrativas requieren el servidor.</p>
+      </section>
+      <section id="complete-step" hidden><div class="plate"><h2 id="success-title"></h2><p id="success-note"></p></div></section>
+      <p id="error" role="alert" hidden></p>
+      <div class="footer-actions"><button type="button" id="back" class="outline" hidden>Volver</button><span></span><button type="submit" id="next">Continuar</button><button type="submit" id="finish" hidden>Guardar configuración</button><button type="submit" id="open" hidden>Abrir plataforma</button></div>
+    </form>
+  </main>
+  <script src="setup.js"></script>
+</body>
+</html>

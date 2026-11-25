@@ -7,6 +7,8 @@ export async function pilotApi<T>(path: string, options: RequestInit = {}): Prom
     headers: { ...(options.body && !(options.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...options.headers },
   })
   const body = await response.json().catch(() => null)
+  if (typeof window !== "undefined" && response.headers.has("x-pld-offline"))
+    window.dispatchEvent(new Event("pld-station-updated"))
   if (!response.ok) throw new PilotApiError(response.status, body?.message || body?.error || `No se pudo completar la solicitud (${response.status}).`, body)
   return body as T
 }
