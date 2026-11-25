@@ -138,3 +138,78 @@ test('sólo borradores EBR y capacitación abierta, plantillas auxiliares sin ar
   assert.equal((await post(coll,'review',{reviewStatus:'approved'})).status,503);
   f.setActive(true);assert.equal((await f.sync()).status,200);assert.equal(f.stat().pending,0);
 });
+test('sincroniza contra el Worker real: cliente, EUI, operación con 10 millones, empresa aislada y ningún aviso inventado',async t=>{
+  const f=fixture(t),dir=f.dir,workerPath=path.join(dir,'worker.cjs'),assetsPath=path.join(dir,'assets');
+  fs.mkdirSync(assetsPath);fs.writeFileSync(path.join(assetsPath,'index.html'),'<html>Prueba interna</html>');
+  require('esbuild').buildSync({entryPoints:[path.join(root,'workers/index.ts')],bundle:true,platform:'node',format:'cjs',target:'node22',outfile:workerPath});
+  const server=await require('../runtime/index.cjs').startServer({databasePath:path.join(dir,'central.sqlite'),storagePath:path.join(dir,'adjuntos'),assetsPath,migrationsPath:path.join(root,'migrations'),workerPath,secret:crypto.randomBytes(42).toString('hex')});
+  let station,reachable=true,cookie='',loseUploadAck=false;
+  try{
+    const admin={name:'Prueba local',email:'qa@example.test',password:crypto.randomBytes(24).toString('hex')};
+    await server.bootstrap(admin);
+    const net=(p,method='GET',payload,extra={})=>fetch(server.origin+p,{method,headers:{origin:server.origin,...(cookie?{cookie}:{}),...(payload&&!(payload instanceof FormData)?{'content-type':'application/json'}:{}),...extra},body:payload instanceof FormData?payload:payload?JSON.stringify(payload):undefined});
+    const login=await net('/api/auth/sign-in/email','POST',{email:admin.email,password:admin.password});assert.equal(login.status,200);
+    cookie=login.headers.getSetCookie().map(c=>c.split(';')[0]).join('; ');assert.ok(cookie);
+    const org=await (await net('/api/v1/organizations','POST',{name:'Organización de prueba'})).json();
+    const addCo=async name=>(await (await net('/api/v1/companies','POST',{name,organizationId:org.id,rfc:name==='A'?'AAA010101AAA':'BBB010101BBB'})).json()).id;
+    const a=await addCo('A'),b=await addCo('B'),to=id=>'/api/v1/companies/'+id;
+    const settings={...f.opts,directory:path.join(dir,'otro-equipo')};
+    station=createOfflineStation(settings);
+    const ctx={credential:crypto.randomBytes(32).toString('hex'),online:async r=>{
+      if(!reachable)throw offlineUnavailable();
+      const multipart=r.headers.get('content-type')?.startsWith('multipart/form-data'),uploadKey=r.headers.get('x-pld-upload-key');
+      const result=await net(new URL(r.url).pathname,r.method,r.body?(multipart?await r.formData():await r.json()):undefined,uploadKey?{'x-pld-upload-key':uploadKey}:{});
+      if(loseUploadAck&&uploadKey&&result.ok){loseUploadAck=false;reachable=false;throw offlineUnavailable();}
+      // Emulate the HTTPS corporate reverse proxy in this loopback-only test.
+      return new Response(result.body,{status:result.status,headers:result.headers});
+    }};
+    const call=(route,method,body)=>station.handle(req(route,method,body),ctx);
+    assert.equal((await call('/api/v1/session')).status,200);
+    for(const id of [a,b])assert.equal((await call(to(id)+'/snapshot')).status,200);
+    reachable=false;
+    const client={id:'cliente-c',nombre:'Ejemplo ficticio',identifiers:{rfc:'QAAX010101123'}};
+    const eui={id:'expediente-e',expedienteId:'expediente-e',nombre:'Ejemplo ficticio',identifiers:client.identifiers,companyId:a};
+    const op={id:'operacion-o',clienteId:client.id,expedienteId:eui.id,cliente:client.nombre,fechaOperacion:'2026-11-24',tipoCliente:'pm_mexicana',actividadKey:'fraccion-xv-uso-goce',monto:10000000,montoCentavos:1000000000,captureStatus:'draft',moneda:'MXN',companyId:a};
+    const mutations=[['actividades_vulnerables_clientes',client],['kyc_expedientes_detalle',eui],['actividades_vulnerables_operaciones',op]];
+    for(const [collection,payload] of mutations)assert.equal((await call(to(a)+'/records/batch','POST',{mutations:[{collection,id:payload.id,payload,expectedRevision:0}]})).status,202);
+    const inst={workflow:{status:'draft'},controls:[],institutionalFactors:[],sources:[],methodologyAccepted:false,reviewPlan:{nextReviewAt:'',owner:'',actions:[]}};
+    const training={moduleClosed:false,employees:[],documents:[],sessions:[],traceability:[],trainingPlan:null,checklistAnswers:{a1:{answer:'pendiente',notes:'Revisar el plan'}}};
+    const mappings=[{id:'mapeo1',signature:'Cliente|Importe',mapping:{name:'Cliente',amount:'Importe'}}];
+    for(const [collection,payload] of [['ebr-institutional-assessment',inst],['pld-training-module',training],['pld-import-mappings',mappings]])assert.equal((await call(to(a)+'/records/batch','POST',{mutations:[{collection,id:'singleton',payload,expectedRevision:0}]})).status,202);
+    await station.close();station=createOfflineStation(settings);assert.equal(station.status(ctx.credential).pending,6);
+    reachable=true;const synced=await station.sync(ctx);assert.equal(synced.status,200,JSON.stringify(await synced.json()));
+    assert.equal(station.status(ctx.credential).pending,0);
+    const rows=(await (await net(to(a)+'/snapshot')).json()).records;
+    const actual=rows.find(r=>r.collection==='actividades_vulnerables_operaciones').payload;
+    assert.equal(actual.captureStatus,'draft');assert.equal(actual.montoCentavos,1000000000);assert.equal(actual.sujetoObligado.id,a);assert.equal(actual.expedienteId,eui.id);
+    assert.ok(rows.some(r=>r.collection==='ebr-institutional-assessment'&&r.payload.workflow.status==='draft'));
+    assert.ok(rows.some(r=>r.collection==='pld-training-module'&&r.payload.moduleClosed===false));
+    assert.ok(!rows.some(r=>r.collection==='pld-sat-output-packages'&&!r.deleted));
+    assert.equal((await (await net(to(b)+'/snapshot')).json()).records.length,0);
+    const txt=Buffer.from('Contenido ficticio de adjunto'),data='data:text/plain;base64,'+txt.toString('base64');
+    const document={id:'exp-con-archivo',expedienteId:'exp-con-archivo',companyId:a,nombre:'Ejemplo',adjunto:{fileName:'ejemplo.txt',dataUrl:data}};
+    function work(n,nombre){return {kind:'records',mutations:[{id:document.id,collection:coll,expectedRevision:n,payload:{...document,nombre}}]};}
+    const recovery=pre+'recovery?companyId='+a,commit=pre+'commit?companyId='+a+'&id=';
+    async function protect(body){const x=await call(recovery,'POST',body);assert.equal(x.status,201);return (await x.json()).id;}
+    // Copy alone does not opt into auto-replay. An unrelated file isn't a journal.
+    const standalone=await protect({kind:'file',name:'ejemplo.txt',collection:coll,data});
+    const noReplay=await call(commit+standalone,'POST');assert.equal(noReplay.status,422);assert.equal((await noReplay.json()).code,'MANUAL_REPLAY_REQUIRED');
+    const first=await protect(work(0,'primera'));
+    loseUploadAck=true;const waiting=await call(commit+first,'POST');assert.equal(waiting.status,202);
+    assert.equal((await (await net(to(a)+'/files')).json()).files.length,1); // Uploaded, not yet linked/approved.
+    assert.equal((await (await net(to(a)+'/snapshot')).json()).records.some(r=>r.id===document.id),false);
+    const local=(await (await call(to(a)+'/snapshot')).json()).records.find(r=>r.id===document.id);
+    assert.equal(local.payload.adjunto.dataUrl,data);
+    const list=(await (await call(recovery)).json()).items;assert.ok(!list.some(i=>i.id===first));assert.ok(list.some(i=>i.id===standalone));
+    const second=await protect(work(1,'segunda'));assert.equal((await call(commit+second,'POST')).status,202);
+    await station.close();station=createOfflineStation(settings);reachable=true;
+    const sync2=await station.sync(ctx);assert.equal(sync2.status,200,JSON.stringify(await sync2.json()));
+    const final=(await (await net(to(a)+'/snapshot')).json()).records.find(r=>r.id===document.id),versions=(await (await net(to(a)+'/files')).json()).files;
+    assert.equal(final.revision,2);assert.equal(final.payload.nombre,'segunda');assert.equal(versions.length,1);
+    assert.equal(versions[0].status,'pending');assert.equal(versions[0].sha256,crypto.createHash('sha256').update(txt).digest('hex'));assert.equal(final.payload.adjunto.dataUrl,versions[0].downloadUrl);
+    assert.deepEqual(Buffer.from(await (await net(versions[0].downloadUrl)).arrayBuffer()),txt);
+    assert.equal((await call(recovery+'&id='+first)).status,404);
+    // Connected foreground gets a central, canonical acknowledgment, no offline header.
+    const third=await protect(work(2,'tercera'));const ack=await call(commit+third,'POST');assert.equal(ack.status,200);assert.equal(ack.headers.get('x-pld-offline'),null);assert.equal((await ack.json()).records[0].payload.nombre,'tercera');
+  }finally{await station?.close();await server.close();}
+});

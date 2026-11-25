@@ -26,12 +26,27 @@ async function getVersion(env:PilotEnv,companyId:string,id:string){
   if(!row)throw new ApiError(404,"Documento no disponible.","NOT_FOUND")
   return row
 }
-async function storeVersion(env:PilotEnv,actor:PilotActor,companyId:string,input:{bytes:ArrayBuffer;fileName:string;moduleKey:string;title:string;documentId?:string;expectedRevision:number;relatedType?:string;relatedId?:string}){
+async function storeVersion(env:PilotEnv,actor:PilotActor,companyId:string,input:{bytes:ArrayBuffer;fileName:string;moduleKey:string;title:string;documentId?:string;expectedRevision:number;relatedType?:string;relatedId?:string;uploadKey?:string}){
   const company=await requireCompany(actor,companyId,env,input.moduleKey,"upload")
   const mime=validateFile(new Uint8Array(input.bytes),input.fileName),sha256=await digest(input.bytes),versionId=crypto.randomUUID(),documentId=input.documentId||crypto.randomUUID(),at=new Date().toISOString()
+  const key=input.uploadKey
+  const requestHash=key?await digest(new TextEncoder().encode(JSON.stringify([1,sha256,input.fileName,input.title,input.documentId??null,input.expectedRevision,input.relatedType||null,input.relatedId||null])).buffer):""
+  async function confirmed() {
+    if(!key)return null
+    const receipt=await env.DB.prepare("SELECT requestHash,versionId FROM pld_file_upload_receipts WHERE actorId=? AND companyId=? AND moduleKey=? AND uploadKey=?").bind(actor.id,companyId,input.moduleKey,key).first<{requestHash:string;versionId:string}>()
+    if(!receipt)return null
+    if(receipt.requestHash!==requestHash)throw new ApiError(409,"Este intento corresponde a un archivo o destino distinto. No se creó otra versión.","UPLOAD_KEY_CONFLICT")
+    const row=await getVersion(env,companyId,receipt.versionId)
+    if(row.moduleKey!==input.moduleKey||row.uploadedBy!==actor.id||row.sha256!==sha256)throw new ApiError(409,"No se pudo comprobar la versión original.","UPLOAD_RECEIPT_INVALID")
+    return metadata(row)
+  }
+  const receipt=await confirmed();if(receipt)return receipt
   const old=await env.DB.prepare("SELECT revision,moduleKey FROM pld_documents WHERE id=? AND companyId=?").bind(documentId,companyId).first<{revision:number;moduleKey:string}>()
   if(input.documentId&&!old)throw new ApiError(404,"Documento no disponible.","NOT_FOUND")
-  if(old&&(old.moduleKey!==input.moduleKey||old.revision!==input.expectedRevision))throw new ApiError(409,"El documento cambió; vuelve a abrirlo antes de añadir una versión.","REVISION_CONFLICT")
+  if(old&&(old.moduleKey!==input.moduleKey||old.revision!==input.expectedRevision)){
+    const concurrent=await confirmed();if(concurrent)return concurrent
+    throw new ApiError(409,"El documento cambió; vuelve a abrirlo antes de añadir una versión.","REVISION_CONFLICT")
+  }
   if(!old&&input.expectedRevision!==0)throw new ApiError(409,"Revisión de documento no válida.","REVISION_CONFLICT")
   const version=(old?.revision||0)+1,objectKey=`${company.organizationId}/${companyId}/${documentId}/${versionId}`
   await env.EVIDENCE_BUCKET.put(objectKey,input.bytes,{httpMetadata:{contentType:mime},customMetadata:{sha256,companyId,documentId}})
@@ -39,8 +54,16 @@ async function storeVersion(env:PilotEnv,actor:PilotActor,companyId:string,input
   statements.push(env.DB.prepare("INSERT INTO pld_revision_guard(id,valid) VALUES(?,CASE WHEN COALESCE((SELECT revision FROM pld_documents WHERE id=? AND companyId=?),0)=? THEN 1 ELSE 0 END)").bind(guard,documentId,companyId,input.expectedRevision))
   statements.push(env.DB.prepare("INSERT INTO pld_documents(id,companyId,moduleKey,title,relatedType,relatedId,revision,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,title=excluded.title,updatedAt=excluded.updatedAt").bind(documentId,companyId,input.moduleKey,input.title,input.relatedType||null,input.relatedId||null,version,at,at))
   statements.push(env.DB.prepare("INSERT INTO pld_file_versions(id,documentId,companyId,version,objectKey,sha256,fileName,mimeType,size,status,createdAt,uploadedBy) VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?)").bind(versionId,documentId,companyId,version,objectKey,sha256,input.fileName,mime,input.bytes.byteLength,at,actor.id))
+  if(key)statements.push(env.DB.prepare("INSERT INTO pld_file_upload_receipts(actorId,companyId,moduleKey,uploadKey,requestHash,versionId,createdAt) VALUES(?,?,?,?,?,?,?)").bind(actor.id,companyId,input.moduleKey,key,requestHash,versionId,at))
   statements.push(env.DB.prepare("DELETE FROM pld_revision_guard WHERE id=?").bind(guard),auditStatement(env,actor,"file.uploaded","document",documentId,company.organizationId,companyId,{versionId,version,sha256,size:input.bytes.byteLength}))
-  try{await env.DB.batch(statements)}catch(error){await env.EVIDENCE_BUCKET.delete(objectKey);if(String(error).includes("CHECK constraint"))throw new ApiError(409,"El documento cambió en otra sesión.","REVISION_CONFLICT");throw error}
+  try{await env.DB.batch(statements)}catch(error){
+    // Never remove a committed file after an ambiguous commit response. If
+    // the database is unavailable, preserve the object for reconciliation.
+    const committed=await env.DB.prepare("SELECT id FROM pld_file_versions WHERE id=? AND companyId=?").bind(versionId,companyId).first<{id:string}>()
+    if(!committed)await env.EVIDENCE_BUCKET.delete(objectKey)
+    const concurrent=await confirmed();if(concurrent)return concurrent
+    if(String(error).includes("CHECK constraint"))throw new ApiError(409,"El documento cambió en otra sesión.","REVISION_CONFLICT");throw error
+  }
   return metadata({id:versionId,documentId,companyId,version,objectKey,sha256,fileName:input.fileName,mimeType:mime,size:input.bytes.byteLength,status:"pending",createdAt:at,uploadedBy:actor.id,moduleKey:input.moduleKey,title:input.title,revision:version})
 }
 
@@ -62,7 +85,9 @@ export async function handleFiles(request:Request,url:URL,actor:PilotActor,env:P
     await requireCompany(actor,companyId,env,moduleKey,"upload")
     const documentId=form.get("documentId")?identifier(form.get("documentId")):undefined,expectedRevision=Number(form.get("expectedRevision")||0)
     if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0)throw new ApiError(400,"Revisión no válida.","INVALID_REVISION")
-    return json(await storeVersion(env,actor,companyId,{bytes:await file.arrayBuffer(),fileName:fileName(file.name),moduleKey,title:text(form.get("title")||file.name,"el título"),documentId,expectedRevision,relatedType:text(form.get("relatedType"),"la relación",60,false),relatedId:text(form.get("relatedId"),"el registro relacionado",180,false)}),201)
+    const rawKey=request.headers.get("x-pld-upload-key")
+    if(rawKey!==null&&!/^[a-f0-9]{64}$/.test(rawKey))throw new ApiError(400,"Identificador de reintento no válido.","INVALID_UPLOAD_KEY")
+    return json(await storeVersion(env,actor,companyId,{bytes:await file.arrayBuffer(),fileName:fileName(file.name),moduleKey,title:text(form.get("title")||file.name,"el título"),documentId,expectedRevision,uploadKey:rawKey||undefined,relatedType:text(form.get("relatedType"),"la relación",60,false),relatedId:text(form.get("relatedId"),"el registro relacionado",180,false)}),201)
   }
   if(match[2]){
     const row=await getVersion(env,companyId,identifier(match[2]))

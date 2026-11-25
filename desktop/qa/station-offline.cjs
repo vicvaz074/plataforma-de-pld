@@ -12,6 +12,7 @@ const {createStationTransport}=require('../shared/station-shell.cjs');
 const offline=require('../offline/station.cjs');
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'davara-pld-fixture-'));
 const resources=path.resolve(__dirname,'../build/pld');
+const services=process.env.PLD_QA_SERVICE_FIXTURES?path.resolve(process.env.PLD_QA_SERVICE_FIXTURES):resources;
 app.setPath('userData',path.join(temp,'profile'));
 app.on('window-all-closed',()=>{}); // Reload the station without stopping the test server.
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
@@ -23,10 +24,15 @@ async function main(){
   execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-days','1','-subj','/CN=127.0.0.1','-keyout',keyfile,'-out',certfile],{stdio:'ignore'});
   const cert=fs.readFileSync(certfile),fp=new X509Certificate(cert).fingerprint256;
   const assetsPath=path.join(resources,'out'),vaultDir=path.join(temp,'station');
-  let central,win,shell,pinnedPort=0;
+  let central,win,shell,pinnedPort=0,dropNextUploadReply=false;
+  const actualUploadKeys=[];
   const proxy=https.createServer({key:fs.readFileSync(keyfile),cert},(req,res)=>{
     if(!central){res.writeHead(503);res.end();return;}
     const r=http.request(new URL(req.url,central.listenOrigin),{method:req.method,headers:req.headers},reply=>{
+      if(req.method==='POST'&&req.url.endsWith('/files')&&[200,201].includes(reply.statusCode)){
+        actualUploadKeys.push(req.headers['x-pld-upload-key']);
+        if(dropNextUploadReply){dropNextUploadReply=false;reply.resume();res.destroy();return;}
+      }
       res.writeHead(reply.statusCode,reply.headers);reply.pipe(res);
     });
     r.on('error',()=>{res.destroy();});req.pipe(r);
@@ -52,8 +58,9 @@ async function main(){
     });
   }
   async function openStation(){
-    shell=createStationTransport({session:s,origin,assetsPath,directory:vaultDir,crypt:safeStorage,contracts:require(path.join(resources,'contracts.cjs')),offline,intervalMs:150});
+    shell=createStationTransport({session:s,origin,assetsPath,directory:vaultDir,crypt:safeStorage,contracts:require(path.join(services,'contracts.cjs')),offline,intervalMs:150});
     win=new BrowserWindow({show:false,webPreferences:{session:s,contextIsolation:true,sandbox:true,nodeIntegration:false}});
+    win.webContents.setUserAgent(win.webContents.getUserAgent()+' DavaraPLDStation/1');
     // Fixed static same-origin document avoids UI-driven refetch during the
     // permission checks. Also load the actual expediente and assets below.
     await win.loadURL(origin+'/login.txt');
@@ -65,7 +72,7 @@ async function main(){
     return win.webContents.executeJavaScript(code);
   }
   try{
-    central=await startServer({databasePath:path.join(temp,'office.sqlite'),storagePath:path.join(temp,'files'),assetsPath,migrationsPath:path.join(resources,'migrations'),workerPath:path.join(resources,'worker.cjs'),publicOrigin:origin,bootstrapEmail:adminEmail,secret:password()});
+    central=await startServer({databasePath:path.join(temp,'office.sqlite'),storagePath:path.join(temp,'files'),assetsPath,migrationsPath:path.join(services,'migrations'),workerPath:path.join(services,'worker.cjs'),publicOrigin:origin,bootstrapEmail:adminEmail,secret:password()});
     await central.bootstrap({name:'Responsable ficticio',email:adminEmail,password:adminPassword});
     await expect(adminApi(signIn,'POST',{email:adminEmail,password:adminPassword}),200,'Inicio de administración de la instalación efímera');
     const org=(await expect(adminApi('/api/v1/organizations','POST',{name:'Organización ficticia'}),201,'Crear organización')).data;
@@ -73,7 +80,7 @@ async function main(){
     const co=(await expect(makeCo('Empresa ficticia asignada','AAA010101AAA'),201,'Crear empresa asignada')).data;
     const other=(await expect(makeCo('Empresa ficticia no asignada','BBB010101BBB'),201,'Crear segunda empresa')).data;
     const user=(await expect(adminApi('/api/v1/users','POST',{email,name:'Capturista ficticia',organizationId:org.id,companyIds:[co.id],role:'capture'}),201,'Crear cuenta operativa')).data;
-    await expect(adminApi('/api/v1/grants','PUT',{organizationId:org.id,companyId:co.id,userId:user.user.id,role:'capture',permissions:{expedientes:['view','edit'],operaciones:['view']}}),200,'Acotar permisos de la capturista');
+    await expect(adminApi('/api/v1/grants','PUT',{organizationId:org.id,companyId:co.id,userId:user.user.id,role:'capture',permissions:{expedientes:['view','edit','upload','download'],operaciones:['view']}}),200,'Acotar permisos de la capturista');
     await openStation();
     await expect(api(signIn,'POST',{email,password:user.temporaryPassword}),200,'Sesión inicial');
     await expect(api('/api/auth/change-password','POST',{currentPassword:user.temporaryPassword,newPassword,revokeOtherSessions:true}),200,'Cambio obligatorio');
@@ -137,6 +144,30 @@ async function main(){
     assert.equal((await api(statusPath)).data.pending,0);
     assert.equal((await adminApi(base+'/snapshot')).data.records.find(r=>r.id===id).revision,2);
     console.log('OK: edición concurrente detectada, comparación y resolución explícita sin sobrescritura.');
+    await cut();
+    const docRecord='eui-'+randomUUID(),pdf=Buffer.from('%PDF-1.4\n% archivo sintético de la estación\n%%EOF');
+    const withFile={collection:mutation.collection,id:docRecord,expectedRevision:0,payload:{id:docRecord,nombre:'Expediente sintético con PDF',attachments:[{fileName:'constancia.pdf',dataUrl:'data:application/pdf;base64,'+pdf.toString('base64')}]}};
+    const recovery='/api/v1/desktop-offline/recovery?companyId='+encodeURIComponent(co.id);
+    const receipt=(await expect(api(recovery,'POST',{kind:'records',mutations:[withFile]}),201,'Proteger expediente con adjunto')).data;
+    const commit='/api/v1/desktop-offline/commit?'+new URLSearchParams({companyId:co.id,id:receipt.id});
+    const local=await expect(api(commit,'POST'),202,'Entregar expediente y PDF al sincronizador');
+    assert.equal(local.data.pending,true);
+    await closeStation();await openStation();
+    assert.ok((await api(base+'/snapshot')).data.records.some(r=>r.id===docRecord));
+    dropNextUploadReply=true;await connect();
+    const sentBy=Date.now()+18000;
+    do{state=(await api(statusPath)).data;if(!state.pending)break;await pause(175);}while(Date.now()<sentBy);
+    assert.equal(state.pending,0,'Servidor debe confirmar el expediente incluso si se perdió el primer acuse de archivo');
+    assert.equal(dropNextUploadReply,false,'El servidor procesó la primera subida pero el acuse se perdió');
+    const eui=(await adminApi(base+'/snapshot')).data.records.find(r=>r.id===docRecord);
+    assert.equal(eui?.revision,1);const ref=eui.payload.attachments[0].dataUrl;
+    const versions=(await adminApi(base+'/files')).data.files;
+    assert.equal(versions.length,1,'El reintento no debe duplicar versiones documentales');
+    assert.equal(versions[0].downloadUrl,ref);assert.equal(versions[0].fileName,'constancia.pdf');
+    const downloaded=await win.webContents.executeJavaScript('fetch('+JSON.stringify(ref)+').then(async r=>({status:r.status,bytes:Array.from(new Uint8Array(await r.arrayBuffer()))}))');
+    assert.equal(downloaded.status,200);assert.deepEqual(Buffer.from(downloaded.bytes),pdf);
+    assert.ok(actualUploadKeys.length>=2,'El envío sin acuse debe reintentarse contra el servidor');assert.match(actualUploadKeys[0],/^[a-f0-9]{64}$/);assert.equal(new Set(actualUploadKeys).size,1);
+    console.log('OK: expediente + PDF offline; un acuse perdido no duplica el archivo, que se recupera desde la referencia privada del registro.');
     await cut();
     const logout=await expect(api('/api/auth/sign-out','POST',{}),200,'Cerrar sesión sólo en esta estación');
     assert.equal(logout.data.serverRevocationConfirmed,false);assert.equal((await api(statusPath)).data.authorized,false);

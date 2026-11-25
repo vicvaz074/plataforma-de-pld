@@ -1,7 +1,7 @@
 import { pilotApi, jsonRequest } from "./api"
 import { COLLECTION_MODULES, sessionCan, type CloudRecord, type Company, type ModuleKey, type PilotSession } from "./contracts"
 import { decodeCollection, diffCollection, encodeCollection } from "./record-codecs"
-import { isStationRenderer, protectDraft, forgetDraft, getRecovery } from "./station-recovery"
+import { isStationRenderer, protectDraft, forgetDraft, getRecovery, commitStationDraft, type StationWrite } from "./station-recovery"
 import type { RecordMutation } from "./contracts"
 
 export type SaveState = { status: "saved" | "saving" | "error"; pending: number; message?: string; warnings?: string[] }
@@ -190,14 +190,22 @@ async function drain(scope: DrainScope) {
     // Protect original revisions and any embedded attachment before a network
     // operation. This is a private recovery copy, not a confirmed write.
     let recoveryId: string | undefined
+    let stationWrite: StationWrite | null = null
     if(isStationRenderer()&&!scope.company.id.startsWith("inbox:")){
       const original=batch.flatMap(([collection,raw])=>diffCollection(collection,raw===null?new Map():encodeCollection(collection,JSON.parse(raw)),records))
-      if(original.length)try { recoveryId=await protectDraft(scope.company.id,{kind:"records",mutations:original}) }catch{/* If local space is unavailable, still attempt the real server. */}
+      if(original.length){
+        // Wait for durable storage and then explicitly hand off ownership. If
+        // the response is lost the original upload path must NOT start too.
+        recoveryId=await protectDraft(scope.company.id,{kind:"records",mutations:original})
+        assertDrainScope(scope)
+        stationWrite=await commitStationDraft(scope.company.id,recoveryId,original)
+        if(stationWrite)recoveryId=undefined // only the broker retires its journal
+      }
       assertDrainScope(scope)
     }
     // Coalesce synchronous changes from a moduleKey into one atomic server batch.
     const mutations = []
-    for (const [collection, raw] of batch) {
+    for (const [collection, raw] of stationWrite ? [] : batch) {
       const moduleKey = COLLECTION_MODULES[collection]
       if (!sessionCan(session, scope.company, moduleKey, "edit")) throw new Error("Tu acceso es de consulta para este módulo.")
       const parsed = raw === null ? null : JSON.parse(raw)
@@ -206,6 +214,13 @@ async function drain(scope: DrainScope) {
       mutations.push(...diffCollection(collection, desired, records))
     }
     const changedCollections = new Set<string>()
+    const applyResult=(result:StationWrite)=>{
+      for (const warning of result.warnings || []) if (warning.message) companyNotices.set(scope.company.id, [...new Set([...(companyNotices.get(scope.company.id) || []), `${warning.message}${warning.operationIds?.length ? ` (${warning.operationIds.length} operaciones)` : ""}`])])
+      const changed = new Map(result.records.map((r) => [`${r.collection}\u0000${r.id}`, r]))
+      records = [...records.filter((r) => !changed.has(`${r.collection}\u0000${r.id}`)), ...result.records]
+      result.records.forEach((record) => changedCollections.add(record.collection))
+    }
+    if(stationWrite)applyResult(stationWrite)
     if (mutations.length) {
       const batchPath = scope.company.id.startsWith("inbox:") ? `/organizations/${encodeURIComponent(scope.company.organizationId)}/inbox/records/batch` : `/companies/${encodeURIComponent(scope.company.id)}/records/batch`
       // The API caps atomic batches. A large migration/import is persisted in
@@ -214,10 +229,7 @@ async function drain(scope: DrainScope) {
         assertDrainScope(scope)
         const result = await pilotApi<{ records: CloudRecord[]; warnings?: Array<{ message?: string; operationIds?: string[] }> }>(batchPath, jsonRequest("POST", { mutations: mutations.slice(offset, offset + 100) }))
         assertDrainScope(scope)
-        for (const warning of result.warnings || []) if (warning.message) companyNotices.set(company.id, [...new Set([...(companyNotices.get(company.id) || []), `${warning.message}${warning.operationIds?.length ? ` (${warning.operationIds.length} operaciones)` : ""}`])])
-        const changed = new Map(result.records.map((r) => [`${r.collection}\u0000${r.id}`, r]))
-        records = [...records.filter((r) => !changed.has(`${r.collection}\u0000${r.id}`)), ...result.records]
-        result.records.forEach((record) => changedCollections.add(record.collection))
+        applyResult(result)
       }
     }
     // Server-derived packages and recalculations also update the shared view,
@@ -273,6 +285,9 @@ export async function replayStationRecovery(id:string) {
   const scope=captureModuleScope(),bound={company,authGeneration,pending,uploaded},companyId=company.id
   const item=await getRecovery(companyId,id);assertModuleScope(scope)
   if(item.companyId!==companyId||item.body.kind!=="records")throw Error("No corresponde a esta empresa o no es un borrador de registros.")
+  const stationWrite=await commitStationDraft(companyId,id,item.body.mutations)
+  assertModuleScope(scope)
+  if(stationWrite)return {pending:stationWrite.pending===true}
   // Only the real server may decide a replay. Revisions are rechecked again
   // by the server on commit; this first check prevents orphan file uploads.
   const url="/api/v1/companies/"+encodeURIComponent(companyId)
@@ -292,6 +307,7 @@ export async function replayStationRecovery(id:string) {
   const data=await r.json();assertModuleScope(scope)
   if(!r.ok||r.headers.has("x-pld-offline")||!values.every(m=>data.records?.some((row:CloudRecord)=>row.id===m.id&&row.collection===m.collection&&row.revision===m.expectedRevision+1)))throw Error(data?.message||"No se confirmó el lote. Tu borrador se conserva.")
   await forgetDraft(companyId,id)
+  return {pending:false}
 }
 
 const companyStorage: Storage = {

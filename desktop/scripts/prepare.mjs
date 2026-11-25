@@ -10,6 +10,7 @@ const desktop = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const root = path.dirname(desktop);
 const dst = path.join(desktop,'build','pld');
 const requireRoot = createRequire(path.join(root,'package.json'));
+const {regulatoryLinks}=requireRoot(path.join(desktop,'shared/links.cjs'));
 // DOS and Unix platforms: invoke pnpm via its real JS entrypoint if available.
 if (!process.argv.includes('--built')) {
   const run = spawnSync(process.platform==='win32'?'pnpm.cmd':'pnpm',['build'], {
@@ -21,6 +22,11 @@ if (!process.argv.includes('--built')) {
 const webPkgs=JSON.parse(fs.readFileSync(path.join(desktop,'build/web-components.json')));
 if (!webPkgs.length) throw new Error('Falta inventario del frontend; vuelva a ejecutar prepare:resources.');
 fs.mkdirSync(dst,{recursive:true});
+// Only literal public links shipped in tracked PLD catalogs may open outside
+// the application. Never construct an external destination from form values.
+const sources=execFileSync('git',['ls-files','-z','--','lib/pld','lib/data'],{cwd:root,encoding:'utf8'}).split('\0').filter(f=>/\.(json|ts)$/.test(f));
+const links=regulatoryLinks(sources.map(f=>fs.readFileSync(path.join(root,f),'utf8')));
+fs.writeFileSync(path.join(dst,'public-links.json'),JSON.stringify([...links].sort()));
 // An allowlist prevents accidental publication of .env, private work products,
 // Wrangler bindings, old release artifacts and personal files from public/.
 const tracked=new Set(execFileSync('git',['ls-files','-z','--','public'],{cwd:root,encoding:'utf8'}).split('\0').filter(Boolean).map(x=>x.slice(7)));

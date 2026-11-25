@@ -33,7 +33,7 @@ async function bootstrap(request:Request,env:PilotEnv){
 export async function fetchPilot(request:Request,env:PilotEnv):Promise<Response>{
   const url=new URL(request.url)
   try{
-    if(url.pathname==="/api/v1/health")return json({mode:"cloud",configured:Boolean(env.DB&&env.EVIDENCE_BUCKET&&env.BETTER_AUTH_SECRET&&env.BETTER_AUTH_URL),environment:env.ENVIRONMENT||"local"})
+    if(url.pathname==="/api/v1/health")return json({mode:"cloud",configured:Boolean(env.DB&&env.EVIDENCE_BUCKET&&env.BETTER_AUTH_SECRET&&env.BETTER_AUTH_URL),environment:env.ENVIRONMENT||"local",capabilities:{idempotentFileUploads:true}})
     assertOrigin(request,env)
     if(url.pathname==="/api/v1/bootstrap"&&request.method==="POST")return await bootstrap(request,env)
     if(url.pathname.startsWith("/api/auth/")){

@@ -106,7 +106,7 @@ async function treeHash(root){
 const workerSha256=await sha(path.join(payload,'worker.cjs')),contractsSha256=await sha(path.join(payload,'contracts.cjs'));
 if(workerSha256!==hdr.workerSha256||contractsSha256!==hdr.contractsSha256)throw Error('Los servicios distribuidos difieren del build identificado.');
 const metadata=path.join(out,'MANIFIESTO-compilacion.json');
-fs.writeFileSync(metadata,JSON.stringify({schemaVersion:1,target:target+'/'+techArch,...hdr,appAsarSha256:await sha(path.join(resources,'app.asar')),frontend:await treeHash(path.join(payload,'out')),migrations:await treeHash(path.join(payload,'migrations')),treeDigestFormat:'SHA-256 de (ruta relativa UTF-8 + NUL + SHA-256 hexadecimal del archivo + LF), ordenado por bytes UTF-8 de la ruta.'},null,2)+'\n');
+fs.writeFileSync(metadata,JSON.stringify({schemaVersion:1,target:target+'/'+techArch,...hdr,appAsarSha256:await sha(path.join(resources,'app.asar')),publicLinksSha256:await sha(path.join(payload,'public-links.json')),frontend:await treeHash(path.join(payload,'out')),migrations:await treeHash(path.join(payload,'migrations')),treeDigestFormat:'SHA-256 de (ruta relativa UTF-8 + NUL + SHA-256 hexadecimal del archivo + LF), ordenado por bytes UTF-8 de la ruta.'},null,2)+'\n');
 const sbomName='SBOM-escritorio-'+target+'-'+techArch+'.cdx.json';
 const desktopBom={bomFormat:'CycloneDX',specVersion:'1.6',serialNumber:'urn:uuid:'+randomUUID(),version:1,
  metadata:{timestamp:new Date().toISOString(),component:{type:'application',name:'Davara PLD escritorio',version:ver,

@@ -1,10 +1,24 @@
 'use strict';
-const {app,BrowserWindow,ipcMain,dialog,session,Menu,safeStorage,net}=require('electron');
+const {app,BrowserWindow,ipcMain,dialog,session,Menu,safeStorage,net,shell}=require('electron');
 const path=require('node:path');
 const {pathToFileURL}=require('node:url');
 const {createHash}=require('node:crypto');
 const {DEFAULT_PORT,makeService,localFile,probeOrigin}=require('./shared/setup.cjs');
 const homeUrl=pathToFileURL(path.join(__dirname,'setup','index.html')).href;
+const {classify}=require('./shared/links.cjs');
+let knownLinks;
+function openLink(parent,origin,s,target){
+  if(!knownLinks)knownLinks=new Set(require(path.join(resourceBase,'public-links.json')));
+  const kind=classify(target,origin,knownLinks);
+  if(kind==='external'){
+    void dialog.showMessageBox(parent,{type:'question',title:'Salir de la plataforma',message:'¿Abrir esta referencia fuera de PLD?',detail:target,buttons:['Cancelar','Abrir'],defaultId:0,cancelId:0}).then(({response})=>{if(response===1)return shell.openExternal(target);}).catch(()=>{});
+  }else if(kind==='document'){
+    const viewer=new BrowserWindow({parent,width:980,height:760,title:'Documento · Davara PLD',webPreferences:{session:s,contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true,javascript:false,devTools:false,webviewTag:false}});
+    viewer.removeMenu();secureWindow(viewer,url=>url===target);
+    void viewer.loadURL(target).catch(()=>{if(!viewer.isDestroyed())viewer.close();});
+  }
+  return !!kind;
+}
 let wizard=null,work=null,service,chosen=null,notice='',lastSettings=null,allowQuit=false,closing=false,resourceBase,stationShell=null;
 const replyError=e=>{
   if(e?.code==='EADDRINUSE')return 'Ese puerto está ocupado. Prueba otro puerto o cierra la otra instancia.';
@@ -61,7 +75,10 @@ function openPlatform(origin) {
   });
   s.on('will-download',(_e,item)=>{if(!allowedUrl(item.getURL(),origin) && !item.getURL().startsWith('blob:'+origin+'/'))item.cancel();});
   const w=new BrowserWindow({width:1360,height:890,minWidth:740,minHeight:520,title:'Plataforma PLD · Davara',backgroundColor:'#fff',webPreferences:{session:s,contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true,devTools:false,webviewTag:false}});
+  if(station)w.webContents.setUserAgent(w.webContents.getUserAgent()+' DavaraPLDStation/1');
   work=w;secureWindow(w,url=>{try{return new URL(url).origin===origin && /^(https?):/.test(url);}catch{return false;}});
+  w.webContents.setWindowOpenHandler(({url})=>{openLink(w,origin,s,url);return {action:'deny'};});
+  w.webContents.on('will-navigate',(event,url)=>{if(!allowedUrl(url,origin)&&openLink(w,origin,s,url))event.preventDefault();});
   w.on('closed',()=>{if(work===w)work=null;});
   if(wizard && !wizard.isDestroyed())wizard.close();
   void w.loadURL(origin+(station?'/':'/login')).catch(()=>{if(w.isDestroyed())return;

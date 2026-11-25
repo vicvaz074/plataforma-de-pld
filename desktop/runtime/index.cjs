@@ -77,7 +77,7 @@ async function startServer(options){
       }
       remoteHeaders.set('cf-connecting-ip',req.socket.remoteAddress||'127.0.0.1')
       if(u.pathname==='/api/v1/health' && req.method==='GET'){
-        return Response.json({configured:true,mode:'cloud',environment:'onprem',distribution:'pld-onprem'},{headers:{'Cache-Control':'no-store'}})
+        return Response.json({configured:true,mode:'cloud',environment:'onprem',distribution:'pld-onprem',capabilities:{idempotentFileUploads:true}},{headers:{'Cache-Control':'no-store'}})
       }
       const request=new Request(u,{method:req.method,headers:remoteHeaders,body:await requestBody(req)})
       if(u.pathname==='/api'||u.pathname.startsWith('/api/'))return worker.fetch(request,env)

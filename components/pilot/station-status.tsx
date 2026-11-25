@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { CheckCircle2, CloudOff, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { listRecovery, getRecovery, forgetDraft, type Recovery, type RecoverySummary } from "@/lib/pilot/station-recovery"
+import { isStationRenderer, listRecovery, getRecovery, forgetDraft, type Recovery, type RecoverySummary } from "@/lib/pilot/station-recovery"
 import { replayStationRecovery } from "@/lib/pilot/module-storage"
 
 type Issue = { id: string; companyId: string; state: string; code: string }
@@ -23,13 +23,15 @@ export function StationStatus({ companyId, fallback }: { companyId: string; fall
   const [error, setError] = useState("")
   const [review, setReview] = useState<{id:string; text:string} | null>(null)
   const [unavailable, setUnavailable] = useState(false)
+  const [checking,setChecking] = useState(false)
   const [copies,setCopies]=useState<RecoverySummary[]>([])
   const [copy,setCopy]=useState<Recovery|null>(null)
   const [result,setResult]=useState("")
   useEffect(() => {
     // This switch selects a desktop-only UX. Authorization is always enforced
     // by the native station and on-prem API, independent of the user agent.
-    if (!/Electron\//i.test(navigator.userAgent) || location.protocol !== "https:") return
+    if (!isStationRenderer()) return
+    setChecking(true)
     let live = true, sequence = 0
     async function refresh() {
       const seq = ++sequence
@@ -42,6 +44,7 @@ export function StationStatus({ companyId, fallback }: { companyId: string; fall
           else {const r=await listRecovery(companyId);if(live&&seq===sequence)setCopies(r.items)}
         }
       } catch { if (live && seq === sequence) { setUnavailable(true); setInfo(null); setReview(null) } }
+      finally { if (live && seq===sequence) setChecking(false) }
     }
     void refresh()
     const events = ["online","offline","focus","pld-station-updated"]
@@ -50,7 +53,8 @@ export function StationStatus({ companyId, fallback }: { companyId: string; fall
     return () => { live = false; window.clearInterval(timer); events.forEach(e => window.removeEventListener(e, refresh)) }
   }, [companyId])
   if (unavailable) return <span role="status" className="px-1 text-xs text-white">Sin verificar sincronización</span>
-  if (!info) return <>{fallback}</>
+  if (checking&&!info) return <span role="status" className="px-1 text-xs text-white">Verificando estación…</span>
+  if (!info) return isStationRenderer()?<span role="status" className="px-1 text-xs text-white">Verificando estación…</span>:<>{fallback}</>
   const exact = info.mode === "online" && !info.pending && !info.conflicts && !copies.length && info.authorized
   const label = !info.authorized ? "Sesión por verificar" : info.conflicts ? "Cambios por revisar" : info.pending ? `${info.pending} pendientes de sincronizar` : copies.length ? "Borradores por recuperar" : info.mode === "offline" ? "Sin conexión al servidor" : "Sincronización de estación"
   const issues = (info.issues || []).filter(i => i.companyId === companyId)
@@ -71,7 +75,7 @@ export function StationStatus({ companyId, fallback }: { companyId: string; fall
         {info.authorized && <><p className="text-sm">Pendientes de envío: {info.pending} · Conflictos: {info.conflicts}</p>
           <Button disabled={busy} onClick={()=>void run(async()=>{await local("sync",{method:"POST"})})}>{busy && <Loader2 className="mr-2 size-4 animate-spin" />}Sincronizar ahora</Button>
           {issues.map(issue=><div key={issue.id} className="rounded-md border p-3 text-sm"><p>La empresa activa tiene un cambio que necesita revisión.</p>
-            <Button size="sm" variant="outline" disabled={busy} onClick={()=>void run(async()=>{const data=await local("review?batchId="+encodeURIComponent(issue.id));setReview({id:issue.id,text:JSON.stringify(data,null,2)})})}>Comparar versiones</Button></div>)}
+            <Button size="sm" variant="outline" disabled={busy} onClick={()=>void run(async()=>{const data=await local("review?batchId="+encodeURIComponent(issue.id));setReview({id:issue.id,text:JSON.stringify(data,(_k,v)=>typeof v==="string"&&v.startsWith("data:")?"[Archivo incluido]":v,2)})})}>Comparar versiones</Button></div>)}
           {review && issues.some(i=>i.id===review.id) && <section className="space-y-2"><p className="text-sm">Compara tu borrador con los datos disponibles del servidor. No se sobrescribe ninguna versión automáticamente.</p>
             <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-3 text-xs">{review.text}</pre>
             <Button variant="outline" disabled={busy} onClick={()=>{if(window.confirm("¿Descartar este borrador local? No se modificará el registro del servidor."))void run(async()=>{await local("discard",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({batchId:review.id,companyId,confirm:true})});setReview(null)})}}>Descartar este borrador</Button></section>}
@@ -80,7 +84,7 @@ export function StationStatus({ companyId, fallback }: { companyId: string; fall
             {copies.map(item=><button key={item.id} type="button" disabled={busy} className="block w-full rounded border px-3 py-2 text-left text-sm hover:bg-muted" onClick={()=>void run(async()=>setCopy(await getRecovery(companyId,item.id)))}>{item.kind==="file"?"Archivo por verificar":"Captura por verificar"} · {new Date(item.createdAt).toLocaleString("es-MX")}</button>)}
             {copy&&copies.some(x=>x.id===copy.id)&&<div className="space-y-2 rounded-md border p-3 text-sm">
               {copy.body.kind==="records"?<><pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(copy.body.mutations,(k,v)=>typeof v==="string"&&v.startsWith("data:")?"[Archivo incluido]":v,2)}</pre>
-                <Button size="sm" disabled={busy||info.mode!=="online"} onClick={()=>{if(window.confirm("¿Enviar este lote a validación del servidor con las revisiones originales?"))void run(async()=>{await replayStationRecovery(copy.id);setCopy(null);setResult("Servidor confirmado. Vuelve a abrir el módulo para consultar la revisión guardada.")})}}>Revalidar y enviar</Button></>:
+                <Button size="sm" disabled={busy||info.mode!=="online"} onClick={()=>{if(window.confirm("¿Enviar este lote a validación del servidor con las revisiones originales?"))void run(async()=>{const outcome=await replayStationRecovery(copy.id);setCopy(null);setResult(outcome.pending?"El lote está pendiente de sincronizar. El servidor aún no ha confirmado el guardado.":"Servidor confirmado. Vuelve a abrir el módulo para consultar la revisión guardada.")})}}>Revalidar y enviar</Button></>:
                 <p>Original: <button className="underline" onClick={()=>void run(async()=>{const body=copy.body;if(body.kind!=="file")return;const blob=await (await fetch(body.data)).blob();const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=body.name;link.click();window.setTimeout(()=>URL.revokeObjectURL(url),30000)})}>Recuperar {copy.body.name}</button>. Si el servidor aún no lo recibió, vuelve a adjuntarlo en su expediente.</p>}
               <Button variant="ghost" size="sm" disabled={busy} onClick={()=>{if(window.confirm("¿Eliminar únicamente esta copia local de recuperación? No se puede deshacer."))void run(async()=>{await forgetDraft(companyId,copy.id);setCopy(null)})}}>Eliminar copia local</Button>
             </div>}
