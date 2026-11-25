@@ -213,3 +213,36 @@ test('sincroniza contra el Worker real: cliente, EUI, operación con 10 millones
     const third=await protect(work(2,'tercera'));const ack=await call(commit+third,'POST');assert.equal(ack.status,200);assert.equal(ack.headers.get('x-pld-offline'),null);assert.equal((await ack.json()).records[0].payload.nombre,'tercera');
   }finally{await station?.close();await server.close();}
 });
+test('Alta sin acuse ni sujeto nuevo, plan abierto de auditoría y notas de gobernanza sin declarar cumplimiento',async t=>{
+  const f=fixture(t),sess=normal();for(const m of ['registro','auditoria','gobernanza'])sess.grants[0].permissions[m]=['view','edit'];f.setWho(sess);
+  const reg='registro-sat-data',aud='auditoria-planes-accion',gov='gobernanza-control-data';
+  const questionnaire={expedienteCerrado:false,questions:[{id:'q1',answer:'no',notes:'',actionPlan:'',required:true}],documents:[],trace:[],manualVersions:[],committeeSessions:[],alerts:[]};
+  f.records.set(JSON.stringify([gov,'singleton']),{id:'singleton',collection:gov,revision:1,payload:questionnaire});
+  await f.ss();f.setActive(false);
+  const send=(c,id,p,rev=0)=>f.call(base+'/records/batch','POST',{mutations:[{id,collection:c,payload:p,expectedRevision:rev}]});
+  const alta={schemaVersion:2,identificacion:{rfc:company.rfc},contactos:[{correo:'qa@example.test'}],actividades:[],datosChecklist:{q:{notes:'pendiente',completed:false}},documentos:[],sujetosRegistrados:[],documentosRegistro:{detalle:null,acuse:null,aceptacion:null}};
+  assert.equal((await send(reg,'singleton',{...alta,sujetosRegistrados:[{id:'otra'}]})).status,503);
+  assert.equal((await send(reg,'singleton',{...alta,documentosRegistro:{acuse:{id:'simulado'}}})).status,503);
+  assert.equal((await send(reg,'singleton',{...alta,identificacion:{rfc:'OTRA010101AA0'}})).status,403);
+  assert.equal((await send(reg,'singleton',alta)).status,202);
+  const plan={id:'plan1',source:'Revisión interna',action:'Documentar políticas',responsible:'Captura',deadline:'2026-12-01',status:'Pendiente',progress:0};
+  assert.equal((await send(aud,plan.id,{...plan,status:'Cerrado'})).status,503);assert.equal((await send(aud,plan.id,{...plan,progress:100})).status,503);
+  assert.equal((await send(aud,plan.id,plan)).status,202);
+  const notes={...questionnaire,questions:[{...questionnaire.questions[0],notes:'Definir tarea',actionPlan:'Capacitar al equipo'}]};
+  assert.equal((await send(gov,'singleton',{...notes,expedienteCerrado:true},1)).status,503);
+  assert.equal((await send(gov,'singleton',{...notes,questions:[{...notes.questions[0],answer:'si'}]},1)).status,503);
+  assert.equal((await send(gov,'singleton',notes,1)).status,202);f.setActive(true);assert.equal((await f.sync()).status,200);
+});
+test('un archivo guardado para recuperación no se sube sin opt-in, snapshot propio, permiso de carga y soporte de recibos',async t=>{
+  const f=fixture(t),sess=normal(),protect=pre+'recovery?companyId='+company.id,commit=pre+'commit?companyId='+company.id+'&id=';
+  const body={kind:'records',mutations:[{...item(0,'ejemplo'),payload:{id:'exp-uno',archivo:{name:'nota.txt',dataUrl:'data:text/plain;base64,QUJD'}}}]};
+  await f.ss();assert.equal((await f.call(protect,'POST',body)).status,403);
+  sess.grants[0].permissions.expedientes.push('upload','download');f.setWho(sess);await f.ss();
+  const receipt=await (await f.call(protect,'POST',body)).json();assert.ok(receipt.id);
+  await f.sync();assert.equal(f.sends,0);assert.equal(f.stat().pending,0);
+  // Test server lacks explicit idempotent-file capability; it gets no upload or record.
+  assert.equal((await f.call(commit+receipt.id,'POST')).status,409);assert.equal(f.sends,0);assert.equal(f.stat().conflicts,1);
+  const [issue]=f.stat().issues;assert.equal(issue.code,'OFFLINE_UPLOAD_RECEIPTS_UNSUPPORTED');
+  const details=await (await f.call(pre+'review?batchId='+issue.id)).json();assert.equal(details.uploads[0].confirmed,false);
+  f.setActive(false);assert.equal((await f.call(pre+'review?batchId='+issue.id,'GET',undefined,'cookie-ajena')).status,401);
+});

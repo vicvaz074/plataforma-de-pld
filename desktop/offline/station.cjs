@@ -228,7 +228,7 @@ function createOfflineStation({directory,origin,crypt,contracts,contractsPath,no
         return handleRecovery(request,{actorId:a.id,origin,
           can:(id,k,action)=>a.snapshots.some(s=>s.id===id)&&can(a,id,k,action),
           get:()=>structuredClone((a.recovery||[]).filter(item=>!a.queue.some(q=>q.sourceId===item.id))),
-          set:items=>{if(!Array.isArray(items))throw err(400,'INVALID_RECOVERY','Borrador de recuperación no válido.');const claimed=(a.recovery||[]).filter(item=>a.queue.some(q=>q.sourceId===item.id));a.recovery=[...claimed,...items.filter(item=>!claimed.some(v=>v.id===item.id))];vault.save();},
+          set:items=>{if(!Array.isArray(items))throw err(400,'INVALID_RECOVERY','Borrador de recuperación no válido.');const claimed=(a.recovery||[]).filter(item=>a.queue.some(q=>q.sourceId===item.id)),all=[...claimed,...items.filter(item=>!claimed.some(v=>v.id===item.id))];if(all.length>200||Buffer.byteLength(JSON.stringify(all))>45*1024*1024)throw err(507,'OFFLINE_CAPACITY','Revisa los borradores antes de agregar más.');a.recovery=all;vault.save();},
           readLimited,json,reject});
       }
       const body=p===prefix+'discard'&&m==='POST'?await readLimited(request,2048):null;

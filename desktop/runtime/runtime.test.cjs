@@ -48,9 +48,9 @@ test('servidor empaquetable: admin único, inicio real, expediente, evidencia, a
   const dir=folder(t),options=opts(dir)
   let service=await startServer(options),cookie=''
   const admin={name:'Administrador de prueba',email:'principal@example.test',password:randomBytes(22).toString('hex')}
-  async function req(route,method='GET',payload){
+  async function req(route,method='GET',payload,extra={}){
     const form=payload instanceof FormData
-    const headers={Origin:service.origin,...(cookie?{Cookie:cookie}:{}),...(!form&&payload?{'Content-Type':'application/json'}:{})}
+    const headers={Origin:service.origin,...(cookie?{Cookie:cookie}:{}),...(!form&&payload?{'Content-Type':'application/json'}:{}),...extra}
     return fetch(service.origin+route,{method,headers,body:form?payload:payload?JSON.stringify(payload):undefined})
   }
   async function checked(route,method,payload,want){
@@ -78,7 +78,17 @@ test('servidor empaquetable: admin único, inicio real, expediente, evidencia, a
     await checked(base+'/records/batch','POST',{mutations:[item]},200)
     assert.equal((await req(base+'/records/batch','POST',{mutations:[item]})).status,409)
     const file=new FormData();file.set('file',new Blob(['evidencia ficticia']),'prueba.txt');file.set('moduleKey','evidencias');file.set('title','Evidencia de prueba')
-    const version=await checked(base+'/files','POST',file,201)
+    const header={'X-PLD-Upload-Key':'f'.repeat(64)}
+    assert.equal((await req(base+'/files','POST',file,{'X-PLD-Upload-Key':'no-es-una-clave'})).status,400)
+    const [first,duplicate]=await Promise.all([req(base+'/files','POST',file,header),req(base+'/files','POST',file,header)])
+    assert.equal(first.status,201);assert.equal(duplicate.status,201)
+    const version=await first.json();assert.equal((await duplicate.json()).id,version.id)
+    file.set('title','Otro destino')
+    assert.equal((await req(base+'/files','POST',file,header)).status,409)
+    file.set('title','Evidencia de prueba')
+    assert.equal((await (await req(base+'/files','POST',file,header)).json()).id,version.id)
+    const separate=await req('/api/v1/companies/'+other.id+'/files','POST',file,header)
+    assert.equal(separate.status,201);assert.notEqual((await separate.json()).id,version.id)
     assert.equal((await req('/api/v1/companies/'+other.id+'/files/'+version.id)).status,404)
     const bk=await checked(base+'/backups','POST',{},201);assert.equal(bk.fileCount,1)
     const csvForm=new FormData()

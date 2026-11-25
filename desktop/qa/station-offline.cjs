@@ -85,6 +85,18 @@ async function main(){
     await expect(api(signIn,'POST',{email,password:user.temporaryPassword}),200,'Sesión inicial');
     await expect(api('/api/auth/change-password','POST',{currentPassword:user.temporaryPassword,newPassword,revokeOtherSessions:true}),200,'Cambio obligatorio');
     await expect(api(signIn,'POST',{email,password:newPassword}),200,'Sesión final con permisos de captura');
+    const {MODULE_LABELS,ALL_ACTIONS}=require(path.join(services,'contracts.cjs'));
+    assert.equal(Object.keys(MODULE_LABELS).length,11,'Si se agrega otro módulo se debe actualizar la matriz y su documentación');
+    const allow={expedientes:new Set(['view','edit','upload','download']),operaciones:new Set(['view'])};
+    const authorize='/api/v1/companies/'+co.id+'/authorize';
+    for(const moduleKey of Object.keys(MODULE_LABELS))for(const action of ALL_ACTIONS){
+      const input={moduleKey,action};
+      const owner=await expect(adminApi(authorize,'POST',input),200,'Superadministrador: '+moduleKey+'/'+action);
+      assert.equal(owner.data.authorized,true);assert.equal(owner.data.companyId,co.id);
+      await expect(api(authorize,'POST',input),allow[moduleKey]?.has(action)?200:403,'Capturista: '+moduleKey+'/'+action);
+    }
+    await expect(api('/api/v1/companies/'+other.id+'/authorize','POST',{moduleKey:'expedientes',action:'view'}),404,'La empresa no asignada no devuelve permisos');
+    console.log('OK: API corporativa, 11 módulos × 6 acciones × 2 roles; el superadministrador administra todos y la capturista sólo recibe los permisos expresos.');
     const who=await expect(api('/api/v1/session'),200,'Obtener sesión corporativa');
     assert.equal(who.data.user.id,user.user.id);assert.deepEqual(who.data.companies.map(c=>c.id),[co.id]);
     const base='/api/v1/companies/'+co.id, batch=base+'/records/batch';

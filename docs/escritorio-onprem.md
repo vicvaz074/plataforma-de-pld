@@ -36,12 +36,33 @@ El servidor escucha sólo en `127.0.0.1:<puerto>`, no en toda la red. Para ofrec
 
 La cuenta del sistema que ejecuta el servidor debe tener acceso al volumen y su llavero. El proceso de escritorio **no se instala como un servicio del sistema**: al salir de la aplicación servidor o cerrar su sesión se pierde la conexión de las estaciones. Para continuidad operativa, TI debe acordar supervisión, mantenimiento y horarios antes de usar expedientes reales.
 
-## 4. Qué se puede guardar sin red
+## 4. Trabajar sin conexión
 
-- El equipo servidor puede trabajar en modo local sin Internet. Esto no presenta avisos al SAT ni sustituye consultas o trámites externos.
-- En una estación se requiere un inicio de sesión previo y una empresa ya abierta con acceso vigente. Se puede consultar la copia autorizada y poner en cola altas/cambios de clientes y expedientes, **borradores** de operación y EBR, cambios de capacitación sin cierre/aprobación y mapeos de importación admitidos. La autorización desconectada es temporal (hasta ocho horas y nunca después de la expiración conocida de la sesión). No existe inicio de sesión inicial ni alta de usuarios sin conexión.
-- **Pendiente** no significa guardado en el servidor. Al reconectar se comprueban la sesión, empresa, permisos y la revisión de cada cambio. Si la versión central difiere, se conserva el conflicto sin sobrescribir automáticamente. Resolverlo y verificar que el contador de pendientes llegue a cero.
-- No hay sincronización offline completa de archivos ni de todos los módulos. Una copia recuperable en la estación **no acredita** una carga de evidencia, una importación terminada ni una acción administrativa en el servidor. Conservar el original y revisar los pendientes al reconectar. La copia de la estación no sustituye su respaldo y los borradores aún no sincronizados no estarán en la copia central. Evitar borrar el perfil, reinstalar o cambiar de máquina con pendientes.
+**Servidor local:** conserva la base oficial y aplica las validaciones incluso sin Internet. **Estación desconectada del servidor:** conserva una copia de trabajo cifrada, no otra base oficial. Ninguno de los dos modos presenta avisos ante el SAT ni sustituye consultas externas.
+
+Para usar una estación sin red, la persona debe haber iniciado sesión y abierto la empresa en línea. La autorización dura **hasta ocho horas desde su última verificación en el servidor**, sin superar la expiración conocida de la sesión. No permite el primer acceso ni cambiar de identidad sin red. Si se suspende una cuenta mientras está desconectada, la estación sólo puede conocer la suspensión al volver a verificar con el servidor o al vencer su autorización temporal. Al cerrar sesión sin red se elimina el acceso local; eso no confirma la revocación en otros equipos.
+
+| Módulo o flujo | Al guardar sin conexión |
+| --- | --- |
+| Expedientes y clientes | Se ponen en cola las altas y ediciones ordinarias en la empresa sincronizada. Un adjunto embebido en un expediente identificable (por ejemplo, un PDF de identificación) puede viajar con el registro. La bandeja privada sin empresa no tiene esta función. |
+| Actos y operaciones | Sólo borradores de captura, con identidad e importe válidos. Completar, presentar, corregir una presentación o cancelar exige al servidor. |
+| EBR | Borradores individuales de metodología compatible e institucionales; no se sincronizan aprobaciones ni se sustituyen evaluaciones históricas aprobadas. |
+| Capacitación | Cambios admitidos de planes, participantes, sesiones y seguimiento antes del cierre. No se autoaprueba el plan ni se actualiza su documentación aprobada. |
+| Mapeos de importación | Se pueden conservar y sincronizar mapeos válidos de columnas en los módulos admitidos (Alta, Expediente, Actos y Evidencias). Importar archivos o ejecutar trabajos en lote requiere conexión. |
+| Alta SAT | Captura ordinaria de identificación, contactos, actividades, representante o notas del mismo registro. Cambiar el sujeto, documentos o acuses no se confirma sin el servidor. |
+| Auditoría y Gobernanza | Auditoría admite planes pendientes o en seguimiento, no cierres ni reaperturas. En un cuestionario de Gobernanza abierto se admiten notas y planes de acción; no respuestas aprobatorias, firmas ni cierre. |
+| Avisos, Beneficiario, WhoIs PEP y Evidencias | Consulta de los registros previamente sincronizados y permitidos. En estos módulos, una **copia de recuperación** confirmada permite revisar o reintentar una captura en línea; no equivale a una presentación, aprobación, acuse, consulta de fuentes ni evidencia aceptada. |
+| Administración | Crear cuentas o empresas, cambiar privilegios y acceder a sesiones requiere conexión. Los cambios de rol se verifican de nuevo al reconectar. |
+
+**Pendiente de sincronizar** significa que el equipo conserva el borrador, no que el servidor lo aceptó. Mientras la estación está abierta reintenta automáticamente; también se puede pulsar **Sincronizar ahora**. Revalida el usuario, empresa, permisos y revisión inicial. Con un adjunto embebido compatible, la referencia del expediente se transforma en una versión privada en el servidor; se comprueban identidad del archivo, tamaño y huella. Un reintento después de perder la confirmación no crea otra versión para el mismo destino y contenido. Una copia local no marca un documento como revisado ni aprobado. Si hay **Cambios por revisar**, comparar las dos versiones en Sincronización; no se sobrescribe el registro central.
+
+**Copia de recuperación** significa otra cosa: es trabajo protegido para revisión manual. Por ejemplo, si un archivo se subió por separado y se perdió la conexión, la estación no puede saber a qué versión debe vincularlo. En **Sincronización → Copias de recuperación de esta empresa**, recuperar o descargar el original en un destino corporativo autorizado, comparar con el historial del servidor y adjuntarlo manualmente sólo si falta. Para lotes admitidos se ofrece **Revalidar y enviar**; para las demás decisiones se regresa al flujo correspondiente en línea. No archivar ni borrar una copia hasta verificar el resultado y su asociación.
+
+Límites por archivo: hasta 20 MB y formatos admitidos por el servidor (PDF, imágenes compatibles, Office, CSV, TXT, JSON o XML). El paquete completo debe caber en el almacén local; los adjuntos embebidos para autoenvío deben estar codificados en base64 y tener un tipo reconocido. Si se agota la capacidad, la aplicación no debe dar el borrador por guardado: conservar el original y recuperar la conexión. El respaldo central **no contiene los pendientes locales**: no borrar el perfil, reinstalar ni cambiar de equipo con pendientes.
+
+### Matriz de comprobación de permisos
+
+El recorrido reproducible `pnpm --dir desktop exec electron qa/station-offline.cjs` usa una instalación y cuentas ficticias: verifica los **11 módulos** del contrato (Alta, Expedientes, Actos, Avisos, EBR, PEP, Beneficiario, Evidencias, Capacitación, Auditoría y Gobernanza) contra las **seis acciones** de la API: consultar, editar, cargar, descargar, aprobar y archivar. El superadministrador está autorizado para las seis en su instalación. La capturista de prueba tiene sólo consulta/edición/carga/descarga en Expedientes y consulta en Actos; todas las demás combinaciones se deniegan, incluida la consulta de una empresa no asignada. Es una prueba de autorización, no una afirmación de que las seis acciones se puedan ejecutar sin conexión. El mismo recorrido corta la red realmente, prueba la reapertura de un expediente, el conflicto entre dos ediciones y la descarga del PDF privado después de perder el primer acuse de subida.
 
 ## 5. Protección y recuperación
 

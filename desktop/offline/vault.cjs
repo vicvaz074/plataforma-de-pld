@@ -26,19 +26,22 @@ function openVault(directory, origin, crypt) {
   const db = new DatabaseSync(dbfile);
   fs.chmodSync(dbfile,0o600);
   let version = 0, locked = false;
-  let state = {v:1, leases:[], actors:[]};
-  try {
-    db.exec('PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS station (id INTEGER PRIMARY KEY CHECK(id=1), rev INTEGER NOT NULL, box BLOB NOT NULL) STRICT');
+  const state = {v:1, leases:[], actors:[]};
+  function restore(){
     const row = db.prepare('SELECT rev,box FROM station WHERE id=1').get();
     if (row) {
       const box=Buffer.from(row.box);
       if (box.length > MAX+28 || box.length < 29) throw Error('Tamaño de caché no válido.');
       const cipher=crypto.createDecipheriv('aes-256-gcm', key, box.subarray(0,12));
       cipher.setAAD(aad); cipher.setAuthTag(box.subarray(12,28));
-      state=JSON.parse(Buffer.concat([cipher.update(box.subarray(28)),cipher.final()]).toString());
+      Object.assign(state,JSON.parse(Buffer.concat([cipher.update(box.subarray(28)),cipher.final()]).toString()));
       if (state.v!==1 || !Array.isArray(state.actors) || !Array.isArray(state.leases)) throw Error('Versión local no compatible.');
       version=row.rev;
-    }
+    }else Object.assign(state,{v:1,leases:[],actors:[]});
+  }
+  try {
+    db.exec('PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS station (id INTEGER PRIMARY KEY CHECK(id=1), rev INTEGER NOT NULL, box BLOB NOT NULL) STRICT');
+    restore();
   } catch(e) { db.close(); key.fill(0); throw e; }
   return {
     state,
@@ -47,7 +50,7 @@ function openVault(directory, origin, crypt) {
       if (locked) throw Error('Almacén local bloqueado; abre nuevamente la estación.');
       try {
         const clear=Buffer.from(JSON.stringify(state));
-        if (clear.length>MAX) throw Error('Se alcanzó la capacidad local.');
+        if (clear.length>MAX) {clear.fill(0);restore();throw Object.assign(Error('Se alcanzó la capacidad de la estación. Los cambios anteriores siguen protegidos; sincroniza o revisa tus copias.'),{status:507,code:'OFFLINE_CAPACITY'});}
         const iv=crypto.randomBytes(12),cipher=crypto.createCipheriv('aes-256-gcm',key,iv);
         cipher.setAAD(aad);
         const encrypted=Buffer.concat([cipher.update(clear),cipher.final()]);clear.fill(0);
@@ -56,7 +59,7 @@ function openVault(directory, origin, crypt) {
           : db.prepare('UPDATE station SET rev=rev+1,box=? WHERE id=1 AND rev=?').run(box,version);
         if(result.changes!==1) throw Error('Otra instancia modificó la estación.');
         version++;
-      } catch(e) {locked=true;throw e;}
+      } catch(e) {if(e.code!=='OFFLINE_CAPACITY')locked=true;throw e;}
     },
     assertOpen(){if(locked)throw Error('Almacén local bloqueado; abre nuevamente la estación.');},
     close(){locked=true;key.fill(0);db.close();}
